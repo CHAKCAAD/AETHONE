@@ -205,7 +205,7 @@ if not lock_path.is_file():
     raise SystemExit("FATAL: Cargo.lock is missing; refusing an unpinned boring-sys patch.")
 
 lock_text = lock_path.read_text(encoding="utf-8")
-if 'name = "boring-sys"\\nversion = "5.3.0"\\n' not in lock_text:
+if 'name = "boring-sys"\nversion = "5.3.0"\n' not in lock_text:
     raise SystemExit("FATAL: Cargo.lock does not pin boring-sys 5.3.0 exactly.")
 
 registry_src = cargo_home / "registry" / "src"
