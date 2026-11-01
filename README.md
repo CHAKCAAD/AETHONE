@@ -1,10 +1,42 @@
-# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.4**, post-v4.3 review corrections)
+# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.5**, runtime smoke added)
 
 Deliverable of directive 6 of report v3: *"start the next phase with GitHub Actions
 setup and the initial native build."* — revised after the employer's reviews of
 bundle v1, v2, v3, v4, the v4.1 addendum, v4.2 and v4.3 (2026-10-31 / 2026-11-01). No frozen
 pin (source commits, Rust/Go/Zig versions, NDK r26d, API 29, three-ABI matrix, N1–N8)
-was changed in v4.2, v4.3 or v4.4.
+was changed in v4.2, v4.3, v4.4 or v4.5.
+
+## v4.5 — runtime smoke job: the first runtime evidence (2026-11-01)
+
+**Scope change only — NO frozen pin changed (N1/N8 untouched).** A new CI job
+`runtime-smoke` (x86_64 leg) boots the official Google **16 KB page-size emulator
+image** and executes this pipeline's artifacts on a live Android system for the
+first time:
+
+- image: `system-images;android-36;google_apis_ps16k;x86_64` revision **7**
+  (stable channel, tag `page_size_16kb`; zip `x86_64-ps16k-36_r07.zip`,
+  sha1 `dd783282e84bf475a02eba6777c79fc5695e1583`, size 1849428145;
+  requires emulator >= 35.4.9)
+- emulator pin: **37.2.13** (stable channel; sha1
+  `f41f9e31eb5ca64926603c03265c50bbc0ff4172`)
+- fail-closed assertions: kernel `getconf PAGESIZE` == **16384**; on-device
+  sha256 == artifact sha256 for all 5 binaries (transfer integrity);
+  `aether --help` executes and its usage output contains `--protocol`,
+  `--tor` and `--psiphon` (CLI surface attested **at runtime**, not only in
+  the pinned source); `psiphon-tunnel-core` and `lyrebird` execute on-device
+  (dynamic linking + Go runtime boot; a config/usage error exit IS an
+  execution proof). NO tunnel and NO network connection is attempted.
+- evidence: the `runtime-smoke-x86_64` artifact (environment, versions, help
+  text, PT outputs, sha256 tables) and `runtime-status-x86_64.txt`, which
+  feeds status-summary — the honest-exit gate now includes runtime-smoke.
+
+N2 boundary unchanged: emulator evidence is **CI evidence**, not device
+evidence. arm64-v8a/armeabi-v7a artifacts stay static-only; app-context JNI
+loading (`System.loadLibrary` of `libzeptun-jni.so`) and real-device tests
+remain NOT TESTED. Also in v4.5: `scripts/inspect_elf.sh` v3.1 — static-archive
+extraction pre-creates nested member directories (Zig `.zig-cache/...` member
+paths), fixing the `ar x failed` CI failure of run 41338079878 (verified
+against the real native-x86_64 artifact: script exit 0, failures=0).
 
 ## v4.4 — corrections for the employer's post-v4.3 review (documentation-only)
 

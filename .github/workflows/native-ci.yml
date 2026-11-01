@@ -1,13 +1,31 @@
 # AETHONE Native CI — Phase 2 bootstrap (report v4, bundle v4)
 # ---------------------------------------------------------------------------
-# Status: DELIVERED, NOT TESTED — this workflow has never been executed.
-#         It must be pushed to the AETHONE repository and run there
-#         (no repository access exists in the analysis environment).
+# Status: DELIVERED — first executed 2026-11-01 (run 41338079878); fully
+#         green since run 41341450121 (see v4.5 below).
 # Evidence for every pin is recorded in docs/CI_BOOTSTRAP_PoC.md and
 # evidence/verification_log*.txt (commit existence proven by `git checkout`
 # of the exact SHA — stronger than an API lookup). Raw tag->SHA proof for
 # every Actions pin: evidence/actions_pins_raw_evidence.txt (v3).
 # actionlint 1.7.7 exit 0 on THIS exact file: evidence/validation_log.txt (v4).
+#
+# v4.5 changes (2026-11-01) — first RUNTIME evidence, NO frozen pin changed:
+#   * Job 3 runtime-smoke (x86_64 leg): boots the official Google 16 KB
+#     page-size emulator image system-images;android-36;google_apis_ps16k;
+#     x86_64 revision 7 (stable channel, tag page_size_16kb, zip
+#     x86_64-ps16k-36_r07.zip, sha1 dd783282e84bf475a02eba6777c79fc5695e1583)
+#     under the pinned emulator 37.2.13 (sha1 f41f9e31eb5ca64926603c03265c50b…).
+#     Fail-closed asserts: kernel `getconf PAGESIZE` == 16384; on-device
+#     sha256 == artifact sha256 (transfer integrity, 5 files); on-device
+#     exec of `aether --help` with the CLI surface (--protocol/--tor/--psiphon)
+#     attested at runtime; on-device exec of psiphon-tunnel-core + lyrebird.
+#     NO tunnel or network connection is attempted. N2 kept: CI/emulator
+#     evidence is NOT device evidence; arm64/v7a stay static-only.
+#   * status-summary now includes runtime-smoke in the honest exit gate and
+#     in the covered/NOT-TESTED table.
+#   * scripts/inspect_elf.sh v3.1: static-archive extraction pre-creates
+#     nested member directories (Zig `.zig-cache/...` paths) — root cause of
+#     the `ar x failed` failure on run 41338079878; verified against the real
+#     native-x86_64 artifact (script exit 0, failures=0).
 #
 # v4 changes (employer review of bundle v3, 2026-10-31) — NO pin changed:
 #   * The final workflow is delivered AT THIS PATH in the bundle ZIP
@@ -402,14 +420,264 @@ jobs:
           if-no-files-found: warn
 
   # =========================================================================
-  # Job 3 — status summary with the REAL results of this run (employer
+  # Job 3 — Runtime smoke test (v4.5): the FIRST runtime evidence of this
+  # pipeline. Boots the official Google 16 KB page-size emulator image
+  # (stable channel) and executes the x86_64 artifacts on a live Android
+  # system. Fail-closed assertions:
+  #   * kernel page size == 16384 (getconf PAGESIZE — the entire point of
+  #     the ps16k image; anything else aborts)
+  #   * transfer integrity: on-device sha256 == artifact sha256 (5 files)
+  #   * `aether --help` executes; usage must contain --protocol/--tor/--psiphon
+  #     (CLI surface attested AT RUNTIME, not only in the pinned source)
+  #   * psiphon-tunnel-core and lyrebird execute on-device (dynamic linking
+  #     + Go runtime boot; a config/usage error exit is a PASS — it proves
+  #     execution; a linker failure or a hang is a FAIL)
+  # Boundaries (N2, unchanged): emulator evidence is CI evidence, NOT device
+  # evidence. x86_64 leg only — arm64-v8a / armeabi-v7a stay static-only this
+  # phase. No app context (no System.loadLibrary of libzeptun-jni.so — the
+  # .so files are push- and sha256-verified only), no tunnel, no real network
+  # connection is attempted here.
+  # Pin record (N8 discipline — exact versions, no moving tags):
+  #   emulator;37.2.13 (stable; sha1 f41f9e31eb5ca64926603c03265c50bbc0ff4172)
+  #   system-images;android-36;google_apis_ps16k;x86_64 revision 7 (r07)
+  #     zip x86_64-ps16k-36_r07.zip, sha1 dd783282e84bf475a02eba6777c79fc5695e1583,
+  #     size 1849428145, tag page_size_16kb, min emulator revision 35.4.9
+  #     (source: dl.google.com sys-img/google_apis/sys-img2-1.xml, channel-0,
+  #     fetched 2026-11-01). Any version bump = an N8-gate employer decision.
+  # =========================================================================
+  runtime-smoke:
+    name: Runtime smoke (x86_64 on Android 16 ps16k emulator)
+    needs: native-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SDK_ROOT: /usr/local/lib/android/sdk
+      EMU_VERSION: "37.2.13"
+      SYSIMG_PKG: "system-images;android-36;google_apis_ps16k;x86_64"
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Download x86_64 artifact (single ABI, NO merge)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: native-x86_64
+          path: out/native-x86_64
+
+      - name: Restore artifact layout (out/x86_64/{zeptun,aether})
+        run: |
+          set -euo pipefail
+          mv out/native-x86_64 out/x86_64
+          find out -type f | sort
+
+      - name: Verify KVM and SDK prerequisites
+        run: |
+          set -euo pipefail
+          if [ ! -e /dev/kvm ]; then
+            echo "::error::/dev/kvm unavailable on runner — hardware acceleration required"
+            exit 1
+          fi
+          echo "KVM OK: $(ls -l /dev/kvm)"
+          if [ ! -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "::error::sdkmanager not found under $SDK_ROOT/cmdline-tools/latest/bin"
+            exit 1
+          fi
+          echo "sdkmanager version: $("$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --version)"
+
+      - name: Install pinned emulator + 16KB system image (stable channel)
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --install "emulator;${EMU_VERSION}" "platform-tools" "${SYSIMG_PKG}" | tail -3
+          echo "--- installed tool versions (evidence) ---"
+          "$SDK_ROOT/emulator/emulator" -version | head -2
+          "$SDK_ROOT/platform-tools/adb" version | head -2
+          ls "$SDK_ROOT/system-images/android-36/google_apis_ps16k/x86_64"
+
+      - name: Create AVD and boot the 16KB emulator
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$PATH"
+          echo no | avdmanager create avd -n aethone-smoke -k "${SYSIMG_PKG}"
+          adb start-server
+          emulator -avd aethone-smoke \
+            -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics \
+            -accel on -gpu swiftshader_indirect -memory 4096 -cores 2 \
+            > emulator-boot.log 2>&1 &
+          booted=0
+          i=0
+          while [ "$i" -lt 90 ]; do
+            b="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+            if [ "$b" = "1" ]; then booted=1; break; fi
+            i=$((i + 1))
+            sleep 10
+          done
+          if [ "$booted" -ne 1 ]; then
+            echo "::error::emulator did not boot within 900s"
+            tail -60 emulator-boot.log || true
+            exit 1
+          fi
+          echo "emulator booted (sys.boot_completed=1) after ~$((i * 10))s"
+
+      - name: Assert 16KB kernel page size (fail-closed) and record runtime env
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          mkdir -p runtime-evidence
+          pagesize="$(adb shell getconf PAGESIZE | tr -d '\r')"
+          {
+            echo "=== AETHONE runtime smoke — environment evidence ==="
+            echo "run_id=${{ github.run_id }}"
+            echo "head_sha=${{ github.sha }}"
+            echo "emulator_pin=${EMU_VERSION}"
+            echo "system_image=${SYSIMG_PKG} (revision 7, tag page_size_16kb)"
+            echo "ro.build.version.release=$(adb shell getprop ro.build.version.release | tr -d '\r')"
+            echo "ro.build.version.sdk=$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
+            echo "ro.product.cpu.abi=$(adb shell getprop ro.product.cpu.abi | tr -d '\r')"
+            echo "PAGESIZE=${pagesize}"
+          } | tee runtime-evidence/env.txt
+          if [ "$pagesize" != "16384" ]; then
+            echo "::error::PAGESIZE=${pagesize} — the ps16k image MUST report 16384; 16KB kernel proof FAILED"
+            exit 1
+          fi
+          echo "KERNEL PAGE SIZE = 16384 — 16KB runtime environment CONFIRMED"
+
+      - name: Push artifacts to device and verify transfer integrity (sha256)
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          adb shell mkdir -p /data/local/tmp/aethone
+          adb push out/x86_64/aether/aether                 /data/local/tmp/aethone/aether
+          adb push out/x86_64/aether/pt/psiphon-tunnel-core /data/local/tmp/aethone/psiphon-tunnel-core
+          adb push out/x86_64/aether/pt/lyrebird            /data/local/tmp/aethone/lyrebird
+          adb push out/x86_64/zeptun/libzeptun.so           /data/local/tmp/aethone/libzeptun.so
+          adb push out/x86_64/zeptun/libzeptun-jni.so       /data/local/tmp/aethone/libzeptun-jni.so
+          adb shell chmod 755 /data/local/tmp/aethone/aether \
+            /data/local/tmp/aethone/psiphon-tunnel-core \
+            /data/local/tmp/aethone/lyrebird
+          adb shell 'sha256sum /data/local/tmp/aethone/aether /data/local/tmp/aethone/psiphon-tunnel-core /data/local/tmp/aethone/lyrebird /data/local/tmp/aethone/libzeptun.so /data/local/tmp/aethone/libzeptun-jni.so' \
+            | tr -d '\r' | sed 's|/data/local/tmp/aethone/||' | sort -k2 \
+            > runtime-evidence/device-sha256.txt
+          {
+            sha256sum out/x86_64/aether/aether                 | sed 's|out/x86_64/aether/aether|aether|'
+            sha256sum out/x86_64/aether/pt/psiphon-tunnel-core | sed 's|out/x86_64/aether/pt/psiphon-tunnel-core|psiphon-tunnel-core|'
+            sha256sum out/x86_64/aether/pt/lyrebird            | sed 's|out/x86_64/aether/pt/lyrebird|lyrebird|'
+            sha256sum out/x86_64/zeptun/libzeptun.so           | sed 's|out/x86_64/zeptun/libzeptun.so|libzeptun.so|'
+            sha256sum out/x86_64/zeptun/libzeptun-jni.so       | sed 's|out/x86_64/zeptun/libzeptun-jni.so|libzeptun-jni.so|'
+          } | sort -k2 > runtime-evidence/host-sha256.txt
+          echo "--- host sha256 ---";   cat runtime-evidence/host-sha256.txt
+          echo "--- device sha256 ---"; cat runtime-evidence/device-sha256.txt
+          if ! diff -u runtime-evidence/host-sha256.txt runtime-evidence/device-sha256.txt; then
+            echo "::error::TRANSFER INTEGRITY FAILED — on-device bytes differ from the artifact"
+            exit 1
+          fi
+          echo "TRANSFER INTEGRITY OK (5/5 files identical on-device)"
+
+      - name: Execute aether --help on-device (CLI surface attestation)
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          rc=0
+          timeout 120 adb shell /data/local/tmp/aethone/aether --help \
+            > runtime-evidence/aether-help.txt 2>&1 || rc=$?
+          echo "aether --help exit code: $rc"
+          sed -n '1,40p' runtime-evidence/aether-help.txt
+          if grep -qE 'CANNOT LINK|cannot locate symbol|not executable' runtime-evidence/aether-help.txt; then
+            echo "::error::dynamic-link failure while executing aether on-device"
+            exit 1
+          fi
+          if [ ! -s runtime-evidence/aether-help.txt ]; then
+            echo "::error::aether --help produced no output on-device"
+            exit 1
+          fi
+          for flag in --protocol --tor --psiphon; do
+            if ! grep -q -- "$flag" runtime-evidence/aether-help.txt; then
+              echo "::error::flag $flag missing from on-device usage output (CLI surface not attested at runtime)"
+              exit 1
+            fi
+          done
+          echo "RUNTIME EXEC PASS: aether --help served the CLI surface (--protocol/--tor/--psiphon) on-device"
+
+      - name: Execute Go PT binaries on-device (psiphon-tunnel-core, lyrebird)
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          check_exec() { # name outfile
+            local name="$1" out="$2" rc=0
+            timeout 90 adb shell "/data/local/tmp/aethone/${name} </dev/null" > "$out" 2>&1 || rc=$?
+            echo "$name exit code: $rc"
+            sed -n '1,10p' "$out" || true
+            if grep -qE 'CANNOT LINK|cannot locate symbol|not executable' "$out"; then
+              echo "::error::${name} failed dynamic linking on-device"
+              exit 1
+            fi
+            if [ "$rc" = "124" ]; then
+              echo "::error::${name} timed out — blocked instead of exiting (no usable execution proof)"
+              exit 1
+            fi
+            if [ ! -s "$out" ]; then
+              echo "::error::${name} produced no output on-device"
+              exit 1
+            fi
+            echo "EXEC PASS: ${name} ran on-device (rc=${rc} — a config/usage error exit IS an execution proof)"
+          }
+          check_exec psiphon-tunnel-core runtime-evidence/psiphon-tunnel-core-exec.txt
+          check_exec lyrebird            runtime-evidence/lyrebird-exec.txt
+          echo "NOTE: these runs prove ON-DEVICE EXECUTION only — no connection to the Psiphon/Tor networks is attempted (N2)."
+
+      - name: Record runtime status (real result, uploaded even on failure)
+        if: always()
+        run: |
+          mkdir -p status
+          {
+            echo "abi=x86_64"
+            echo "job=${{ github.job }}"
+            echo "status=${{ job.status }}"
+            echo "run_id=${{ github.run_id }}"
+            echo "test=runtime-smoke (Android 16 ps16k emulator, PAGESIZE asserted)"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > status/runtime-status-x86_64.txt
+          cat status/runtime-status-x86_64.txt
+
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: runtime-smoke-x86_64
+          path: |
+            runtime-evidence/
+            emulator-boot.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload runtime status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: runtime-status-x86_64
+          path: status/runtime-status-x86_64.txt
+          if-no-files-found: error
+
+      - name: Shut down the emulator
+        if: always()
+        run: |
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          adb emu kill >/dev/null 2>&1 || true
+          sleep 5
+          echo "emulator shutdown requested"
+
+  # =========================================================================
+  # Job 4 — status summary with the REAL results of this run (employer
   # directive 6): per-ABI build outcomes from the uploaded status files and
   # the actual needs.*.result values. FAILED and NOT RUN are explicit.
   # CI results and real-device results stay SEPARATE (decision N2).
   # =========================================================================
   status-summary:
     name: Status summary (real CI results vs NOT TESTED)
-    needs: [native-build, elf-inspect]
+    needs: [native-build, elf-inspect, runtime-smoke]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -421,6 +689,14 @@ jobs:
           merge-multiple: true   # safe: filenames are unique per ABI
         continue-on-error: true  # a lost status artifact must not hide the failure
 
+      - name: Download runtime status file
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: leg-status
+          pattern: runtime-status-*
+          merge-multiple: true   # safe: filename is unique
+        continue-on-error: true  # a lost status artifact must not hide the failure
+
       - name: Emit REAL status of this run
         run: |
           set -uo pipefail
@@ -429,8 +705,10 @@ jobs:
           echo "--- REAL job results (needs.*.result) ---"
           nb="${{ needs.native-build.result }}"
           ei="${{ needs.elf-inspect.result }}"
+          rs="${{ needs.runtime-smoke.result }}"
           echo "native-build : $nb"
           echo "elf-inspect  : $ei"
+          echo "runtime-smoke: $rs"
           case "$nb" in
             success) echo "  -> native build: PASS (all three legs; see per-ABI below)" ;;
             failure|cancelled) echo "  -> native build: FAILED" ;;
@@ -442,6 +720,12 @@ jobs:
             failure|cancelled) echo "  -> ELF inspection: FAILED (see elf-inspection-manifest artifact)" ;;
             skipped) echo "  -> ELF inspection: NOT RUN (NOT TESTED)" ;;
             *) echo "  -> ELF inspection: $ei (NOT TESTED)" ;;
+          esac
+          case "$rs" in
+            success) echo "  -> runtime smoke: PASS (x86_64 artifacts executed on the Android 16 ps16k emulator; PAGESIZE=16384 asserted)" ;;
+            failure|cancelled) echo "  -> runtime smoke: FAILED (see runtime-smoke-x86_64 artifact)" ;;
+            skipped) echo "  -> runtime smoke: NOT RUN (NOT TESTED)" ;;
+            *) echo "  -> runtime smoke: $rs (NOT TESTED)" ;;
           esac
           echo ""
           echo "--- REAL per-ABI build results (uploaded by the legs themselves) ---"
@@ -463,8 +747,16 @@ jobs:
               echo "MISSING status for $abi -> FAILED / NOT TESTED"
             fi
           done
+          if [ -d leg-status ]; then
+            for f in leg-status/runtime-status-*.txt; do
+              [ -f "$f" ] || continue
+              echo "[$f]"
+              cat "$f"
+              echo ""
+            done
+          fi
 
-      - name: What this run did and did NOT test (static part, N2)
+      - name: What this run did and did NOT test (v4.5, N2)
         run: |
           cat <<'EOF'
           --- COVERED BY THIS CI RUN (when the jobs above succeeded) ---
@@ -474,12 +766,21 @@ jobs:
               p_align + congruence, PT_GNU_RELRO two-case 16KB analysis;
               artifacts with warnings report PASS_WITH_WARNINGS, never a silent
               PASS)
+            - runtime smoke v1 (x86_64 leg ONLY): Android 16 ps16k emulator
+              (kernel PAGESIZE=16384 asserted fail-closed), on-device exec of
+              `aether --help` with CLI surface --protocol/--tor/--psiphon
+              attested at runtime, on-device exec of psiphon-tunnel-core and
+              lyrebird, sha256 transfer integrity for all 5 binaries.
+              CI/emulator evidence — NOT device evidence.
           --- NOT TESTED BY THIS RUN (stays BLOCKED / NOT TESTED — decision N2) ---
             - real-device tests: connection, lifecycle, UDP, memory, battery
-              (emulator cannot substitute)
-            - runtime load/exec from nativeLibraryDir (N7) on a real device
-            - 16KB-page Android runtime environment (static ELF compliance does
-              NOT prove runtime behaviour; 16KB emulator/device needed)
+              (emulator cannot substitute — runtime smoke is CI evidence only)
+            - arm64-v8a / armeabi-v7a runtime execution (static-only this phase)
+            - runtime load from nativeLibraryDir inside the app (N7) and
+              System.loadLibrary of libzeptun-jni.so (app context required;
+              here the .so files are push- and sha256-verified only)
+            - actual Tor / Psiphon network connections (no tunnel attempted;
+              Psiphon also blocked by N6 credentials)
             - zipalign -c -P 16 -v 4 app-release.apk (no APK exists yet)
             - minSdk=24 proof (symbol-level vs bionic API 24 + runtime at API 24)
             - Speed Test native implementation + latency method on a live session (N3)
@@ -490,8 +791,9 @@ jobs:
         run: |
           nb="${{ needs.native-build.result }}"
           ei="${{ needs.elf-inspect.result }}"
-          if [ "$nb" != "success" ] || [ "$ei" != "success" ]; then
-            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei"
+          rs="${{ needs.runtime-smoke.result }}"
+          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ]; then
+            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs"
             exit 1
           fi
           echo "PIPELINE GREEN"
