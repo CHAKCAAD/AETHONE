@@ -438,7 +438,13 @@ jobs:
   # .so files are push- and sha256-verified only), no tunnel, no real network
   # connection is attempted here.
   # Pin record (N8 discipline — exact versions, no moving tags):
-  #   emulator;37.2.13 (stable; sha1 f41f9e31eb5ca64926603c03265c50bbc0ff4172)
+  #   emulator 37.2.13 (stable; sha1 f41f9e31eb5ca64926603c03265c50bbc0ff4172).
+  #     The emulator package has NO versioned sdkmanager path (the manifest
+  #     ships one stable path "emulator"; preview builds use separate
+  #     "emulators;<build>" paths), so the pin is kept by installing the
+  #     stable package and FAIL-CLOSED asserting the exact version after
+  #     install — the same pattern as the NDK r26d check. Any upstream
+  #     bump fails the gate and needs an explicit employer decision.
   #   system-images;android-36;google_apis_ps16k;x86_64 revision 7 (r07)
   #     zip x86_64-ps16k-36_r07.zip, sha1 dd783282e84bf475a02eba6777c79fc5695e1583,
   #     size 1849428145, tag page_size_16kb, min emulator revision 35.4.9
@@ -491,11 +497,20 @@ jobs:
           set -euo pipefail
           export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager --install "emulator;${EMU_VERSION}" "platform-tools" "${SYSIMG_PKG}" | tail -3
+          # The emulator package has NO versioned sdkmanager path (single
+          # stable path "emulator"; previews are separate "emulators;<build>").
+          # N8 pin discipline is kept via the fail-closed version assert below.
+          sdkmanager --install "emulator" "platform-tools" "${SYSIMG_PKG}" | tail -3
           echo "--- installed tool versions (evidence) ---"
           "$SDK_ROOT/emulator/emulator" -version | head -2
           "$SDK_ROOT/platform-tools/adb" version | head -2
           ls "$SDK_ROOT/system-images/android-36/google_apis_ps16k/x86_64"
+          if ! "$SDK_ROOT/emulator/emulator" -version | grep -q "37\.2\.13"; then
+            echo "::error::EMULATOR VERSION DRIFT: expected the 37.2.13 pin (N8), got:"
+            "$SDK_ROOT/emulator/emulator" -version | head -2
+            exit 1
+          fi
+          echo "EMULATOR PIN VERIFIED: 37.2.13"
 
       - name: Create AVD and boot the 16KB emulator
         run: |
