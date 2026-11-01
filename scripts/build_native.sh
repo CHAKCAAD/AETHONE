@@ -260,11 +260,11 @@ PY_BORING_SYS
     for subdir in build .fingerprint deps; do
       dir="$profile_root/$subdir"
       [ -d "$dir" ] || continue
-      count=$(find "$dir" -mindepth 1 -maxdepth 1 \\
-        \\( -name 'boring-sys-*' -o -name 'libboring_sys-*' \\) -print | wc -l)
+      count=$(find "$dir" -mindepth 1 -maxdepth 1 \
+        \( -name 'boring-sys-*' -o -name 'libboring_sys-*' \) -print | wc -l)
       if [ "$count" -gt 0 ]; then
-        find "$dir" -mindepth 1 -maxdepth 1 \\
-          \\( -name 'boring-sys-*' -o -name 'libboring_sys-*' \\) -exec rm -rf {} +
+        find "$dir" -mindepth 1 -maxdepth 1 \
+          \( -name 'boring-sys-*' -o -name 'libboring_sys-*' \) -exec rm -rf {} +
         echo "Removed $count stale boring-sys entries from $dir"
         removed=$((removed + count))
       fi
@@ -274,7 +274,7 @@ PY_BORING_SYS
 
   # Fail closed if a stale build-script output directory survived.
   for dir in target/release/build "target/$RUST_TARGET/release/build"; do
-    if [ -d "$dir" ] && find "$dir" -mindepth 1 -maxdepth 1 \\
+    if [ -d "$dir" ] && find "$dir" -mindepth 1 -maxdepth 1 \
        -type d -name 'boring-sys-*' -print -quit | grep -q .; then
       echo "FATAL: stale boring-sys build directory remains under $dir" >&2
       exit 1
