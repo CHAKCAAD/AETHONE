@@ -1,0 +1,225 @@
+=== Phase2 verification part2 2026-10-31T09:42:15Z ===
+--- 1. Aether blobless clone at pinned commit ---
+Cloning into '/home/z/my-project/work_aethone/phase2_evidence/src/aether'...
+Note: switching to 'd58f9d568083129ce2c767c85054021eb3ee6a38'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at d58f9d5 Fix the 2.4.0 release notes to cover everything since 2.3.0
+[COMMIT OK — proven by git checkout] CluvexStudio/Aether @ d58f9d568083129ce2c767c85054021eb3ee6a38
+committed: 2026-10-24 19:06:47 +0330
+subject: Fix the 2.4.0 release notes to cover everything since 2.3.0
+--- 2. Aether source facts ---
+top-level:
+Dockerfile
+Docs
+LICENSE
+README.fa.md
+README.md
+TRADEMARK.md
+aether
+aether.sh
+h2-bench.sh
+license-texts
+psiphon-build.sh
+pt-build.sh
+quiche
+third-party-notices.py
+>>> psiphon-related files:
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/aether/src/psiphon.rs
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/psiphon-build.sh
+>>> .gitmodules (if any):
+>>> psiphon.rs head:
+use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::time::Duration;
+
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
+use serde::Deserialize;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::{Child, Command};
+
+use crate::error::{AetherError, Result};
+
+const DEFAULT_BIND: &str = "127.0.0.1:1821";
+const READY_TIMEOUT_SECS: u64 = 180;
+const BINARY_NAMES: &[&str] = &["psiphon-tunnel-core", "psiphon"];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    Off,
+    Chain,
+    Reverse,
+    Only,
+}
+
+pub fn mode() -> Mode {
+    let raw = std::env::var("AETHER_PSIPHON")
+        .unwrap_or_default()
+        .trim()
+        .to_lowercase();
+
+    match raw.as_str() {
+        "" | "0" | "off" | "false" | "no" => Mode::Off,
+        "reverse" | "rev" | "warp-over-psiphon" => Mode::Reverse,
+        "only" | "alone" | "psiphon-only" | "direct" => Mode::Only,
+        _ => Mode::Chain,
+    }
+}
+
+pub fn listen_address() -> SocketAddr {
+    std::env::var("AETHER_PSIPHON_BIND")
+        .ok()
+        .and_then(|value| value.trim().parse().ok())
+        .unwrap_or_else(|| DEFAULT_BIND.parse().expect("a literal address"))
+}
+
+pub fn http_listen_address() -> Option<SocketAddr> {
+    std::env::var("AETHER_PSIPHON_HTTP")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty() && value != "off")
+        .and_then(|value| value.parse().ok())
+}
+
+pub fn state_dir(base_config: &str) -> PathBuf {
+    if let Some(dir) = std::env::var("AETHER_PSIPHON_DIR")
+        .ok()
+        .filter(|d| !d.trim().is_empty())
+    {
+        return PathBuf::from(dir.trim());
+>>> android / platform / 16KB references in scripts+workflows+docs:
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/.github/workflows/release.yml:499:  # Android / Termux targets, built with the NDK via cargo-ndk on the
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/.github/workflows/release.yml:500:  # latest Ubuntu runner (the NDK cross toolchain, not the host libc,
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/.github/workflows/release.yml:553:      - name: Install Android NDK
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/.github/workflows/release.yml:554:        id: ndk
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/.github/workflows/release.yml:555:        uses: nttld/setup-ndk@v1
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/.github/workflows/release.yml:557:          ndk-version: r26d
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/.github/workflows/release.yml:559:      - name: Install cargo-ndk
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/.github/workflows/release.yml:560:        run: cargo install cargo-ndk --locked
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/.github/workflows/release.yml:570:          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/.github/workflows/release.yml:571:          ANDROID_NDK_ROOT: ${{ steps.ndk.outputs.ndk-path }}
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/.github/workflows/release.yml:575:          cargo ndk -t ${{ matrix.abi }} --platform 29 build --release --features tor
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/aether/src/bridges.rs:24:    "obfs4 45.145.95.6:27015 C5B7CD6946FF10C5B3E89691A7D3F2C122D2117C cert=TD7PbUO0/0k6xYHMPW3vJxICfkMZNdkRrb63Zhl5j9dW3iRGiCx0A7mPhe5T2EDzQ35+Zw iat-mode=0",
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/.github/workflows/stable.yml:237:  android_ndk_lts:
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/.github/workflows/stable.yml:266:      - name: Install cargo-ndk
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/.github/workflows/stable.yml:267:        run: cargo install cargo-ndk
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/.github/workflows/stable.yml:269:      - name: Run cargo ndk
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/.github/workflows/stable.yml:270:        run: cargo ndk --manifest-path quiche/Cargo.toml --target ${{ matrix.arch }} --platform ${{ env.API_LEVEL }} -- build --verbose --features ffi
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/quiche/src/lib.rs:6675:                // We cap the maximum packet size to 16KB or so, so that it can be
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/tools/android/build_android_ndk19.sh:3:# Build quiche for Android NDK 19 or higher
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/tools/android/build_android_ndk19.sh:5:# ANDROID_NDK_HOME : android ndk location
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/tools/android/build_android_ndk19.sh:14:if [ ! -d "${ANDROID_NDK_HOME-}" ]; then
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/tools/android/build_android_ndk19.sh:15:    ANDROID_NDK_HOME=/usr/local/share/android-ndk
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/tools/android/build_android_ndk19.sh:28:    cargo ndk -t $arch -p $API_LEVEL -- build --features ffi $*
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:351:Building quiche for Android (NDK version 19 or higher, 21 recommended), can be
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:352:done using [cargo-ndk] (v2.0 or later).
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:354:First the [Android NDK] needs to be installed, either using Android Studio or
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:355:directly, and the `ANDROID_NDK_HOME` environment variable needs to be set to the
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:356:NDK installation path, e.g.:
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:359: $ export ANDROID_NDK_HOME=/usr/local/share/android-ndk
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:371:[cargo-ndk] (v2.0 or later) also needs to be installed:
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:374: $ cargo install cargo-ndk
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:378:the `-t <architecture>` and `-p <NDK version>` options are mandatory.
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:381: $ cargo ndk -t arm64-v8a -p 21 -- build --features ffi
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:384:See [build_android_ndk19.sh] for more information.
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:386:[Android NDK]: https://developer.android.com/ndk
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:387:[cargo-ndk]: https://docs.rs/crate/cargo-ndk
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/README.md:388:[build_android_ndk19.sh]: https://github.com/cloudflare/quiche/blob/master/tools/android/build_android_ndk19.sh
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/h3i/AGENTS.md:49:- **ConnectionSummary**: returned from both sync/async `connect()`. Contains per-stream frame maps, QUIC stats, path stats, close reason. Custom `Serialize` impl truncates binary at 16KB.
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/h3i/src/prompts/h3/mod.rs:250:    .with_page_size(18)
+/home/z/my-project/work_aethone/phase2_evidence/src/aether/quiche/h3i/src/prompts/h3/errors.rs:96:            .with_page_size(18)
+--- 3. Psiphon fork repo discovery ---
+FORK FOUND: https://github.com/CluvexStudio/psiphon-tunnel-core.git
+--- 3b. upstream psiphon probe ---
+upstream repo reachable: Psiphon-Labs/psiphon-tunnel-core
+--- 4. Psiphon fork blobless clone at pinned commit ---
+Cloning into '/home/z/my-project/work_aethone/phase2_evidence/src/psiphon-fork'...
+Note: switching to '2956a96b56fe09b99e72a8eb4bed3e79d29e3543'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 2956a96b QUIC noise profiles: junk and signature packets before the handshake, with Aether's light, firewall and gfw presets
+[COMMIT OK — proven by git checkout] https://github.com/CluvexStudio/psiphon-tunnel-core.git @ 2956a96b56fe09b99e72a8eb4bed3e79d29e3543
+committed: 2026-09-29 18:52:32 +0330
+subject: QUIC noise profiles: junk and signature packets before the handshake, with Aether's light, firewall and gfw presets
+>>> fork go.mod:
+module github.com/Psiphon-Labs/psiphon-tunnel-core
+
+go 1.26.0
+
+toolchain go1.26.3
+
+// The following replaces are required only when the build tag
+// PSIPHON_ENABLE_REFRACTION_NETWORKING is specified.
+
+replace gitlab.com/yawning/obfs4.git => github.com/jmwample/obfs4 v0.0.0-20230725223418-2d2e5b4a16ba
+
+replace github.com/pion/dtls/v2 => ./replace/dtls
+
+// pion/dtls v2 uses a local replace (replace/dtls) with [Psiphon] patches
+// for Conjure/refraction-networking support.
+>>> fork vs upstream base:
+upstream 83aa73b9b982e7421e00117f5b0c5aceb5dda452 IS ancestor of fork HEAD (per N1)
+>>> fork files changed vs upstream base (diff stat):
+ psiphon/common/noise/noise.go           | 239 +++++++++++++++++++++++++++++++
+ psiphon/common/noise/noise_test.go      | 240 ++++++++++++++++++++++++++++++++
+ psiphon/common/parameters/parameters.go |   2 +
+ psiphon/common/quic/quic.go             |   5 +
+ psiphon/common/quic/quic_test.go        |  25 +++-
+ psiphon/config.go                       |   5 +
+ psiphon/tunnel.go                       |  15 ++
+ psiphon/tunnel_noise_test.go            |  38 +++++
+ 8 files changed, 566 insertions(+), 3 deletions(-)
+--- 5. Zeptun blobless clone (record + Android evidence) ---
+Cloning into '/home/z/my-project/work_aethone/phase2_evidence/src/zeptun'...
+Note: switching to '08a1ab05aab315b7872ed582c52b7c230930d05d'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 08a1ab0 benchmark results from the runner
+[COMMIT OK — proven by git checkout] Noisemux/zeptun @ 08a1ab05aab315b7872ed582c52b7c230930d05d
+--- 6. NDK r26d version code probes (dl.google.com archives) ---
+placeholder probe r26d http=200
+=== DONE part2 ===

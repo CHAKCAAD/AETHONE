@@ -1,0 +1,256 @@
+=== AETHONE v4.1 evidence digest — bionic RELRO runtime behavior + official 16KB docs ===
+date: 2026-10-31T16:19:13Z
+
+--- fetched source files (sha256) ---
+6bfb0cd76e2fc41c4d5c6cbae792827e6b18ec3c6aa8f53b7eb9b05b5c18c76a  linker_phdr.cpp
+fcdc080bf5666d396a2928390cf35f067cff25a3ba04485032a085f90316562f  linker_main.cpp
+3e0da3960feebb3b12573862ed01255a875509fbf7de9e215116c35209a747fc  linker.h
+bc3295ba6ce9e42a2e9b6a3d25ab21ec216a0fb0c79b82e767dd5f1d6a72c56d  linker_phdr.h
+c7e9936c3f8a4e832e6d72e1a0523d8cbd0b0c9cdea9ba6438f0c5bfa949a9d6  page_sizes.html
+
+--- fetch provenance ---
+linker_phdr.cpp  : https://android.googlesource.com/platform/bionic/+/refs/heads/main/linker/linker_phdr.cpp?format=TEXT (base64-decoded)
+linker_main.cpp  : https://android.googlesource.com/platform/bionic/+/refs/heads/main/linker/linker.cpp?format=TEXT (base64-decoded)
+linker.h         : https://android.googlesource.com/platform/bionic/+/refs/heads/main/linker/linker.h?format=TEXT (base64-decoded)
+linker_phdr.h    : https://android.googlesource.com/platform/bionic/+/refs/heads/main/linker/linker_phdr.h?format=TEXT (base64-decoded)
+page_sizes.html  : https://developer.android.com/guide/practices/page-sizes (Last updated 2026-10-16 UTC per page footer)
+
+=====================================================================
+EXCERPT 1 — ElfReader: when 16KiB app-compat mode is enabled
+file: linker_phdr.cpp (AOSP main), lines ~185-192
+=====================================================================
+  if (kPageSize == 16*1024 && min_align_ == 4096) {
+    // This prop needs to be read on 16KiB devices for each ELF where min_palign is 4KiB.
+    // It cannot be cached since the developer may toggle app compat on/off.
+    // This check will be removed once app compat is made the default on 16KiB devices.
+    should_use_16kib_app_compat_ =
+        ::android::base::GetBoolProperty("bionic.linker.16kb.app_compat.enabled", false) ||
+        get_16kb_appcompat_mode();
+  }
+
+=====================================================================
+EXCERPT 2 — _extend_gnu_relro_prot_end: documented RW over-protection hazard
+       of the compatibility path (RX/RW page-sharing limitation)
+file: linker_phdr.cpp (AOSP main)
+=====================================================================
+static inline void _extend_gnu_relro_prot_end(const ElfW(Phdr)* relro_phdr,
+                                              const ElfW(Phdr)* phdr_table, size_t phdr_count,
+                                              ElfW(Addr) load_bias, ElfW(Addr)* seg_page_end,
+                                              bool should_pad_segments,
+                                              bool should_use_16kib_app_compat) {
+  // Find the index and phdr of the LOAD containing the GNU_RELRO segment
+  for (size_t index = 0; index < phdr_count; ++index) {
+    const ElfW(Phdr)* phdr = &phdr_table[index];
+
+    if (phdr->p_type == PT_LOAD && phdr->p_vaddr == relro_phdr->p_vaddr) {
+      // If the PT_GNU_RELRO mem size is not at least as large as the corresponding
+      // LOAD segment mem size, we need to protect only a partial region of the
+      // LOAD segment and therefore cannot avoid a VMA split.
+      //
+      // Note: Don't check the page-aligned mem sizes since the extended protection
+      // may incorrectly write protect non-relocation data.
+      //
+      // Example:
+      //
+      //               |---- 3K ----|-- 1K --|---- 3K ---- |-- 1K --|
+      //       ----------------------------------------------------------------
+      //               |            |        |             |        |
+      //        SEG X  |     RO     |   RO   |     RW      |        |   SEG Y
+      //               |            |        |             |        |
+      //       ----------------------------------------------------------------
+      //                            |        |             |
+      //                            |        |             |
+      //                            |        |             |
+      //                    relro_vaddr   relro_vaddr   relro_vaddr
+      //                    (load_vaddr)       +            +
+      //                                  relro_memsz   load_memsz
+      //
+      //       ----------------------------------------------------------------
+      //               |         PAGE        |         PAGE         |
+      //       ----------------------------------------------------------------
+      //                                     |       Potential      |
+      //                                     |----- Extended RO ----|
+      //                                     |      Protection      |
+      //
+      // If the check below uses  page aligned mem sizes it will cause incorrect write
+      // protection of the 3K RW part of the LOAD segment containing the GNU_RELRO.
+      if (relro_phdr->p_memsz < phdr->p_memsz) {
+        return;
+      }
+
+      ElfW(Addr) p_memsz = phdr->p_memsz;
+
+=====================================================================
+EXCERPT 3 — _phdr_table_set_gnu_relro_prot: the loop that processes EVERY
+       PT_GNU_RELRO segment, with the in-source page-boundary warning
+file: linker_phdr.cpp (AOSP main)
+=====================================================================
+/* Used internally by phdr_table_protect_gnu_relro and
+ * phdr_table_unprotect_gnu_relro.
+ */
+static int _phdr_table_set_gnu_relro_prot(const ElfW(Phdr)* phdr_table, size_t phdr_count,
+                                          ElfW(Addr) load_bias, int prot_flags,
+                                          bool should_pad_segments,
+                                          bool should_use_16kib_app_compat) {
+  const ElfW(Phdr)* phdr = phdr_table;
+  const ElfW(Phdr)* phdr_limit = phdr + phdr_count;
+
+  for (phdr = phdr_table; phdr < phdr_limit; phdr++) {
+    if (phdr->p_type != PT_GNU_RELRO) {
+      continue;
+    }
+
+    // Tricky: what happens when the relro segment does not start
+    // or end at page boundaries? We're going to be over-protective
+    // here and put every page touched by the segment as read-only.
+
+    // This seems to match Ian Lance Taylor's description of the
+    // feature at http://www.airs.com/blog/archives/189.
+
+    //    Extract:
+    //       Note that the current dynamic linker code will only work
+    //       correctly if the PT_GNU_RELRO segment starts on a page
+    //       boundary. This is because the dynamic linker rounds the
+    //       p_vaddr field down to the previous page boundary. If
+    //       there is anything on the page which should not be read-only,
+    //       the program is likely to fail at runtime. So in effect the
+    //       linker must only emit a PT_GNU_RELRO segment if it ensures
+    //       that it starts on a page boundary.
+    ElfW(Addr) seg_page_start = page_start(phdr->p_vaddr) + load_bias;
+    ElfW(Addr) seg_page_end = page_end(phdr->p_vaddr + phdr->p_memsz) + load_bias;
+    _extend_gnu_relro_prot_end(phdr, phdr_table, phdr_count, load_bias, &seg_page_end,
+                               should_pad_segments, should_use_16kib_app_compat);
+
+    int ret = mprotect(reinterpret_cast<void*>(seg_page_start),
+                       seg_page_end - seg_page_start,
+                       prot_flags);
+    if (ret < 0) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+/* Apply GNU relro protection if specified by the program header. This will
+ * turn some of the pages of a writable PT_LOAD segment to read-only, as
+ * specified by one or more PT_GNU_RELRO segments. This must be always
+ * performed after relocations.
+ *
+ * The areas typically covered are .got and .data.rel.ro, these are
+ * read-only from the program's POV, but contain absolute addresses
+ * that need to be relocated before use.
+ *
+ * Input:
+ *   phdr_table  -> program header table
+ *   phdr_count  -> number of entries in tables
+ *   load_bias   -> load bias
+ *   should_pad_segments -> Were segments extended to avoid gaps in the memory map
+ *   should_use_16kib_app_compat -> Is the ELF being loaded in 16KiB app compat mode.
+ * Return:
+ *   0 on success, -1 on failure (error code in errno).
+ */
+
+=====================================================================
+EXCERPT 4 — official Android documentation: RELRO security flag (16KB rule)
+source: developer.android.com/guide/practices/page-sizes  (text extracted)
+=====================================================================
+Check the RELRO security flag 
+
+ To mitigate security exploits, modern linkers use the
+ Relocation Read-Only (RELRO) flag to make relocation
+sections of the shared object file read-only after loading.
+Enable the RELRO flag in your build . 
+
+ A RELRO section having a start address plus segment size (MemSize) that is not
+16 KB aligned crashes the app at runtime with a segmentation fault. This
+happens if the .so file was built with NDK tool chain r27 and lower without
+enabling the relevant flags . 
+
+ Run the following command on each shared object file (Linux or macOS): 
+ SDK_ROOT_LOCATION /Android/sdk/ndk/ NDK_VERSION /toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-readelf -Wl SHARED_OBJECT_FILE.so | grep 'RELRO\|Type'
+ 
+ The GNU_RELRO string is printed if there's a RELRO segment. 
+
+ Next, check the RELRO segment alignment by summing its virtual offset address
+(VirtAddr) with the segment memory size (MemSiz) and dividing by 16 KB
+(0x4000). If the remainder (modulo) is zero, then the RELRO segment is
+16 KB aligned. 
+
+ Here's a an example for a non-aligned .so file: 
+ Type Offset VirtAddr PhysAddr FileSiz MemSiz Flg Align 
+GNU_RELRO 0x0cfaf0 0x00000000000dfaf0 0x00000000000dfaf0 0x01510 0x01510 R 0x1
+ 
+ Formula : (VirtAddr + MemSiz) % 0x4000 == 0 
+
+ Result : (0xdfaf0 + 0x01510) % 0x4000 = 0xE1000 % 0x4000 == 0x1000 
+
+ Since 0x1000 is not zero, this .so file isn't 16 KB compliant. The RELRO
+protection range from DC000 (the previous page break) to E4000 is read-only,
+but Android Linker expects the sub-range from E1000 to E4000 to be
+writable, resulting in a segmentation fault. In this case, rebuild the .so 
+file as described in the
+ Compile your app using 16 KB ELF alignment section. 
+
+ Here is an example of an aligned .so file, with a RELRO segment: 
+ Type Offset VirtAddr PhysAddr FileSiz MemSiz Flg Align
+GNU_RELRO 0x0cfaf0 0x00000000000dfaf0 0x00000000000dfaf0 0x01510 0x00510 R 0x1 
+ 
+ Here is a an example of an .so file without a RELRO segment: 
+ Type Offset VirtAddr PhysAddr FileSiz MemSiz Flg Align
+ 
+ This is a trivially 16 KB compliant .so file without having any RELRO
+segment. 
+
+ Here is an example of an aligned .so file where GNU_RELRO is in its own
+ LOAD segment: 
+ Type Offset VirtAddr PhysAddr FileSiz MemSiz Flg Align
+LOAD 0x000000 0x0000000000000000 0x0000000000000000 0x000680 0x000680 R E 0x4000
+LOAD 0x000680 0x0000000000004680 0x0000000000004680 0x0001d8 0x000980 RW 0x4000
+GNU_RELRO 0x000680 0x0000000000004680 0x0000000000004680 0x0001d8 0x000980 R 0x1
+ 
+ Formula : (VirtAddr + MemSiz) % 0x4000 == 0 
+
+ Result : (0x4680 + 0x0980) % 0x4000 = 0x5000 % 0x4000 == 0x1000 
+
+ Although 0x1000 isn't zero, this .so file is still 16 KB compliant. 
+
+ The modulo formula applies when GNU_RELRO shares a LOAD segment with
+subsequent writable data (such as .data or .bss ). 
+
+ To check whether GNU_RELRO is in its own LOAD segment, inspect the
+program headers by running llvm-readelf -Wl and filtering with
+ grep 'LOAD\|RELRO\|Type' . Compare the VirtAddr and MemSiz of
+ GNU_RELRO against the containing LOAD segment. In this example,
+both have VirtAddr 0x4680 and MemSiz 0x0980 . 
+
+ Because the entire LOAD segment contains only RELRO data, there's no
+writable data in the sub-range from 0x5000 to 0x8000. Additionally, any
+subsequent writable LOAD segment begins on a separate 16 KB page
+boundary (at 0x8000 or beyond). The linker's read-only protection won't
+overlap with any writable data, so no segmentation fault occurs. 
+
+ Build your app with support for 16 KB devices 
+
+ If your app uses native code, then complete the steps that are outlined in the
+following sections to make sure that your app supports 16 KB devices: 
+
+ 
+ Update the packaging of your shared libraries 
+ Compile your app using 16 KB ELF alignment 
+ Fix code and resolve runtime issues 
+ Optimize custom memory allocators (if applicable) 
+ Check SDKs for 16 KB support 
+ 
+ Tip: If you update your tools to the latest versions (AGP version 8.5.1 or
+higher and NDK version r28 or higher) and use 16 KB-compatible prebuilt
+dependencies, then your app is 16 KB compatible by default and you can
+skip to the step for fixing code and resolving runtime issues . 
+ Update the packaging of your
+
+=====================================================================
+EXCERPT 5 — official Android documentation: 16 KB backcompat mode
+source: developer.android.com/guide/practices/page-sizes  (text extracted)
+=====================================================================
+16 KB backcompat option is available when a device is running with a 16 KB kernel. The package manager runs an app in 16 KB backcompat mode when the following conditions are met: If the app has ELF files (with an .so extension) with a LOAD segment alignment of 4 KB. If the zipped APK has uncompressed ELF files that are 4 KB ZIP aligned. If the package manager has enabled 16 KB backcompat mode for an app, the app displays a warning when it's first launched saying that it's running in 16 KB backcompat mode. 16 KB backcompat mode allows some apps to work, but for best reliability and stability, apps should still be 16 KB aligned. On the app info page, under Advanced , toggle the setting Run app with page size compat mode to enable or disable the 16 KB backcompat mode for specific app. This setting is visible only when the device is running with 16 KB page size. Page size compat mode setting To force 16 KB backcompat on for every app on the device: adb shell setprop bionic.linker.16kb.app_compat.enabled true adb shell setprop pm.16kb.app_compat.disabled false To force 16 KB backcompat off for every app on the device: adb shell setprop bionic.linker.16kb.app_compat.enabled false adb shell setprop pm.16kb.app_compat.disabled true In Android 17, you can also force 16 KB backcompat off for every app and cause any incompatible binary to immediately abort: adb shell setprop bionic.linker.16kb.app_compat.enabled fatal adb shell setprop pm.16kb.app_compat.disabled true Set the android:pageSizeCompat property to enabled or disabled to turn on or off backcompat mode for a specific app in its AndroidManifest.xml . When this property is set, the app won't display backcompat mode warnings when it launches. Content and code samples on this page are subject to the licenses described in the Content License . Java and OpenJDK are trademarks or registered trademarks of Oracle and/or its affiliates. Last updated 2026-10-16 UTC. [[["Easy to understand","easyToUnderstand","thumb-up"],["Solved my problem","solvedMyProblem","thumb-up"],["Other","otherUp","thumb-up"]],[["Missing the information I need","missingTheInformationINeed","thumb-down"],["Too complicated / too many steps","tooComplicatedTooManySteps","thumb-down"],["Out of date","outOfDate","thumb-down"],["Samples / code issue","samplesCodeIssue","thumb-down"],["Other","otherDown","thumb-down"]],["Last updated 2026-10-16 UTC."]
+
+=== end of digest ===

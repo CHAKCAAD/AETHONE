@@ -1,0 +1,19 @@
+=== v4.3 -> v4.4 diff index (employer review: NDK input fix, machine counts, CLI dedup, packaging) ===
+
+Changed files:
+  .github/workflows/native-ci.yml  — ONLY change: NDK_VERSION split into r26d (input) +
+      NDK_PKG_REVISION=26.3.11579264 (check-only) + new fail-closed verify step.
+      No pin/SHA/version changed (nttld/setup-ndk SHA identical; NDK still r26d).
+  docs/FEATURE_MATRIX.md           — v4.4 title + correction note + 28 env-only reference.
+      NO matrix row changed (105 data rows / 25 App Surface).
+  docs/CLI_REFERENCE.md            — regenerated: RUST_LOG duplicate removed (28 env-only).
+  README.md                        — v4.4 changelog section added.
+New files:
+  evidence/feature_matrix_counts_v44.txt          — corrected machine counts (105/25/117-incl-headers)
+  evidence/setup_ndk_interface_evidence_v44.txt   — pinned action interface + live URL evidence
+  evidence/setup_ndk_pinned_source_v44/           — action.yml, installer.ts, main.ts @ pin SHA
+  evidence/validation_v44_changes.txt             — automated assertions for this round
+  evidence/evidence_manifest_v44.txt              — no self-hash (hash in external verification file)
+Unchanged: all scripts, rust-toolchain.toml, docs/SMART_AUTO_SPEC.md, all v4.2/v4.3 evidence
+(including feature_matrix_counts_v43.txt and evidence_manifest_v43.txt — kept as history,
+delivered exactly once since v4.4).

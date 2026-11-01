@@ -1,0 +1,78 @@
+lyrebird_proxy_arm64: go1.26.3
+	path	gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird/cmd/lyrebird
+	mod	gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird	(devel)	
+	dep	filippo.io/edwards25519	v1.1.0	h1:FNf4tywRC1HmFuKW5xopWpigGjJKiJSV0Cqo0cJWDaA=
+	dep	github.com/andybalholm/brotli	v1.1.1	h1:PR2pgnyFznKEugtsUo0xLdDop5SKXd5Qf5ysW+7XdTA=
+	dep	github.com/aws/aws-sdk-go-v2	v1.36.1	h1:iTDl5U6oAhkNPba0e1t1hrwAo02ZMqbrGq4k5JBWM5E=
+	dep	github.com/aws/aws-sdk-go-v2/config	v1.29.6	h1:fqgqEKK5HaZVWLQoLiC9Q+xDlSp+1LYidp6ybGE2OGg=
+	dep	github.com/aws/aws-sdk-go-v2/credentials	v1.17.59	h1:9btwmrt//Q6JcSdgJOLI98sdr5p7tssS9yAsGe8aKP4=
+	dep	github.com/aws/aws-sdk-go-v2/feature/ec2/imds	v1.16.28	h1:KwsodFKVQTlI5EyhRSugALzsV6mG/SGrdjlMXSZSdso=
+	dep	github.com/aws/aws-sdk-go-v2/internal/configsources	v1.3.32	h1:BjUcr3X3K0wZPGFg2bxOWW3VPN8rkE3/61zhP+IHviA=
+	dep	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2	v2.6.32	h1:m1GeXHVMJsRsUAqG6HjZWx9dj7F5TR+cF1bjyfYyBd4=
+	dep	github.com/aws/aws-sdk-go-v2/internal/ini	v1.8.2	h1:Pg9URiobXy85kgFev3og2CuOZ8JZUBENF+dcgWBaYNk=
+	dep	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding	v1.12.2	h1:D4oz8/CzT9bAEYtVhSBmFj2dNOtaHOtMKc2vHBwYizA=
+	dep	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url	v1.12.13	h1:SYVGSFQHlchIcy6e7x12bsrxClCXSP5et8cqVhL8cuw=
+	dep	github.com/aws/aws-sdk-go-v2/service/sqs	v1.37.14	h1:KSVbQW2umLp7i4Lo6mvBUz5PqV+Ze/IL6LCTasxQWEk=
+	dep	github.com/aws/aws-sdk-go-v2/service/sso	v1.24.15	h1:/eE3DogBjYlvlbhd2ssWyeuovWunHLxfgw3s/OJa4GQ=
+	dep	github.com/aws/aws-sdk-go-v2/service/ssooidc	v1.28.14	h1:M/zwXiL2iXUrHputuXgmO94TVNmcenPHxgLXLutodKE=
+	dep	github.com/aws/aws-sdk-go-v2/service/sts	v1.33.14	h1:TzeR06UCMUq+KA3bDkujxK1GVGy+G8qQN/QVYzGLkQE=
+	dep	github.com/aws/smithy-go	v1.22.2	h1:6D9hW43xKFrRx/tXXfAlIZc4JI+yQe6snnWcQyxSyLQ=
+	dep	github.com/cloudflare/circl	v1.5.0	h1:hxIWksrX6XN5a1L2TI/h53AGPhNHoUBo+TD1ms9+pys=
+	dep	github.com/dchest/siphash	v1.2.3	h1:QXwFc8cFOR2dSa/gE6o/HokBMWtLUaNDVd+22aKHeEA=
+	dep	github.com/golang/mock	v1.6.0	h1:ErTB+efbowRARo13NNdxyJji2egdxLGQhRaY+DUumQc=
+	dep	github.com/google/uuid	v1.6.0	h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+	dep	github.com/klauspost/compress	v1.17.11	h1:In6xLpyWOi1+C7tXUUWv2ot1QvBjxevKAaI6IXrJmUc=
+	dep	github.com/klauspost/cpuid/v2	v2.2.9	h1:66ze0taIn2H33fBvCkXuv9BmCwDfafmiIVpKV9kKGuY=
+	dep	github.com/klauspost/reedsolomon	v1.12.4	h1:5aDr3ZGoJbgu/8+j45KtUJxzYm8k08JGtB9Wx1VQ4OA=
+	dep	github.com/miekg/dns	v1.1.63	h1:8M5aAw6OMZfFXTT7K5V0Eu5YiiL8l7nUAkyN6C9YwaY=
+	dep	github.com/patrickmn/go-cache	v2.1.0+incompatible	h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
+	dep	github.com/pion/datachannel	v1.5.10	h1:ly0Q26K1i6ZkGf42W7D4hQYR90pZwzFOjTq5AuCKk4o=
+	dep	github.com/pion/dtls/v3	v3.0.4	h1:44CZekewMzfrn9pmGrj5BNnTMDCFwr+6sLH+cCuLM7U=
+	dep	github.com/pion/ice/v4	v4.0.7	h1:mnwuT3n3RE/9va41/9QJqN5+Bhc0H/x/ZyiVlWMw35M=
+	dep	github.com/pion/interceptor	v0.1.37	h1:aRA8Zpab/wE7/c0O3fh1PqY0AJI3fCSEM5lRWJVorwI=
+	dep	github.com/pion/logging	v0.2.3	h1:gHuf0zpoh1GW67Nr6Gj4cv5Z9ZscU7g/EaoC/Ke/igI=
+	dep	github.com/pion/mdns/v2	v2.0.7	h1:c9kM8ewCgjslaAmicYMFQIde2H9/lrZpjBkN8VwoVtM=
+	dep	github.com/pion/randutil	v0.1.0	h1:CFG1UdESneORglEsnimhUjf33Rwjubwj6xfiOXBa3mA=
+	dep	github.com/pion/rtcp	v1.2.15	h1:LZQi2JbdipLOj4eBjK4wlVoQWfrZbh3Q6eHtWtJBZBo=
+	dep	github.com/pion/rtp	v1.8.12	h1:nsKs8Wi0jQyBFHU3qmn/OvtZrhktVfJY0vRxwACsL5U=
+	dep	github.com/pion/sctp	v1.8.37	h1:ZDmGPtRPX9mKCiVXtMbTWybFw3z/hVKAZgU81wcOrqs=
+	dep	github.com/pion/sdp/v3	v3.0.11	h1:VhgVSopdsBKwhCFoyyPmT1fKMeV9nLMrEKxNOdy3IVI=
+	dep	github.com/pion/srtp/v3	v3.0.4	h1:2Z6vDVxzrX3UHEgrUyIGM4rRouoC7v+NiF1IHtp9B5M=
+	dep	github.com/pion/stun/v3	v3.0.0	h1:4h1gwhWLWuZWOJIJR9s2ferRO+W3zA/b6ijOI6mKzUw=
+	dep	github.com/pion/transport/v3	v3.0.7	h1:iRbMH05BzSNwhILHoBoAPxoB9xQgOaJk+591KC9P1o0=
+	dep	github.com/pion/turn/v4	v4.0.0	h1:qxplo3Rxa9Yg1xXDxxH8xaqcyGUtbHYw4QSCvmFWvhM=
+	dep	github.com/pion/webrtc/v4	v4.0.13	h1:XuUaWTjRufsiGJRC+G71OgiSMe7tl7mQ0kkd4bAqIaQ=
+	dep	github.com/pkg/errors	v0.9.1	h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+	dep	github.com/realclientip/realclientip-go	v1.0.0	h1:+yPxeC0mEaJzq1BfCt2h4BxlyrvIIBzR6suDc3BEF1U=
+	dep	github.com/refraction-networking/utls	v1.6.7
+	=>	gitlab.torproject.org/shelikhoo/utls-temporary	v0.0.0-20260114141111-0f042ad603ef	h1:EjqrOEAMf6S/zOB1qQUILNd2t8kbCnJNSUCqaNPXXXc=
+	
+	dep	github.com/templexxx/cpu	v0.1.1	h1:isxHaxBXpYFWnk2DReuKkigaZyrjs2+9ypIdGP4h+HI=
+	dep	github.com/templexxx/xorsimd	v0.4.3	h1:9AQTFHd7Bhk3dIT7Al2XeBX5DWOvsUPZCuhyAtNbHjU=
+	dep	github.com/tjfoc/gmsm	v1.4.1	h1:aMe1GlZb+0bLjn+cKTPEvvn9oUEBlJitaZiiBwsbgho=
+	dep	github.com/txthinking/runnergroup	v0.0.0-20241229123329-7b873ad00768	h1:5LCkYJacA/M7KE6ziubXWi/OP6efchScE479kIV7OYU=
+	dep	github.com/txthinking/socks5	v0.0.0-20230325130024-4230056ae301	h1:d/Wr/Vl/wiJHc3AHYbYs5I3PucJvRuw3SvbmlIRf+oM=
+	dep	github.com/wlynxg/anet	v0.0.5	h1:J3VJGi1gvo0JwZ/P1/Yc/8p63SoW98B5dHkYDmpgvvU=
+	dep	github.com/xtaci/kcp-go/v5	v5.6.18	h1:7oV4mc272pcnn39/13BB11Bx7hJM4ogMIEokJYVWn4g=
+	dep	github.com/xtaci/smux	v1.5.34	h1:OUA9JaDFHJDT8ZT3ebwLWPAgEfE6sWo2LaTy3anXqwg=
+	dep	gitlab.com/yawning/edwards25519-extra	v0.0.0-20231005122941-2149dcafc266	h1:IvjshROr8z24+UCiOe/90cUWt3QDr8Rt+VkUjZsn+i0=
+	dep	gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib	v1.6.0	h1:KD9m+mRBwtEdqe94Sv72uiedMWeRdIr4sXbrRyzRiIo=
+	dep	gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/ptutil	v0.0.0-20250130151315-efaf4e0ec0d3	h1:pwWCiqrB6b3SynILsv3M+76utmcgMiTZ2aqfccjWmxo=
+	dep	gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2	v2.11.0	h1:k91gpxp168GBMpbAZL07oMxoG9WZqRKXK4JM10ysUys=
+	dep	gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/webtunnel	v0.0.3	h1:/uY4/KT/U4+mFznyb8UUIs/KJoWc6ShbaGTefQ+LJvE=
+	dep	golang.org/x/crypto	v0.33.0	h1:IOBPskki6Lysi0lo9qQvbxiQ+FvsCC/YWOecCHAixus=
+	dep	golang.org/x/net	v0.35.0	h1:T5GQRQb2y08kTAByq9L4/bz8cipCdA8FbRTXewonqY8=
+	dep	golang.org/x/sys	v0.30.0	h1:QjkSwP/36a20jFYWkSue1YwXzLmsV5Gfq7Eiy72C1uc=
+	dep	golang.org/x/text	v0.22.0	h1:bofq7m3/HAFvbF51jz3Q9wLg3jkvSPuiZu/pD1XwgtM=
+	build	-buildmode=exe
+	build	-compiler=gc
+	build	-trimpath=true
+	build	DefaultGODEBUG=asynctimerchan=1,containermaxprocs=0,cryptocustomrand=1,decoratemappings=0,gotestjsonbuildtext=1,gotypesalias=0,httpcookiemaxnum=0,httpservecontentkeepheaders=1,multipathtcp=0,randseednop=0,rsa1024min=0,tls3des=1,tlsmlkem=0,tlssecpmlkem=0,tlssha1=1,updatemaxprocs=0,urlmaxqueryparams=0,urlstrictcolons=0,winreadlinkvolume=0,winsymlink=0,x509keypairleaf=0,x509negativeserial=1,x509rsacrt=0,x509sha256skid=0,x509usepolicies=0
+	build	CGO_ENABLED=0
+	build	GOARCH=arm64
+	build	GOOS=linux
+	build	GOARM64=v8.0
+	build	vcs=git
+	build	vcs.revision=99e38a787cc372f9d5de81e5e27219aadbd6dbfb
+	build	vcs.time=2026-10-31T14:05:34Z
+	build	vcs.modified=true

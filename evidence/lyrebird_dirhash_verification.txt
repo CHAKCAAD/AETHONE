@@ -1,0 +1,9 @@
+zip: /home/z/my-project/work_aethone/v41_evidence/lyrebird_proxy.zip
+files hashed: 67
+computed module h1:  h1:uzPZpf45zlpdB/Gyk8P+QGjsuEeReitMpsaPiBmHncM=
+sum.golang.org h1:   h1:uzPZpf45zlpdB/Gyk8P+QGjsuEeReitMpsaPiBmHncM=
+RESULT: MATCH — proxy zip content == checksum-DB-recorded content for lyrebird@v0.0.0-20260312101154-fc105a03c0e0
+computed go.mod h1:  h1:uCIr865SJMJ4LHn90G3+L/MmMCA8cix7ZAvV74HcWLo=
+sum.golang.org:      h1:uCIr865SJMJ4LHn90G3+L/MmMCA8cix7ZAvV74HcWLo=
+go.mod hash: MATCH
+go.mod content sha256: ac4bddbc3f5b5e12afb9bb3af7ec02cb36675305dfc1acdd446b445ad1f6a3f0

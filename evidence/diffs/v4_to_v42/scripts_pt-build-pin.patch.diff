@@ -1,0 +1,81 @@
+--- a/scripts/pt-build-pin.patch
++++ b/scripts/pt-build-pin.patch
+@@ -16,11 +16,24 @@
+ #     proxy pseudo-version assertion.
+ #   * The pin fc105a03c0e0 itself is untouched (N8 — frozen).
+ #
++# v4.2 (employer review of v4.1, item 2):
++#   * proxy path: the curl lookup + h1 grep does NOT validate the SIGNATURE
++#     of the sumdb record. The record is now verified EXPLICITLY by the
++#     OFFICIAL Go client (go command, GOSUMDB=sum.golang.org; the key is
++#     hard-coded in the official toolchain), run in a fresh temp module so
++#     the sumdb is genuinely consulted. The zip entering the build must be
++#     byte-identical (sha256) to the zip the go client verified. The local
++#     dirhash check is kept as defense in depth. Every failure aborts the
++#     build. Raw mechanism proof (analysis environment):
++#     evidence/lyrebird_sumdb_goclient_verification.txt. The CI execution of
++#     this code path stays NOT TESTED until the first real CI run.
++#   * git path: unchanged. Pin: unchanged (N8).
++#
+ diff --git a/pt-build.sh b/pt-build.sh
+ index af491d3..7e52a5b 100644
+ --- a/pt-build.sh
+ +++ b/pt-build.sh
+-@@ -156,14 +156,96 @@ version="v0.0.0-20260312101154-fc105a03c0e0"
++@@ -156,14 +156,137 @@ version="v0.0.0-20260312101154-fc105a03c0e0"
+  work="$(mktemp -d)"
+  trap 'rm -rf "$work"' EXIT
+  
+@@ -113,9 +126,50 @@
+ +        exit 1
+ +    fi
+ +    echo "pt-build: proxy zip verified against sum.golang.org: $sumdb_h1" >&2
+-+    printf '{"path":"proxy","module":"%s","version":"%s","pin":"%s","zip_sha256":"%s","dirhash":"%s","sumdb_response_sha256":"%s"}\n' \
+++    # AETHONE v4.2 (employer review of v4.1, item 2): the lookup + h1 grep
+++    # above does NOT validate the SIGNATURE of the sumdb record. Verify the
+++    # signed record EXPLICITLY with the OFFICIAL Go client (GOSUMDB), in a
+++    # fresh temp module (a go.sum that already carries h1 entries satisfies
+++    # 'go mod download' WITHOUT consulting the sumdb — behaviour recorded in
+++    # evidence/lyrebird_sumdb_goclient_verification.txt, control B note).
+++    if ! command -v go >/dev/null 2>&1; then
+++        echo "pt-build: FATAL: go not found — official Go-client sumdb verification cannot run (pin $commit)" >&2
+++        exit 1
+++    fi
+++    goverify="$(mktemp -d)"
+++    if ! (
+++        export GOFLAGS= GONOPROXY= GONOSUMDB= GOPRIVATE=
+++        export GOPROXY="https://proxy.golang.org,direct" GOSUMDB="sum.golang.org"
+++        export GOTOOLCHAIN=local GOPATH="$goverify/gopath"
+++        export GOMODCACHE="$goverify/gomodcache" GOCACHE="$goverify/gocache"
+++        cd "$goverify" || exit 1
+++        go mod init aethone-sumdb-verify || exit 1
+++        go mod edit -require="$module@$version" || exit 1
+++        go mod download -x "$module" || exit 1
+++    ) > "$work/lyrebird_goclient_transcript.log" 2>&1; then
+++        cat "$work/lyrebird_goclient_transcript.log" >&2
+++        echo "pt-build: FATAL: the official Go client did NOT verify the signed sumdb record for $module@$version — SOURCE NOT PROVEN, refusing to build (pin $commit)" >&2
+++        rm -rf "$goverify"
+++        exit 1
+++    fi
+++    go_zip="$goverify/gomodcache/cache/download/$module/@v/$version.zip"
+++    if [ ! -f "$go_zip" ]; then
+++        echo "pt-build: FATAL: go-client-verified zip not found in module cache: $go_zip (pin $commit)" >&2
+++        rm -rf "$goverify"
+++        exit 1
+++    fi
+++    go_zip_sha256="$(sha256sum "$go_zip" | awk '{print $1}')"
+++    if [ "$go_zip_sha256" != "$zip_sha256" ]; then
+++        echo "pt-build: FATAL: zip identity mismatch: downloaded $zip_sha256 != go-client-verified $go_zip_sha256 — the verified zip is not the build zip, refusing to build (pin $commit)" >&2
+++        rm -rf "$goverify"
+++        exit 1
+++    fi
+++    rm -rf "$goverify"
+++    echo "pt-build: signed sumdb record verified by the official Go client (GOSUMDB=sum.golang.org); build zip is byte-identical to the verified zip: $go_zip_sha256" >&2
+++    printf '{"path":"proxy","module":"%s","version":"%s","pin":"%s","zip_sha256":"%s","dirhash":"%s","sumdb_response_sha256":"%s","sumdb_goclient":"verified-by-official-go-client","zip_identity":"curl==go-client","goclient_transcript_sha256":"%s"}\n' \
+ +        "$module" "$version" "$commit" "$zip_sha256" "$local_h1" \
+-+        "$(sha256sum "$work/lyrebird.sumdb" | awk '{print $1}')" > "$PT_LYREBIRD_PROOF_FILE"
+++        "$(sha256sum "$work/lyrebird.sumdb" | awk '{print $1}')" \
+++        "$(sha256sum "$work/lyrebird_goclient_transcript.log" | awk '{print $1}')" > "$PT_LYREBIRD_PROOF_FILE"
+ +    echo "pt-build: source-origin proof (proxy) -> $PT_LYREBIRD_PROOF_FILE" >&2
+      (cd "$work" && unzip -q lyrebird.zip)
+  

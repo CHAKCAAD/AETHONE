@@ -1,0 +1,48 @@
+=== AETHONE v4.4 — Master Feature Matrix counts (machine-generated, corrected rule) ===
+
+FIXED RULE (v4.4): a data row is a table row that is not a separator row and NOT
+immediately followed by a |---| separator (header rows excluded). The v4.3 counter
+counted header rows as data rows (12 of them), inflating 105 to 117.
+
+Matrix rows per section (data rows | header rows):
+    5 data | 1 header  1. Protocol selection — pinned-source taxonomy (correction item 3)
+    4 data | 1 header  2. Independent core layers (correction item 4) — one capability per axis, never merged
+   19 data | 2 header  3. Tor — native Aether capability behind the cargo feature `tor` (correction item 1)
+   15 data | 2 header  4. Psiphon — Aether-managed capability (correction item 6)
+    3 data | 1 header  5. Reverse-mode carrier restrictions (correction item 5)
+   15 data | 1 header  6. Connection & traffic surface — pinned source
+    7 data | 1 header  7. TLS / ECH / fingerprint & Zero Trust surface — pinned source
+    4 data | 1 header  8. SMART AUTO — registered requirement (correction item 7)
+   25 data | 1 header  9. AETHONE app surface (Phase-1 analysis report v2) — UI-frozen groups (correction item 8)
+    8 data | 1 header  10. Native build, CI and verification infrastructure (unchanged from v4.2)
+    0 data | 0 header  11. Platforms
+    0 data | 0 header  12. Freeze confirmation (applies to every row above)
+    0 data | 0 header  13. Counts & completeness
+
+  TOTAL data rows          : 105   (corrected figure — employer review of v4.3)
+  TOTAL header rows        : 12
+  TOTAL table rows incl. headers: 117   (reported in v4.3 as '117 features' — superseded)
+  App Surface (section 9) data rows: 25
+
+Status token occurrences in FEATURE_MATRIX.md (cells may combine tokens):
+  VERIFIED: 14
+  NOT TESTED: 114
+  BLOCKED: 4
+  WARN: 2
+  NOT IMPLEMENTED: 5
+  SPECIFICATION REQUIRED: 2
+
+CLI_REFERENCE.md rows (machine recount):
+  parser-arm table rows:            113
+  environment-only table rows:      28
+  distinct environment-only names:  28  (RUST_LOG occurrences: 1 — v4.3 had 2)
+  total numbered table rows:        141
+
+Incomplete / open items registered (statuses other than plain VERIFIED):
+  - runtime on Android for EVERY attested CLI option: NOT TESTED until first real build/device run (N2)
+  - Tor: Android build with --features tor NOT TESTED; Tor execution on Android NOT TESTED; app integration NOT TESTED
+  - Psiphon: execution on Android NOT TESTED; official credentials BLOCKED (N6); nativeLibraryDir execution N7 NOT TESTED
+  - SMART AUTO: SPECIFICATION REQUIRED / NOT IMPLEMENTED / NOT TESTED
+  - UI groups (9.x): frozen; UI work not permitted this phase
+  - GitHub Actions execution: NOT TESTED / BLOCKED on push approval
+  - the corrected GitHub Actions workflow itself has never been executed (NOT TESTED)

@@ -1,0 +1,355 @@
+--- 2026-11-01 11:24:32.101880427 +0000
++++ 2026-11-01 13:28:15.206305047 +0000
+@@ -1,61 +1,305 @@
+-# AETHONE — Feature Matrix (created by employer directive, post-v4.1 review, item 9)
++# AETHONE — Master Feature Matrix (v4.3)
+ 
+-One row per core feature. Statuses use the project's four-state vocabulary
+-(VERIFIED / NOT TESTED / BLOCKED / WARN) plus `SPEC …` markers where a
+-specification itself is the open item. "Backend" = the native/CI side of the
+-frozen pins. "UI" = Flutter/Figma — **frozen this phase** (no UI change is
+-permitted without separate employer approval; nothing here upgrades UI work).
+-
+-Anchor evidence: `evidence/protocol_surface_pinned_commit_v42.txt` (pinned
+-Aether commit `d58f9d5…`, `cli.rs` sha256 `c974d7f1…`, byte-identical live
+-fetch), `evidence/pins_summary.json`, `docs/SMART_AUTO_SPEC.md`.
+-
+-## SMART AUTO (binding core requirement — registered, not implemented)
++**Revision scope (employer directive, post-v4.2 review):** full reconciliation of this
++matrix and of `docs/SMART_AUTO_SPEC.md` with the **real Aether source at the pinned
++commit** — no guessing, no invented naming, no capability imported from other versions.
++
++**Anchor source (single ground truth for every row below):**
++
++- Commit `d58f9d568083129ce2c767c85054021eb3ee6a38` (Aether 2.4.0, frozen by N1/N8).
++- Files used, byte-identical to the live commit (live-fetch proof:
++  `evidence/protocol_surface_pinned_commit_v43.txt`):
++  `aether/src/cli.rs` (`c974d7f1…`), `aether/src/lib.rs` (`f32943f5…`),
++  `aether/src/tor.rs` (`4c70ad4a…`), `aether/src/psiphon.rs` (`4f9b245f…`),
++  `aether/src/bridges.rs` (`96f7e91c…`), `aether/Cargo.toml` (`216fb0c9…`).
++- `docs/CLI_REFERENCE.md` — all **113 parser arms** (90 flag-driven environment
++  variables) and **29 environment-only variables**, generated programmatically from
++  `cli.rs` with exact line numbers.
++- Companion: `evidence/feature_matrix_counts_v43.txt`,
++  `evidence/insufficient_source_evidence_v43.txt`, `evidence/pins_summary.json`.
++
++**Status vocabulary:** `VERIFIED` / `NOT TESTED` / `BLOCKED` / `WARN` /
++`NOT IMPLEMENTED` / `SPECIFICATION REQUIRED`.
++**Column meaning:** "Backend" = native/CI side of the frozen pins. "UI" =
++Flutter/Figma — **frozen this phase**. "**CLI attested**" = the pinned source exposes
++the option; it is **never** a runtime-capability proof. Every line reference (L…) is
++inside the file named in the same cell, at the pinned commit.
++
++**Correction carried by this revision:** the v4.2 statement *"NOT in pinned Aether
++CLI surface (no `--tor` flag recorded)"* was **wrong** and is retracted in full —
++§3 below. No other v4.2 row is silently rewritten; v4.2→v4.3 diffs are under
++`evidence/diffs/v42_to_v43/`.
++
++---
++
++## 1. Protocol selection — pinned-source taxonomy (correction item 3)
++
++The pinned `lib.rs` `Protocol` enum has **exactly four members** (lib.rs L3444–3449):
++`Masque`, `WireGuard`, `WarpInWarp`, `MasqueInMasque`.
++`Protocol::parse` (lib.rs L3452–3460) accepts the aliases below; `--protocol` accepts
++only `masque | wg | gool | mim` (cli.rs L74).
++
++**GOOL Classic is NOT a fifth protocol and NOT a `--protocol` value.** The parser arm
++`--gool-classic` sets `AETHER_PROTOCOL=gool` **and** `AETHER_GOOL_MODE=classic`
++(cli.rs L644–647). Therefore:
++
++- **GOOL** = WireGuard carried **inside MASQUE** (WarpInWarp family);
++- **GOOL Classic** = WireGuard carried **inside WireGuard** (submode of the same
++  WarpInWarp family, selected by `AETHER_GOOL_MODE=classic`; also selected by naming
++  any `--wiw-*` endpoint, `gool_classic()` lib.rs L3015–3023).
++
++The UI may present two cards (GOOL / GOOL Classic); on the backend both map to the
++WarpInWarp/GOOL family with a different mode setting. SMART AUTO may evaluate the
++**five transport profiles** below, but documentation must keep the distinction
++between the four protocol types and the Classic submode.
++
++| # | Transport profile | Pinned-source surface | Specification | Backend | UI | Testing |
++|---|---|---|---|---|---|---|
++| 1.1 | MASQUE (default) | `--masque` (cli.rs L56, parser L637) | attested, 4-member enum lib.rs L3444–3449 | in pinned source; build via CI (`NOT TESTED`) | frozen | `NOT TESTED` |
++| 1.2 | WireGuard (WG) | `--wg`, `--wireguard`, `--warp` (L57, parser L638) | attested | in pinned source; build via CI | frozen | `NOT TESTED` |
++| 1.3 | GOOL (WG in MASQUE) | `--gool`, `--wiw` (L59, parser L639); `--gool-peer` L66 | attested | in pinned source; build via CI | frozen | `NOT TESTED` |
++| 1.4 | GOOL Classic (WG in WG) — **submode, not a protocol value** | `--gool-classic` (L68, parser L644–647 sets `gool`+`classic`) | attested as submode | in pinned source; build via CI | frozen | `NOT TESTED` |
++| 1.5 | MIM (MASQUE in MASQUE) | `--mim`, `--masque-in-masque` (L69, parser L648) | attested | in pinned source; build via CI | frozen | `NOT TESTED` |
++
++GOOL Classic endpoints (select the classic submode on their own): `--wiw-outer` L84,
++`--wiw-inner` L85, `--wiw-peers` L86, `--wiw-scan` L87. MIM endpoints:
++`--mim-outer` L94, `--mim-inner` L95, `--mim-peers` L96, `--mim-scan` L97.
++
++## 2. Independent core layers (correction item 4) — one capability per axis, never merged
++
++| # | Layer | Real values (pinned source) | Surface | Specification | Backend | UI | Testing |
++|---|---|---|---|---|---|---|---|
++| 2.a | **Protocol Selection** | masque, wg, gool, gool-classic (submode), mim | §1 | attested | in pinned source | frozen | `NOT TESTED` |
++| 2.b | **Scan Mode** (endpoint-scan intensity/depth — independent of §2.a) | `turbo`, `balanced`, `thorough`, `verified`, `ironclad` | `--scan` cli.rs L101 + per-mode flags L102–109 (parser L655–660); enum prober.rs L472–478 | attested | in pinned source | frozen | `NOT TESTED` |
++| 2.c | **Noise Profile** (obfuscation — independent of §2.a/2.b) | `off`, `light`, `firewall`, `balanced`, `gfw`, `aggressive` | `--noize` cli.rs L114 (parser L662); defaults: firewall for MASQUE, balanced for WG/gool (lib.rs L742/748) | attested | in pinned source | frozen | `NOT TESTED` |
++| 2.d | **MASQUE Transport** (independent of §2.a — `--h2`/`--h3` are NOT protocols) | HTTP/3 (QUIC, default) vs HTTP/2 (TCP) | `--h2/--http2` cli.rs L120 (parser L664), `--h3/--quic` L121 (parser L665), `--no-quic-v2` L122, `--h2-peer` L125 | attested | in pinned source; forced to HTTP/2 inside Reverse modes (lib.rs L216, L242) | frozen | `NOT TESTED` |
++
++## 3. Tor — native Aether capability behind the cargo feature `tor` (correction item 1)
++
++**v4.2 retraction.** v4.2 wrote that Tor is *"NOT in pinned Aether CLI surface (no
++`--tor` flag recorded)"*. That was incorrect. At the pinned commit Tor support is
++**native to Aether**, implemented with Arti, and gated behind the cargo feature
++`tor`:
++
++- `Cargo.toml` L64–66: `tor = ["dep:arti-client", "dep:tor-chanmgr", "dep:tor-rtcompat", "dep:tokio-util", "dep:liblzma", "dep:tracing-subscriber"]`; the optional Arti dependencies sit at L57–62 (arti-client 0.46 …).
++- `tor.rs` L7–12: `Mode { Off, Chain, Reverse, Only }`; `mode()` parses `AETHER_TOR` (L25–37).
++- **Without** the feature, every entry point returns the explicit error *"this build has no tor support; rebuild with `cargo build --release --features tor`"* (tor.rs L191–196; stubs for `run_chain` L198–201, `run_only` L203–210, `start_reverse` L212–215).
++- **With** the feature, the real implementations are compiled (tor.rs L217–221 gate `with_tor`; `run_chain` L866, `run_only` L887, `start_reverse` L905).
++- `build_native.sh` **L187** builds `aether` with `cargo ndk … build --release --features tor` — activation request `VERIFIED` (script-level; execution `NOT TESTED`).
++
++Tor is **not** presented as a capability outside the core: the implementation below is
++Aether's own; app-level integration and Android runtime are separate rows.
++
++### 3.1 The three Tor modes — one row each (correction item 2)
++
++| # | Mode | Pinned-source surface | Listener roles | Specification | Backend (source) | Android runtime | App integration |
++|---|---|---|---|---|---|---|---|
++| 3.1.a | **TOR ONLY** | `--tor-only` (cli.rs L238, parser L586 → `AETHER_TOR=only`); tor.rs `Mode::Only` | **main listener** `--bind` (default `127.0.0.1:1819`, L23) serves plain Tor — no tunnel (USAGE L238) | attested | `VERIFIED` in source (tor.rs `run_only` L887) | `NOT TESTED` | `NOT TESTED` |
++| 3.1.b | **AETHER → TOR** (chain) | `--tor` (cli.rs L227, parser L584 → `AETHER_TOR=chain`); aether → warp → tor → internet (USAGE L227–231) | main listener keeps the WARP exit; **second listener** `--tor-bind` (default `127.0.0.1:1820`, L239) is the Tor egress | attested | `VERIFIED` in source (tor.rs `run_chain` L866) | `NOT TESTED` | `NOT TESTED` |
++| 3.1.c | **TOR → AETHER** (reverse) | `--tor-reverse` (cli.rs L232, parser L585 → `AETHER_TOR=reverse`); tunnel dialed through Tor (USAGE L232–237) | second listener `--tor-bind` serves the Tor side; tunnel dials through it | attested | `VERIFIED` in source (tor.rs `start_reverse` L905; refusal logic lib.rs L203–218) | `NOT TESTED` | `NOT TESTED` |
++
++Build gate for all three: cargo feature `tor` (`cargo build --release --features tor`,
++USAGE L203–204; `build_native.sh` L187). Source presence `VERIFIED`; **real Android
++build with the feature: `NOT TESTED`; real Tor execution on Android: `NOT TESTED`;
++AETHONE app integration/management: `NOT TESTED`.**
++
++### 3.2 Tor parameters — pinned source (correction item 2)
++
++| Parameter | Meaning (USAGE, abridged) | cli.rs line | Status |
++|---|---|---|---|
++| `--tor` | chain: tor inside the tunnel | L227 | CLI attested; runtime `NOT TESTED` |
++| `--tor-reverse` | tunnel dialed through tor | L232 | CLI attested; runtime `NOT TESTED` |
++| `--tor-only` | plain tor, no tunnel | L238 | CLI attested; runtime `NOT TESTED` |
++| `--tor-bind <addr>` | tor proxy listener for chain/reverse; default `127.0.0.1:1820` | L239 | CLI attested; runtime `NOT TESTED` |
++| `--tor-http <addr>` | also serve tor as HTTP/CONNECT proxy (off by default) | L241 | CLI attested; runtime `NOT TESTED` |
++| `--tor-bridge-file <path>` | bridge lines from file (torrc shape) | L243 | CLI attested; runtime `NOT TESTED` |
++| `--tor-relays <what>` | onionoo relays as bridges: auto (default) / only / off / count | L245 | CLI attested; runtime `NOT TESTED` |
++| `--tor-relay-ports <set>` | `web` (default: 80+443) or `any`; known tor ports skipped | L251 | CLI attested; runtime `NOT TESTED` |
++| `--tor-dir <path>` | tor state/cache dir (default `<config>-tor`) | L255 | CLI attested; runtime `NOT TESTED` |
++| `--tor-bridges` | go to bridges at once | L301 | CLI attested; runtime `NOT TESTED` |
++| `--no-tor-bridges` | never use bridges | L302 | CLI attested; runtime `NOT TESTED` |
++| `--tor-bridge <line>` | own bridge line (repeatable, parser `append` L587) | L303 | CLI attested; runtime `NOT TESTED` |
++| `--tor-pt [name=]<path>` | pluggable-transport binary (e.g. lyrebird, snowflake) | L306 | CLI attested; runtime `NOT TESTED` |
++| `--tor-pt-dir <path>` | extra search dir for PT binaries | L309 | CLI attested; runtime `NOT TESTED` |
++| `AETHER_TOR_COUNTRY` | **BridgeDB/Moat request country** — used in `detect_country()`/`from_settings()` to POST `{"country": …}` to `bridges.torproject.org/moat/circumvention` (bridges.rs L410–427, L444–448, L9; cli.rs L429). It is **NOT** a Tor exit-country selection. **No Tor exit-country control exists in the pinned source** (contrast: `--psiphon-region`, §4, is a real Psiphon egress-region request). | L429 | source `VERIFIED` (bridge-request scope only) |
++| `AETHER_TOR_DIRECT_SECS` / `AETHER_TOR_STALL_SECS` / `AETHER_TOR_BRIDGE_SECS` / `AETHER_TOR_CHECK` / `AETHER_TOR_LOG` | timing/reachability/log knobs (defaults 75/75/360/`check.torproject.org:443`) | L425–432 | CLI attested; runtime `NOT TESTED` |
++
++Bridges and pluggable transports are **registered as present in the pinned source**
++(bridges.rs: Moat client L9+, `detect_country` L410–427, onionoo fallback L682+);
++their runtime behavior and the v4.2 lyrebird PoC remain `NOT TESTED` on Android.
++
++## 4. Psiphon — Aether-managed capability (correction item 6)
++
++Psiphon is a **mode/layer managed by Aether** (external `psiphon-tunnel-core` binary
++spawned and supervised by `psiphon.rs`), **not** one of the base protocols
++MASQUE/WG. Frozen decisions stay intact: **N1** (fork pin `2956a96…`),
++**N6** (official Sponsor/Propagation IDs required for release — compiled defaults are
++placeholders `FFFFFFFFFFFFFFFF`, psiphon.rs L223–224 → `BLOCKED`),
++**N7** (execute from `nativeLibraryDir`). Source/flags existing ≠ successful Psiphon
++execution on Android.
++
++### 4.1 The three Psiphon modes — one row each
++
++| # | Mode | Pinned-source surface | Listener roles | Specification | Backend (source) | Android runtime |
++|---|---|---|---|---|---|---|
++| 4.1.a | **PSIPHON ONLY** | `--psiphon-only` (cli.rs L264, parser L600 → `AETHER_PSIPHON=only`) | **main listener** `--bind` (1819) serves plain Psiphon — no tunnel (USAGE L264) | attested | `VERIFIED` in source (psiphon.rs `run_only` L916) | `NOT TESTED` |
++| 4.1.b | **AETHER → PSIPHON** (chain) | `--psiphon` (cli.rs L258, parser L598); aether → warp → psiphon → internet (USAGE L258–259) | second listener `--psiphon-bind` (default `127.0.0.1:1821`, L282; psiphon.rs L14) is the Psiphon egress | attested | `VERIFIED` in source (`run_chain` L940) | `NOT TESTED` |
++| 4.1.c | **PSIPHON → AETHER** (reverse) | `--psiphon-reverse` (cli.rs L260, parser L599) | second listener serves the Psiphon side; tunnel dials through it | attested | `VERIFIED` in source (`start_reverse` L1031; refusal lib.rs L229–244) | `NOT TESTED` |
++
++### 4.2 Psiphon parameters — pinned source
++
++| Parameter | Meaning (USAGE, abridged) | cli.rs line | Status |
++|---|---|---|---|
++| `--psiphon-mode <shape>` | `auto` (default, psiphon picks) / `cdn` (fronted meek through CDN) / `direct` (no fronting); parsed by `shape()` psiphon.rs L284–293 | L265 | CLI attested; runtime `NOT TESTED` |
++| `--psiphon-region <cc>` | ask Psiphon to **leave from this country** (e.g. DE) — real egress-region request; `AvailableEgressRegions` in log | L285 | CLI attested; runtime `NOT TESTED` |
++| `--psiphon-cdn-ips <list>` | CDN fronting edge addresses to try | L271 | CLI attested; runtime `NOT TESTED` |
++| `--psiphon-cdn-sni <list>` | server names for those edges | L274 | CLI attested; runtime `NOT TESTED` |
++| `--psiphon-cdn-sets <list>` | built-in edge sets: cloudflare, fastly, cloudfront, psiphon-akamai, psiphon-bunny, vercel, github, curated-fronting, legacy-android-overrides | L275 | CLI attested; runtime `NOT TESTED` |
++| `--psiphon-config <path>` | user JSON config laid over the built-in one | L268 | CLI attested; runtime `NOT TESTED` |
++| `--psiphon-bind <addr>` | psiphon proxy listener for chain/reverse; default `127.0.0.1:1821` | L282 | CLI attested; runtime `NOT TESTED` |
++| `--psiphon-http <addr>` | also serve psiphon as HTTP/CONNECT proxy | L284 | CLI attested; runtime `NOT TESTED` |
++| `--psiphon-dir <path>` | psiphon data dir (default `<config>-psiphon`) | L287 | CLI attested; runtime `NOT TESTED` |
++| `--psiphon-bin <path>` | psiphon-tunnel-core binary location | L289 | CLI attested; runtime `NOT TESTED` |
++| `--psiphon-server-entries <path>` | initial server entries (first connection independent of list download) | L291 | CLI attested; runtime `NOT TESTED` |
++| `AETHER_PSIPHON_READY_SECS` | ready timeout (default 180; psiphon.rs L15) | L423 | CLI attested; runtime `NOT TESTED` |
++
++## 5. Reverse-mode carrier restrictions (correction item 5)
++
++Pinned-source rule — `needs_udp_to_warp()` (lib.rs L3007–3013): a protocol that needs
++UDP to reach WARP cannot pass a TCP-only carrier:
++
++| Carrier context | WireGuard | GOOL Classic | MASQUE | GOOL (non-classic) | MIM |
++|---|---|---|---|---|---|
++| **Tor Reverse** (`--tor-reverse`) | **refused** (lib.rs L203–218) | **refused** | **allowed — forced over HTTP/2** (`AETHER_MASQUE_HTTP2=1`, lib.rs L216) | allowed (rides the MASQUE outer hop) | allowed (`needs_udp_to_warp`=false) |
++| **Psiphon Reverse** (`--psiphon-reverse`) | **refused** (lib.rs L229–244) | **refused** | **allowed — forced over HTTP/2** (lib.rs L242) | allowed | allowed |
++| Tor Only / Psiphon Only | n/a (no tunnel) | n/a | n/a | n/a | n/a |
++
++The refusal is explicit and fail-closed (hard error, not a silent substitution) —
++lib.rs L206–213/L232–239: *"… carries tcp only and warp's wireguard endpoints answer
++on udp alone, so {protocol} can never be reached through …"*.
++
++**SMART AUTO obligations (binding):** AUTO must never propose an incompatible
++combination; no restriction may be bypassed by hidden protocol switching, hidden mode
++switching, or a hidden fallback to Direct. Detail in `docs/SMART_AUTO_SPEC.md` §4–§5.
++
++## 6. Connection & traffic surface — pinned source
++
++| # | Feature | Pinned-source surface | Specification | Backend | UI | Testing |
++|---|---|---|---|---|---|---|
++| 6.1 | Local SOCKS5 proxy | `--bind` L23 (default `127.0.0.1:1819`) | attested | in pinned source | frozen | `NOT TESTED` |
++| 6.2 | HTTP CONNECT proxy | `--http-proxy` L24–25 (off by default) | attested | in pinned source | frozen | `NOT TESTED` |
++| 6.3 | Upstream proxy dialing | `--upstream` L26–29 (tor and psiphon dial through it when no tunnel carries them) | attested | in pinned source | frozen | `NOT TESTED` |
++| 6.4 | Routing rules (block/direct) | `--route-block` L302, `--route-direct` L303, `--routes` L304; entry grammar L306–315 (name, `full:`, `keyword:`, `regexp:`, CIDR, `port:`, `private`) | attested | in pinned source | frozen | `NOT TESTED` |
++| 6.5 | SNI sniffing for routing | `AETHER_ROUTE_SNIFF` (default on), `AETHER_ROUTE_SNIFF_MS` (400) | attested | in pinned source | frozen | `NOT TESTED` |
++| 6.6 | IP version | `-4` L48 (default), `-6` L49, `--dual` L50, `--ip` L51 | attested | in pinned source | frozen | `NOT TESTED` |
++| 6.7 | DNS resolvers | `--dns` L130 (default `1.1.1.1,1.0.0.1`) | attested | in pinned source | frozen | `NOT TESTED` |
++| 6.8 | Endpoint override | `--peer` L52, `--wg-peer` L53 (+ §1 endpoint flags) | attested | in pinned source | frozen | `NOT TESTED` |
++| 6.9 | Quick reconnect | `--quick-reconnect` L46 / `--no-quick-reconnect` L47 (last working gateway vs fresh scan) | attested | in pinned source | frozen | `NOT TESTED` |
++| 6.10 | Exit location check | `--exit-loc` L37–41 (`!IR,AZ,RU` / `DE,SE` grammar), `--exit-loc-secs` L42 (60) | attested (tunnel-exit country enforcement) | in pinned source | frozen | `NOT TESTED` |
++| 6.11 | Statistics & logging | `--stats` L43 (off), `--stats-secs` L45 (60); `--log-level` L379, `--verbose` L383, `RUST_LOG` | attested | in pinned source | frozen | `NOT TESTED` |
++| 6.12 | Endpoint hygiene | `AETHER_WG_ENDPOINT_COOLDOWN_SECS` (300), `AETHER_WG_STALE_SECS` (10) | attested | in pinned source | — | `NOT TESTED` |
++| 6.13 | Proxy capacity / TCP hygiene | `AETHER_MAX_CLIENTS` (512–8192 by resources), `AETHER_HALF_CLOSE_SECS` (30), `AETHER_TCP_KEEPALIVE_SECS` (60), `AETHER_TCP_CONNECT_SECS` (30) | attested | in pinned source | — | `NOT TESTED` |
++| 6.14 | Identity registration & API | `--register` L344 (masque/wg/gool/gool-classic/mim/all), `--config` L339, `--wg-config` L340, `--masque-config` L341, `--api-address` L357, `--api-sni` L364, `--api-host` L367, `AETHER_REPROVISION` | attested | in pinned source | — | `NOT TESTED` |
++| 6.15 | Resource profile | `--perf` L377 (low/medium/high; auto-detect default) | attested | in pinned source | — | `NOT TESTED` |
++
++## 7. TLS / ECH / fingerprint & Zero Trust surface — pinned source
++
++| # | Feature | Pinned-source surface | Specification | Backend | UI | Testing |
++|---|---|---|---|---|---|---|
++| 7.1 | TLS fingerprint surface | Chrome-fingerprint BoringSSL by default; `--tls-ciphers` L169, `--tls13-ciphers` L174, `--tls-groups` L179, `--tls-key-shares` L180, `--disable-grease` L184, `--enable-grease-sigalgs` L187, `--tls-sigalgs` L189, `--tls-cert-compression` L195, `--tls-alps` L200, `--tls-trust-anchors` L203, `--tls-server-padding` L207, `--enable-ech-grease` L209, `--disable-ocsp-stapling` L211, `--disable-sct` L212, `--disable-session-ticket` L213, `--disable-extension-permutation` L215 | attested | in pinned source | frozen | `NOT TESTED` |
++| 7.2 | MASQUE SNI & pinning | `--masque-sni` L144 (default `www.cloudflare.com`), `--tls-verify` L151 (on with `--team`; `AETHER_TLS_VERIFY=0`) | attested | in pinned source | frozen | `NOT TESTED` |
++| 7.3 | Encrypted Client Hello | `--ech` L154 (auto/base64), `--ech-dns` L159, `--ech-domain` L167 | attested | in pinned source | frozen | `NOT TESTED` |
++| 7.4 | ClientHello fragmentation | `--fragment` L131 (off), `--fragment-size` L136 (8–16), `--fragment-delay` L137 (2–10) | attested | in pinned source | frozen | `NOT TESTED` |
++| 7.5 | Zero Trust enrolment | `--team` L312, `--access-id` L313, `--access-secret` L314, `--access-email` L315, `--access-token` L316, `--gateway` L318 | attested | in pinned source | frozen | `NOT TESTED` |
++| 7.6 | WireGuard keepalive/profile retry | `--keepalive` L220 (5), `--no-profile-retry` L221 | attested | in pinned source | frozen | `NOT TESTED` |
++| 7.7 | Data-plane validation | `--no-data-check` L126, `--validate-secs` L127 (10), `--startup-secs` L128 (30), `--reconnect-secs` L129 (2) | attested (E2E validation gate exists in core) | in pinned source | frozen | `NOT TESTED` |
++
++## 8. SMART AUTO — registered requirement (correction item 7)
++
++**Boundary correction.** SMART AUTO is **not** an automatic ranking algorithm in the
++current Aether core. The pinned `select_protocol()` (lib.rs L3281–3337) is an
++**interactive numbered menu** (asks the user; Tor/Psiphon entries appear only when
++compiled/available; Zero-Trust entry at the end). `select_gool()`
++(lib.rs L3364–3380) is likewise interactive. **These must never be presented as
++SMART AUTO.** SMART AUTO is an **AETHONE app-layer algorithm** to be designed
++independently in a later phase.
+ 
+ | Feature | Specification | Backend | UI | Testing |
+ |---|---|---|---|---|
+-| Protocol Selection: AUTO / SMART | `SPECIFICATION REQUIRED` — registered in `docs/SMART_AUTO_SPEC.md` (factors §3, guarantees §4) | `NOT IMPLEMENTED` | `NOT IMPLEMENTED` (design belongs to the algorithm phase; UI frozen) | `NOT TESTED` |
+-| Protocol set for AUTO (MASQUE, WG, GOOL, GOOL Classic, MIM) | Recorded; CLI surface attested at pinned commit | CLI surface attested; runtime `NOT TESTED` | frozen | `NOT TESTED` (per protocol) |
+-| Scan Mode: turbo / balanced / thorough / verified / ironclad | Recorded (independent of protocol selection — never conflate) | CLI surface attested at pinned commit (`--scan`, L101) | frozen | `NOT TESTED` |
++| Protocol Selection: AUTO / SMART | `SPECIFICATION REQUIRED` — registered in `docs/SMART_AUTO_SPEC.md` (factors §3, guarantees §4, mode rules §5–§6) | `NOT IMPLEMENTED` (app layer; nothing in Aether/Zeptun/native) | `NOT IMPLEMENTED` (UI frozen) | `NOT TESTED` |
++| Candidate set | five transport profiles of §1 (four protocol types + GOOL Classic submode) | CLI surface attested; runtime `NOT TESTED` | frozen | `NOT TESTED` |
++| Scan Mode axis | §2.b — never conflated with protocol selection | CLI attested | frozen | `NOT TESTED` |
++| Tor/Psiphon in AUTO | **excluded** — modes/layers, not base protocols; never auto-toggled; never switched between Chain/Reverse/Only | — | frozen | `NOT TESTED` |
++
++Status unchanged: `SMART AUTO — SPECIFICATION REQUIRED / NOT IMPLEMENTED / NOT TESTED`.
++
++## 9. AETHONE app surface (Phase-1 analysis report v2) — UI-frozen groups (correction item 8)
++
++These groups come from the Phase-1 analysis report v2 (UI/Figma/Flutter side). The
++Aether source is **not** a witness for UI-only rows; where a native mapping exists it
++is named, otherwise the Backend column says "no Aether-core surface (app-level)".
++UI is frozen this phase; nothing here upgrades UI work.
++
++| # | App group | Native mapping (pinned source) | Specification | Backend | UI | Testing |
++|---|---|---|---|---|---|---|
++| 9.1 | Onboarding | none (app-level) | Phase-1 report v2 (design assets) | no Aether-core surface | designed, frozen | `NOT TESTED` |
++| 9.2 | Home Screen & five connection states | connect-state display maps to session events (app-level) | Phase-1 report v2 | app-level | designed, frozen | `NOT TESTED` |
++| 9.3 | Protocol Selection UI (5 profiles incl. GOOL Classic card) | §1 (backend maps classic to `gool`+`classic`) | Phase-1 report v2 + §1 here | CLI attested | designed, frozen | `NOT TESTED` |
++| 9.4 | SMART AUTO (UI) | §8 | `SMART_AUTO_SPEC.md` | `NOT IMPLEMENTED` | frozen | `NOT TESTED` |
++| 9.5 | Scan Mode & Noise Profile UI | §2.b/§2.c | Phase-1 report v2 + §2 here | CLI attested | designed, frozen | `NOT TESTED` |
++| 9.6 | MASQUE H2/H3 | §2.d | Phase-1 report v2 + §2.d | CLI attested | designed, frozen | `NOT TESTED` |
++| 9.7 | Proxy mode / Tunnel (VPN) mode | app service modes (Phase-1 report) | Phase-1 report v2 | app-level | designed, frozen | `NOT TESTED` |
++| 9.8 | Tor group & all its settings | §3.2 (14 params) | Phase-1 report v2 + §3 here | CLI attested | designed, frozen | `NOT TESTED` |
++| 9.9 | Psiphon group & all its settings | §4.2 (11 params + ready timeout) | Phase-1 report v2 + §4 here | CLI attested | designed, frozen | `NOT TESTED` |
++| 9.10 | Routing & Route Rules | §6.4–6.5 | Phase-1 report v2 | CLI attested | designed, frozen | `NOT TESTED` |
++| 9.11 | IP Version | §6.6 | Phase-1 report v2 | CLI attested | designed, frozen | `NOT TESTED` |
++| 9.12 | DNS | §6.7 | Phase-1 report v2 | CLI attested | designed, frozen | `NOT TESTED` |
++| 9.13 | Endpoint Override | §6.8 | Phase-1 report v2 | CLI attested | designed, frozen | `NOT TESTED` |
++| 9.14 | Quick Reconnect | §6.9 | Phase-1 report v2 | CLI attested | designed, frozen | `NOT TESTED` |
++| 9.15 | Exit Location Check | §6.10 | Phase-1 report v2 | CLI attested | designed, frozen | `NOT TESTED` |
++| 9.16 | Statistics & Logging | §6.11 (CLI) + app screens | Phase-1 report v2 | CLI attested / app-level | designed, frozen | `NOT TESTED` |
++| 9.17 | Speed Test & Diagnostics | SOCKS5-native measurement (N3, frozen) | Phase-1 report v2 + N3 | `NOT IMPLEMENTED` in bundle scope | designed, frozen | `NOT TESTED` |
++| 9.18 | Kill Switch | none in pinned CLI surface (app-level, Android VpnService semantics) | Phase-1 report v2 | no Aether-core surface (app-level) | designed, frozen | `NOT TESTED` |
++| 9.19 | Security & Privacy | app-level + §7 where applicable | Phase-1 report v2 | mixed | designed, frozen | `NOT TESTED` |
++| 9.20 | Motion Settings & Reduce Motion | none (UI-only) | Phase-1 report v2 | no Aether-core surface | designed, frozen | `NOT TESTED` |
++| 9.21 | Appearance | none (UI-only) | Phase-1 report v2 | no Aether-core surface | designed, frozen | `NOT TESTED` |
++| 9.22 | Language & System Language | none (UI-only) | Phase-1 report v2 | no Aether-core surface | designed, frozen | `NOT TESTED` |
++| 9.23 | Support & About | none (UI-only) | Phase-1 report v2 | no Aether-core surface | designed, frozen | `NOT TESTED` |
++| 9.24 | Session lifecycle & Android service management | app-level (N7 `nativeLibraryDir` execution for psiphon binary) | Phase-1 report v2 + N7 | app-level | designed, frozen | `NOT TESTED` |
++| 9.25 | Permissions & error management | app-level; core error paths exist in source (error.rs) | Phase-1 report v2 | app-level | designed, frozen | `NOT TESTED` |
+ 
+-## Protocol selection (manual) — pinned-source surface
++## 10. Native build, CI and verification infrastructure (unchanged from v4.2)
+ 
+ | Feature | Specification | Backend | UI | Testing |
+ |---|---|---|---|---|
+-| MASQUE (default) | attested (`--masque`, cli.rs L56) | in pinned source; build via CI | frozen | `NOT TESTED` |
+-| WireGuard (WG) | attested (`--wg/--wireguard/--warp`, L57) | in pinned source; build via CI | frozen | `NOT TESTED` |
+-| GOOL | attested (`--gool/--wiw`, L59) | in pinned source; build via CI | frozen | `NOT TESTED` |
+-| GOOL Classic | attested (`--gool-classic`, L68) | in pinned source; build via CI | frozen | `NOT TESTED` |
+-| MIM | attested (`--mim/--masque-in-masque`, L69) | in pinned source; build via CI | frozen | `NOT TESTED` |
+-
+-## Measurement & modes
++| Native CI workflow (`native-ci.yml`) | delivered at `.github/workflows/native-ci.yml`; actionlint 1.7.7 exit 0 on the exact in-ZIP file | workflow executed by GitHub Actions | — | CI execution `NOT TESTED` / `BLOCKED` on push approval |
++| Build of zeptun + aether + lyrebird + psiphon (3 ABIs, N5) | `build_native.sh` at frozen pins; **aether built with `--features tor` (L187)** | script delivered, `bash -n` clean | — | real build `NOT TESTED` (first CI run) |
++| Lyrebird pin provenance (N8) | `pt-build-pin.patch` v4.2 fail-closed chain + official Go-client GOSUMDB verification | `VERIFIED` in analysis environment | — | CI code path `NOT TESTED` |
++| ELF inspection gate (`inspect_elf.sh` v4) | every PT_GNU_RELRO independent; two-case 16KB rule | `VERIFIED` static over 9 official artifacts | — | CI execution `NOT TESTED`; device runtime `NOT TESTED` |
++| Multi-RELRO runtime compatibility (bionic) | linker loop processes every RELRO separately — **no "general non-support" claim**; over-protection/overlap risk documented (`evidence/bionic_relro_runtime_position_v42.txt`) | source-derived (AOSP) | — | `NOT TESTED` (device, N2/N7) |
++| 16 KB page-size support | per-ABI static rules; x86_64 Go execs `WARN` | static `VERIFIED` | — | runtime `NOT TESTED` |
++| Artifact flow (CI artifact → APK jniLibs) | simulation over existing official files only | simulation `VERIFIED` | — | full build path `NOT TESTED` |
++| Psiphon credentials (public release) | N6 | placeholders `FFFFFFFFFFFFFFFF` (psiphon.rs L223–224) | frozen | `BLOCKED` (official IDs pending) |
+ 
+-| Feature | Specification | Backend | UI | Testing |
+-|---|---|---|---|---|
+-| SOCKS5 native speed measurement | DECIDED (N3, frozen) | `NOT IMPLEMENTED` in current bundle scope | frozen | `NOT TESTED` |
+-| TCP CONNECT latency via SOCKS5 / HTTP TTFB (same session) | required by SMART AUTO spec §3(3)–(4) | `NOT IMPLEMENTED` | frozen | `NOT TESTED` |
+-| Proxy mode | existing app concept (Phase-1 report) | out of this bundle's native scope | frozen | `NOT TESTED` here |
+-| Tunnel mode (VPN) | existing app concept (Phase-1 report) | out of this bundle's native scope | frozen | `NOT TESTED` here |
+-| Tor mode | required as app-level mode; must NOT enter auto-select without independent tests | `NOT` in pinned Aether CLI surface at `d58f9d5…` (no `--tor` flag recorded) — any Tor support is a separate app-level work item | frozen | `NOT TESTED` |
+-| Psiphon mode | N1/N6/N7 frozen decisions | fork pin `2956a96…` VERIFIED; official credentials `BLOCKED` (N6); exec from `nativeLibraryDir` (N7) | frozen | `NOT TESTED` |
+-| Noise profiles (off/light/firewall/balanced/gfw/aggressive) | attested (`--noize`, cli.rs L114) — separate concept from Scan Mode | in pinned source | frozen | `NOT TESTED` |
++## 11. Platforms
+ 
+-## Native build, CI and verification infrastructure (this bundle)
+-
+-| Feature | Specification | Backend | UI | Testing |
+-|---|---|---|---|---|
+-| Native CI workflow (`native-ci.yml`) | delivered at canonical path `.github/workflows/native-ci.yml` (SHA256 in `evidence/zip_integrity_v42.txt`); actionlint 1.7.7 exit 0 on the exact in-ZIP file | workflow executed by GitHub Actions | — | CI execution `NOT TESTED` / `BLOCKED` on push approval |
+-| Build of zeptun + aether + lyrebird + psiphon (3 ABIs, N5) | `build_native.sh` at frozen pins (N1, N5, N8) | script delivered, `bash -n` clean | — | real build `NOT TESTED` (first CI run) |
+-| Lyrebird pin provenance (N8) | `pt-build-pin.patch` v4.2: fail-closed checkout + HEAD==pin + proxy pseudo-version assertion + local dirhash + **official Go-client signed-record verification (GOSUMDB) + build-zip identity check** | `VERIFIED` in analysis environment (`evidence/lyrebird_sumdb_goclient_verification.txt`) | — | CI code path `NOT TESTED` |
+-| ELF inspection gate (`inspect_elf.sh` v4) | every PT_GNU_RELRO independent; two-case 16KB rule; archive per-member; hygiene check | `VERIFIED` static over 9 official v2.4.0 artifacts | — | CI execution `NOT TESTED`; device runtime `NOT TESTED` |
+-| Multi-RELRO runtime compatibility (bionic) | corrected position `evidence/bionic_relro_runtime_position_v42.txt` — linker loop processes every RELRO separately (no general non-support claim); over-protection/overlap risk documented | source-derived (AOSP main) | — | `NOT TESTED` (device, N2/N7) |
+-| 16 KB page-size support | per-ABI static rules; x86_64 Go execs `WARN` (PASS_WITH_WARNINGS, never silent PASS) | static analysis VERIFIED on official artifacts | — | runtime `NOT TESTED` |
+-| Artifact flow (CI artifact → APK jniLibs layout) | simulation proves path of existing official files only | simulation `VERIFIED` (9 files, `set -euo pipefail`) | — | complete build path incl. Zeptun outputs `NOT TESTED` |
+-| Psiphon credentials (public release) | N6 | placeholder `FFFFFFFFFFFFFFFF` compiled defaults recorded | frozen | `BLOCKED` (official IDs pending) |
++Focus: **Android only** (three ABIs, N5; NDK r26d; API 29 — frozen). Windows and Linux
++remain in the future plan; no row above is re-scoped to them.
+ 
+-## Freeze confirmation (applies to every row above)
++## 12. Freeze confirmation (applies to every row above)
+ 
+ All pins and decisions N1–N8 remain frozen (source commits, Rust 1.99.1, Go 1.26.3,
+ Zig 0.16.0, cargo-ndk 4.1.2, NDK r26d, API 29, three-ABI matrix, version pins).
+-No push. No Flutter UI change. GitHub Actions execution and real builds remain
+-NOT TESTED until the employer approves the first push.
++No push. No Flutter UI change. No Aether/Zeptun source change (this revision is
++documentation-only). GitHub Actions execution and real builds remain `NOT TESTED`
++until the employer approves the first push.
++
++## 13. Counts & completeness
++
++Machine-generated summary: `evidence/feature_matrix_counts_v43.txt` (rows per
++section, statuses per column). Items where the source gives **insufficient evidence**
++are listed explicitly in `evidence/insufficient_source_evidence_v43.txt` — headline
++items: UI-only groups (§9.1, 9.18–9.23 — no Aether-core witness by design), runtime
++behavior of every attested option (`NOT TESTED` until first real build/device run,
++N2), Tor build/run with the `tor` feature on Android, Psiphon execution on Android
++(N6/N7).

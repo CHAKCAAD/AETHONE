@@ -1,0 +1,77 @@
+--- a/docs/CI_BOOTSTRAP_PoC.md
++++ b/docs/CI_BOOTSTRAP_PoC.md
+@@ -1,4 +1,4 @@
+-# AETHONE — CI Bootstrap PoC (Phase 2, report v4 — bundle v4)
++# AETHONE — CI Bootstrap PoC (Phase 2, report v4 bundle — **v4.2**)
+ 
+ **Status of this document:** the CI code is complete, pinned and locally
+ validated (bash -n, YAML/JSON parse, actionlint 1.7.7 on the delivered
+@@ -13,6 +13,50 @@
+ this bundle is an UPSTREAM release artifact — inspection/simulation, not a
+ real AETHONE build.**
+ 
++## 0b. v4.2 change log (employer review of v4.1, 2026-11-01)
++
++1. **Workflow integrity made self-evident inside the package** (item 1) —
++   `.github/workflows/native-ci.yml` ships at its canonical path; sha256
++   `ce2ef44b4ad093bec0ad4ca6f5882a7f7f8dbfee57d6ebb39e186437b8c19dfd`;
++   actionlint 1.7.7 exit 0 on EXACTLY the file extracted from THIS ZIP;
++   raw proof `evidence/zip_integrity_v42.txt`. (The v4.1 review could not see
++   the file because a GUI re-packaging step dropped the hidden `.github`
++   directory — beware of archivers that omit dot-files.) File content:
++   **unchanged since v4**.
++2. **SumDB method completed — official Go client** (item 2) — the curl lookup
++   + h1 grep did NOT validate the record signature. Now: live explicit
++   signed-record verification with the official Go client (go 1.26.3,
++   `GOSUMDB=sum.golang.org`) + build-zip identity proof
++   (`evidence/lyrebird_sumdb_goclient_verification.txt`), and the SAME
++   mechanism added to `scripts/pt-build-pin.patch` **v4.2** (proxy path: fresh
++   temp module + GOSUMDB + byte-identity of the build zip with the
++   go-client-verified zip; fail-closed; local dirhash kept; pin
++   `fc105a03c0e0` and pseudo-version UNTOUCHED — N8). `build_native.sh`
++   `PT_PATCHED_SHA256` = `3fbee02f78a4613a1452c32037c78c9d3a51ea4cb84edd8c4ebe808c023c4b88`
++   (patch v4.2 applied to the frozen pt-build.sh; `git apply` + `bash -n`
++   clean — `evidence/validation_v42_changes.txt`). CI execution of the new
++   code path: **NOT TESTED**.
++3. **Bionic multi-RELRO wording corrected** (item 3) — the standard linker
++   loop processes EVERY PT_GNU_RELRO separately; no general non-support claim
++   is made (withdrawn). Documented instead: per-segment page-rounded
++   over-protection and its overlap risk with writable data + the 16KiB
++   app-compat extension hazards
++   (`evidence/bionic_relro_runtime_position_v42.txt`). Runtime: **NOT TESTED**.
++4. **Feature documentation added** (item 9, documentation only) —
++   `docs/SMART_AUTO_SPEC.md` (SMART AUTO registered as a binding core
++   requirement; `SPECIFICATION REQUIRED / NOT IMPLEMENTED / NOT TESTED`;
++   Protocol Selection vs Scan Mode kept strictly separate; protocol set
++   reconciled with the pinned commit via
++   `evidence/protocol_surface_pinned_commit_v42.txt`) and
++   `docs/FEATURE_MATRIX.md`.
++5. **Docs/package alignment** (item 5) — this document and `README.md` now
++   reference only files that actually exist in the package
++   (`evidence/validation_v42_changes.txt` asserts reference existence).
++
++Unchanged in v4.2: the workflow file, all pins (N1–N8), ABIs (N5), tool
++versions, `rust-toolchain.toml`, `inspect_elf.sh`, all v4 evidence, and the
++Flutter UI.
++
+ ## 0a. v4 change log (employer review of bundle v3, 2026-10-31)
+ 
+ 1. **Final workflow at the canonical path** — `.github/workflows/native-ci.yml`
+@@ -59,7 +103,7 @@
+ | `.github/workflows/native-ci.yml` | GitHub Actions workflow: 3 jobs (native-build per ABI → elf-inspect → status-summary); every Action pinned to a full commit SHA with raw evidence |
+ | `rust-toolchain.toml` | Exact Rust pin (1.99.1) so local builds match CI |
+ | `scripts/build_native.sh` | Builds zeptun + aether + lyrebird + psiphon for ONE ABI at the frozen pins; verifies every expected output with `[ -f ]` before copying; intermediates outside the artifact path + whitelist guard; zero `|| true` (v3) |
+-| `scripts/pt-build-pin.patch` | Hardens Aether's frozen `pt-build.sh`: checkout failure aborts, HEAD must equal `fc105a03c0e0`, proxy pseudo-version must embed the pin (N8) |
++| `scripts/pt-build-pin.patch` | Hardens Aether's frozen `pt-build.sh`: checkout failure aborts, HEAD must equal `fc105a03c0e0`, proxy pseudo-version must embed the pin (N8); **v4.2: proxy path additionally verifies the SIGNED sumdb record with the official Go client (GOSUMDB) and requires byte-identity of the build zip with the go-client-verified zip** |
+ | `scripts/inspect_elf.sh` | v3 inspection: archives per-member; ELF header/type/PT_INTERP/PT_DYNAMIC/DF_1_PIE; NEEDED allowlists (`[]` when empty); every PT_LOAD (offset/vaddr/memsz/flags/align) with raw-derived minimum; **PT_GNU_RELRO two-case 16KB analysis** (own-load vs shared-load); armv7 N/A for 16KB; PASS_WITH_WARNINGS verdicts; artifact-tree hygiene check |
+ | `docs/CI_BOOTSTRAP_PoC.md` | This document |
+ | `evidence/` | verification logs, regenerated real readelf evidence of the official v2.4.0 artifacts (`elf_inspection_log.txt`, `elf_manifest_official_v240.json`), `pins_summary.json`, `actions_pins_raw_evidence.txt`, `relro_two_case_analysis.txt`, `android_pagesizes_doc_excerpt.txt`, `diffs/` (v2→v3), `validation_log.txt` |
+@@ -71,7 +115,7 @@
+ | Aether | `d58f9d568083129ce2c767c85054021eb3ee6a38` (2.4.0) | git checkout proof, `evidence/verification_log2.txt` |
+ | Zeptun | `08a1ab05aab315b7872ed582c52b7c230930d05d` (1.1.3) | git checkout proof; build.zig + scripts/build_android.sh read at this SHA for the v2 path fix |
+ | Psiphon fork | `2956a96b56fe09b99e72a8eb4bed3e79d29e3543` | git checkout proof; ancestor of base `83aa73b9…` verified; diff vs base = 8 files +566/−3 |
+-| Lyrebird | `fc105a03c0e0` | pinned inside Aether's frozen `pt-build.sh`; **enforced** by `scripts/pt-build-pin.patch` v4: git path = hard abort + `HEAD == pin` + binary `vcs.revision` check; proxy path = pseudo-version assertion **and** the zip verified against sum.golang.org (H1 dirhash locally recomputed; any mismatch/unreachable sumdb = hard abort). Rationale: a binary built from the .git-less proxy zip records NO main-module commit (`go version -m` cannot carry the pin there — proven end-to-end, `evidence/lyrebird_pin_independent_test.txt`). Proof recorded in `manifest.json`. |
++| Lyrebird | `fc105a03c0e0` | pinned inside Aether's frozen `pt-build.sh`; **enforced** by `scripts/pt-build-pin.patch` v4.2: git path = hard abort + `HEAD == pin` + binary `vcs.revision` check; proxy path = pseudo-version assertion **and** the zip verified against sum.golang.org (H1 dirhash locally recomputed; any mismatch/unreachable sumdb = hard abort) **and** the signed record verified by the official Go client (fresh temp module, `GOSUMDB=sum.golang.org`) **and** byte-identity of the build zip with the go-client-verified zip. Rationale: a binary built from the .git-less proxy zip records NO main-module commit (`go version -m` cannot carry the pin there — proven end-to-end, `evidence/lyrebird_pin_independent_test.txt`). Signed-record proof (analysis environment): `evidence/lyrebird_sumdb_goclient_verification.txt`. Proof recorded in `manifest.json`. |
+ | Rust | `1.99.1` | blog.rust-lang.org (stable channel 2026-10-15); Aether ships no pin — CI pins it |
+ | Zig | `0.16.0` | zeptun README; tarball sha256 `70e49664…ba3d00` from ziglang.org index |
+ | Go | `1.26.3` + `GOTOOLCHAIN=local` | fork `go.mod` (`toolchain go1.26.3`); forbids silent switching |

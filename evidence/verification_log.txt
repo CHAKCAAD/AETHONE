@@ -1,0 +1,39 @@
+=== AETHONE Phase2 evidence verification 2026-10-31T09:40:36Z ===
+--- 1. Commit existence verification ---
+[COMMIT FAIL] CluvexStudio/Aether @ d58f9d568083129ce2c767c85054021eb3ee6a38 — HTTP 403
+[COMMIT FAIL] Noisemux/zeptun @ 08a1ab05aab315b7872ed582c52b7c230930d05d — HTTP 403
+[COMMIT FAIL] Psiphon-Labs/psiphon-tunnel-core @ 83aa73b9b982e7421e00117f5b0c5aceb5dda452 — HTTP 403
+--- 2. Locate CluvexStudio psiphon fork ---
+FORK REPO = NOT FOUND
+--- 3. Latest releases (for freeze record N8) ---
+[LATEST RELEASE] CluvexStudio/Aether — HTTP 403
+[LATEST RELEASE] Noisemux/zeptun — HTTP 403
+--- 4. Aether file discovery ---
+aether tree total files: 0
+--- 5. Fetch key Aether files ---
+[RAW 404] rust-toolchain.toml (14 bytes) -> aether_rust-toolchain.raw
+[RAW 404] rust-toolchain (14 bytes) -> aether_rust-toolchain.raw
+[RAW 404] Cargo.toml (14 bytes) -> aether_Cargo.raw
+aether psiphon.rs path = NOT FOUND
+--- 6. Fetch key Zeptun files ---
+[RAW 200] scripts/build_android.sh (987 bytes) -> zeptun_build_android.sh
+[RAW 200] build.zig (15384 bytes) -> zeptun_build.zig
+[RAW 200] README.md (15155 bytes) -> zeptun_README.md
+--- 7. Psiphon fork files ---
+--- 8. sha256 of fetched raw evidence ---
+d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed  ./aether_Cargo.raw
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./aether_all_paths.txt
+d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed  ./aether_rust-toolchain.raw
+863239acc204a87e31037f59904ef95ff19431aea5ec6e114db55858d5bda7b1  ./aether_tree.json
+863239acc204a87e31037f59904ef95ff19431aea5ec6e114db55858d5bda7b1  ./cluvex_repos.json
+668da8386bdef2f15bcfc4ff1677d45a9ca54ff11cdc8f288525a46b08bba148  ./commit_CluvexStudio_Aether_d58f9d5680.json
+668da8386bdef2f15bcfc4ff1677d45a9ca54ff11cdc8f288525a46b08bba148  ./commit_Noisemux_zeptun_08a1ab05aa.json
+471c3f07d3e28533f1232e653a78292c6764b0df71d184c57e7e9553a9606f91  ./commit_Psiphon-Labs_psiphon-tunnel-core_83aa73b9b9.json
+471c3f07d3e28533f1232e653a78292c6764b0df71d184c57e7e9553a9606f91  ./release_CluvexStudio_Aether.json
+863239acc204a87e31037f59904ef95ff19431aea5ec6e114db55858d5bda7b1  ./release_Noisemux_zeptun.json
+a96f2f622ce2bbea80ea4f9aeb5abd383e27d10c6244e80a644b651e1cac8dd2  ./zeptun_README.md
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./zeptun_all_paths.txt
+7d67d6e43768b9484f1e1f286b8af1bcc71a504c7f9256a4940a5f439d21b1ba  ./zeptun_build.zig
+8aa6b0443c971f1878b6ed88ee6fb82ff5add56c8ea69301241b0850cfe1fb88  ./zeptun_build_android.sh
+471c3f07d3e28533f1232e653a78292c6764b0df71d184c57e7e9553a9606f91  ./zeptun_tree.json
+=== DONE ===

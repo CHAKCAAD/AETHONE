@@ -1,0 +1,47 @@
+AETHONE — DOCX/PDF TOC + page verification (employer fix #5)
+Date: 2026-10-31T15:30:14Z
+
+Method (ONE render method for every side of the comparison):
+  soffice --headless --convert-to pdf renders BOTH the probe (raw DOCX)
+  and the final (patched DOCX); pdfinfo gives the page counts; per-page
+  pdftotext supplies both the TOC entry lines and the body heading text,
+  so RTL text is compared to itself (scrambling cancels out).
+
+Change applied: the docx-js TOC SDT (whose nested PAGEREF fields render
+EMPTY in LibreOffice — verified in this run) was replaced by STATIC TOC
+paragraphs carrying the real page numbers measured in the probe render;
+the 'Update Field' note paragraph of v3 is REMOVED.
+
+raw DOCX      : report_v4_raw.docx
+patched DOCX  : AETHONE_گزارش_تفاوت_باندل_CI_نسخه۴.docx
+final PDF     : ./AETHONE_گزارش_تفاوت_باندل_CI_نسخه۴.pdf
+
+TOC note paragraph (v3 leftover, 'Update Field') removed: YES
+TOC page in render: 2   probe pages: 10   final pages: 10   equal: True
+TOC entries verified: 22
+
+Per-entry check (written == rendered_on_toc == probe_body == final_body):
+  PASS  '۱. چکیدهٔ مدیریتی'  written=1 rendered_on_toc=1 probe_body=1 final_body=1
+  PASS  '۲. ردیابی شش بند دستور کارفرما'  written=1 rendered_on_toc=1 probe_body=1 final_body=1
+  PASS  '۳. بند ۱ — تحویل Workflow نهایی و actionlint'  written=2 rendered_on_toc=2 probe_body=2 final_body=2
+  PASS  '۴. بند ۲ — اصلاح و تکرار شبیه‌سازی Artifact-fl'  written=2 rendered_on_toc=2 probe_body=2 final_body=2
+  PASS  '۴-۱. ریشهٔ خطای ARM64'  written=2 rendered_on_toc=2 probe_body=2 final_body=2
+  PASS  '۴-۲. اجرای واحد v4'  written=2 rendered_on_toc=2 probe_body=2 final_body=2
+  PASS  '۵. بند ۳ — آزمون مستقل Pin مربوط به Lyrebird'  written=3 rendered_on_toc=3 probe_body=3 final_body=3
+  PASS  '۵-۱. مسیر Git — در سندباکس مسدود، مکانیزم اثبا'  written=3 rendered_on_toc=3 probe_body=3 final_body=3
+  PASS  '۵-۲. مسیر Proxy — اثبات کامل بدون Git'  written=3 rendered_on_toc=3 probe_body=3 final_body=3
+  PASS  '۵-۳. پرسش شما: go version -m روی باینریِ ZIP ب'  written=4 rendered_on_toc=4 probe_body=4 final_body=4
+  PASS  '۵-۴. پیاده‌سازی در پچ و اسکریپت — بدون تضعیف پ'  written=4 rendered_on_toc=4 probe_body=4 final_body=4
+  PASS  '۶. بند ۴ — تکمیل بررسی چند PT_GNU_RELRO'  written=4 rendered_on_toc=4 probe_body=4 final_body=4
+  PASS  '۷. بند ۵ — نهایی‌سازی DOCX و PDF (همین سند)'  written=5 rendered_on_toc=5 probe_body=5 final_body=5
+  PASS  '۸. بند ۶ — محدودیت‌های ثابت رعایت‌شده'  written=5 rendered_on_toc=5 probe_body=5 final_body=5
+  PASS  '۹. ساختار بستهٔ ZIP نسخهٔ ۴'  written=6 rendered_on_toc=6 probe_body=6 final_body=6
+  PASS  '۱۰. وضعیت چهارگانه (VERIFIED / NOT TESTED / BL'  written=7 rendered_on_toc=7 probe_body=7 final_body=7
+  PASS  '۱۰-۱. VERIFIED — با شاهد خام قابل بازبینی'  written=7 rendered_on_toc=7 probe_body=7 final_body=7
+  PASS  '۱۰-۲. NOT TESTED — اجرا نشده، هیچ ادعایی مطرح '  written=7 rendered_on_toc=7 probe_body=7 final_body=7
+  PASS  '۱۰-۳. BLOCKED — منتظر اقدام خارجی'  written=7 rendered_on_toc=7 probe_body=7 final_body=7
+  PASS  '۱۰-۴. WARN — ثبت‌شده و نیازمند تصمیم شما'  written=7 rendered_on_toc=7 probe_body=7 final_body=7
+  PASS  '۱۱. آنچه واقعاً اجرا شد — در برابر شبیه‌سازی و'  written=8 rendered_on_toc=8 probe_body=8 final_body=8
+  PASS  '۱۲. گام‌های بعدی و تصمیم‌های درخواستی'  written=8 rendered_on_toc=8 probe_body=8 final_body=8
+
+RESULT: ALL ENTRIES VERIFIED — page counts stable, TOC numbers correct

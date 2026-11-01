@@ -1,0 +1,13 @@
+=== PT_GNU_RELRO enumeration — official Aether v2.4.0 Android artifacts ===
+date: 2026-10-31T16:15:08Z
+method: readelf -lW (GNU readelf 2.44) on sha256-verified official release tarballs
+
+[arm64] aether — PT_GNU_RELRO count: 1 — ELF type: DYN — LOAD aligns: 0x4000 
+[arm64] pt/lyrebird — PT_GNU_RELRO count: 0 — ELF type: EXEC — LOAD aligns: 0x10000 
+[arm64] pt/psiphon-tunnel-core — PT_GNU_RELRO count: 0 — ELF type: EXEC — LOAD aligns: 0x10000 
+[armv7] aether — PT_GNU_RELRO count: 1 — ELF type: DYN — LOAD aligns: 0x1000 
+[armv7] pt/lyrebird — PT_GNU_RELRO count: 0 — ELF type: EXEC — LOAD aligns: 0x10000 
+[armv7] pt/psiphon-tunnel-core — PT_GNU_RELRO count: 0 — ELF type: EXEC — LOAD aligns: 0x10000 
+[x86_64] aether — PT_GNU_RELRO count: 1 — ELF type: DYN — LOAD aligns: 0x4000 
+[x86_64] pt/lyrebird — PT_GNU_RELRO count: 0 — ELF type: EXEC — LOAD aligns: 0x1000 
+[x86_64] pt/psiphon-tunnel-core — PT_GNU_RELRO count: 0 — ELF type: EXEC — LOAD aligns: 0x1000 

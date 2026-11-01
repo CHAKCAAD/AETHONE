@@ -1,0 +1,24 @@
+AETHONE — v3 → v4 diff index (employer fixes #1..#5)
+Date: 2026-10-31T15:09:08Z
+
+Code/config diffs (this directory):
+  native-ci.yml.diff        — fix #1: final workflow at the canonical path (v4 header note; no functional/pin change)
+  README.md.diff            — v4 section: corrected simulation, lyrebird proof, multi-RELRO
+  CI_BOOTSTRAP_PoC.md.diff  — v4 change log (§0a), lyrebird enforcement row updated
+  build_native.sh.diff      — fix #3: path-aware pin proof + proof file + manifest recording + new PT_PATCHED_SHA256
+  inspect_elf.sh.diff       — fix #4: independent per-segment PT_GNU_RELRO analysis (aggregate FAIL>WARN>N/A>PASS) + shared-load printf fix
+  pt-build-pin.patch.diff   — fix #3: proxy zip verified against sum.golang.org (dirhash), proof file on both paths
+
+REGENERATED evidence files (not diffed — regenerated wholesale by the v4
+single unified validation run; see validation_log.txt):
+  evidence/validation_log.txt           (v4: actionlint on delivered file, set -euo pipefail flow, count checks, RELRO non-regression)
+  evidence/artifact_flow_summary.json   (NEW in v4)
+  evidence/elf_manifest_official_v240.json + elf_inspection_log.txt (v4 inspector; verdicts bit-for-bit identical)
+  evidence/lyrebird_pin_independent_test.txt + lyrebird_pin_test_raw/ (NEW in v4, RAW)
+  evidence/relro_multi_segment_test.txt + fixtures/ (NEW in v4)
+  evidence/pins_summary.json            (v4 adds bundle_v4_changes)
+
+UNCHANGED evidence files (carried over from v3):
+  actions_pins_raw_evidence.txt, relro_two_case_analysis.txt,
+  android_pagesizes_doc_excerpt.txt, verification_log.txt, verification_log2.txt,
+  toc_verification_evidence.txt (REGENERATED in v4 — evidence of the v4 report TOC/page verification)

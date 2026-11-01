@@ -1,0 +1,85 @@
+--- /home/z/my-project/work/v43_extract/README.md	2026-11-01 12:00:00.000000000 +0000
++++ /home/z/my-project/work_v44/bundle/README.md	2026-11-01 14:21:33.472274575 +0000
+@@ -1,10 +1,62 @@
+-# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.3**, post-v4.2 review corrections)
++# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.4**, post-v4.3 review corrections)
+ 
+ Deliverable of directive 6 of report v3: *"start the next phase with GitHub Actions
+ setup and the initial native build."* — revised after the employer's reviews of
+-bundle v1, v2, v3, v4, the v4.1 addendum and v4.2 (2026-10-31 / 2026-11-01). No frozen
++bundle v1, v2, v3, v4, the v4.1 addendum, v4.2 and v4.3 (2026-10-31 / 2026-11-01). No frozen
+ pin (source commits, Rust/Go/Zig versions, NDK r26d, API 29, three-ABI matrix, N1–N8)
+-was changed in v4.2 or v4.3.
++was changed in v4.2, v4.3 or v4.4.
++
++## v4.4 — corrections for the employer's post-v4.3 review (documentation-only)
++
++1. **Workflow NDK input split (critical fix).** v4.3 passed the canonical revision
++   `26.3.11579264` directly to `nttld/setup-ndk`'s `ndk-version` input, but the pinned
++   action source builds the download URL as `android-ndk-<version>-linux.zip`, which
++   Google publishes only for release identifiers (`r26d`): live HEAD 2026-11-01 —
++   r26d form → HTTP 200, canonical form → HTTP 404
++   (`evidence/setup_ndk_interface_evidence_v44.txt` + raw sources in
++   `evidence/setup_ndk_pinned_source_v44/`). The workflow now pins
++   `NDK_VERSION=r26d` (input form) and `NDK_PKG_REVISION=26.3.11579264`
++   (check-only), and a new fail-closed step aborts the build unless the action's
++   `ndk-full-version` output equals `26.3.11579264`. Same frozen NDK r26d, same
++   action SHA — an input-format fix, NOT an upgrade (N8 unchanged).
++2. **Matrix counting corrected (machine recount).** The v4.3 counter also counted
++   table header rows: 12 headers were inside the reported "117 features". Real
++   data rows = **105** (117 table rows including headers; App Surface = **25**
++   data rows, not 26). Fixed rule + per-section counts:
++   `evidence/feature_matrix_counts_v44.txt`. The v4.3 counts file is retained as
++   history; no matrix row changed.
++3. **CLI_REFERENCE dedup.** One duplicated `RUST_LOG` row (both occurrences `L533`)
++   removed; environment-only variables = **28 distinct** (machine recount,
++   regenerated programmatically from the same pinned `cli.rs`; parser-arm table
++   unchanged at 113 arms).
++4. **Manifest / packaging fixed.** The v4.3 ZIP carried
++   `evidence/evidence_manifest_v43.txt` TWICE and the manifest recorded a stale
++   self-hash (a hash of an earlier draft of itself). v4.4: strict unique-path
++   packaging (asserted before write); `evidence/evidence_manifest_v44.txt` lists
++   every file except itself and records NO hash of itself — its final SHA256 is
++   published ONLY in the external verification file
++   (`AETHONE_Phase2_CI_Artifacts_v4_4_zip_verification.txt` next to the ZIP).
++   ZIP entry count, unique-path count and all SHA256s are recomputed there.
++5. **Reverse table completed in the change reports.** The v4.2→v4.3 report's
++   Reverse-compatibility table rendered with empty status cells (a generator bug:
++   status chips were wrapped in a nested array the DOCX writer silently dropped);
++   the report was regenerated with every cell filled — WireGuard and GOOL Classic
++   **refused**; MASQUE **allowed, HTTP/2 forced**; GOOL (non-classic) and MIM
++   **allowed** — byte-consistent with FEATURE_MATRIX §5 and lib.rs
++   L203–218 / L229–244, L216 / L242, L3007–3013. DOCX + PDF are produced from the
++   same final source. This v4.3→v4.4 change report carries the same completed table.
++
++**New in v4.4:**
++
++- `.github/workflows/native-ci.yml` — NDK input split + fail-closed revision check
++  (the ONLY file-content change outside docs/README; all pins/SHAs identical)
++- `evidence/feature_matrix_counts_v44.txt` — corrected machine counts
++- `evidence/setup_ndk_interface_evidence_v44.txt` + `evidence/setup_ndk_pinned_source_v44/`
++- `evidence/validation_v44_changes.txt` — automated assertions for this round
++- `evidence/evidence_manifest_v44.txt` — no self-hash
++- `evidence/diffs/v43_to_v44/` — exact diffs vs v4.3 + index
++- `docs/CLI_REFERENCE.md` — regenerated (RUST_LOG dedup; 28 env-only)
++- `docs/FEATURE_MATRIX.md` — v4.4 note (matrix rows unchanged)
+ 
+ ## v4.3 — corrections for the employer's post-v4.2 review (documentation-only)
+ 
+@@ -58,11 +110,13 @@
+ 
+ **New in v4.3:**
+ 
+-- `docs/FEATURE_MATRIX.md` — rewritten (117 matrix rows; counts in
+-  `evidence/feature_matrix_counts_v43.txt`)
++- `docs/FEATURE_MATRIX.md` — rewritten (117 table rows incl. headers; corrected in
++  v4.4 to 105 data rows / 25 App Surface — see v4.4 section and
++  `evidence/feature_matrix_counts_v44.txt`)
+ - `docs/SMART_AUTO_SPEC.md` — rewritten (boundary + taxonomy + reverse rules)
+ - `docs/CLI_REFERENCE.md` — NEW: all **113 parser arms** (90 flag-driven env vars)
+-  and **29 environment-only variables** with programmatic line numbers
++  and **28 environment-only variables** with programmatic line numbers (v4.3 listed
++  29 rows with `RUST_LOG` duplicated; corrected by the v4.4 machine recount)
+ - `evidence/protocol_surface_pinned_commit_v43.txt` — all six anchor files
+   (`cli.rs`, `lib.rs`, `tor.rs`, `psiphon.rs`, `bridges.rs`, `Cargo.toml`)
+   byte-identity-proven against the live pinned commit + verbatim excerpts

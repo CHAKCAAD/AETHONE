@@ -1,0 +1,48 @@
+=== validation_v42_changes — focused v4.2 delta validation ===
+date: 2026-11-01T11:30:57Z   set -euo pipefail; any failure aborts this script
+
+--- stage 1: bash -n on all scripts (v4.2 tree) ---
+PASS: bash -n build_native.sh
+PASS: bash -n inspect_elf.sh
+PASS: bash -n build_native.sh
+
+--- stage 2: patch v4.2 applies to the FROZEN pt-build.sh (git apply, fresh repo) ---
+frozen pt-build.sh sha256: 78eb66356edd92e6cd847637afa65022a595b30b81fd50ed69dba8960c0ab052  (expected 78eb66356edd92e6cd847637afa65022a595b30b81fd50ed69dba8960c0ab052)
+PASS: frozen pt-build.sh identity
+warning: pt-build.sh has type 100755, expected 100644
+PASS: git apply pt-build-pin.patch v4.2
+PASS: bash -n patched pt-build.sh
+patched sha256: 3fbee02f78a4613a1452c32037c78c9d3a51ea4cb84edd8c4ebe808c023c4b88
+declared in build_native.sh: 3fbee02f78a4613a1452c32037c78c9d3a51ea4cb84edd8c4ebe808c023c4b88
+PASS: PT_PATCHED_SHA256 chain (patch v4.2 == declared)
+PASS: pin fc105a03c0e0 still present in patched pt-build.sh (N8)
+PASS: official Go-client GOSUMDB verification present in patched pt-build.sh
+info: '|| true' occurrences in patched pt-build.sh: 0
+
+--- stage 3: YAML/JSON parse (v4.2 tree) ---
+YAML OK — jobs: elf-inspect, native-build, status-summary
+PASS: YAML parse .github/workflows/native-ci.yml
+JSON OK — pins_summary.json
+PASS: JSON parse pins_summary.json
+JSON OK — artifact_flow_summary.json
+PASS: JSON parse artifact_flow_summary.json
+
+--- stage 4: actionlint 1.7.7 on the delivered workflow (bundle tree) ---
+PASS: actionlint exit 0
+
+--- stage 5: unchanged-since-v4 assertion (sha256 equality) ---
+PASS unchanged: .github/workflows/native-ci.yml (ce2ef44b4ad093bec0ad4ca6f5882a7f7f8dbfee57d6ebb39e186437b8c19dfd)
+PASS unchanged: rust-toolchain.toml (5328fda38631029fc46e4c9d3414b67e420965ac0acde06348efcdf12d2c8f84)
+PASS unchanged: scripts/inspect_elf.sh (392ca7a37ac33729e1551e8d925011ebbc959f8f950636515b95e02dec74a8b9)
+
+--- stage 6: doc reference-existence (item 5) ---
+PASS: every package-path reference in README/CI_BOOTSTRAP_PoC/FEATURE_MATRIX/SMART_AUTO_SPEC exists
+
+--- stage 7: pins unchanged assertion (grep the frozen values) ---
+PASS: AETHER_SHA frozen
+PASS: PSIPHON_FORK_SHA frozen (N1)
+PASS: ZEPTUN_SHA frozen
+PASS: LYREBIRD_PIN frozen (N8)
+info: API level 29 handled via --api-level (N-decision)
+
+=== RESULT: v4.2 focused validation PASSED (all stages) ===

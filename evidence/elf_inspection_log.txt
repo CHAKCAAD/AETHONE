@@ -1,0 +1,202 @@
+=== AETHONE ELF/ABI inspection v4 — 2026-10-31T15:08:18Z ===
+dir: /home/z/my-project/work_aethone/v4_work/artifact_flow_run/dl
+mode: EVIDENCE (violations recorded, exit 0 — upstream artifact runs only) / missing-artifacts: allowed+recorded (NOT TESTED)
+rules: developer.android.com/guide/practices/page-sizes —
+  LOAD: p_align >= 16384 on arm64-v8a & x86_64 (16KB arches), p_vaddr = p_offset (mod p_align) and (mod 16384); armeabi-v7a = 4KB arch -> 16KB N/A, 4KB validity enforced
+  RELRO (two-case, v4): EVERY PT_GNU_RELRO segment analyzed independently; shared-load -> official formula (VirtAddr+MemSiz)%16384==0; own-load -> formula NOT applicable, every subsequent writable LOAD must start at/after page_up(relro_end); aggregate FAIL>WARN>N/A>PASS
+  zipalign -P 16 stays a SEPARATE check (no APK exists — NOT TESTED)
+  static ELF compliance != runtime proof: runtime_16kb_env = NOT TESTED for every artifact
+
+================ [arm64-v8a] ================
+--- [arm64-v8a] zeptun/libzeptun.so | MISSING — component not built in this run — NOT TESTED ---
+--- [arm64-v8a] zeptun/libzeptun-jni.so | MISSING — component not built in this run — NOT TESTED ---
+--- [arm64-v8a] zeptun/libzeptun.a | MISSING — component not built in this run — NOT TESTED ---
+--- [arm64-v8a] arm64-v8a/aether/aether (19027136 bytes) | kind=executable-pie ---
+  class=ELF64 machine=AArch64 type=DYN entry=0x4c47c0
+  PT_INTERP: yes | PT_DYNAMIC: yes | DF_1_PIE: yes
+  NEEDED: libdl.so ; libm.so ; libc.so [count: 3]
+    LOAD off=0x000000 vaddr=0x0000000000000000 memsz=0x4c07b8 flags=R align=0x4000 (dec: 16384)
+    LOAD off=0x4c07c0 vaddr=0x00000000004c47c0 memsz=0xcc5960 flags=RE align=0x4000 (dec: 16384)
+    LOAD off=0x1186140 vaddr=0x000000000118e140 memsz=0x093e40 flags=RW align=0x4000 (dec: 16384)
+    LOAD off=0x1219f80 vaddr=0x0000000001225f80 memsz=0x00d3d0 flags=RW align=0x4000 (dec: 16384)
+  min p_align = 16384 dec (raw-derived)
+  16KB LOAD rule: PASS (min p_align 16384 >= 16384) [static ELF fact — runtime NOT TESTED]
+  16KB congruence: PASS (all LOAD vaddr = offset mod p_align and mod 16384)
+  PT_GNU_RELRO segments found: 1 — full two-case analysis (v4; per-segment independent)
+  RELRO row: offset=0x1186140 vaddr=0x000000000118e140 filesz=0x093e40 memsz=0x093ec0 flags=R
+  covering LOAD: vaddr=0x000000000118e140 memsz=0x093e40 flags=RW end=0x1221f80
+  RELRO data vs LOAD: before=0 bytes, after=128 bytes (RELRO extends past the LOAD end)
+  linker mprotect range (16KB pages): [0x118c000, 0x1224000)
+
+    subsequent LOAD vaddr=0x0000000001225f80 flags=RW writable=true starts_at_or_after_protection_end=true
+  RELRO-16KB: PASS — own-LOAD placement (LOAD contains only RELRO data; official formula (VirtAddr+MemSiz)%16384 NOT applicable); remainder 8192 is expected and harmless here; no subsequent writable LOAD enters the protection range [0x118c000, 0x1224000)
+  verdict: PASS (static ELF inspection only — runtime in a 16 KB Android environment: NOT TESTED)
+
+--- [arm64-v8a] arm64-v8a/aether/pt/psiphon-tunnel-core (20906146 bytes) | kind=go-static ---
+  class=ELF64 machine=AArch64 type=EXEC entry=0x99900
+  PT_INTERP: no | PT_DYNAMIC: no | DF_1_PIE: no
+  NEEDED: (none) [count: 0]
+  static proof: NEEDED empty + no PT_INTERP + no PT_DYNAMIC (link type EXEC recorded)
+    LOAD off=0x000000 vaddr=0x0000000000010000 memsz=0x89fba4 flags=RE align=0x10000 (dec: 65536)
+    LOAD off=0x8a0000 vaddr=0x00000000008b0000 memsz=0xa6a518 flags=R align=0x10000 (dec: 65536)
+    LOAD off=0x1310000 vaddr=0x0000000001320000 memsz=0x2128460 flags=RW align=0x10000 (dec: 65536)
+  min p_align = 65536 dec (raw-derived)
+  16KB LOAD rule: PASS (min p_align 65536 >= 16384) [static ELF fact — runtime NOT TESTED]
+  16KB congruence: PASS (all LOAD vaddr = offset mod p_align and mod 16384)
+  RELRO: no PT_GNU_RELRO segment — no RELRO requirement (trivially compliant; recorded ABSENT)
+  verdict: PASS (static ELF inspection only — runtime in a 16 KB Android environment: NOT TESTED)
+
+--- [arm64-v8a] arm64-v8a/aether/pt/lyrebird (14680216 bytes) | kind=go-static ---
+  class=ELF64 machine=AArch64 type=EXEC entry=0x7f550
+  PT_INTERP: no | PT_DYNAMIC: no | DF_1_PIE: no
+  NEEDED: (none) [count: 0]
+  static proof: NEEDED empty + no PT_INTERP + no PT_DYNAMIC (link type EXEC recorded)
+    LOAD off=0x000000 vaddr=0x0000000000010000 memsz=0x655404 flags=RE align=0x10000 (dec: 65536)
+    LOAD off=0x660000 vaddr=0x0000000000670000 memsz=0x6f7e18 flags=R align=0x10000 (dec: 65536)
+    LOAD off=0xd60000 vaddr=0x0000000000d70000 memsz=0x1250f0 flags=RW align=0x10000 (dec: 65536)
+  min p_align = 65536 dec (raw-derived)
+  16KB LOAD rule: PASS (min p_align 65536 >= 16384) [static ELF fact — runtime NOT TESTED]
+  16KB congruence: PASS (all LOAD vaddr = offset mod p_align and mod 16384)
+  RELRO: no PT_GNU_RELRO segment — no RELRO requirement (trivially compliant; recorded ABSENT)
+  verdict: PASS (static ELF inspection only — runtime in a 16 KB Android environment: NOT TESTED)
+
+================ [armeabi-v7a] ================
+--- [armeabi-v7a] zeptun/libzeptun.so | MISSING — component not built in this run — NOT TESTED ---
+--- [armeabi-v7a] zeptun/libzeptun-jni.so | MISSING — component not built in this run — NOT TESTED ---
+--- [armeabi-v7a] zeptun/libzeptun.a | MISSING — component not built in this run — NOT TESTED ---
+--- [armeabi-v7a] armeabi-v7a/aether/aether (13516628 bytes) | kind=executable-pie ---
+  class=ELF32 machine=ARM type=DYN entry=0x266980
+  PT_INTERP: yes | PT_DYNAMIC: yes | DF_1_PIE: yes
+  NEEDED: libdl.so ; libm.so ; libc.so [count: 3]
+    LOAD off=0x000000 vaddr=0x00000000 memsz=0x265911 flags=R align=0x1000 (dec: 4096)
+    LOAD off=0x265980 vaddr=0x00266980 memsz=0xa21a40 flags=RE align=0x1000 (dec: 4096)
+    LOAD off=0xc873c0 vaddr=0x00c893c0 memsz=0x569e4 flags=RW align=0x1000 (dec: 4096)
+    LOAD off=0xcddda8 vaddr=0x00ce0da8 memsz=0x06f45 flags=RW align=0x1000 (dec: 4096)
+  min p_align = 4096 dec (raw-derived)
+  16KB LOAD rule: N/A (armeabi-v7a = 4 KB architecture; 4 KB ELF validity PASS: min p_align 4096 >= 4096)
+  PT_GNU_RELRO segments found: 1 — full two-case analysis (v4; per-segment independent)
+  RELRO row: offset=0xc873c0 vaddr=0x00c893c0 filesz=0x569e4 memsz=0x56c40 flags=R
+  covering LOAD: vaddr=0x00c893c0 memsz=0x569e4 flags=RW end=0xcdfda4
+  RELRO data vs LOAD: before=0 bytes, after=604 bytes (RELRO extends past the LOAD end)
+  linker mprotect range (16KB pages): [0xc88000, 0xce0000)
+
+    subsequent LOAD vaddr=0x00ce0da8 flags=RW writable=true starts_at_or_after_protection_end=true
+  RELRO-16KB: N/A (armeabi-v7a is a 4 KB architecture — placement recorded, no 16 KB requirement)
+  verdict: PASS (static ELF inspection only — runtime in a 16 KB Android environment: NOT TESTED)
+
+--- [armeabi-v7a] armeabi-v7a/aether/pt/psiphon-tunnel-core (21299362 bytes) | kind=go-static ---
+  class=ELF32 machine=ARM type=EXEC entry=0xb2774
+  PT_INTERP: no | PT_DYNAMIC: no | DF_1_PIE: no
+  NEEDED: (none) [count: 0]
+  static proof: NEEDED empty + no PT_INTERP + no PT_DYNAMIC (link type EXEC recorded)
+    LOAD off=0x000000 vaddr=0x00010000 memsz=0xa54578 flags=RE align=0x10000 (dec: 65536)
+    LOAD off=0xa60000 vaddr=0x00a70000 memsz=0x929858 flags=R align=0x10000 (dec: 65536)
+    LOAD off=0x1390000 vaddr=0x013a0000 memsz=0x20f1730 flags=RW align=0x10000 (dec: 65536)
+  min p_align = 65536 dec (raw-derived)
+  16KB LOAD rule: N/A (armeabi-v7a = 4 KB architecture; 4 KB ELF validity PASS: min p_align 65536 >= 4096)
+  RELRO: no PT_GNU_RELRO segment — no RELRO requirement (trivially compliant; recorded ABSENT)
+  verdict: PASS (static ELF inspection only — runtime in a 16 KB Android environment: NOT TESTED)
+
+--- [armeabi-v7a] armeabi-v7a/aether/pt/lyrebird (14221464 bytes) | kind=go-static ---
+  class=ELF32 machine=ARM type=EXEC entry=0x8ae8c
+  PT_INTERP: no | PT_DYNAMIC: no | DF_1_PIE: no
+  NEEDED: (none) [count: 0]
+  static proof: NEEDED empty + no PT_INTERP + no PT_DYNAMIC (link type EXEC recorded)
+    LOAD off=0x000000 vaddr=0x00010000 memsz=0x6fc7a0 flags=RE align=0x10000 (dec: 65536)
+    LOAD off=0x700000 vaddr=0x00710000 memsz=0x5f293c flags=R align=0x10000 (dec: 65536)
+    LOAD off=0xd00000 vaddr=0x00d10000 memsz=0xd52e4 flags=RW align=0x10000 (dec: 65536)
+  min p_align = 65536 dec (raw-derived)
+  16KB LOAD rule: N/A (armeabi-v7a = 4 KB architecture; 4 KB ELF validity PASS: min p_align 65536 >= 4096)
+  RELRO: no PT_GNU_RELRO segment — no RELRO requirement (trivially compliant; recorded ABSENT)
+  verdict: PASS (static ELF inspection only — runtime in a 16 KB Android environment: NOT TESTED)
+
+================ [x86_64] ================
+--- [x86_64] zeptun/libzeptun.so | MISSING — component not built in this run — NOT TESTED ---
+--- [x86_64] zeptun/libzeptun-jni.so | MISSING — component not built in this run — NOT TESTED ---
+--- [x86_64] zeptun/libzeptun.a | MISSING — component not built in this run — NOT TESTED ---
+--- [x86_64] x86_64/aether/aether (21045088 bytes) | kind=executable-pie ---
+  class=ELF64 machine=Advanced Micro Devices X86-64 type=DYN entry=0x4e65c0
+  PT_INTERP: yes | PT_DYNAMIC: yes | DF_1_PIE: yes
+  NEEDED: libdl.so ; libm.so ; libc.so [count: 3]
+    LOAD off=0x000000 vaddr=0x0000000000000000 memsz=0x4e258c flags=R align=0x4000 (dec: 16384)
+    LOAD off=0x4e25c0 vaddr=0x00000000004e65c0 memsz=0xe8fa50 flags=RE align=0x4000 (dec: 16384)
+    LOAD off=0x1372010 vaddr=0x000000000137a010 memsz=0x094ab8 flags=RW align=0x4000 (dec: 16384)
+    LOAD off=0x1406ad0 vaddr=0x0000000001412ad0 memsz=0x00cdf0 flags=RW align=0x4000 (dec: 16384)
+  min p_align = 16384 dec (raw-derived)
+  16KB LOAD rule: PASS (min p_align 16384 >= 16384) [static ELF fact — runtime NOT TESTED]
+  16KB congruence: PASS (all LOAD vaddr = offset mod p_align and mod 16384)
+  PT_GNU_RELRO segments found: 1 — full two-case analysis (v4; per-segment independent)
+  RELRO row: offset=0x1372010 vaddr=0x000000000137a010 filesz=0x094ab8 memsz=0x094ff0 flags=R
+  covering LOAD: vaddr=0x000000000137a010 memsz=0x094ab8 flags=RW end=0x140eac8
+  RELRO data vs LOAD: before=0 bytes, after=1336 bytes (RELRO extends past the LOAD end)
+  linker mprotect range (16KB pages): [0x1378000, 0x1410000)
+
+    subsequent LOAD vaddr=0x0000000001412ad0 flags=RW writable=true starts_at_or_after_protection_end=true
+  RELRO-16KB: PASS — own-LOAD placement (LOAD contains only RELRO data; official formula (VirtAddr+MemSiz)%16384 NOT applicable); remainder 12288 is expected and harmless here; no subsequent writable LOAD enters the protection range [0x1378000, 0x1410000)
+  verdict: PASS (static ELF inspection only — runtime in a 16 KB Android environment: NOT TESTED)
+
+--- [x86_64] x86_64/aether/pt/psiphon-tunnel-core (22528162 bytes) | kind=go-static ---
+  class=ELF64 machine=Advanced Micro Devices X86-64 type=EXEC entry=0x490aa0
+  PT_INTERP: no | PT_DYNAMIC: no | DF_1_PIE: no
+  NEEDED: (none) [count: 0]
+  static proof: NEEDED empty + no PT_INTERP + no PT_DYNAMIC (link type EXEC recorded)
+    LOAD off=0x000000 vaddr=0x0000000000400000 memsz=0x9fc0d1 flags=RE align=0x1000 (dec: 4096)
+    LOAD off=0x9fd000 vaddr=0x0000000000dfd000 memsz=0xaa7db8 flags=R align=0x1000 (dec: 4096)
+    LOAD off=0x14a5000 vaddr=0x00000000018a5000 memsz=0x2121aa0 flags=RW align=0x1000 (dec: 4096)
+  min p_align = 4096 dec (raw-derived)
+  [WARN] 16KB LOAD rule on x86_64 Go executable: min p_align 4096 < 16384 — static ELF fact recorded as kb16_load=FAIL; artifact verdict downgraded to PASS_WITH_WARNINGS (upstream Go linux/amd64 linker default; changing the build is a frozen-pin employer decision, N8; runtime behaviour NOT TESTED; set STRICT_16KB_X86_64_EXEC=1 to hard-fail)
+  16KB congruence: PASS (all LOAD vaddr = offset mod p_align and mod 16384)
+  RELRO: no PT_GNU_RELRO segment — no RELRO requirement (trivially compliant; recorded ABSENT)
+  verdict: PASS_WITH_WARNINGS (static ELF inspection only — runtime in a 16 KB Android environment: NOT TESTED)
+
+--- [x86_64] x86_64/aether/pt/lyrebird (16527512 bytes) | kind=go-static ---
+  class=ELF64 machine=Advanced Micro Devices X86-64 type=EXEC entry=0x46ec40
+  PT_INTERP: no | PT_DYNAMIC: no | DF_1_PIE: no
+  NEEDED: (none) [count: 0]
+  static proof: NEEDED empty + no PT_INTERP + no PT_DYNAMIC (link type EXEC recorded)
+    LOAD off=0x000000 vaddr=0x0000000000400000 memsz=0x7b8c86 flags=RE align=0x1000 (dec: 4096)
+    LOAD off=0x7b9000 vaddr=0x0000000000bb9000 memsz=0x7696b8 flags=R align=0x1000 (dec: 4096)
+    LOAD off=0xf23000 vaddr=0x0000000001323000 memsz=0x11fbb0 flags=RW align=0x1000 (dec: 4096)
+  min p_align = 4096 dec (raw-derived)
+  [WARN] 16KB LOAD rule on x86_64 Go executable: min p_align 4096 < 16384 — static ELF fact recorded as kb16_load=FAIL; artifact verdict downgraded to PASS_WITH_WARNINGS (upstream Go linux/amd64 linker default; changing the build is a frozen-pin employer decision, N8; runtime behaviour NOT TESTED; set STRICT_16KB_X86_64_EXEC=1 to hard-fail)
+  16KB congruence: PASS (all LOAD vaddr = offset mod p_align and mod 16384)
+  RELRO: no PT_GNU_RELRO segment — no RELRO requirement (trivially compliant; recorded ABSENT)
+  verdict: PASS_WITH_WARNINGS (static ELF inspection only — runtime in a 16 KB Android environment: NOT TESTED)
+
+=== verdict: PASS_WITH_WARNINGS — failures=0 warnings=2 missing=9 pass_with_warnings=2 ===
+=== runtime 16 KB environment: NOT TESTED (static ELF inspection only) | zipalign -P 16: NOT TESTED (no APK) ===
+{
+  "generated": "2026-10-31T15:08:19Z",
+  "inspector_version": "v4 (independent multi-PT_GNU_RELRO analysis, two-case RELRO, armv7 N/A, [] NEEDED, PASS_WITH_WARNINGS, runtime separation)",
+  "mode": "evidence",
+  "inspected": 9,
+  "missing": 9,
+  "failures": 0,
+  "warnings": 2,
+  "pass_with_warnings_records": 2,
+  "verdict": "PASS_WITH_WARNINGS",
+  "runtime_16kb_env": "NOT TESTED",
+  "runtime_note": "static ELF compliance does not prove execution in a real 16 KB Android environment; no runtime/device/emulator test has been performed",
+  "zipalign_p16": "NOT TESTED (no APK exists)",
+  "artifacts": [
+    {"abi":"arm64-v8a","path":"zeptun/libzeptun.so","group":"zeptun","kind":"missing","verdict":"MISSING","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"arm64-v8a","path":"zeptun/libzeptun-jni.so","group":"zeptun","kind":"missing","verdict":"MISSING","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"arm64-v8a","path":"zeptun/libzeptun.a","group":"zeptun","kind":"missing","verdict":"MISSING","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"arm64-v8a","path":"arm64-v8a/aether/aether","group":"aether","kind":"executable-pie","class":"ELF64","machine":"AArch64","type":"DYN","pt_interp":true,"pt_dynamic":true,"df_1_pie":true,"needed":["libdl.so","libm.so","libc.so"],"needed_count":3,"load_segment_count":4,"min_load_align_dec":16384,"kb16_load":"PASS","kb16_relro":"PASS","relro":{"present":true,"offset":"0x1186140","vaddr":"0x000000000118e140","filesz":"0x093e40","memsz":"0x093ec0","flags":"R","end":"0x1222000","end_dec":19013632,"formula_remainder_16384":8192,"placement":"own-load","covering_load":{"vaddr":"0x000000000118e140","memsz":"0x093e40","flags":"RW","end":"0x1221f80","writable":true},"data_before_dec":0,"data_after_dec":-128,"protection_range":["0x118c000","0x1224000"],"subsequent_loads":[{"vaddr":"0x0000000001225f80","flags":"RW"}],"rule_applied":"own-load: every subsequent writable LOAD must start at/after page_up(relro_end)","kb16_relro":"PASS","segment_count":1},"congruent_mod_p_align":true,"congruent_mod_16384":true,"verdict":"PASS","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"arm64-v8a","path":"arm64-v8a/aether/pt/psiphon-tunnel-core","group":"aether/pt","kind":"go-static","class":"ELF64","machine":"AArch64","type":"EXEC","pt_interp":false,"pt_dynamic":false,"df_1_pie":false,"needed":[],"needed_count":0,"load_segment_count":3,"min_load_align_dec":65536,"kb16_load":"PASS","kb16_relro":"ABSENT","relro":{"present":false,"segment_count":0,"placement":"absent","kb16_relro":"ABSENT"},"congruent_mod_p_align":true,"congruent_mod_16384":true,"verdict":"PASS","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"arm64-v8a","path":"arm64-v8a/aether/pt/lyrebird","group":"aether/pt","kind":"go-static","class":"ELF64","machine":"AArch64","type":"EXEC","pt_interp":false,"pt_dynamic":false,"df_1_pie":false,"needed":[],"needed_count":0,"load_segment_count":3,"min_load_align_dec":65536,"kb16_load":"PASS","kb16_relro":"ABSENT","relro":{"present":false,"segment_count":0,"placement":"absent","kb16_relro":"ABSENT"},"congruent_mod_p_align":true,"congruent_mod_16384":true,"verdict":"PASS","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"armeabi-v7a","path":"zeptun/libzeptun.so","group":"zeptun","kind":"missing","verdict":"MISSING","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"armeabi-v7a","path":"zeptun/libzeptun-jni.so","group":"zeptun","kind":"missing","verdict":"MISSING","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"armeabi-v7a","path":"zeptun/libzeptun.a","group":"zeptun","kind":"missing","verdict":"MISSING","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"armeabi-v7a","path":"armeabi-v7a/aether/aether","group":"aether","kind":"executable-pie","class":"ELF32","machine":"ARM","type":"DYN","pt_interp":true,"pt_dynamic":true,"df_1_pie":true,"needed":["libdl.so","libm.so","libc.so"],"needed_count":3,"load_segment_count":4,"min_load_align_dec":4096,"kb16_load":"N/A","kb16_relro":"N/A","relro":{"present":true,"offset":"0xc873c0","vaddr":"0x00c893c0","filesz":"0x569e4","memsz":"0x56c40","flags":"R","end":"0xce0000","formula_remainder_16384":0,"placement":"recorded-4kb-arch","covering_load":{"vaddr":"0x00c893c0","memsz":"0x569e4","flags":"RW"},"protection_range":["0xc88000","0xce0000"],"subsequent_loads":[{"vaddr":"0x00ce0da8","flags":"RW"}],"kb16_relro":"N/A","segment_count":1},"congruent_mod_p_align":true,"congruent_mod_16384":true,"verdict":"PASS","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"armeabi-v7a","path":"armeabi-v7a/aether/pt/psiphon-tunnel-core","group":"aether/pt","kind":"go-static","class":"ELF32","machine":"ARM","type":"EXEC","pt_interp":false,"pt_dynamic":false,"df_1_pie":false,"needed":[],"needed_count":0,"load_segment_count":3,"min_load_align_dec":65536,"kb16_load":"N/A","kb16_relro":"ABSENT","relro":{"present":false,"segment_count":0,"placement":"absent","kb16_relro":"ABSENT"},"congruent_mod_p_align":true,"congruent_mod_16384":true,"verdict":"PASS","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"armeabi-v7a","path":"armeabi-v7a/aether/pt/lyrebird","group":"aether/pt","kind":"go-static","class":"ELF32","machine":"ARM","type":"EXEC","pt_interp":false,"pt_dynamic":false,"df_1_pie":false,"needed":[],"needed_count":0,"load_segment_count":3,"min_load_align_dec":65536,"kb16_load":"N/A","kb16_relro":"ABSENT","relro":{"present":false,"segment_count":0,"placement":"absent","kb16_relro":"ABSENT"},"congruent_mod_p_align":true,"congruent_mod_16384":true,"verdict":"PASS","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"x86_64","path":"zeptun/libzeptun.so","group":"zeptun","kind":"missing","verdict":"MISSING","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"x86_64","path":"zeptun/libzeptun-jni.so","group":"zeptun","kind":"missing","verdict":"MISSING","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"x86_64","path":"zeptun/libzeptun.a","group":"zeptun","kind":"missing","verdict":"MISSING","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"x86_64","path":"x86_64/aether/aether","group":"aether","kind":"executable-pie","class":"ELF64","machine":"Advanced Micro Devices X86-64","type":"DYN","pt_interp":true,"pt_dynamic":true,"df_1_pie":true,"needed":["libdl.so","libm.so","libc.so"],"needed_count":3,"load_segment_count":4,"min_load_align_dec":16384,"kb16_load":"PASS","kb16_relro":"PASS","relro":{"present":true,"offset":"0x1372010","vaddr":"0x000000000137a010","filesz":"0x094ab8","memsz":"0x094ff0","flags":"R","end":"0x140f000","end_dec":21032960,"formula_remainder_16384":12288,"placement":"own-load","covering_load":{"vaddr":"0x000000000137a010","memsz":"0x094ab8","flags":"RW","end":"0x140eac8","writable":true},"data_before_dec":0,"data_after_dec":-1336,"protection_range":["0x1378000","0x1410000"],"subsequent_loads":[{"vaddr":"0x0000000001412ad0","flags":"RW"}],"rule_applied":"own-load: every subsequent writable LOAD must start at/after page_up(relro_end)","kb16_relro":"PASS","segment_count":1},"congruent_mod_p_align":true,"congruent_mod_16384":true,"verdict":"PASS","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"x86_64","path":"x86_64/aether/pt/psiphon-tunnel-core","group":"aether/pt","kind":"go-static","class":"ELF64","machine":"Advanced Micro Devices X86-64","type":"EXEC","pt_interp":false,"pt_dynamic":false,"df_1_pie":false,"needed":[],"needed_count":0,"load_segment_count":3,"min_load_align_dec":4096,"kb16_load":"FAIL","kb16_relro":"ABSENT","relro":{"present":false,"segment_count":0,"placement":"absent","kb16_relro":"ABSENT"},"congruent_mod_p_align":true,"congruent_mod_16384":true,"verdict":"PASS_WITH_WARNINGS","runtime_16kb_env":"NOT TESTED"},
+    {"abi":"x86_64","path":"x86_64/aether/pt/lyrebird","group":"aether/pt","kind":"go-static","class":"ELF64","machine":"Advanced Micro Devices X86-64","type":"EXEC","pt_interp":false,"pt_dynamic":false,"df_1_pie":false,"needed":[],"needed_count":0,"load_segment_count":3,"min_load_align_dec":4096,"kb16_load":"FAIL","kb16_relro":"ABSENT","relro":{"present":false,"segment_count":0,"placement":"absent","kb16_relro":"ABSENT"},"congruent_mod_p_align":true,"congruent_mod_16384":true,"verdict":"PASS_WITH_WARNINGS","runtime_16kb_env":"NOT TESTED"}
+  ]
+}
+evidence-mode: exit 0 (violations above are FINDINGS about the inspected upstream artifacts, not CI results)

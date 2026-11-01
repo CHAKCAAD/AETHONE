@@ -1,0 +1,94 @@
+=== AETHONE v4.2 evidence — corrected Bionic multi-PT_GNU_RELRO position (employer review of v4.1, item 3) ===
+date: 2026-11-01 (UTC)   scope: documentation-position correction; zero code/flag/pin changes
+baseline evidence: evidence/bionic_relro_16kb_evidence.txt (v4.1, sha256-verified AOSP fetches)
+
+---------------------------------------------------------------------------
+1. CORRECTED POSITION — recorded exactly as required
+---------------------------------------------------------------------------
+The standard bionic dynamic linker processes EVERY PT_GNU_RELRO segment
+separately. In AOSP main `linker/linker_phdr.cpp`, the function
+`_phdr_table_set_gnu_relro_prot` walks the whole program-header table in a
+loop (`for (phdr = phdr_table; phdr < phdr_limit; phdr++)`) and performs one
+independent mprotect() per PT_GNU_RELRO segment (v4.1 baseline, EXCERPT 3).
+
+THEREFORE the following is recorded explicitly:
+
+  >> NO claim of general non-support for multiple PT_GNU_RELRO segments in
+     Android/bionic is made, and any wording that could be read that way is
+     WITHDRAWN. Multiple RELRO segments are each processed by the standard
+     linker loop, one mprotect() per segment. <<
+
+Static multi-segment ENUMERATION capability of inspect_elf.sh v4 (every
+segment independently analyzed; none hidden under a PASS) remains VERIFIED
+(synthetic fixtures in evidence/relro_multi_segment_test.txt + this run's
+reproduction).
+
+---------------------------------------------------------------------------
+2. WHAT IS DOCUMENTED INSTEAD — the real, source-documented risks
+---------------------------------------------------------------------------
+The runtime risk with multiple RELRO segments is NOT "unsupported", it is
+the documented OVER-PROTECTION / OVERLAP hazard of each segment's
+page-rounded protection range:
+
+R1. Page-boundary over-protection (single or multiple segments).
+    The linker rounds every RELRO segment's protection range outwards to
+    whole pages: seg_page_start = page_start(p_vaddr), seg_page_end =
+    page_end(p_vaddr + p_memsz) (EXCERPT 3). The in-source comment states
+    this is deliberately "over-protective" and, quoting Ian Lance Taylor's
+    description (reproduced in the source): "If there is anything on the
+    page which should not be read-only, the program is likely to fail at
+    runtime." With MULTIPLE RELRO segments this hazard repeats INDEPENDENTLY
+    PER SEGMENT: each additional segment adds its own rounded start/end
+    pages, so the total region forced read-only can only grow. A protection
+    range that overlaps any page containing data that must remain writable
+    => likely segmentation fault at first write to that page.
+
+R2. Shared-LOAD placement rule (official 16 KB documentation).
+    developer.android.com/guide/practices/page-sizes (Last updated
+    2026-10-16 UTC, EXCERPT 4): a RELRO section whose (VirtAddr + MemSiz) is
+    not 16 KB aligned "crashes the app at runtime with a segmentation fault"
+    — the protection range turns read-only a sub-range the linker expects
+    writable. The rule applies when GNU_RELRO shares its LOAD segment with
+    subsequent writable data; when RELRO is in its own LOAD (no writable
+    data in the sub-range, next writable LOAD on a separate page) the file
+    is compliant even with a non-zero remainder. Both official artifacts'
+    verdicts (arm64, x86_64: own-LOAD => PASS) are unchanged.
+
+R3. 16 KiB app-compat extension path hazards (bionic source, EXCERPT 2).
+    `_extend_gnu_relro_prot_end` documents the hazard of "incorrect write
+    protection of non-relocation data" if page-aligned memsz were used, and
+    when relro_memsz < containing-load memsz it ABANDONS the extension
+    entirely (`return;`), leaving a separate (split) VMA instead of extending
+    the protection. This path additionally only activates on a 16 KiB kernel
+    for ELFs with min p_align 4096 when `bionic.linker.16kb.app_compat.enabled`
+    is on — a temporary condition per the in-source comment ("removed once
+    app compat is made the default on 16KiB devices").
+
+---------------------------------------------------------------------------
+3. LAYER SEPARATION (unchanged, restated for precision)
+---------------------------------------------------------------------------
+Layer A — static ELF enumeration (build-time, inspect_elf.sh v4):
+  every PT_GNU_RELRO checked independently; official v2.4.0 artifacts carry
+  exactly ONE RELRO segment each (evidence/official_artifacts_relro_enumeration.txt);
+  verdicts bit-for-bit identical to v3.  Status: VERIFIED (static).
+
+Layer B — runtime compatibility of a multi-RELRO ELF with bionic
+  (real linker, real device, per N2/N7):
+  NOT TESTED. No static result — including complete enumeration of all
+  segments — upgrades Layer B. If a future CI artifact carries multiple
+  RELRO segments, exactly this status applies to it.
+
+Layer C — 16 KB runtime environment:
+  NOT TESTED (no 16 KB device/emulator in the analysis environment; no CI
+  run approved yet).
+
+---------------------------------------------------------------------------
+4. STATUS LINES (four-state labels, fail-closed)
+---------------------------------------------------------------------------
+MULTI-RELRO LINKER-LOOP PROCESSING (source-derived):  VERIFIED (static, AOSP main source)
+MULTI-RELRO RUNTIME COMPATIBILITY (bionic, device):   NOT TESTED
+16 KB RUNTIME (RELRO included):                       NOT TESTED
+Go x86_64 toolchain/status:                           WARN (unchanged)
+Any linker-flag / tool-version change without written approval: FORBIDDEN (N8)
+
+=== end of corrected position ===

@@ -1,0 +1,90 @@
+=== nttld/setup-ndk @ pinned SHA ed92fe6cadad69be94a966a7ee3271275e62f779 (v1.6.0) — interface evidence (v4.4) ===
+Fetched live 2026-11-01 from https://raw.githubusercontent.com/nttld/setup-ndk/<SHA>/...
+Local copies saved under evidence/setup_ndk_pinned_source_v44/ ; sha256 below.
+
+--- action.yml (complete, verbatim) ---
+name: Setup Android NDK
+description: Setup an Android NDK environment by downloading and optionally caching it and adding it to the PATH
+author: Raphaël Thériault
+branding:
+  icon: play
+  color: green
+
+inputs:
+  ndk-version:
+    description: Exact version to use
+    required: true
+  add-to-path:
+    description: Add installation directory to the PATH
+    required: false
+    default: "true"
+  link-to-sdk:
+    description: Add installed NDK to the Android SDK
+    required: false
+    default: "false"
+  local-cache:
+    description: Use the local job cache on top of the runner tool cache
+    required: false
+    default: "false"
+outputs:
+  ndk-path:
+    description: Installation path
+  ndk-full-version:
+    description: Full NDK version
+
+runs:
+  using: node24
+  main: dist/index.js
+
+--- installer.ts: getDownloadUrl + getArchString + getFullVersion (verbatim lines) ---
+L140:   }
+L141: }
+L142: 
+L143: function checkCompatibility() {
+L144:   const supported = ["linux-x64", "win32-x64", "darwin-arm64", "darwin-x64"]
+L145: 
+L146:   const platform = os.platform()
+L147:   const arch = os.arch()
+L148:   const host = `${platform}-${arch}`
+L149: 
+L150:   if (!supported.includes(host)) {
+L151:     throw new Error(`Unsupported host "${host}"`)
+L152:   }
+L153: }
+L154: 
+L155: function getPlatormString() {
+L156:   const platform = os.platform()
+L157:   switch (platform) {
+L158:     case "linux":
+L159:       return "-linux"
+L160:     case "win32":
+L161:       return "-windows"
+L162:     case "darwin":
+L163:       return "-darwin"
+L164:     default:
+
+--- main.ts: output wiring (verbatim lines) ---
+L6:   const version = core.getInput("ndk-version")
+L18:   if (fullVersion) core.setOutput("ndk-full-version", fullVersion)
+
+--- URL resolution consequence (machine-checked) ---
+input 'r26d'            -> slice(1)='26d' -> parseInt=26 >= 23 -> arch=''      ->
+    https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
+input '26.3.11579264'   -> slice(1)='6.3.11579264' -> parseInt=6 < 23 -> arch='-x86_64' ->
+    https://dl.google.com/android/repository/android-ndk-26.3.11579264-linux-x86_64.zip
+
+--- live HEAD checks (2026-11-01, curl -I) ---
+HTTP 200  https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
+HTTP 404  https://dl.google.com/android/repository/android-ndk-26.3.11579264-linux-x86_64.zip
+HTTP 404  https://dl.google.com/android/repository/android-ndk-26.3.11579264-linux.zip
+
+--- ndk-full-version output ---
+installer.ts getFullVersion(): reads <installPath>/source.properties, parses Pkg.Revision,
+splits on '-' -> for r26d the output equals 26.3.11579264. If detection fails the output
+is EMPTY (only a warning) — hence the workflow's fail-closed comparison is required:
+empty output or any value != NDK_PKG_REVISION (26.3.11579264) aborts the build.
+
+CONCLUSION: NDK_VERSION=r26d (action input) + NDK_PKG_REVISION=26.3.11579264 (check-only)
+is the correct split. The NDK version itself is UNCHANGED (r26d, N8 frozen); this is an
+input-format fix, not an upgrade. The v4.3 workflow value 26.3.11579264 passed directly
+to the input would have produced a 404 download URL (build would fail).

@@ -1,0 +1,55 @@
+=== AETHONE v4.3 — sections where the pinned source gives NO or INSUFFICIENT evidence ===
+
+Principle: a capability is claimed only where the pinned source witnesses it.
+The following matrix areas have no witness (or only a UI/plan witness) in
+Aether @ d58f9d568083129ce2c767c85054021eb3ee6a38 and are therefore registered
+with their non-core source of truth and/or NOT TESTED / NOT IMPLEMENTED:
+
+  - Onboarding (9.1)
+      why: none — UI-only
+      registered source of truth: Phase-1 report v2 + Figma assets only
+  - Home Screen & five connection states (9.2)
+      why: none — UI-only (states are app session semantics)
+      registered source of truth: Phase-1 report v2
+  - Kill Switch (9.18)
+      why: no flag/option in the pinned CLI surface; Android VpnService semantics are app-level
+      registered source of truth: no Aether-core witness
+  - Motion Settings / Reduce Motion (9.20)
+      why: none — UI-only
+      registered source of truth: Phase-1 report v2
+  - Appearance (9.21)
+      why: none — UI-only
+      registered source of truth: Phase-1 report v2
+  - Language & System Language (9.22)
+      why: none — UI-only
+      registered source of truth: Phase-1 report v2
+  - Support & About (9.23)
+      why: none — UI-only
+      registered source of truth: Phase-1 report v2
+  - Proxy/Tunnel service modes (9.7)
+      why: app-level service concepts; Aether itself serves SOCKS5/HTTP on fixed listeners
+      registered source of truth: Phase-1 report v2
+  - Speed Test & Diagnostics (9.17)
+      why: N3 decided but NOT IMPLEMENTED in bundle scope
+      registered source of truth: N3 decision record
+  - SMART AUTO (8/9.4)
+      why: no auto-ranking logic anywhere in the pinned source; select_protocol() is an interactive menu (lib.rs L3281)
+      registered source of truth: registration only
+  - Tor runtime on Android (3.x)
+      why: source VERIFIED; build/run with cargo feature tor on Android never executed
+      registered source of truth: NOT TESTED
+  - Psiphon runtime on Android (4.x)
+      why: source VERIFIED; real psiphon-tunnel-core execution never run; credentials are placeholders (N6)
+      registered source of truth: NOT TESTED / BLOCKED
+  - Bridges & pluggable transports runtime (3.2)
+      why: Moat/onionoo client code present (bridges.rs); no runtime/PoC on Android
+      registered source of truth: NOT TESTED
+  - AETHER_TOR_COUNTRY as exit-country control
+      why: ABSENT — variable only selects BridgeDB/Moat bridge-request country (bridges.rs L410–448)
+      registered source of truth: explicit non-capability
+  - Windows / Linux (11)
+      why: no plan-level source witness in Aether repo; future-plan item only
+      registered source of truth: future plan
+
+Every other matrix row cites file+line in the pinned source; runtime status of
+all of them remains NOT TESTED until the first real build and device run (N2).

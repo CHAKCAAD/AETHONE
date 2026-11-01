@@ -1,0 +1,29 @@
+--- /home/z/my-project/work/v43_extract/docs/CLI_REFERENCE.md	2026-11-01 12:00:00.000000000 +0000
++++ /home/z/my-project/work_v44/bundle/docs/CLI_REFERENCE.md	2026-11-01 14:21:33.469274563 +0000
+@@ -5,13 +5,17 @@
+ (Aether 2.4.0), sha256 `c974d7f1…`; byte-identity of all six anchor files vs the live
+ commit is proven in `evidence/protocol_surface_pinned_commit_v43.txt`.
+ 
++**v4.4:** one duplicated `RUST_LOG` row (both occurrences `L533`) removed;
++environment-only variables = **28 distinct** (machine recount, assertion-checked in
++`evidence/validation_v44_changes.txt`). Parser-arm table unchanged (113 arms).
++
+ Reading rules:
+ - **Line(L)** = line number in `aether/src/cli.rs` at the pinned commit (parser arm / USAGE text).
+ - Every flag sets one environment variable (`set`), or adds to it (`append` = repeatable).
+ - A flag **beats** its environment variable; either one stops the interactive question (USAGE L11–14).
+ - Statuses: *CLI attested* means the option exists in the pinned source — **not** a runtime capability proof (runtime on Android: `NOT TESTED`).
+ 
+-Totals: **113 parser arms** mapping **90 distinct flag-driven environment variables**, plus **29 environment-only variables**; USAGE text spans cli.rs L3–542.
++Totals: **113 parser arms** mapping **90 distinct flag-driven environment variables**, plus **28 environment-only variables** (v4.4 recount; the v4.3 file listed 29 rows with `RUST_LOG` duplicated); USAGE text spans cli.rs L3–542.
+ 
+ ## Connection
+ 
+@@ -228,7 +232,6 @@
+ | 26 | `AETHER_TCP_CONNECT_SECS` | how long a connection through the tunnel may take to open (default 30) | L529 |
+ | 27 | `AETHER_REPROVISION` | 0 to stop replacing an identity Cloudflare has refused with a freshly registered one | L531 |
+ | 28 | `RUST_LOG` | standard rust log filter; overrides --log-level | L533 |
+-| 29 | `RUST_LOG` | standard rust log filter; overrides --log-level | L533 |
+ 
+ ## Verified key defaults (USAGE text)
+ 

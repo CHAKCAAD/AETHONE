@@ -1,0 +1,115 @@
+AETHONE — GitHub Actions pin evidence, RAW (bundle v3)
+Date: 2026-10-31 (UTC) — all commands run from the analysis environment
+Method: git ls-remote (tag->SHA), full clone + git object inspection (history/durability)
+NOTE: api.github.com REST returns 403 from this network (recorded in earlier sessions);
+git protocol + raw.githubusercontent.com work. ls-remote is a first-class GitHub endpoint.
+
+======================================================================
+PART 1 — tag -> SHA mappings for the 6 tag-pinned actions
+Command used for each: git ls-remote https://github.com/<repo> refs/tags/<tag> refs/tags/<tag>^{}
+======================================================================
+
+$ git ls-remote https://github.com/actions/checkout refs/tags/v4.4.0 'refs/tags/v4.4.0^{}'
+11d5960a326750d5838078e36cf38b85af677262	refs/tags/v4.4.0
+-> pinned SHA in native-ci.yml: 11d5960a326750d5838078e36cf38b85af677262  == VERIFIED
+   (lightweight tag: the ref itself points at the commit; no ^{} line returned)
+
+$ git ls-remote https://github.com/actions/cache refs/tags/v4.3.0 'refs/tags/v4.3.0^{}'
+0057852bfaa89a56745cba8c7296529d2fc39830	refs/tags/v4.3.0
+-> pinned SHA: 0057852bfaa89a56745cba8c7296529d2fc39830  == VERIFIED (lightweight tag)
+
+$ git ls-remote https://github.com/actions/setup-go refs/tags/v5.6.0 'refs/tags/v5.6.0^{}'
+40f1582b2485089dde7abd97c1529aa768e1baff	refs/tags/v5.6.0
+-> pinned SHA: 40f1582b2485089dde7abd97c1529aa768e1baff  == VERIFIED (lightweight tag)
+
+$ git ls-remote https://github.com/actions/upload-artifact refs/tags/v4.6.2 'refs/tags/v4.6.2^{}'
+ea165f8d65b6e75b540449e92b4886f43607fa02	refs/tags/v4.6.2
+-> pinned SHA: ea165f8d65b6e75b540449e92b4886f43607fa02  == VERIFIED (lightweight tag)
+
+$ git ls-remote https://github.com/actions/download-artifact refs/tags/v4.3.0 'refs/tags/v4.3.0^{}'
+d3f86a106a0bac45b974a628896c90dbdf5c8093	refs/tags/v4.3.0
+-> pinned SHA: d3f86a106a0bac45b974a628896c90dbdf5c8093  == VERIFIED (lightweight tag)
+
+$ git ls-remote https://github.com/nttld/setup-ndk refs/tags/v1.6.0 'refs/tags/v1.6.0^{}'
+aacaf74664d0f8e1b070a865acb47ee25007386d	refs/tags/v1.6.0        <- annotated TAG OBJECT
+ed92fe6cadad69be94a966a7ee3271275e62f779	refs/tags/v1.6.0^{}    <- dereferenced COMMIT
+-> pinned SHA: ed92fe6cadad69be94a966a7ee3271275e62f779  == VERIFIED
+   (v1.6.0 is an ANNOTATED tag; the pin correctly equals the dereferenced COMMIT,
+    not the tag object aacaf746 — pinning the commit is the correct form for
+    `uses:` because Actions resolves to a commit)
+
+======================================================================
+PART 2 — dtolnay/rust-toolchain @ b725eda525362e7cf34af9a7243cac1e3f01a7ec
+(employer question: is the pin in the MAIN-branch history? does the commit persist?)
+======================================================================
+
+$ git ls-remote https://github.com/dtolnay/rust-toolchain refs/heads/master refs/heads/stable
+683b588c487a69d01f6c6ddf40f036ff682cc2c8	refs/heads/master
+b725eda525362e7cf34af9a7243cac1e3f01a7ec	refs/heads/stable
+-> the pinned SHA is the CURRENT stable branch HEAD (fetched 2026-10-31) — VERIFIED
+
+$ git ls-remote https://github.com/dtolnay/rust-toolchain 'refs/heads/1.99*'
+ff7f6a3374ce205788da40198ec918bd5d67aea7	refs/heads/1.99.0
+d124f86f28ff42855784ff3319f48ac182c248f8	refs/heads/1.99
+d124f86f28ff42855784ff3319f48ac182c248f8	refs/heads/1.99.1
+-> per-version branch 1.99.1 head = d124f86f28ff42855784ff3319f48ac182c248f8
+   (NOTE: different commit from the stable pin)
+
+Full clone inspection (git clone https://github.com/dtolnay/rust-toolchain):
+
+$ git cat-file -t b725eda525362e7cf34af9a7243cac1e3f01a7ec
+commit                                    -> commit object EXISTS
+
+$ git log -1 --format='%H%n%an%n%ad%n%s' b725eda
+b725eda525362e7cf34af9a7243cac1e3f01a7ec
+David Tolnay
+Thu Oct 15 22:25:02 2026 -0400
+toolchain: stable
+
+$ git merge-base --is-ancestor b725eda origin/master ; echo $?
+1                                        -> NOT an ancestor of master (NOT in main history)
+
+$ git for-each-ref --contains b725eda --format='%(refname)'
+refs/remotes/origin/stable               -> the ONLY ref containing the pin is refs/heads/stable
+
+$ git log -1 --format='%H %s' b725eda^
+683b588c487a69d01f6c6ddf40f036ff682cc2c8 Add 1.99.1 patch release
+-> the pin's PARENT is exactly the current master HEAD
+
+Commit graph (git log --oneline --graph d124f86 b725eda):
+* b725eda toolchain: stable              <- refs/heads/stable (OUR PIN)
+| * d124f86 toolchain: 1.99.1            <- refs/heads/1.99.1
+|/
+* 683b588 Add 1.99.1 patch release       <- refs/heads/master HEAD
+*   e2a55d2 Merge pull request #187 from dtolnay/pwn
+...
+
+$ git diff --stat b725eda d124f86
+ action.yml | 6 +-----
+-> the two commits differ ONLY in action.yml (6 lines):
+
+$ git diff b725eda d124f86 -- action.yml
+   inputs:
+-  toolchain:
+-    description: Rust toolchain specification -- see ...
+-    required: false
+-    default: stable
+   targets: ...
+@@ -54,7 +50,7 @@ runs:
+-        toolchain: ${{inputs.toolchain}}
++        toolchain: 1.99.1
+
+DURABILITY ANALYSIS (employer question 4):
+- dtolnay/rust-toolchain keeps 292 refs (all per-version branches 1.0 ... 1.99.1
+  are retained; oldest = 1.0). Per-version branch heads do NOT move -> durable.
+- refs/heads/stable MOVES at every Rust stable release. Our pin b725eda is
+  currently the stable HEAD; when Rust 1.100 ships, `stable` will move and
+  b725eda becomes unreachable from any branch/tag. GitHub serves unreachable
+  commits by SHA in practice, but there is NO guarantee against GC.
+- Behavioral equivalence: our workflow passes `toolchain: 1.99.1` explicitly in
+  `with:`, which overrides the action default; with that input the b725eda pin
+  (default: stable) and the d124f86 pin (hardcoded 1.99.1) behave IDENTICALLY.
+  The durable alternative would be d124f86 (= refs/heads/1.99.1 head).
+- DECISION REQUIRED (N8 gate): keep b725eda (current pin, frozen per employer
+  directive 8 — NOT changed in this bundle) vs switch to d124f86. Registered as
+  WARN / NEEDS-REVIEW. No change made without employer approval.

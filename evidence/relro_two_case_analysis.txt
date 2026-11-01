@@ -1,0 +1,103 @@
+AETHONE — RELRO-16KB two-case analysis, RAW DATA (bundle v3, 2026-10-31)
+======================================================================
+Method: readelf -lW on the REAL official Aether v2.4.0 release binaries
+(sha256-verified downloads; see elf_inspection_log.txt). The two-case rule
+is quoted verbatim from developer.android.com/guide/practices/page-sizes
+in android_pagesizes_doc_excerpt.txt.
+
+THE RULE (official doc, verbatim):
+  "The modulo formula applies when GNU_RELRO shares a LOAD segment with
+   subsequent writable data (such as .data or .bss)."
+  Own-LOAD case: "Because the entire LOAD segment contains only RELRO data,
+  there's no writable data in the sub-range ... Additionally, any subsequent
+  writable LOAD segment begins on a separate 16 KB page boundary ... The
+  linker's read-only protection won't overlap with any writable data, so no
+  segmentation fault occurs."
+  Crash mechanism (official doc example): the linker mprotects
+  [page_down(relro_vaddr), page_up(relro_vaddr+memsz)) read-only; any
+  WRITABLE byte inside that range causes a segfault at runtime.
+
+======================================================================
+FILE: aether-android-arm64.d/aether
+======================================================================
+$ readelf -lW aether-android-arm64.d/aether | grep -E 'Type|LOAD|RELRO'
+  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+  INTERP         0x0002e0 0x00000000000002e0 0x00000000000002e0 0x000015 0x000015 R   0x1
+  LOAD           0x000000 0x0000000000000000 0x0000000000000000 0x4c07b8 0x4c07b8 R   0x4000
+  LOAD           0x4c07c0 0x00000000004c47c0 0x00000000004c47c0 0xcc5960 0xcc5960 R E 0x4000
+  LOAD           0x1186140 0x000000000118e140 0x000000000118e140 0x093e40 0x093e40 RW  0x4000
+  LOAD           0x1219f80 0x0000000001225f80 0x0000000001225f80 0x00ac30 0x00d3d0 RW  0x4000
+  GNU_RELRO      0x1186140 0x000000000118e140 0x000000000118e140 0x093e40 0x093ec0 R   0x1
+
+======================================================================
+FILE: aether-android-x86_64.d/aether
+======================================================================
+$ readelf -lW aether-android-x86_64.d/aether | grep -E 'Type|LOAD|RELRO'
+  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+  INTERP         0x0002a8 0x00000000000002a8 0x00000000000002a8 0x000015 0x000015 R   0x1
+  LOAD           0x000000 0x0000000000000000 0x0000000000000000 0x4e258c 0x4e258c R   0x4000
+  LOAD           0x4e25c0 0x00000000004e65c0 0x00000000004e65c0 0xe8fa50 0xe8fa50 R E 0x4000
+  LOAD           0x1372010 0x000000000137a010 0x000000000137a010 0x094ab8 0x094ab8 RW  0x4000
+  LOAD           0x1406ad0 0x0000000001412ad0 0x0000000001412ad0 0x00abc8 0x00cdf0 RW  0x4000
+  GNU_RELRO      0x1372010 0x000000000137a010 0x000000000137a010 0x094ab8 0x094ff0 R   0x1
+
+======================================================================
+FILE: aether-android-armv7.d/aether
+======================================================================
+$ readelf -lW aether-android-armv7.d/aether | grep -E 'Type|LOAD|RELRO'
+  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align
+  INTERP         0x0001b4 0x000001b4 0x000001b4 0x00013 0x00013 R   0x1
+  LOAD           0x000000 0x00000000 0x00000000 0x265911 0x265911 R   0x1000
+  LOAD           0x265980 0x00266980 0x00266980 0xa21a40 0xa21a40 R E 0x1000
+  LOAD           0xc873c0 0x00c893c0 0x00c893c0 0x569e4 0x569e4 RW  0x1000
+  LOAD           0xcddda8 0x00ce0da8 0x00ce0da8 0x05b08 0x06f45 RW  0x1000
+  GNU_RELRO      0xc873c0 0x00c893c0 0x00c893c0 0x569e4 0x56c40 R   0x1
+
+======================================================================
+COMPUTATION (all arithmetic done with python3, printed below)
+======================================================================
+--- aether ARM64  (official v2.4.0) ---
+  PT_GNU_RELRO: vaddr=0x118e140 memsz=0x93ec0 -> end=0x1222000
+  formula remainder (end % 16384) = 8192   <- v2 judged FAIL on this alone (16KB arches)
+  covering LOAD : vaddr=0x118e140 memsz=0x93e40 flags=RW end=0x1221f80
+  data before RELRO in LOAD = 0 bytes; data after RELRO in LOAD = -128 bytes  (RELRO extends past the LOAD end)
+  bionic mprotect range = [0x118c000, 0x1224000)
+  placement = OWN-LOAD (LOAD contains only RELRO data)
+    subsequent LOAD vaddr=0x1225f80 flags=RW writable=yes starts_at_or_after_page_up(relro_end)=YES (safe)
+  => OWN-LOAD rule (formula NOT applicable per official doc): SATISFIED -> kb16_relro = PASS
+
+--- aether x86_64 (official v2.4.0) ---
+  PT_GNU_RELRO: vaddr=0x137a010 memsz=0x94ff0 -> end=0x140f000
+  formula remainder (end % 16384) = 12288   <- v2 judged FAIL on this alone (16KB arches)
+  covering LOAD : vaddr=0x137a010 memsz=0x94ab8 flags=RW end=0x140eac8
+  data before RELRO in LOAD = 0 bytes; data after RELRO in LOAD = -1336 bytes  (RELRO extends past the LOAD end)
+  bionic mprotect range = [0x1378000, 0x1410000)
+  placement = OWN-LOAD (LOAD contains only RELRO data)
+    subsequent LOAD vaddr=0x1412ad0 flags=RW writable=yes starts_at_or_after_page_up(relro_end)=YES (safe)
+  => OWN-LOAD rule (formula NOT applicable per official doc): SATISFIED -> kb16_relro = PASS
+
+--- aether armv7  (official v2.4.0, 4KB arch — 16KB rule N/A, recorded) ---
+  PT_GNU_RELRO: vaddr=0xc893c0 memsz=0x56c40 -> end=0xce0000
+  formula remainder (end % 16384) = 0   <- v2 judged FAIL on this alone (16KB arches)
+  covering LOAD : vaddr=0xc893c0 memsz=0x569e4 flags=RW end=0xcdfda4
+  data before RELRO in LOAD = 0 bytes; data after RELRO in LOAD = -604 bytes  (RELRO extends past the LOAD end)
+  bionic mprotect range = [0xc88000, 0xce0000)
+  placement = OWN-LOAD (LOAD contains only RELRO data)
+    subsequent LOAD vaddr=0xce0da8 flags=RW writable=yes starts_at_or_after_page_up(relro_end)=YES (safe)
+  => OWN-LOAD rule (formula NOT applicable per official doc): SATISFIED -> kb16_relro = PASS
+
+======================================================================
+CONCLUSION (v3, corrects the v2 verdict):
+  * aether ARM64 : own-LOAD placement; next RW LOAD 0x1225f80 starts at/after
+    0x1224000 = page_up(relro_end). No writable byte inside the mprotect
+    range. kb16_relro = PASS. The v2 'FAIL' (remainder 8192) was a FALSE
+    POSITIVE caused by applying the formula unconditionally.
+  * aether x86_64: own-LOAD placement; next RW LOAD 0x1412ad0 starts at/after
+    0x1410000 = page_up(relro_end). kb16_relro = PASS. The v2 'FAIL'
+    (remainder 12288) was likewise a FALSE POSITIVE.
+  * aether armv7 : 4KB architecture -> 16KB rule N/A (data recorded above).
+  * The psiphon-tunnel-core and lyrebird Go executables have NO PT_GNU_RELRO
+    segment at all (static EXEC) -> no RELRO requirement (trivially compliant).
+  * Runtime in a real 16KB Android environment: NOT TESTED (static analysis
+    only — no emulator/device run has been performed).
+======================================================================

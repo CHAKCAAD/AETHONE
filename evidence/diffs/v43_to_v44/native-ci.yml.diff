@@ -1,0 +1,47 @@
+--- /home/z/my-project/work/v43_extract/.github/workflows/native-ci.yml	2026-11-01 12:00:00.000000000 +0000
++++ /home/z/my-project/work_v44/bundle/.github/workflows/native-ci.yml	2026-11-01 14:21:33.466274551 +0000
+@@ -106,7 +106,17 @@
+   GO_VERSION:        "1.26.3"     # fork go.mod: `toolchain go1.26.3`; GOTOOLCHAIN=local forbids silent switches
+   ZIG_VERSION:       "0.16.0"     # zeptun 1.1.3 requirement (README: "Zig 0.16.0 is the only requirement")
+   ZIG_SHA256_X86_64: 70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+-  NDK_VERSION:       "26.3.11579264"  # r26d — frozen per N8 (Aether release.yml uses r26d)
++  # NDK r26d is pinned as TWO forms of the SAME frozen version (N8 — NO version change):
++  #   NDK_VERSION      = release identifier -> the ONLY valid form for nttld/setup-ndk's
++  #                      `ndk-version` input: its pinned getDownloadUrl() builds
++  #                      android-ndk-<version>-linux.zip, which Google publishes only as
++  #                      r26d (live HEAD 2026-11-01: r26d -> HTTP 200,
++  #                      26.3.11579264-forms -> HTTP 404; see
++  #                      evidence/setup_ndk_interface_evidence_v44.txt)
++  #   NDK_PKG_REVISION = canonical Pkg.Revision of r26d -> used ONLY for the fail-closed
++  #                      post-install check against the action's `ndk-full-version` output
++  NDK_VERSION:       "r26d"             # frozen per N8 (Aether release.yml uses r26d) — input form
++  NDK_PKG_REVISION:  "26.3.11579264"    # canonical revision of r26d — check-only, never an action input
+   CARGO_NDK_VERSION: "4.1.2"      # crates.io latest; Aether installs unpinned latest, we pin exactly
+   API_LEVEL:         "29"         # BOTH components build at 29 (aether release.yml `--platform 29`;
+                                   # zeptun Application.mk `APP_PLATFORM := android-29`)
+@@ -203,10 +213,24 @@
+ 
+       - name: Install Android NDK (exact pin r26d)
+         id: ndk
+-        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
++        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0 — SHA unchanged
+         with:
++          # release-identifier form (r26d); the canonical revision 26.3.11579264 is
++          # verified against the action's own output immediately after install
+           ndk-version: ${{ env.NDK_VERSION }}
+ 
++      - name: Verify installed NDK full revision (fail-closed — N8 pin unchanged)
++        env:
++          NDK_INSTALLED_FULL: ${{ steps.ndk.outputs.ndk-full-version }}
++        run: |
++          echo "expected Pkg.Revision (pinned r26d): ${NDK_PKG_REVISION}"
++          echo "installed (setup-ndk ndk-full-version): ${NDK_INSTALLED_FULL}"
++          if [ -z "${NDK_INSTALLED_FULL}" ] || [ "${NDK_INSTALLED_FULL}" != "${NDK_PKG_REVISION}" ]; then
++            echo "::error::NDK full-revision mismatch: expected '${NDK_PKG_REVISION}' (r26d), got '${NDK_INSTALLED_FULL}' — aborting build"
++            exit 1
++          fi
++          echo "NDK pin verified: r26d == ${NDK_INSTALLED_FULL} == ${NDK_PKG_REVISION}"
++
+       - name: Install cargo-ndk (exact pin)
+         run: cargo install cargo-ndk --version "${CARGO_NDK_VERSION}" --locked
+ 

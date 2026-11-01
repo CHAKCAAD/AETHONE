@@ -1,0 +1,16 @@
+{
+  "single_run": true,
+  "date": "2026-10-31T15:08:19Z",
+  "set_flags": "set -euo pipefail",
+  "upstream_label": "EVIDENCE ONLY — upstream Aether v2.4.0 release artifacts, NOT an AETHONE build",
+  "arm64_source_path_fix": {
+    "v3_wrong": "aether-android-arm64-v8a.d",
+    "v4_correct": "aether-android-arm64.d"
+  },
+  "inspected": 9,
+  "missing": 9,
+  "warnings": 2,
+  "verdict": "PASS_WITH_WARNINGS",
+  "counts_match": true,
+  "relro_non_regression_vs_v3": "identical (9/9 records)"
+}

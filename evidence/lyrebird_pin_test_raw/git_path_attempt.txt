@@ -1,0 +1,12 @@
+### [1] GIT PATH — direct clone/checkout attempt of the pinned commit
+$ git ls-remote https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird
+```
+fatal: unable to access 'https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird/': The requested URL returned error: 400
+exit code: 128
+```
+$ git clone --filter=blob:none https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird
+```
+Cloning into 'v4_work/lyrebird_git'...
+fatal: unable to access 'https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird/': The requested URL returned error: 400
+exit code: 128
+```

@@ -1,0 +1,431 @@
+# AETHONE Native CI — Phase 2 bootstrap (report v4, bundle v4)
+# ---------------------------------------------------------------------------
+# Status: DELIVERED, NOT TESTED — this workflow has never been executed.
+#         It must be pushed to the AETHONE repository and run there
+#         (no repository access exists in the analysis environment).
+# Evidence for every pin is recorded in docs/CI_BOOTSTRAP_PoC.md and
+# evidence/verification_log*.txt (commit existence proven by `git checkout`
+# of the exact SHA — stronger than an API lookup). Raw tag->SHA proof for
+# every Actions pin: evidence/actions_pins_raw_evidence.txt (v3).
+# actionlint 1.7.7 exit 0 on THIS exact file: evidence/validation_log.txt (v4).
+#
+# v4 changes (employer review of bundle v3, 2026-10-31) — NO pin changed:
+#   * The final workflow is delivered AT THIS PATH in the bundle ZIP
+#     (employer fix #1).
+#   * inspect_elf.sh v4: EVERY PT_GNU_RELRO segment is analyzed independently
+#     (v3 analyzed only the first and warned about the rest — an unchecked
+#     segment could hide under a PASS). Aggregate FAIL>WARN>N/A>PASS. All 9
+#     official Aether v2.4.0 artifacts carry exactly one RELRO segment
+#     (relro.segment_count in the regenerated manifest), so every official
+#     verdict is IDENTICAL to v3 — compared bit-for-bit in
+#     evidence/validation_log.txt; multi-segment behaviour proven on
+#     synthetic fixtures in evidence/relro_multi_segment_test.txt.
+#   * build_native.sh v4 + pt-build-pin.patch v4: the lyrebird pin proof is
+#     path-aware (employer fix #3). The pin fc105a03c0e0 is UNCHANGED. The
+#     proxy fallback now proves the source zip against sum.golang.org (H1
+#     dirhash locally recomputed — hard abort on mismatch/missing), because
+#     a binary built from the .git-less proxy zip records NO main-module
+#     commit: `go version -m` cannot carry the pin there (proven end-to-end
+#     with go1.26.3 in evidence/lyrebird_pin_independent_test.txt). The git
+#     path keeps the binary vcs.revision check (buildvcs mechanism proven in
+#     the same evidence file). Proof recorded in manifest.json.
+#   * Artifact-flow simulation corrected: the ARM64 upstream evidence path
+#     is aether-android-arm64.d (v3 wrongly used aether-android-arm64-v8a.d);
+#     the whole validation now runs under set -euo pipefail and inspect_elf.sh
+#     runs on the FINAL rearranged tree (evidence/validation_log.txt).
+#
+# v3 changes (employer review of bundle v2, 2026-10-31):
+#   * inspect_elf.sh v3: RELRO-16KB is a TWO-CASE analysis per the official
+#     Android doc (own-LOAD: formula not applicable, subsequent writable
+#     LOADs must stay outside the mprotect range; shared-LOAD: official
+#     formula). The v2 unconditional-formula FAILs for the official Aether
+#     v2.4.0 binaries were false positives — both arm64 and x86_64 are
+#     own-LOAD and PASS. armeabi-v7a records kb16_load=N/A (4 KB arch);
+#     empty NEEDED serializes as []; x86_64 Go executables below 16 KB get
+#     verdict PASS_WITH_WARNINGS (kb16_load=FAIL is a static fact, runtime
+#     NOT TESTED). Static ELF compliance stays separate from runtime proof.
+#   * build_native.sh v3: zeptun ndk-build intermediates are produced under
+#     the source cache (NEVER inside $OUT) and wiped after the copy; a
+#     whitelist guard asserts the artifact contains exactly the 6 expected
+#     outputs + manifest.json. The last two `|| true` are now explicit
+#     fail-closed checks (zero `|| true` in the script).
+#   * dtolnay/rust-toolchain pin b725eda… verified as the current stable
+#     branch HEAD; durability analysis recorded (only ref containing it is
+#     the MOVING stable branch; the durable per-version alternative is
+#     d124f86 = refs/heads/1.99.1). NOT changed without employer approval.
+#   * zipalign -P 16 stays NOT TESTED (no APK exists yet).
+#
+# v2 changes (employer review of the v1 bundle, 2026-10-31):
+#   * Every GitHub Action is pinned to a FULL COMMIT SHA (tag listed in the
+#     comment). v1 used moving tags (@v4/@stable) which is NOT exact pinning
+#     (N8). Any SHA bump goes through the N8 gate — no auto-upgrades.
+#   * native-<abi> artifacts are downloaded WITHOUT merge-multiple so the
+#     three ABI trees stay independent; an explicit rearrange step restores
+#     out/<abi>/zeptun|aether and hard-fails if any ABI is missing — exactly
+#     the layout scripts/inspect_elf.sh expects.
+#   * Each build leg uploads a build-status-<abi>.txt (even on failure) and
+#     status-summary now reports the REAL results of native-build and
+#     elf-inspect (per ABI and overall), explicitly marking FAILED / NOT RUN —
+#     it no longer prints a static wish-list.
+#   * zipalign -P 16 stays NOT TESTED (no APK exists yet).
+# ---------------------------------------------------------------------------
+name: AETHONE Native CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # ---------- frozen source pins (decisions N1/N8 — freeze, no auto-replace) ----------
+  AETHER_REPO:  https://github.com/CluvexStudio/Aether.git
+  AETHER_SHA:   d58f9d568083129ce2c767c85054021eb3ee6a38   # v2.4.0 (2026-10-24)
+  ZEPTUN_REPO:  https://github.com/Noisemux/zeptun.git
+  ZEPTUN_SHA:   08a1ab05aab315b7872ed582c52b7c230930d05d   # 1.1.3
+  PSIPHON_FORK_REPO: https://github.com/CluvexStudio/psiphon-tunnel-core.git
+  PSIPHON_FORK_SHA:  2956a96b56fe09b99e72a8eb4bed3e79d29e3543
+  # NOTE (recorded deviation): Aether's own psiphon-build.sh pins 83aa73b9…
+  # on branch shirokhorshid. AETHONE builds the fork at 2956a96 per the
+  # employer's N1 decision (2956a96 is a descendant of 83aa73b — verified:
+  # `git merge-base --is-ancestor 83aa73b… HEAD` succeeded).
+  # lyrebird is built by Aether's own frozen pt-build.sh (pin fc105a03c0e0
+  # lives inside that script at AETHER_SHA); the checkout fallback is
+  # hard-disabled by scripts/pt-build-pin.patch (N8) and the built binary
+  # must itself prove the pin via `go version -m`.
+
+  # ---------- exact tool pins (directive 3 of report v3) ----------
+  RUST_VERSION:      "1.99.1"     # stable channel 2026-10-15; Aether ships no rust-toolchain, CI pins it
+  GO_VERSION:        "1.26.3"     # fork go.mod: `toolchain go1.26.3`; GOTOOLCHAIN=local forbids silent switches
+  ZIG_VERSION:       "0.16.0"     # zeptun 1.1.3 requirement (README: "Zig 0.16.0 is the only requirement")
+  ZIG_SHA256_X86_64: 70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+  # NDK r26d is pinned as TWO forms of the SAME frozen version (N8 — NO version change):
+  #   NDK_VERSION      = release identifier -> the ONLY valid form for nttld/setup-ndk's
+  #                      `ndk-version` input: its pinned getDownloadUrl() builds
+  #                      android-ndk-<version>-linux.zip, which Google publishes only as
+  #                      r26d (live HEAD 2026-11-01: r26d -> HTTP 200,
+  #                      26.3.11579264-forms -> HTTP 404; see
+  #                      evidence/setup_ndk_interface_evidence_v44.txt)
+  #   NDK_PKG_REVISION = canonical Pkg.Revision of r26d -> used ONLY for the fail-closed
+  #                      post-install check against the action's `ndk-full-version` output
+  NDK_VERSION:       "r26d"             # frozen per N8 (Aether release.yml uses r26d) — input form
+  NDK_PKG_REVISION:  "26.3.11579264"    # canonical revision of r26d — check-only, never an action input
+  CARGO_NDK_VERSION: "4.1.2"      # crates.io latest; Aether installs unpinned latest, we pin exactly
+  API_LEVEL:         "29"         # BOTH components build at 29 (aether release.yml `--platform 29`;
+                                  # zeptun Application.mk `APP_PLATFORM := android-29`)
+  # minSdk=24 stays CANDIDATE / NOT TESTED — API 29 as the native-build level
+  # does NOT prove app behaviour on API 29+ (employer note, 2026-10-31).
+
+  # ---------- recorded for later packaging jobs (not used by this workflow yet) ----------
+  JDK_VERSION:        "17.0.21+9"     # Temurin GA 2026-10-22
+  GRADLE_VERSION:     "9.8.2"         # 2026-10-19; AGP 9.4.0 requires >= 9.6.0
+  AGP_VERSION:        "9.4.0"
+  BUILD_TOOLS_VERSION: "36.0.0"
+  NDK_EVAL_CANDIDATE: "28.2.13676358"  # r28c — evaluation candidate per N4 (NOT approved for use)
+  NDK_LTS_CURRENT:    "30.0.16248370"  # r30 — current LTS, recorded only; upgrades go through the N8 gate
+
+  # ---------- GitHub Actions pinned by FULL COMMIT SHA (N8 — no moving tags) ----------
+  # Raw tag->SHA proof (git ls-remote, 2026-10-31): evidence/actions_pins_raw_evidence.txt
+  # Lightweight tags resolve directly to the pinned commit; nttld/setup-ndk v1.6.0 is an
+  # annotated tag and the pin equals its dereferenced COMMIT (correct form for `uses:`).
+  # dtolnay/rust-toolchain is pinned to the stable BRANCH HEAD (moving ref) — commit
+  # exists and behavior with `toolchain: 1.99.1` input is identical to the 1.99.1 branch
+  # (d124f86); only ref containing it is refs/heads/stable, so durability depends on
+  # GitHub serving the SHA after the branch moves — WARN / NEEDS-REVIEW, employer decision.
+  # Any change to these SHAs = an upgrade decision → N8 gate only.
+  ACTIONS_CHECKOUT_SHA:     "11d5960a326750d5838078e36cf38b85af677262"  # actions/checkout        v4.4.0 (lightweight tag -> this commit, VERIFIED)
+  ACTIONS_CACHE_SHA:        "0057852bfaa89a56745cba8c7296529d2fc39830"  # actions/cache           v4.3.0 (lightweight tag -> this commit, VERIFIED)
+  ACTIONS_SETUP_GO_SHA:     "40f1582b2485089dde7abd97c1529aa768e1baff"  # actions/setup-go        v5.6.0 (lightweight tag -> this commit, VERIFIED)
+  ACTIONS_UPLOAD_ARTIFACT_SHA: "ea165f8d65b6e75b540449e92b4886f43607fa02"  # actions/upload-artifact v4.6.2 (lightweight tag -> this commit, VERIFIED)
+  ACTIONS_DOWNLOAD_ARTIFACT_SHA: "d3f86a106a0bac45b974a628896c90dbdf5c8093"  # actions/download-artifact v4.3.0 (lightweight tag -> this commit, VERIFIED)
+  ACTIONS_SETUP_NDK_SHA:    "ed92fe6cadad69be94a966a7ee3271275e62f779"  # nttld/setup-ndk         v1.6.0 (annotated tag aacaf746 -> commit ed92fe6c, VERIFIED)
+  DTOLNAY_RUST_TOOLCHAIN_SHA: "b725eda525362e7cf34af9a7243cac1e3f01a7ec"  # dtolnay/rust-toolchain  branch `stable` HEAD (2026-10-31, VERIFIED; moving-ref durability WARN — see evidence)
+
+jobs:
+  # =========================================================================
+  # Job 1 — native build per ABI (N5: arm64-v8a, armeabi-v7a, x86_64; NO x86)
+  # =========================================================================
+  native-build:
+    name: Native build (${{ matrix.abi }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            rust_target: aarch64-linux-android
+            goarch: arm64
+            goarm: ""
+            zig_arch: aarch64
+          - abi: armeabi-v7a
+            rust_target: armv7-linux-androideabi
+            goarch: arm
+            goarm: "7"
+            zig_arch: arm
+          - abi: x86_64
+            rust_target: x86_64-linux-android
+            goarch: amd64
+            goarm: ""
+            zig_arch: x86_64
+    env:
+      ZIG_PREFIX: ${{ github.workspace }}/.tools/zig
+      SRC_CACHE: ${{ github.workspace }}/.srccache
+      OUT_DIR: ${{ github.workspace }}/out/${{ matrix.abi }}
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Restore source caches (frozen SHAs)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ env.SRC_CACHE }}
+          key: srccache-${{ env.AETHER_SHA }}-${{ env.ZEPTUN_SHA }}-${{ env.PSIPHON_FORK_SHA }}
+
+      - name: Install Rust toolchain (exact pin)
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # branch stable @ 2026-10-31
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.rust_target }}
+
+      - name: Install Go toolchain (exact pin, no silent toolchain switching)
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go env -w GOTOOLCHAIN=local
+
+      - name: Install Zig toolchain (exact pin + sha256)
+        run: |
+          url="https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
+          curl -fsSL "$url" -o /tmp/zig.tar.xz
+          echo "${ZIG_SHA256_X86_64}  /tmp/zig.tar.xz" | sha256sum -c -
+          rm -rf "$ZIG_PREFIX" && mkdir -p "$ZIG_PREFIX"
+          tar -xJf /tmp/zig.tar.xz -C "$ZIG_PREFIX" --strip-components=1
+          "$ZIG_PREFIX/zig" version
+
+      - name: Install Android NDK (exact pin r26d)
+        id: ndk
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0 — SHA unchanged
+        with:
+          # release-identifier form (r26d); the canonical revision 26.3.11579264 is
+          # verified against the action's own output immediately after install
+          ndk-version: ${{ env.NDK_VERSION }}
+
+      - name: Verify installed NDK full revision (fail-closed — N8 pin unchanged)
+        env:
+          NDK_INSTALLED_FULL: ${{ steps.ndk.outputs.ndk-full-version }}
+        run: |
+          echo "expected Pkg.Revision (pinned r26d): ${NDK_PKG_REVISION}"
+          echo "installed (setup-ndk ndk-full-version): ${NDK_INSTALLED_FULL}"
+          if [ -z "${NDK_INSTALLED_FULL}" ] || [ "${NDK_INSTALLED_FULL}" != "${NDK_PKG_REVISION}" ]; then
+            echo "::error::NDK full-revision mismatch: expected '${NDK_PKG_REVISION}' (r26d), got '${NDK_INSTALLED_FULL}' — aborting build"
+            exit 1
+          fi
+          echo "NDK pin verified: r26d == ${NDK_INSTALLED_FULL} == ${NDK_PKG_REVISION}"
+
+      - name: Install cargo-ndk (exact pin)
+        run: cargo install cargo-ndk --version "${CARGO_NDK_VERSION}" --locked
+
+      - name: Build all native components for ${{ matrix.abi }}
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.ndk.outputs.ndk-path }}
+          ZIG: ${{ env.ZIG_PREFIX }}/zig
+        run: |
+          bash scripts/build_native.sh \
+            --abi "${{ matrix.abi }}" \
+            --rust-target "${{ matrix.rust_target }}" \
+            --goarch "${{ matrix.goarch }}" --goarm "${{ matrix.goarm }}" \
+            --api-level "$API_LEVEL" \
+            --src-cache "$SRC_CACHE" \
+            --out "$OUT_DIR"
+
+      - name: Upload native artifacts (${{ matrix.abi }}) — kept per-ABI, NEVER merged
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-${{ matrix.abi }}
+          # v3: OUT contains ONLY the 6 expected final outputs + manifest.json
+          # (build_native.sh whitelist guard) — no intermediates can leak in.
+          path: ${{ env.OUT_DIR }}
+          if-no-files-found: error
+
+      - name: Record leg status (real result, uploaded even on failure)
+        if: always()
+        run: |
+          mkdir -p status
+          {
+            echo "abi=${{ matrix.abi }}"
+            echo "job=${{ github.job }}"
+            echo "status=${{ job.status }}"
+            echo "run_id=${{ github.run_id }}"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > "status/build-status-${{ matrix.abi }}.txt"
+          cat "status/build-status-${{ matrix.abi }}.txt"
+
+      - name: Upload leg status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: build-status-${{ matrix.abi }}
+          path: status/build-status-${{ matrix.abi }}.txt
+          if-no-files-found: error
+
+  # =========================================================================
+  # Job 2 — ELF / ABI inspection of what Job 1 actually built.
+  # The three ABI trees are restored SEPARATELY (no merge-multiple): the
+  # rearrange step below recreates out/<abi>/{zeptun,aether} and fails hard
+  # if any ABI leg did not produce its tree — exactly what inspect_elf.sh
+  # expects (out/<abi>/...).
+  # =========================================================================
+  elf-inspect:
+    name: ELF & ABI inspection
+    needs: native-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Download native artifacts (per ABI — NO merge-multiple)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: ${{ github.workspace }}/out
+          pattern: native-*
+
+      - name: Restore per-ABI layout (out/<abi>/{zeptun,aether})
+        run: |
+          set -euo pipefail
+          echo "before rearrange:"; find out -maxdepth 3 -type d | sort
+          for d in out/native-*; do
+            [ -d "$d" ] || continue
+            abi="${d##*/native-}"
+            rm -rf "out/$abi"
+            mv "$d" "out/$abi"
+          done
+          missing=0
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            if [ ! -d "out/$abi" ]; then
+              echo "FATAL: ABI tree out/$abi missing after rearrange (leg failed or artifact lost)"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          echo "after rearrange:"; find out -maxdepth 3 -type d | sort
+
+      - name: Run inspection (readelf v3 — machine, PIE, static-proof, NEEDED, LOAD, two-case RELRO 16KB)
+        run: bash scripts/inspect_elf.sh --dir "${{ github.workspace }}/out"
+
+      - name: Upload inspection results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: elf-inspection-manifest
+          path: |
+            out/elf_manifest.json
+            out/elf_inspection_log.txt
+            out/*/manifest.json
+          if-no-files-found: warn
+
+  # =========================================================================
+  # Job 3 — status summary with the REAL results of this run (employer
+  # directive 6): per-ABI build outcomes from the uploaded status files and
+  # the actual needs.*.result values. FAILED and NOT RUN are explicit.
+  # CI results and real-device results stay SEPARATE (decision N2).
+  # =========================================================================
+  status-summary:
+    name: Status summary (real CI results vs NOT TESTED)
+    needs: [native-build, elf-inspect]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download leg status files
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: leg-status
+          pattern: build-status-*
+          merge-multiple: true   # safe: filenames are unique per ABI
+        continue-on-error: true  # a lost status artifact must not hide the failure
+
+      - name: Emit REAL status of this run
+        run: |
+          set -uo pipefail
+          echo "=== AETHONE CI status — run ${{ github.run_id }} (${{ github.event_name }}) ==="
+          echo ""
+          echo "--- REAL job results (needs.*.result) ---"
+          nb="${{ needs.native-build.result }}"
+          ei="${{ needs.elf-inspect.result }}"
+          echo "native-build : $nb"
+          echo "elf-inspect  : $ei"
+          case "$nb" in
+            success) echo "  -> native build: PASS (all three legs; see per-ABI below)" ;;
+            failure|cancelled) echo "  -> native build: FAILED" ;;
+            skipped) echo "  -> native build: NOT RUN (NOT TESTED)" ;;
+            *) echo "  -> native build: $nb (NOT TESTED)" ;;
+          esac
+          case "$ei" in
+            success) echo "  -> ELF inspection: PASS" ;;
+            failure|cancelled) echo "  -> ELF inspection: FAILED (see elf-inspection-manifest artifact)" ;;
+            skipped) echo "  -> ELF inspection: NOT RUN (NOT TESTED)" ;;
+            *) echo "  -> ELF inspection: $ei (NOT TESTED)" ;;
+          esac
+          echo ""
+          echo "--- REAL per-ABI build results (uploaded by the legs themselves) ---"
+          if [ -d leg-status ]; then
+            found=0
+            for f in leg-status/build-status-*.txt; do
+              [ -f "$f" ] || continue
+              found=1
+              echo "[$f]"
+              cat "$f"
+              echo ""
+            done
+            [ "$found" -eq 1 ] || echo "no leg status files found — legs died before recording (status: FAILED / NOT TESTED)"
+          else
+            echo "leg-status directory absent — legs died before recording (status: FAILED / NOT TESTED)"
+          fi
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            if [ ! -f "leg-status/build-status-$abi.txt" ]; then
+              echo "MISSING status for $abi -> FAILED / NOT TESTED"
+            fi
+          done
+
+      - name: What this run did and did NOT test (static part, N2)
+        run: |
+          cat <<'EOF'
+          --- COVERED BY THIS CI RUN (when the jobs above succeeded) ---
+            - native build per ABI (arm64-v8a, armeabi-v7a, x86_64; no x86, N5)
+            - ELF/ABI static inspection v3 (machine, PIE-exec proof, Go static
+              proof incl. PT_INTERP/PT_DYNAMIC, NEEDED allowlists, all PT_LOAD
+              p_align + congruence, PT_GNU_RELRO two-case 16KB analysis;
+              artifacts with warnings report PASS_WITH_WARNINGS, never a silent
+              PASS)
+          --- NOT TESTED BY THIS RUN (stays BLOCKED / NOT TESTED — decision N2) ---
+            - real-device tests: connection, lifecycle, UDP, memory, battery
+              (emulator cannot substitute)
+            - runtime load/exec from nativeLibraryDir (N7) on a real device
+            - 16KB-page Android runtime environment (static ELF compliance does
+              NOT prove runtime behaviour; 16KB emulator/device needed)
+            - zipalign -c -P 16 -v 4 app-release.apk (no APK exists yet)
+            - minSdk=24 proof (symbol-level vs bionic API 24 + runtime at API 24)
+            - Speed Test native implementation + latency method on a live session (N3)
+            - Psiphon official credentials for public release (N6) — BLOCKED
+          EOF
+
+      - name: Fail the summary if the pipeline failed (honest exit code)
+        run: |
+          nb="${{ needs.native-build.result }}"
+          ei="${{ needs.elf-inspect.result }}"
+          if [ "$nb" != "success" ] || [ "$ei" != "success" ]; then
+            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei"
+            exit 1
+          fi
+          echo "PIPELINE GREEN"

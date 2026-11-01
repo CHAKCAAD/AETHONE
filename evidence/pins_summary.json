@@ -1,0 +1,319 @@
+{
+  "document": "AETHONE Phase-2 — verified pins & evidence summary (report v3, bundle v3)",
+  "generated": "2026-10-31",
+  "verification_method": "commit existence proven by `git clone --filter=blob:none` + `git checkout <sha>` (REST API returns 403 from the analysis network); raw file evidence fetched from raw.githubusercontent.com at the exact SHA; tool versions verified against official sources (developer.android.com, services.gradle.org, blog.rust-lang.org, go.dev, ziglang.org, crates.io, api.adoptium.net).",
+  "source_pins": {
+    "aether": {
+      "repository": "https://github.com/CluvexStudio/Aether",
+      "commit": "d58f9d568083129ce2c767c85054021eb3ee6a38",
+      "version": "2.4.0",
+      "commit_date": "2026-10-24",
+      "commit_subject": "Fix the 2.4.0 release notes to cover everything since 2.3.0",
+      "existence": "VERIFIED (git checkout)"
+    },
+    "zeptun": {
+      "repository": "https://github.com/Noisemux/zeptun",
+      "commit": "08a1ab05aab315b7872ed582c52b7c230930d05d",
+      "version": "1.1.3",
+      "existence": "VERIFIED (git checkout)"
+    },
+    "psiphon_fork": {
+      "repository": "https://github.com/CluvexStudio/psiphon-tunnel-core",
+      "commit": "2956a96b56fe09b99e72a8eb4bed3e79d29e3543",
+      "commit_date": "2026-09-29",
+      "commit_subject": "QUIC noise profiles: junk and signature packets before the handshake, with Aether's light, firewall and gfw presets",
+      "existence": "VERIFIED (git checkout)",
+      "upstream_base": "83aa73b9b982e7421e00117f5b0c5aceb5dda452 (VERIFIED ancestor: merge-base --is-ancestor succeeded)",
+      "diff_vs_base": "8 files, +566/-3: noise.go(+239), noise_test.go(+240), parameters.go(+2), quic.go(+5), quic_test.go(+25), config.go(+5), tunnel.go(+15), tunnel_noise_test.go(+38)",
+      "note": "Aether's own psiphon-build.sh pins 83aa73b on branch shirokhorshid; AETHONE deviates deliberately to 2956a96 per employer decision N1"
+    },
+    "lyrebird": {
+      "repository": "gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird",
+      "commit": "fc105a03c0e0",
+      "pinned_inside": "Aether pt-build.sh @ d58f9d568083129ce2c767c85054021eb3ee6a38"
+    }
+  },
+  "platform_level_resolution": {
+    "question": "--platform 29 vs --platform 24 (directive 1 of report v3)",
+    "aether_evidence": ".github/workflows/release.yml @ d58f9d56: `cargo ndk -t $abi --platform 29 build --release --features tor` with ndk-version r26d; job comment: 'The binary is built for Android 10 (API 29) and later, the level PattNG builds aether, hev-socks5-tunnel and libv2ray for.'",
+    "zeptun_evidence": {
+      "Application.mk": "APP_PLATFORM := android-29 (REAL build file, sha256 4f4be98dbc41fd22dfefab118a096316bb01942101a32754b430e147c6f0f99b, identical via raw fetch and git clone)",
+      "docs_conflict": "docs/wiki/Android.md @ same commit claims 'APP_PLATFORM := android-24' — STALE DOCUMENTATION at the frozen commit; the phase-1 audit copied this claim into platform_compatibility.json"
+    },
+    "conclusion": "BOTH components build at API 29. No evidence supports minSdk=24. minSdk=24 remains CANDIDATE until proven per native dependency (symbol-level vs bionic API 24 + runtime load/exec at API 24).",
+    "minSdk_status": "CANDIDATE — NOT TESTED"
+  },
+  "tool_pins": {
+    "rust": {
+      "version": "1.99.1",
+      "evidence": "blog.rust-lang.org 'Announcing Rust 1.99.1'; stable channel date 2026-10-15; Aether ships NO rust-toolchain file (Dockerfile: rust:bookworm = latest stable; release.yml: dtolnay/rust-toolchain@stable) — CI pins exactly + rust-toolchain.toml provided"
+    },
+    "zig": {
+      "version": "0.16.0",
+      "evidence": "zeptun README @ 08a1ab05: 'Zig 0.16.0 is the only requirement'; x86_64-linux tarball sha256 70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00 from ziglang.org/download/index.json"
+    },
+    "go": {
+      "version": "1.26.3",
+      "evidence": "fork go.mod @ 2956a96: `go 1.26.0` + `toolchain go1.26.3`; CI sets GOTOOLCHAIN=local; current stable go1.27.3 recorded (go.dev/dl)"
+    },
+    "ndk": {
+      "pinned": {
+        "revision": "r26d",
+        "version": "26.3.11579264",
+        "evidence": "Aether release.yml `ndk-version: r26d`; developer.android.com/ndk/downloads/older_releases: r26d = 26.3.11579264"
+      },
+      "frozen": true,
+      "eval_candidates_recorded": {
+        "r28c": "28.2.13676358 (latest r28; also AGP 9.4.0's default NDK) — evaluation only per N4",
+        "r30": "30.0.16248370 (current LTS per developer.android.com/ndk/downloads) — recorded only"
+      },
+      "upgrade_rule": "N8 gate only (changelog review + source diff + compatibility verification + employer approval). NOTE: the full N8 gate list was truncated in transmission — re-confirmation requested."
+    },
+    "cargo_ndk": {
+      "version": "4.1.2",
+      "evidence": "crates.io max_version (2025-08-09); Aether installs unpinned latest, CI pins exactly"
+    },
+    "api_level": {
+      "value": 29,
+      "evidence": "aether release.yml + zeptun Application.mk (see platform_level_resolution)"
+    },
+    "jdk": {
+      "version": "17.0.21+9",
+      "evidence": "Temurin GA 2026-10-22 via api.adoptium.net feature_releases/17/ga; not used by native CI yet — packaging baseline"
+    },
+    "gradle": {
+      "version": "9.8.2",
+      "evidence": "services.gradle.org/versions/current, build 2026-10-19; satisfies AGP 9.4.0 min 9.6.0"
+    },
+    "agp": {
+      "version": "9.4.0",
+      "evidence": "developer.android.com/build/releases/gradle-plugin: AGP 9.4.0 — Gradle ≥9.6.0, JDK ≥17, Build Tools 36.0.0, NDK default 28.2.13676358; final app-level pin fixed at Flutter skeleton creation"
+    },
+    "build_tools": {
+      "version": "36.0.0",
+      "evidence": "AGP 9.4.0 default (needed for zipalign -P 16 when an APK/AAB exists)"
+    }
+  },
+  "elf_inspection_official_v240": {
+    "scope": "REAL readelf inspection of the OFFICIAL Aether v2.4.0 Android release artifacts (NOT a local/CI build) — downloaded with published sha256 verification",
+    "artifacts": {
+      "arm64-v8a": {
+        "aether": {
+          "type": "DYN (PIE)",
+          "machine": "AArch64",
+          "min_p_align": "0x4000 (16384)",
+          "kb16": "PASS",
+          "needed": "libdl.so, libm.so, libc.so (no libc++_shared)",
+          "relro_16kb": "PASS (v3 CORRECTION of the v2 false positive): PT_GNU_RELRO sits in its OWN LOAD (covering LOAD contains only RELRO data; RELRO extends past its end into the gap); the official formula does NOT apply to this placement. Safety condition verified: the next writable LOAD starts at/after page_up(relro_end) — arm64: 0x1225f80 >= 0x1224000; x86_64: 0x1412ad0 >= 0x1410000. No writable byte inside the linker mprotect range. Raw data: evidence/relro_two_case_analysis.txt",
+          "pie_proof": "DYN + PT_INTERP + DF_1_PIE",
+          "relro_placement": "own-load",
+          "verdict": "PASS (static ELF inspection only; runtime in a 16KB environment: NOT TESTED)"
+        },
+        "psiphon-tunnel-core": {
+          "type": "EXEC",
+          "machine": "AArch64",
+          "min_p_align": "0x10000 (65536)",
+          "kb16": "PASS (>=16384)",
+          "needed": "none (static)",
+          "static_proof": "NEEDED empty + no PT_INTERP + no PT_DYNAMIC (type EXEC)"
+        },
+        "lyrebird": {
+          "type": "EXEC",
+          "machine": "AArch64",
+          "min_p_align": "0x10000 (65536)",
+          "kb16": "PASS (>=16384)",
+          "needed": "none (static)",
+          "static_proof": "NEEDED empty + no PT_INTERP + no PT_DYNAMIC (type EXEC)"
+        }
+      },
+      "armeabi-v7a": {
+        "aether": {
+          "type": "DYN (PIE)",
+          "machine": "ARM (ELF32)",
+          "min_p_align": "0x1000 (4096)",
+          "kb16": "N/A (armv7 = 4KB architecture; 4KB ELF validity PASS)",
+          "needed": "libdl.so, libm.so, libc.so",
+          "relro_16kb": "N/A (4KB arch; placement recorded: own-load, end 0xce0000)"
+        },
+        "psiphon-tunnel-core": {
+          "type": "EXEC",
+          "machine": "ARM (ELF32)",
+          "min_p_align": "0x10000",
+          "kb16": "N/A (armv7 = 4KB architecture; 4KB ELF validity PASS)",
+          "needed": "none (static)",
+          "static_proof": "NEEDED empty + no PT_INTERP + no PT_DYNAMIC (type EXEC)"
+        },
+        "lyrebird": {
+          "type": "EXEC",
+          "machine": "ARM (ELF32)",
+          "min_p_align": "0x10000",
+          "kb16": "N/A (armv7 = 4KB architecture; 4KB ELF validity PASS)",
+          "needed": "none (static)",
+          "static_proof": "NEEDED empty + no PT_INTERP + no PT_DYNAMIC (type EXEC)"
+        }
+      },
+      "x86_64": {
+        "aether": {
+          "type": "DYN (PIE)",
+          "machine": "x86-64",
+          "min_p_align": "0x4000 (16384)",
+          "kb16": "PASS",
+          "needed": "libdl.so, libm.so, libc.so",
+          "relro_16kb": "PASS (v3 CORRECTION of the v2 false positive): PT_GNU_RELRO sits in its OWN LOAD (covering LOAD contains only RELRO data; RELRO extends past its end into the gap); the official formula does NOT apply to this placement. Safety condition verified: the next writable LOAD starts at/after page_up(relro_end) — arm64: 0x1225f80 >= 0x1224000; x86_64: 0x1412ad0 >= 0x1410000. No writable byte inside the linker mprotect range. Raw data: evidence/relro_two_case_analysis.txt",
+          "pie_proof": "DYN + PT_INTERP + DF_1_PIE",
+          "relro_placement": "own-load",
+          "verdict": "PASS (static ELF inspection only; runtime in a 16KB environment: NOT TESTED)"
+        },
+        "psiphon-tunnel-core": {
+          "type": "EXEC",
+          "machine": "x86-64",
+          "min_p_align": "0x1000 (4096)",
+          "kb16": "BELOW-16KB (min p_align 4096 < 16384) — kb16_load=FAIL as a static ELF fact; artifact verdict = PASS_WITH_WARNINGS (runtime NOT TESTED); employer decision on the Go build (N8); STRICT_16KB_X86_64_EXEC=1 hard-fails",
+          "needed": "none (static)",
+          "static_proof": "NEEDED empty + no PT_INTERP + no PT_DYNAMIC (type EXEC)",
+          "verdict": "PASS_WITH_WARNINGS"
+        },
+        "lyrebird": {
+          "type": "EXEC",
+          "machine": "x86-64",
+          "min_p_align": "0x1000 (4096)",
+          "kb16": "BELOW-16KB (min p_align 4096 < 16384) — kb16_load=FAIL as a static ELF fact; artifact verdict = PASS_WITH_WARNINGS (runtime NOT TESTED); employer decision on the Go build (N8); STRICT_16KB_X86_64_EXEC=1 hard-fails",
+          "needed": "none (static)",
+          "static_proof": "NEEDED empty + no PT_INTERP + no PT_DYNAMIC (type EXEC)",
+          "verdict": "PASS_WITH_WARNINGS"
+        }
+      }
+    },
+    "conclusion": "LOAD-16KB: PASS on arm64 (aether 16384, Go 65536); armv7 N/A (4KB arch, 4KB validity PASS). RELRO-16KB (v3 two-case): PASS on aether arm64 + x86_64 — BOTH are own-LOAD placements; the v2 FAIL verdicts (remainders 8192/12288) were FALSE POSITIVES from applying the formula unconditionally; the definitive-incompatibility claim is WITHDRAWN. x86_64 Go execs below 16KB (upstream property) recorded as kb16_load=FAIL + verdict PASS_WITH_WARNINGS. zeptun artifacts still NOT TESTED (not shipped upstream; CI will build+inspect). zipalign -P 16 NOT TESTED (no APK). Runtime in a real 16KB environment NOT TESTED for every artifact (static analysis only).",
+    "regenerated_with": "inspect_elf.sh v3 (--evidence-mode; two-case RELRO, armv7 N/A, [] NEEDED, PASS_WITH_WARNINGS, runtime separation)",
+    "open_decisions": [
+      "x86_64 Go executables below 16KB: accept PASS_WITH_WARNINGS or mandate the Go linker-flag change (employer approval, N8)",
+      "dtolnay/rust-toolchain pin strategy: keep b725eda (stable HEAD, moving-ref durability risk) vs switch to d124f86 (refs/heads/1.99.1, durable, behaviorally identical with explicit toolchain input) — employer decision (N8)",
+      "16KB runtime verification on an emulator/device once artifacts exist (static compliance is necessary, not sufficient)"
+    ]
+  },
+  "psiphon_credentials_N6": {
+    "compiled_defaults": "psiphon.rs @ d58f9d56 L223-224: PROPAGATION_CHANNEL_ID = SPONSOR_ID = 'FFFFFFFFFFFFFFFF'",
+    "env_overrides": "AETHER_PSIPHON_PROPAGATION_CHANNEL_ID / AETHER_PSIPHON_SPONSOR_ID (L510-518)",
+    "public_release_status": "BLOCKED until official credentials obtained"
+  },
+  "status_master_list": {
+    "VERIFIED_THIS_SESSION": [
+      "All pinned commits exist (aether d58f9d56, zeptun 08a1ab05, psiphon fork 2956a96; upstream 83aa73b ancestor confirmed)",
+      "Fork diff vs upstream: 8 files +566/-3 (QUIC noise profiles)",
+      "Platform level = 29 in both components' real build files; zeptun doc-vs-build inconsistency found and resolved (docs stale at android-24 claim)",
+      "Tool versions: Rust 1.99.1, Zig 0.16.0 (+sha256), Go 1.26.3 (go.mod), NDK r26d=26.3.11579264, r28c=28.2.13676358, r30=30.0.16248370, cargo-ndk 4.1.2, JDK 17.0.21+9, Gradle 9.8.2, AGP 9.4.0, Build-Tools 36.0.0, Go stable 1.27.3",
+      "Official v2.4.0 Android artifacts: sha256 verified; full ELF inspection (machine/PIE/static/p_align/NEEDED) — 16KB PASS on arm64",
+      "psiphon.rs subprocess management (tokio::process::Command, bind 127.0.0.1:1821, READY_TIMEOUT 180s) and FFFFFFFFFFFFFFFF placeholder defaults with env overrides",
+      "Bundle v2: zeptun real output paths verified in build.zig+scripts/build_android.sh @ 08a1ab05; pt-build.sh fallback flaw confirmed in source @ d58f9d56 (line 'pinned commit is gone, using the default branch') and patched; official v2.4.0 RELRO-16KB + x86_64 Go exec findings from real readelf (inspect_elf.sh v2, evidence-mode)",
+      "Bundle v3: raw tag->SHA proof for all 6 tag-pinned GitHub Actions (lightweight tags; nttld/setup-ndk annotated tag dereferenced to commit); dtolnay/rust-toolchain b725eda = current stable HEAD, NOT in master history, only ref = moving stable branch, durable alternative d124f86 (1.99.1 branch); RELRO two-case analysis per the official Android doc — aether arm64+x86_64 official binaries are own-LOAD -> PASS (v2 FAILs were false positives); inspect_elf.sh v3 executed over the real official v2.4.0 files (9 artifacts, verdict PASS_WITH_WARNINGS: 2 x86_64 Go execs below 16KB, runtime NOT TESTED)"
+    ],
+    "BLOCKED": [
+      "CI execution of native-ci.yml — requires pushing to the AETHONE repository (no repository access in the analysis environment)",
+      "Psiphon official PropagationChannelId/SponsorId for public release (N6)",
+      "N8 full upgrade-gate text — truncated in transmission; employer re-confirmation requested",
+      "Real-device test execution (no Android device in the analysis environment; N2 forbids emulator substitution)",
+      "16KB-page Android runtime environment test (no Android SDK/emulator in the analysis environment)",
+      "UI code implementation — awaiting separate employer approval after PoC results (per final directive)",
+      "dtolnay/rust-toolchain pin durability decision (keep b725eda vs switch to d124f86) — employer decision (N8); pin NOT changed in v3"
+    ],
+    "NOT_TESTED": [
+      "Our own native build products (CI build equivalence with the official artifacts)",
+      "zeptun artifact ELF inspection (zeptun does not ship Android artifacts in releases; CI will build and inspect)",
+      "minSdk=24 proof (symbol-level vs bionic API 24 + runtime load/exec at API 24)",
+      "zipalign -c -P 16 on an APK/AAB (no APK exists yet)",
+      "Speed Test native implementation and latency method on a live session (N3)",
+      "Per-mode tests P-T1..P-T3, P-TB (Tor) and P-S1..P-S3, P-SC (Psiphon) — each mode gated by its OWN test",
+      "Cloudflare speedtest endpoint policy/privacy/traffic review (N3 prerequisite)",
+      "zipalign -c -P 16 -v 4 app-release.apk — command recorded per official doc; runs only when a real APK exists"
+    ],
+    "WARN": [
+      "x86_64 Go executables (psiphon-tunnel-core, lyrebird) built with GOOS=linux default linker: min p_align 4096 < 16384 — kb16_load=FAIL (static fact), artifact verdict PASS_WITH_WARNINGS, runtime NOT TESTED; fix requires Go build-flag change (frozen, N8 gate)",
+      "dtolnay/rust-toolchain pin b725eda is a moving-branch HEAD (only containing ref = refs/heads/stable) — durability depends on GitHub serving the SHA after the branch moves; durable alternative d124f86 recorded; employer decision pending",
+      "16KB runtime: ALL static PASS results (incl. the corrected RELRO PASS) are static ELF analysis only — no 16KB emulator/device run exists yet"
+    ]
+  },
+  "bundle_v2_changes": {
+    "date": "2026-10-31",
+    "summary": "Employer review of bundle v1 applied. No frozen pin (commit/tool/NDK/API/ABI matrix) changed.",
+    "items": [
+      "build_native.sh v2: real zeptun output paths (zig-out/android/{jniLibs,prebuilt}/<abi> from `zig build android`; OUT=.../zeptun-build/jniLibs/<abi> from ndk-build), [ -f ] checks before every copy, no `|| true`, foreign-ABI export guard, wiped zig-out before build (cache hygiene)",
+      "scripts/pt-build-pin.patch: Aether pt-build.sh silent fallback to default branch (N8 violation) replaced by hard abort + HEAD==fc105a03c0e0 verification + proxy pseudo-version assertion; built binary must prove the pin via `go version -m`; v1 self-copy `cp X X || true` removed",
+      "inspect_elf.sh v2: static archives (.a) inspected per MEMBER (Machine/Class); Go static proof = NEEDED empty AND no PT_INTERP AND no PT_DYNAMIC; aether PIE proof = DYN + PT_INTERP + DF_1_PIE; full PT_LOAD dump + raw-derived min p_align; official RELRO rule (VirtAddr+MemSiz)%16384==0; x86_64 never skipped; zipalign -P 16 kept separate (NOT TESTED, no APK)",
+      "native-ci.yml v2: all 7 GitHub Actions pinned to FULL COMMIT SHAs (v1 used moving tags @v4/@stable); native-<abi> artifacts downloaded WITHOUT merge-multiple + explicit rearrange step with hard failure on missing ABI; per-leg build-status-<abi>.txt uploaded even on failure; status-summary prints REAL needs.*.result + per-ABI statuses (FAILED / NOT RUN explicit)"
+    ]
+  },
+  "github_actions_pins": {
+    "method": "git ls-remote https://github.com/<repo> refs/tags/<tag> 'refs/tags/<tag>^{}' (raw output 2026-10-31, recorded verbatim in evidence/actions_pins_raw_evidence.txt); dtolnay analyzed via full clone (cat-file, merge-base --is-ancestor, for-each-ref --contains)",
+    "raw_evidence": "evidence/actions_pins_raw_evidence.txt",
+    "pins": {
+      "actions/checkout": {
+        "tag": "v4.4.0",
+        "sha": "11d5960a326750d5838078e36cf38b85af677262",
+        "tag_type": "lightweight",
+        "verification": "VERIFIED (ls-remote: tag ref == pinned SHA)"
+      },
+      "actions/cache": {
+        "tag": "v4.3.0",
+        "sha": "0057852bfaa89a56745cba8c7296529d2fc39830",
+        "tag_type": "lightweight",
+        "verification": "VERIFIED (ls-remote: tag ref == pinned SHA)"
+      },
+      "actions/setup-go": {
+        "tag": "v5.6.0",
+        "sha": "40f1582b2485089dde7abd97c1529aa768e1baff",
+        "tag_type": "lightweight",
+        "verification": "VERIFIED (ls-remote: tag ref == pinned SHA)"
+      },
+      "actions/upload-artifact": {
+        "tag": "v4.6.2",
+        "sha": "ea165f8d65b6e75b540449e92b4886f43607fa02",
+        "tag_type": "lightweight",
+        "verification": "VERIFIED (ls-remote: tag ref == pinned SHA)"
+      },
+      "actions/download-artifact": {
+        "tag": "v4.3.0",
+        "sha": "d3f86a106a0bac45b974a628896c90dbdf5c8093",
+        "tag_type": "lightweight",
+        "verification": "VERIFIED (ls-remote: tag ref == pinned SHA)"
+      },
+      "nttld/setup-ndk": {
+        "tag": "v1.6.0",
+        "tag_object": "aacaf74664d0f8e1b070a865acb47ee25007386d",
+        "sha": "ed92fe6cadad69be94a966a7ee3271275e62f779",
+        "tag_type": "annotated",
+        "verification": "VERIFIED (ls-remote: ^{}-dereferenced COMMIT == pinned SHA — correct form for uses:)"
+      },
+      "dtolnay/rust-toolchain": {
+        "ref": "branch stable HEAD 2026-10-31",
+        "sha": "b725eda525362e7cf34af9a7243cac1e3f01a7ec",
+        "commit_subject": "toolchain: stable (David Tolnay, 2026-10-15 22:25:02 -0400)",
+        "verification": "VERIFIED as current stable HEAD (ls-remote)",
+        "in_master_history": "NO (merge-base --is-ancestor -> false; parent IS current master HEAD 683b588 'Add 1.99.1 patch release')",
+        "durability": "WARN / NEEDS-REVIEW: only ref containing it is refs/heads/stable, which MOVES at every Rust stable release; GitHub serves unreachable commits by SHA in practice but there is no GC guarantee",
+        "durable_alternative": "d124f86f28ff42855784ff3319f48ac182c248f8 = refs/heads/1.99.1 head (per-version branches are retained indefinitely — 292 refs from 1.0 to 1.99.1); differs from the pin ONLY in action.yml default (stable vs hardcoded 1.99.1); behaviorally IDENTICAL for our workflow because it passes toolchain: 1.99.1 explicitly",
+        "action_taken": "NONE — pin frozen per employer directive 8; decision registered for the employer (N8 gate)"
+      }
+    }
+  },
+  "bundle_v3_changes": {
+    "date": "2026-10-31",
+    "summary": "Employer review of bundle v2 applied. No frozen pin (commit/tool/NDK/API/ABI matrix) changed.",
+    "items": [
+      "inspect_elf.sh v3: RELRO-16KB corrected to the OFFICIAL TWO-CASE rule (own-load: formula not applicable, subsequent writable LOADs must start at/after page_up(relro_end); shared-load: official formula). The v2 unconditional formula produced FALSE-POSITIVE FAILs for the official Aether v2.4.0 binaries — both arm64 and x86_64 are own-load and PASS. Raw data: evidence/relro_two_case_analysis.txt + android_pagesizes_doc_excerpt.txt (verbatim official doc).",
+      "Manifest/verdict semantics: armeabi-v7a kb16_load = N/A (4KB arch; 4KB ELF validity still enforced); needed = [] for no-dependency files (was [\"\"]); x86_64 Go executables with kb16_load=FAIL get verdict PASS_WITH_WARNINGS (runtime NOT TESTED); every record carries runtime_16kb_env = NOT TESTED (static ELF compliance separated from runtime proof).",
+      "build_native.sh v3: zeptun ndk-build intermediates moved OUT of the uploaded artifact tree ($SRC_CACHE/zeptun-build.tmp, wiped before/after; whitelist guard = exactly 6 expected outputs + manifest.json). The two remaining || true (ZIG resolution, go version -m) converted to explicit fail-closed checks — zero || true in the script (v2 claimed this while two remained).",
+      "GitHub Actions pins: raw git ls-remote tag->SHA proof recorded for all 6 tag-pinned actions (evidence/actions_pins_raw_evidence.txt); dtolnay/rust-toolchain b725eda verified as current stable branch HEAD with durability analysis (NOT in master history; only ref containing it is the MOVING stable branch; durable alternative d124f86 = refs/heads/1.99.1, behaviorally identical with explicit toolchain: 1.99.1 input). NO pin changed — freeze directive respected; durability registered as WARN/NEEDS-REVIEW.",
+      "inspect_elf.sh v3 hygiene check: intermediate build products inside an inspected tree are a hard failure in CI mode.",
+      "Validation v3: bash -n, YAML parse, JSON parse (jq), actionlint 1.7.7, artifact-flow simulation with independent per-ABI artifacts, v3 inspection executed over the real official v2.4.0 files. Upstream-artifact inspection is reported as EVIDENCE, never as a real AETHONE build."
+    ]
+  },
+  "bundle_v4_changes": [
+    "employer review of bundle v3 (2026-10-31), fix #1: the final workflow with all v3 fixes is delivered at the canonical path .github/workflows/native-ci.yml; actionlint 1.7.7 executed on exactly that file (exit 0, raw output in validation_log.txt stage 3)",
+    "fix #2: artifact-flow simulation corrected — the ARM64 upstream evidence path is aether-android-arm64.d (v3 wrongly used aether-android-arm64-v8a.d); whole validation re-run from scratch under set -euo pipefail; inspect_elf.sh executed on the FINAL rearranged tree; log/manifest/summary from ONE run with asserted count consistency",
+    "fix #3: independent lyrebird pin test executed against live upstream infrastructure (pin UNCHANGED fc105a03c0e0): git path BLOCKED in the analysis sandbox (raw error recorded; buildvcs mechanism proven via synthetic repo); proxy path PROVEN end-to-end (go list -m resolution, .info Origin full commit hash fc105a03c0e0acc2479301c361c012ffed359c43, zip sha256, sum.golang.org h1: dirhash reproduced by an independent local implementation); go version -m on a .git-less proxy-zip build records NO main-module commit (proven) — v4 therefore proves the proxy path via the sumdb-verified zip (hard abort on mismatch/missing) and keeps the binary vcs.revision check on the git path; proof recorded in manifest.json",
+    "fix #4: inspect_elf.sh v4 analyzes EVERY PT_GNU_RELRO segment independently (v3 analyzed only the first); aggregate FAIL>WARN>N/A>PASS; no unanalyzed segment can hide under a PASS; all 9 official Aether v2.4.0 artifacts carry exactly one RELRO segment (relro.segment_count=1) so every official verdict is bit-for-bit identical to v3 (verified in validation_log.txt stage 8); multi-segment logic proven on synthetic fixtures",
+    "fix #5: report DOCX regenerated (TOC update-note page removed); final PDF produced from the same final DOCX; page/TOC consistency verified with one render method (evidence in the report package)",
+    "constraints respected: N1-N8 untouched, no pin/commit/ABI/toolchain change, no push, minSdk=24 stays Candidate, NOT TESTED/BLOCKED/WARN only changed with real evidence"
+  ]
+}

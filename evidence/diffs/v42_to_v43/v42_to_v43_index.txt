@@ -1,0 +1,15 @@
+=== v4.2 -> v4.3 diff index (employer review: master matrix + SMART AUTO vs pinned source) ===
+
+Changed files:
+  docs/FEATURE_MATRIX.md    — rewritten (corrections 1-6, 8): Tor retraction + 3 modes + 14 params,
+                              Psiphon 3 modes + 11 params, protocol taxonomy 4+classic, independent
+                              layers, reverse restrictions, app-surface groups, counts
+  docs/SMART_AUTO_SPEC.md   — rewritten (correction 7 + 3 + 5): interactive-select_protocol boundary,
+                              4+1 taxonomy, reverse-carrier table, mode-boundary rules
+New files:
+  docs/CLI_REFERENCE.md                                  — all 113 parser arms + 29 env-only vars, programmatic line numbers
+  evidence/protocol_surface_pinned_commit_v43.txt        — 6-file byte-identity (live fetch) + verbatim excerpts
+  evidence/surface_facts_v43.json                        — machine-readable extraction (arms, envs, symbol lines)
+  evidence/feature_matrix_counts_v43.txt                 — row/status counts
+  evidence/insufficient_source_evidence_v43.txt          — explicit no-witness list
+Unchanged: all scripts, .github/workflows/native-ci.yml, rust-toolchain.toml, all v4.2 evidence.

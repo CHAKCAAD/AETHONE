@@ -1,0 +1,31 @@
+=== AETHONE v4.3 — focused validation of the documentation revision ===
+bash -n build_native.sh: exit 0
+bash -n inspect_elf.sh: exit 0
+surface_facts_v43.json parse: exit 0
+pins_summary.json parse: exit 0
+native-ci.yml present at real path: True  sha256: ce2ef44b4ad093bec0ad4ca6f5882a7f7f8dbfee57d6ebb39e186437b8c19dfd
+native-ci.yml unchanged vs v4.2: True
+scripts/build_native.sh unchanged vs v4.2: True
+scripts/inspect_elf.sh unchanged vs v4.2: True
+scripts/pt-build-pin.patch unchanged vs v4.2: True
+actionlint binary not found in this environment (v4.2 evidence retained)
+docs/FEATURE_MATRIX.md: placeholder-scan CLEAN; lines=305
+docs/SMART_AUTO_SPEC.md: placeholder-scan CLEAN; lines=162
+docs/CLI_REFERENCE.md: placeholder-scan CLEAN; lines=269
+
+correction assertions:
+  [PASS] retraction of v4.2 Tor claim present
+  [PASS] three Tor modes rows present
+  [PASS] 14 tor params
+  [PASS] AETHER_TOR_COUNTRY = BridgeDB-only note
+  [PASS] 3 psiphon modes
+  [PASS] 11 psiphon params
+  [PASS] protocol enum 4 members cited
+  [PASS] gool-classic mapping cited
+  [PASS] reverse restrictions cited
+  [PASS] build_native.sh --features tor cited
+  [PASS] old Tor claim ONLY inside the retraction quote
+  [PASS] SMART AUTO status line intact
+  [PASS] select_protocol interactive boundary
+  [PASS] AUTO must not switch chain/reverse/only
+ALL ASSERTIONS: PASS

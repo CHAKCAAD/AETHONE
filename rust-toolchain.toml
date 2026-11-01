@@ -1,0 +1,8 @@
+[toolchain]
+# AETHONE CI pin — Rust 1.99.1 (stable channel 2026-10-15).
+# Aether 2.4.0 ships NO rust-toolchain file and builds with "latest stable"
+# (dtolnay/rust-toolchain@stable). Per directive 3 of report v3, the CI pins
+# the exact version instead; this file makes local builds match the CI.
+# Upgrades go through the N8 gate only.
+channel = "1.99.1"
+profile = "minimal"

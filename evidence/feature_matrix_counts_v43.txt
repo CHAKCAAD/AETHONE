@@ -1,0 +1,38 @@
+=== AETHONE v4.3 — Master Feature Matrix counts (machine-generated) ===
+
+Matrix rows (table rows beginning with a number, per section):
+    6  1. Protocol selection — pinned-source taxonomy (correction item 3)
+    5  2. Independent core layers (correction item 4) — one capability per axis, never merged
+   21  3. Tor — native Aether capability behind the cargo feature `tor` (correction item 1)
+   17  4. Psiphon — Aether-managed capability (correction item 6)
+    4  5. Reverse-mode carrier restrictions (correction item 5)
+   16  6. Connection & traffic surface — pinned source
+    8  7. TLS / ECH / fingerprint & Zero Trust surface — pinned source
+    5  8. SMART AUTO — registered requirement (correction item 7)
+   26  9. AETHONE app surface (Phase-1 analysis report v2) — UI-frozen groups (correction item 8)
+    9  10. Native build, CI and verification infrastructure (unchanged from v4.2)
+    0  11. Platforms
+    0  12. Freeze confirmation (applies to every row above)
+    0  13. Counts & completeness
+  TOTAL matrix rows: 117
+
+Status token occurrences in FEATURE_MATRIX.md (cells may combine tokens):
+  VERIFIED: 14
+  NOT TESTED: 114
+  BLOCKED: 4
+  WARN: 2
+  NOT IMPLEMENTED: 5
+  SPECIFICATION REQUIRED: 2
+
+CLI_REFERENCE.md rows (flag table + env-only table): 142
+  parser arms (from pinned cli.rs): 113
+  distinct flag-driven env vars:    90
+  environment-only variables:       29
+
+Incomplete / open items registered (statuses other than plain VERIFIED):
+  - runtime on Android for EVERY attested CLI option: NOT TESTED until first real build/device run (N2)
+  - Tor: Android build with --features tor NOT TESTED; Tor execution on Android NOT TESTED; app integration NOT TESTED
+  - Psiphon: execution on Android NOT TESTED; official credentials BLOCKED (N6); nativeLibraryDir execution N7 NOT TESTED
+  - SMART AUTO: SPECIFICATION REQUIRED / NOT IMPLEMENTED / NOT TESTED
+  - UI groups (9.x): frozen; UI work not permitted this phase
+  - GitHub Actions execution: NOT TESTED / BLOCKED on push approval

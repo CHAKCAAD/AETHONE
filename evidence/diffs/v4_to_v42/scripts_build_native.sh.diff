@@ -1,0 +1,18 @@
+--- a/scripts/build_native.sh
++++ b/scripts/build_native.sh
+@@ -75,8 +75,13 @@
+ 
+ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # <repo>/scripts
+ PT_PATCH="$SCRIPT_DIR/pt-build-pin.patch"
+-# sha256 of the patched pt-build.sh (Aether @ d58f9d56 + pt-build-pin.patch v4)
+-PT_PATCHED_SHA256="6bd5fa747c0c77097d3bc654ce3e89cb1051d3c8630592aa555d2591ec6f8754"
++# sha256 of the patched pt-build.sh
++#   v4:   (Aether @ d58f9d56 + pt-build-pin.patch v4)    = 6bd5fa74...
++#   v4.2: (Aether @ d58f9d56 + pt-build-pin.patch v4.2)  — v4.2 adds the
++#         official Go-client (GOSUMDB) signed-record verification + zip
++#         identity check on the proxy path (employer review of v4.1, item 2).
++#         Pin fc105a03c0e0 unchanged (N8).
++PT_PATCHED_SHA256="3fbee02f78a4613a1452c32037c78c9d3a51ea4cb84edd8c4ebe808c023c4b88"
+ 
+ ABI=""; RUST_TARGET=""; GOARCH=""; GOARM=""; API_LEVEL=""; SRC_CACHE=""; OUT=""
+ while [ $# -gt 0 ]; do

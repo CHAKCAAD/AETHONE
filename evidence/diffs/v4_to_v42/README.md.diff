@@ -1,0 +1,117 @@
+--- a/README.md
++++ b/README.md
+@@ -1,9 +1,64 @@
+-# AETHONE — Phase 2 CI Artifacts (report v4 bundle — v4, post-review)
++# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.2**, post-v4.1 review corrections)
+ 
+ Deliverable of directive 6 of report v3: *"start the next phase with GitHub Actions
+ setup and the initial native build."* — revised after the employer's reviews of
+-bundle v1, v2 and v3 (2026-10-31). No frozen pin (source commits, Rust/Go/Zig
+-versions, NDK r26d, API 29, three-ABI matrix, N1–N8) was changed in v4.
++bundle v1, v2, v3, v4 and the v4.1 addendum (2026-10-31 / 2026-11-01). No frozen pin
++(source commits, Rust/Go/Zig versions, NDK r26d, API 29, three-ABI matrix, N1–N8)
++was changed in v4.2.
++
++## v4.2 — corrections for the employer's post-v4.1 review (all six items)
++
++1. **Workflow at its real path, proven inside THIS package.**
++   `.github/workflows/native-ci.yml` is delivered at its canonical path in this
++   ZIP (the v4.1 review could not see it because a GUI re-packaging step had
++   dropped the hidden `.github` directory — the v4 ZIP itself contained it;
++   hidden folders are easy to lose in GUI archivers). Integrity block:
++
++   ```
++   path   : .github/workflows/native-ci.yml          (UNCHANGED since v4)
++   sha256 : ce2ef44b4ad093bec0ad4ca6f5882a7f7f8dbfee57d6ebb39e186437b8c19dfd
++   actionlint 1.7.7: exit 0, run on EXACTLY the file extracted from THIS ZIP
++   raw    : evidence/zip_integrity_v42.txt
++   verify : unzip -l <this zip> | grep native-ci.yml   # entry must be listed
++            unzip -p <this zip> .github/workflows/native-ci.yml | sha256sum
++   ```
++
++   Do not re-package this bundle with GUI tools that silently omit dot-files.
++2. **SumDB verification completed with the OFFICIAL Go client** (item 2).
++   The v4/v4.1 proxy-path proof (curl lookup + h1 grep) did NOT validate the
++   record signature. v4.2 adds: (a) a live, explicit signed-record verification
++   run with the official Go client (`GOSUMDB=sum.golang.org`, go 1.26.3, the
++   pinned toolchain) — lookup + tile fetches, exit 0; the go-client-verified
++   zip is byte-identical (sha256 `e460a90a…`) to the zip the build script
++   downloads, and the independent dirhash re-check matches both sum.golang.org
++   records (`evidence/lyrebird_sumdb_goclient_verification.txt`); and (b) the
++   same mechanism written into `scripts/pt-build-pin.patch` **v4.2** (proxy
++   path: fresh temp module + GOSUMDB + build-zip identity check, fail-closed;
++   pin `fc105a03c0e0` and the pseudo-version string untouched). CI execution
++   of that code path stays **NOT TESTED** until the first real CI run.
++   `build_native.sh` `PT_PATCHED_SHA256` updated to the v4.2 patched file:
++   `3fbee02f78a4613a1452c32037c78c9d3a51ea4cb84edd8c4ebe808c023c4b88`.
++3. **Bionic multi-RELRO statement corrected** (item 3). The standard linker
++   loop processes EVERY PT_GNU_RELRO segment separately — no claim of general
++   non-support is made (any such reading is withdrawn). The documented risk is
++   the page-rounded over-protection/overlap of each segment's protection range
++   with writable data (plus the 16KiB app-compat extension hazards), recorded
++   in `evidence/bionic_relro_runtime_position_v42.txt`. Runtime stays **NOT
++   TESTED**.
++4. **v4 main report PDF delivered alongside DOCX** (item 4) and the v4.1
++   addendum DOCX/PDF page-count + page-break parity re-verified
++   (`evidence/page_parity_v41_addendum.txt`).
++5. **README and CI_BOOTSTRAP_PoC.md aligned with the real package structure**
++   (item 5): every referenced path below exists in this ZIP; the workflow
++   delivery claim is backed by the file itself + integrity block above.
++6. **SMART AUTO registered as a binding core requirement** (item 9) — two
++   independent concepts (Protocol Selection AUTO/SMART vs Scan Mode
++   turbo/balanced/thorough/verified/ironclad), protocol set reconciled with the
++   pinned commit (`evidence/protocol_surface_pinned_commit_v42.txt`),
++   algorithm factors and design guarantees, mode separation, and the status
++   line `SMART AUTO — SPECIFICATION REQUIRED / NOT IMPLEMENTED / NOT TESTED`:
++   see `docs/SMART_AUTO_SPEC.md` and `docs/FEATURE_MATRIX.md`.
++   Documentation only — zero implementation, zero UI changes.
+ 
+ - **Status:** code DELIVERED and locally validated (bash -n, YAML/JSON parse,
+   actionlint 1.7.7 on the delivered workflow, artifact-flow simulation under
+@@ -133,4 +188,45 @@
+   `bundle_v4_changes`)
+ - `verification_log.txt` / `verification_log2.txt` — commit-existence proofs
+   (git checkout), fork diff, source facts (unchanged from v2)
+-- `diffs/` — unified diffs v3 → v4 for every changed file (REGENERATED in v4)
++- `diffs/` — unified diffs v3 → v4 for every changed file (REGENERATED in v4),
++  plus the `v4_to_v42/` subfolder with the v4.2 deltas
++
++Evidence NEW in v4.2:
++- `zip_integrity_v42.txt` — item 1: ZIP-entry listing proving
++  `.github/workflows/native-ci.yml` exists at its real path inside THIS
++  package, sha256 of the in-ZIP file, and actionlint 1.7.7 exit 0 on exactly
++  that extracted file
++- `lyrebird_sumdb_goclient_verification.txt` — item 2: full raw transcript of
++  the official Go-client SumDB verification (go 1.26.3, GOSUMDB=sum.golang.org):
++  lookup + tile fetches, go.sum entries, `go mod verify`, cache-zip sha256 ==
++  `e460a90a…` (the build zip), independent dirhash match (zip h1 AND go.mod
++  h1), control A (toolchain-hardcoded key special case) and control B
++  (untrusted sumdb config refused, fail-closed)
++- `bionic_relro_runtime_position_v42.txt` — item 3: corrected position (linker
++  loop processes every PT_GNU_RELRO separately — no general non-support claim;
++  over-protection/overlap risk documented; runtime NOT TESTED)
++- `protocol_surface_pinned_commit_v42.txt` — item 9: protocol/scan-mode surface
++  of the pinned commit (cli.rs sha256-verified against a byte-identical live
++  fetch of `d58f9d5…`)
++- `page_parity_v41_addendum.txt` — item 4: v4.1 addendum DOCX↔PDF page count
++  and page-break parity check (+ the same check for the v4 report pair)
++- `evidence_manifest_v42.txt` — sha256 of every file in this package
++- `validation_v42_changes.txt` — focused v4.2 validation run: v4.2 patch
++  applied to the frozen pt-build.sh (`git apply`), new `PT_PATCHED_SHA256`
++  chain match, `bash -n` on all scripts, YAML/JSON parse, actionlint 1.7.7 on
++  the delivered workflow
++
++Docs NEW in v4.2 (employer item 9 — documentation only, no implementation):
++- `docs/SMART_AUTO_SPEC.md` — SMART AUTO registered as a binding core
++  requirement; two independent concepts; protocol set reconciled with the
++  pinned commit; algorithm factors; design guarantees; mode separation;
++  status `SMART AUTO — SPECIFICATION REQUIRED / NOT IMPLEMENTED / NOT TESTED`
++- `docs/FEATURE_MATRIX.md` — feature matrix (Specification / Backend / UI /
++  Testing) for SMART AUTO and the other core features
++- v4.1 addendum evidence copied into `evidence/` (from the addendum package):
++  `bionic_relro_16kb_evidence.txt`, `dtolnay_lsremote_raw.txt`,
++  `dtolnay_master_history_check.txt`, `evidence_manifest_v41.txt`,
++  `lyrebird_dirhash_verification.txt`, `lyrebird_proxy.zip`,
++  `lyrebird_proxy_evidence.txt`, `lyrebird_sumdb_lookup.txt`,
++  `lyrebird_v_info.json`, `lyrebird_v_mod.txt`, `lyrebird_zip_listing.txt`,
++  `official_artifacts_relro_enumeration.txt`, `verify_lyrebird_dirhash.py`

@@ -1,0 +1,125 @@
+diff --git a/README.md b/README.md
+index 80fcc74..4aac6dd 100755
+--- a/README.md
++++ b/README.md
+@@ -1,23 +1,70 @@
+-# AETHONE — Phase 2 CI Artifacts (report v3 bundle — v3, post-review)
++# AETHONE — Phase 2 CI Artifacts (report v4 bundle — v4, post-review)
+ 
+ Deliverable of directive 6 of report v3: *"start the next phase with GitHub Actions
+ setup and the initial native build."* — revised after the employer's reviews of
+-bundle v1 and bundle v2 (2026-10-31). No frozen pin (source commits, Rust/Go/Zig
+-versions, NDK r26d, API 29, three-ABI matrix, N1–N8) was changed in v3.
++bundle v1, v2 and v3 (2026-10-31). No frozen pin (source commits, Rust/Go/Zig
++versions, NDK r26d, API 29, three-ABI matrix, N1–N8) was changed in v4.
+ 
+ - **Status:** code DELIVERED and locally validated (bash -n, YAML/JSON parse,
+-  actionlint, artifact-flow simulation on the REAL official v2.4.0 artifacts,
+-  inspect_elf.sh v3 executed over the real upstream files), but **NOT TESTED on
+-  GitHub Actions** — no CI run has happened yet (requires pushing to the AETHONE
+-  repository). Nothing in this bundle is a real AETHONE build: every inspected
+-  binary is an UPSTREAM release artifact (simulation/evidence only).
++  actionlint 1.7.7 on the delivered workflow, artifact-flow simulation under
++  `set -euo pipefail` with the corrected ARM64 source path, inspect_elf.sh v4
++  over the real official v2.4.0 artifacts, live lyrebird pin proof), but
++  **NOT TESTED on GitHub Actions** — no CI run has happened yet (requires
++  pushing to the AETHONE repository). Nothing in this bundle is a real AETHONE
++  build: every inspected binary is an UPSTREAM release artifact
++  (simulation/evidence only).
+ - **Deployment:** copy `.github/workflows/native-ci.yml`, `scripts/`, and
+   `rust-toolchain.toml` to the AETHONE repository root, commit, push — after
+-  employer approval.
++  employer approval. (v4: the workflow is delivered at its canonical path
++  inside this bundle, not only as a diff.)
+ - **Separation of results (N2):** CI logs and real-device results are recorded
+   separately; nothing unexecuted is upgraded to "pass".
+ 
+-Key v3 fixes (full diffs v2 → v3 in `evidence/diffs/`):
++Key v4 fixes (employer review of bundle v3; full diffs v3 → v4 in `evidence/diffs/`):
++
++1. **Final workflow delivered at the canonical path.**
++   `.github/workflows/native-ci.yml` (with all v3 fixes) is in this bundle at
++   its real path; `actionlint` 1.7.7 was executed on EXACTLY this file —
++   exit 0, raw output in `evidence/validation_log.txt` (stage 3).
++2. **Artifact-flow simulation corrected and re-run from scratch.** The v3
++   simulation copied the ARM64 Aether files from the wrong upstream path
++   (`aether-android-arm64-v8a.d` — does not exist), the copies failed, the run
++   continued and the summary still claimed success. v4 uses the REAL upstream
++   evidence path `aether-android-arm64.d`, runs the whole suite under
++   `set -euo pipefail` (any failed copy/move = real failure), gives the FINAL
++   rearranged tree — and only that tree — to `inspect_elf.sh`, and produces
++   log, manifest and summary from ONE run with matching counts
++   (`evidence/validation_log.txt`, `evidence/artifact_flow_summary.json`,
++   regenerated `evidence/elf_manifest_official_v240.json`).
++3. **Independent Lyrebird pin test (pin UNCHANGED: `fc105a03c0e0`).** Both
++   acquisition paths tested against live upstream infrastructure
++   (`evidence/lyrebird_pin_independent_test.txt`):
++   - git path: BLOCKED in the analysis environment (gitlab.torproject.org
++     unreachable, raw error recorded); the Go buildvcs mechanism it relies on
++     was proven with a synthetic repo.
++   - proxy path: PROVEN end-to-end — `go list -m` resolves the pin to the
++     frozen pseudo-version; the proxy's `.info` Origin attests the FULL commit
++     hash `fc105a03c0e0acc2479301c361c012ffed359c43`; the zip sha256 is
++     recorded; sum.golang.org attests the H1 dirhash; an independent local
++     re-implementation reproduces it (zip AND go.mod).
++   - `go version -m` on a binary built from the .git-less proxy zip records
++     NO main-module commit ("(devel)") — and if built inside an enclosing git
++     worktree it stamps THAT worktree's unrelated revision (observed live).
++     The v3 grep-on-binary was therefore structurally impossible on the proxy
++     path. v4 (`build_native.sh` + `pt-build-pin.patch`): proxy path proves
++     the pin via the sumdb-verified zip (hard abort on mismatch/missing);
++     git path keeps the binary vcs.revision check; the proof is copied into
++     `manifest.json`. No proof => build stops with an explicit message.
++4. **Multi-PT_GNU_RELRO handled (no unchecked segment under a PASS).**
++   `inspect_elf.sh` v4 analyzes EVERY RELRO segment independently (own
++   covering LOAD, own placement, own rule); aggregate FAIL>WARN>N/A>PASS.
++   All 9 official Aether v2.4.0 artifacts carry EXACTLY ONE RELRO segment
++   (`relro.segment_count` in the manifest) — their verdicts are bit-for-bit
++   identical to v3 (comparison in `evidence/validation_log.txt` stage 8;
++   no arbitrary rule change, no result change). The multi-segment logic is
++   proven on synthetic fixtures (`evidence/relro_multi_segment_test.txt`).
++
++Key v3 fixes (kept; diffs v2 → v3 in the previous bundle, summary below):
+ 
+ 1. **RELRO-16KB analysis corrected (two-case, per the official Android doc).**
+    The v2 checker applied `(VirtAddr+MemSiz) % 16384 == 0` unconditionally.
+@@ -62,19 +109,28 @@ Key v3 fixes (full diffs v2 → v3 in `evidence/diffs/`):
+    while two remained — corrected here).
+ 
+ Evidence in `evidence/`:
++- `validation_log.txt` — REGENERATED in v4: ONE unified run (`set -euo pipefail`)
++  covering bash -n, YAML/JSON, actionlint on the delivered workflow, ABI matrix,
++  frozen-pin chain (patch applied live, sha256 verified), the corrected
++  artifact-flow simulation, inspect_elf.sh v4 over the real official files,
++  count-consistency assertions and the bit-for-bit RELRO non-regression check
++- `artifact_flow_summary.json` — machine-readable summary of that same run
++  (NEW in v4)
++- `elf_inspection_log.txt` / `elf_manifest_official_v240.json` — REGENERATED in
++  v4 from the single unified run (relro.segment_count = 1 on all 9 official
++  artifacts; verdicts identical to v3)
++- `lyrebird_pin_independent_test.txt` — RAW evidence of the independent pin
++  test (NEW in v4; raw companion files in `lyrebird_pin_test_raw/`)
++- `relro_multi_segment_test.txt` + `fixtures/` — synthetic multi-RELRO
++  fixtures, generator and raw inspector output (NEW in v4)
+ - `actions_pins_raw_evidence.txt` — raw git ls-remote + clone output for all 7
+-  Actions pins, including the dtolnay durability analysis (NEW in v3)
++  Actions pins, including the dtolnay durability analysis (v3, unchanged)
+ - `relro_two_case_analysis.txt` — raw program-header data and the corrected
+-  RELRO computation for Aether ARM64 / x86_64 (NEW in v3)
++  RELRO computation for Aether ARM64 / x86_64 (v3, unchanged)
+ - `android_pagesizes_doc_excerpt.txt` — verbatim excerpt of the official
+-  Android page-sizes doc sections this analysis implements (NEW in v3)
+-- `elf_inspection_log.txt` / `elf_manifest_official_v240.json` — REGENERATED
+-  with inspect_elf.sh v3 over the real official v2.4.0 artifacts
+-  (sha256-verified downloads): RELRO two-case PASS, armv7 N/A, NEEDED [],
+-  x86_64 Go PASS_WITH_WARNINGS
+-- `pins_summary.json` — machine-readable pin + status master list (v3)
++  Android page-sizes doc sections this analysis implements (v3, unchanged)
++- `pins_summary.json` — machine-readable pin + status master list (v4 adds
++  `bundle_v4_changes`)
+ - `verification_log.txt` / `verification_log2.txt` — commit-existence proofs
+   (git checkout), fork diff, source facts (unchanged from v2)
+-- `validation_log.txt` — bash -n, YAML/JSON validation, actionlint,
+-  artifact-path simulation, v3 inspection run (regenerated)
+-- `diffs/` — unified diffs v2 → v3 for every changed file
++- `diffs/` — unified diffs v3 → v4 for every changed file (REGENERATED in v4)

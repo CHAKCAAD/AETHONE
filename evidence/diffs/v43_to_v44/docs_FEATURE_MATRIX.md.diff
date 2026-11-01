@@ -1,0 +1,34 @@
+--- /home/z/my-project/work/v43_extract/docs/FEATURE_MATRIX.md	2026-11-01 12:00:00.000000000 +0000
++++ /home/z/my-project/work_v44/bundle/docs/FEATURE_MATRIX.md	2026-11-01 14:21:33.467274555 +0000
+@@ -1,4 +1,4 @@
+-# AETHONE — Master Feature Matrix (v4.3)
++# AETHONE — Master Feature Matrix (v4.4)
+ 
+ **Revision scope (employer directive, post-v4.2 review):** full reconciliation of this
+ matrix and of `docs/SMART_AUTO_SPEC.md` with the **real Aether source at the pinned
+@@ -13,11 +13,24 @@
+   `aether/src/tor.rs` (`4c70ad4a…`), `aether/src/psiphon.rs` (`4f9b245f…`),
+   `aether/src/bridges.rs` (`96f7e91c…`), `aether/Cargo.toml` (`216fb0c9…`).
+ - `docs/CLI_REFERENCE.md` — all **113 parser arms** (90 flag-driven environment
+-  variables) and **29 environment-only variables**, generated programmatically from
++  variables) and **28 environment-only variables** (v4.4 machine recount after
++  removing one duplicated `RUST_LOG` row), generated programmatically from
+   `cli.rs` with exact line numbers.
+ - Companion: `evidence/feature_matrix_counts_v43.txt`,
+   `evidence/insufficient_source_evidence_v43.txt`, `evidence/pins_summary.json`.
+ 
++**v4.4 correction (employer review of v4.3 — documentation counts only):** no row
++of this matrix changed. The v4.3 machine counter included table **header** rows in
++its totals (12 of them), so the corrected totals are **105 data rows** (117 table
++rows including headers; App Surface = **25** data rows). Fixed machine rule and
++per-section counts: `evidence/feature_matrix_counts_v44.txt`. The v4.3 counts file
++is retained unchanged as history. Related fix: `docs/CLI_REFERENCE.md` regenerated
++with one duplicated `RUST_LOG` row removed — **28** distinct environment-only
++variables. The workflow now also passes `r26d` (release-identifier form) to
++`nttld/setup-ndk` and fail-closed-verifies `26.3.11579264` after install — same
++frozen NDK r26d, same action SHA (N8 unchanged);
++`evidence/setup_ndk_interface_evidence_v44.txt`.
++
+ **Status vocabulary:** `VERIFIED` / `NOT TESTED` / `BLOCKED` / `WARN` /
+ `NOT IMPLEMENTED` / `SPECIFICATION REQUIRED`.
+ **Column meaning:** "Backend" = native/CI side of the frozen pins. "UI" =

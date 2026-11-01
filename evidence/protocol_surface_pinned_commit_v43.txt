@@ -1,0 +1,351 @@
+=== AETHONE v4.3 evidence — MASTER surface of the PINNED Aether commit ===
+date: 2026-11-01T13:24:19Z
+pinned commit (frozen): d58f9d568083129ce2c767c85054021eb3ee6a38  (Aether 2.4.0, subject: 'Fix the 2.4.0 release notes to cover everything since 2.3.0')
+local checkout: work_aethone/phase2_evidence/src/aether  (git rev-parse HEAD == pin, proven 2026-10-31)
+method: byte-identity of the six key files vs live raw.githubusercontent.com at the pin;
+        every line number below read DIRECTLY from the local pinned files (no arithmetic).
+
+--- 1. byte-identity of the six anchor files ---
+  aether/src/cli.rs
+    local sha256: c974d7f1844a4e2c933464f2800ba220b280b522933b46ec04fbd6ad217cb6b4
+    live  sha256: c974d7f1844a4e2c933464f2800ba220b280b522933b46ec04fbd6ad217cb6b4
+    => IDENTICAL
+  aether/src/lib.rs
+    local sha256: f32943f536b02dc37de20d8c3e0e387de3792f1a8c485a1a12d1016a772c3baf
+    live  sha256: f32943f536b02dc37de20d8c3e0e387de3792f1a8c485a1a12d1016a772c3baf
+    => IDENTICAL
+  aether/src/tor.rs
+    local sha256: 4c70ad4a1e59006b217d6a0b21090dada78e6506ce4f573f704029f96b827a28
+    live  sha256: 4c70ad4a1e59006b217d6a0b21090dada78e6506ce4f573f704029f96b827a28
+    => IDENTICAL
+  aether/src/psiphon.rs
+    local sha256: 4f9b245fb78bd3ba8eeeab43642f59b9932545cf75b919bea4049862c334eaf7
+    live  sha256: 4f9b245fb78bd3ba8eeeab43642f59b9932545cf75b919bea4049862c334eaf7
+    => IDENTICAL
+  aether/src/bridges.rs
+    local sha256: 96f7e91ce0277dd2309fb8a2bf394797a905d4f881ac8340ee591755f002213b
+    live  sha256: 96f7e91ce0277dd2309fb8a2bf394797a905d4f881ac8340ee591755f002213b
+    => IDENTICAL
+  aether/Cargo.toml
+    local sha256: 216fb0c9a1399198a738d3b2c508656d3e6fdb96796217aa2f2d62f6470369ff
+    live  sha256: 216fb0c9a1399198a738d3b2c508656d3e6fdb96796217aa2f2d62f6470369ff
+    => IDENTICAL
+
+--- 2. key symbol line numbers (rg -n, verbatim) ---
+  enum Protocol (lib.rs): lines 3444
+  Protocol::parse (lib.rs): lines 3452
+  select_protocol (lib.rs): lines 3281
+  select_gool (lib.rs): lines 3364
+  select_scan_mode (lib.rs): lines 3249
+  needs_udp_to_warp (lib.rs): lines 3007
+  gool_classic (lib.rs): lines 3015
+  tor reverse refusal (lib.rs): lines 206
+  psiphon reverse refusal (lib.rs): lines 232
+  register gool-classic (lib.rs): lines 1124
+  tor Mode enum (tor.rs): lines 7
+  tor mode() (tor.rs): lines 25
+  tor unsupported() (tor.rs): lines 192
+  tor cfg(not) stubs (tor.rs): lines [191, 198, 203, 212]
+  tor cfg(feature) gates (tor.rs): lines [217, 220]
+  tor with_tor run_chain (tor.rs): lines 866
+  tor with_tor run_only (tor.rs): lines 887
+  tor with_tor start_reverse (tor.rs): lines 905
+  psiphon DEFAULT_BIND (psiphon.rs): lines 14
+  psiphon READY_TIMEOUT (psiphon.rs): lines 15
+  psiphon PROPAGATION/SPONSOR (psiphon.rs): lines [223, 224]
+  psiphon mode() (psiphon.rs): lines 26
+  psiphon shape() (psiphon.rs): lines 284
+  psiphon run_only/run_chain/start_reverse: lines [916, 940, 1031]
+  bridges MOAT (bridges.rs): lines 9
+  bridges AETHER_TOR_COUNTRY (bridges.rs): lines 411
+  bridges detect_country (bridges.rs): lines 410
+  Cargo features (Cargo.toml): lines 64
+  Cargo tor feature (Cargo.toml): lines 66
+  Cargo arti-client dep (Cargo.toml): lines 57
+
+--- 3. lib.rs: Protocol enum + parse + label (verbatim) ---
+   3444| enum Protocol {
+   3445|     Masque,
+   3446|     WireGuard,
+   3447|     WarpInWarp,
+   3448|     MasqueInMasque,
+   3449| }
+   3450| 
+   3451| impl Protocol {
+   3452|     fn parse(s: &str) -> Protocol {
+   3453|         match s.trim().to_lowercase().as_str() {
+   3454|             "wg" | "wireguard" => Protocol::WireGuard,
+   3455|             "gool" | "wiw" | "warp-in-warp" | "warpinwarp" => Protocol::WarpInWarp,
+   3456|             "mim" | "m2" | "masque-in-masque" | "masqueinmasque" => Protocol::MasqueInMasque,
+   3457|             _ => Protocol::Masque,
+   3458|         }
+   3459|     }
+   3460| 
+   3461|     fn label(&self) -> &'static str {
+   3462|         match self {
+   3463|             Protocol::Masque => "MASQUE",
+   3464|             Protocol::WireGuard => "WireGuard",
+   3465|             Protocol::WarpInWarp => "WARP-in-WARP (gool)",
+   3466|             Protocol::MasqueInMasque => "MASQUE-in-MASQUE",
+   3467|         }
+   3468|     }
+   3469| }
+   3470| 
+
+--- 4. lib.rs: select_protocol is an INTERACTIVE prompt (verbatim head) ---
+   3281| async fn select_protocol(base: &str) -> Protocol {
+   3282|     if let Ok(v) = std::env::var("AETHER_PROTOCOL") {
+   3283|         return Protocol::parse(&v);
+   3284|     }
+   3332|             "\nProtocol:\n  [1] MASQUE (modern, QUIC/H3, default)\n  \
+   3333|              [2] WireGuard (classic, faster)\n  [3] WARP-in-WARP / gool\n  \
+   3334|              [4] MASQUE-in-MASQUE (two masque hops, for a different exit address)\n\
+   3335|              {extra}{zero_trust}Choose [1-{last}] (default 1): "
+   3336|         ))
+   3337|         .await;
+  (continues with numbered menu [1]-[4] + Tor/Psiphon/Zero-Trust extras)
+
+--- 5. lib.rs: select_gool — classic chosen inside gool family (verbatim) ---
+   3366|         "\nWhich gool?\n  \
+   3367|          [1] gool over masque: wireguard carried inside a masque tunnel, for a foreign exit \
+   3368|          address (default)\n  \
+   3369|          [2] classic gool: wireguard carried inside wireguard, a plain warp exit\n\
+   3370|          Choose [1-2] (default 1): ",
+   3371|     )
+   3372|     .await;
+   3373| 
+   3374|     if matches!(answer.as_deref(), Some("2")) {
+   3375|         std::env::set_var("AETHER_GOOL_MODE", "classic");
+   3376|     }
+   3377|     Protocol::WarpInWarp
+   3378| }
+   3379| 
+   3380| async fn select_psiphon_chain() -> Protocol {
+
+--- 6. lib.rs: needs_udp_to_warp + gool_classic (verbatim) ---
+   3003| 
+   3004| /// Whether a tunnel of `protocol` needs UDP to reach WARP, which Tor and Psiphon around the tunnel
+   3005| /// do not carry: WireGuard does, and so does the classic gool, WireGuard in WireGuard. Gool over
+   3006| /// masque dials MASQUE alone, which runs over HTTP/2.
+   3007| fn needs_udp_to_warp(protocol: Protocol, classic_gool: bool) -> bool {
+   3008|     match protocol {
+   3009|         Protocol::WireGuard => true,
+   3010|         Protocol::WarpInWarp => classic_gool,
+   3011|         Protocol::Masque | Protocol::MasqueInMasque => false,
+   3012|     }
+   3013| }
+   3014| 
+   3015| fn gool_classic() -> bool {
+   3016|     matches!(
+   3017|         std::env::var("AETHER_GOOL_MODE").as_deref(),
+   3018|         Ok("wiw") | Ok("wg") | Ok("classic")
+   3019|     ) || ["AETHER_WIW_OUTER_PEER", "AETHER_WIW_INNER_PEER", "AETHER_WIW_PEERS"]
+   3020|         .iter()
+   3021|         .any(|key| env_value(key).is_some())
+   3022| }
+   3023| 
+   3024| fn gool_inner_peers(identity: &account::Identity) -> Result<Vec<SocketAddr>> {
+
+--- 7. lib.rs: Tor Reverse refusal + HTTP/2 carrier force (verbatim) ---
+    211|             }
+    212| 
+    213|             let (socks, carrier) = tor::start_reverse(tor::state_dir(&base_config)).await?;
+    214|             tor_and_psiphon.push(carrier);
+    215|             std::env::set_var("AETHER_UPSTREAM", carrier_upstream("tor", socks)?);
+    216|             std::env::set_var("AETHER_MASQUE_HTTP2", "1");
+    217|             log::info!("[+] the tunnel is dialled through tor on the http/2 carrier");
+    218|         }
+    219|         tor::Mode::Only | tor::Mode::Off => {}
+
+--- 8. lib.rs: Psiphon Reverse refusal + HTTP/2 carrier force (verbatim) ---
+    231|                 return Err(AetherError::Other(format!(
+    232|                     "psiphon carries tcp only and warp's wireguard endpoints answer on udp alone, \
+    233|                      so {} can never be reached through psiphon; use --masque or --gool, which this \
+    234|                      mode runs over http/2, or put psiphon inside the tunnel instead with --psiphon",
+    235|                     protocol.label()
+    236|                 )));
+    237|             }
+    238| 
+    239|             let (socks, carrier) = psiphon::start_reverse(psiphon::state_dir(&base_config)).await?;
+
+--- 9. tor.rs: Mode enum + mode() parse (verbatim) ---
+      6| #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+      7| pub enum Mode {
+      8|     Off,
+      9|     Chain,
+     10|     Reverse,
+     11|     Only,
+     12| }
+     13| 
+     14| impl Mode {
+     15|     pub fn label(self) -> &'static str {
+     16|         match self {
+     17|             Mode::Off => "off",
+     18|             Mode::Chain => "tor through the tunnel",
+     19|             Mode::Reverse => "the tunnel through tor",
+     20|             Mode::Only => "tor alone",
+     21|         }
+     22|     }
+     23| }
+     24| 
+     25| pub fn mode() -> Mode {
+     26|     let raw = match std::env::var("AETHER_TOR") {
+     27|         Ok(value) => value.trim().to_lowercase(),
+     28|         Err(_) => return Mode::Off,
+     29|     };
+     30| 
+     31|     match raw.as_str() {
+     32|         "" | "0" | "off" | "false" | "no" => Mode::Off,
+     33|         "reverse" | "rev" | "warp-over-tor" => Mode::Reverse,
+     34|         "only" | "alone" | "tor-only" | "direct" => Mode::Only,
+     35|         _ => Mode::Chain,
+     36|     }
+     37| }
+
+--- 10. tor.rs: no-feature stubs return the EXPLICIT error (verbatim) ---
+    191| #[cfg(not(feature = "tor"))]
+    192| fn unsupported() -> AetherError {
+    193|     AetherError::Other(
+    194|         "this build has no tor support; rebuild with `cargo build --release --features tor`".into(),
+    195|     )
+    196| }
+    197| 
+    198| #[cfg(not(feature = "tor"))]
+    199| pub async fn run_chain(_through: SocketAddr, _state: PathBuf) -> Result<()> {
+    200|     Err(unsupported())
+    201| }
+    202| 
+    203| #[cfg(not(feature = "tor"))]
+    204| pub async fn run_only(
+    205|     _listener: tokio::net::TcpListener,
+    206|     _listen: SocketAddr,
+    207|     _state: PathBuf,
+    208| ) -> Result<()> {
+    209|     Err(unsupported())
+    210| }
+    211| 
+    212| #[cfg(not(feature = "tor"))]
+    213| pub async fn start_reverse(_state: PathBuf) -> Result<(SocketAddr, tokio::task::AbortHandle)> {
+    214|     Err(unsupported())
+    215| }
+
+--- 11. tor.rs: feature-gated real implementation re-export (verbatim) ---
+    217| #[cfg(feature = "tor")]
+    218| pub use with_tor::{run_chain, run_only, start_reverse};
+    219| 
+    220| #[cfg(feature = "tor")]
+    221| mod with_tor {
+    866|     pub async fn run_chain(through: SocketAddr, state: PathBuf) -> Result<()> {
+    887|     pub async fn run_only(listener: TcpListener, listen: SocketAddr, state: PathBuf) -> Result<()> {
+    905|     pub async fn start_reverse(state: PathBuf) -> Result<(SocketAddr, tokio::task::AbortHandle)> {
+
+--- 12. psiphon.rs: consts + mode() + shape() (verbatim) ---
+     14| const DEFAULT_BIND: &str = "127.0.0.1:1821";
+     15| const READY_TIMEOUT_SECS: u64 = 180;
+     16| const BINARY_NAMES: &[&str] = &["psiphon-tunnel-core", "psiphon"];
+    223| const PROPAGATION_CHANNEL_ID: &str = "FFFFFFFFFFFFFFFF";
+    224| const SPONSOR_ID: &str = "FFFFFFFFFFFFFFFF";
+    225| const SERVER_LIST_URL: &str =
+     26| pub fn mode() -> Mode {
+     27|     let raw = std::env::var("AETHER_PSIPHON")
+     28|         .unwrap_or_default()
+     29|         .trim()
+     30|         .to_lowercase();
+     31| 
+     32|     match raw.as_str() {
+     33|         "" | "0" | "off" | "false" | "no" => Mode::Off,
+     34|         "reverse" | "rev" | "warp-over-psiphon" => Mode::Reverse,
+     35|         "only" | "alone" | "psiphon-only" | "direct" => Mode::Only,
+     36|         _ => Mode::Chain,
+     37|     }
+     38| }
+    284| pub fn shape() -> Shape {
+    285|     match std::env::var("AETHER_PSIPHON_MODE")
+    286|         .unwrap_or_default()
+    287|         .trim()
+    288|         .to_ascii_lowercase()
+    289|         .as_str()
+    290|     {
+    291|         "cdn" | "fronted" => Shape::Cdn,
+    292|         "direct" | "plain" => Shape::Direct,
+    293|         _ => Shape::Auto,
+    294|     }
+    295| }
+    296| 
+
+--- 13. bridges.rs: MOAT + detect_country + AETHER_TOR_COUNTRY usage (verbatim) ---
+      9| const MOAT: &str = "https://bridges.torproject.org/moat/circumvention";
+    410| async fn detect_country(client: &reqwest::Client) -> Option<String> {
+    411|     if let Some(told) = std::env::var("AETHER_TOR_COUNTRY")
+    412|         .ok()
+    413|         .map(|code| code.trim().to_lowercase())
+    414|         .filter(|code| code.len() == 2)
+    415|     {
+    416|         return Some(told);
+    417|     }
+    418| 
+    419|     let body = client.get(TRACE).send().await.ok()?.text().await.ok()?;
+    420|     body.lines()
+    421|         .find_map(|line| line.strip_prefix("loc="))
+    422|         .map(|code| code.trim().to_lowercase())
+    423|         .filter(|code| code.len() == 2)
+    424| }
+    425| 
+    426| fn ordered(mut grouped: BTreeMap<String, Vec<String>>) -> Vec<String> {
+    427|     let mut lines = Vec::new();
+    444|         None => serde_json::json!({}),
+    445|     };
+    446| 
+    447|     let reply: MoatReply = client
+    448|         .post(format!("{MOAT}/settings"))
+
+--- 14. Cargo.toml: optional Arti deps + [features] (verbatim) ---
+     57| arti-client = { version = "0.46", default-features = false, features = ["tokio", "rustls", "compression", "static-sqlite", "bridge-client", "pt-client"], optional = true }
+     58| tor-chanmgr = { version = "0.46", optional = true }
+     59| tor-rtcompat = { version = "0.46", default-features = false, features = ["tokio", "rustls"], optional = true }
+     60| tokio-util = { version = "0.7", features = ["compat"], optional = true }
+     61| liblzma = { version = "0.4", features = ["static"], optional = true }
+     62| tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"], optional = true }
+     64| [features]
+     65| default = []
+     66| tor = ["dep:arti-client", "dep:tor-chanmgr", "dep:tor-rtcompat", "dep:tokio-util", "dep:liblzma", "dep:tracing-subscriber"]
+
+--- 15. cli.rs: parser mapping --tor/--psiphon family (verbatim) ---
+    584|             "--tor" => set("AETHER_TOR", "chain"),
+    585|             "--tor-reverse" => set("AETHER_TOR", "reverse"),
+    586|             "--tor-only" => set("AETHER_TOR", "only"),
+    598|             "--psiphon" => set("AETHER_PSIPHON", "chain"),
+    599|             "--psiphon-reverse" => set("AETHER_PSIPHON", "reverse"),
+    600|             "--psiphon-only" => set("AETHER_PSIPHON", "only"),
+    601|             "--psiphon-config" => set("AETHER_PSIPHON_CONFIG", next_value!()),
+    602|             "--psiphon-bind" => set("AETHER_PSIPHON_BIND", next_value!()),
+    603|             "--psiphon-http" => set("AETHER_PSIPHON_HTTP", next_value!()),
+    604|             "--psiphon-region" => set("AETHER_PSIPHON_REGION", next_value!()),
+    605|             "--psiphon-mode" => set("AETHER_PSIPHON_MODE", next_value!()),
+    606|             "--psiphon-cdn-ips" => set("AETHER_PSIPHON_CDN_IPS", next_value!()),
+    607|             "--psiphon-cdn-sni" => set("AETHER_PSIPHON_CDN_SNI", next_value!()),
+    608|             "--psiphon-cdn-sets" => set("AETHER_PSIPHON_CDN_SETS", next_value!()),
+    609|             "--psiphon-dir" => set("AETHER_PSIPHON_DIR", next_value!()),
+
+--- 16. cli.rs: parser mapping protocol family incl. gool-classic (verbatim) ---
+    637|             "--masque" => set("AETHER_PROTOCOL", "masque"),
+    638|             "--wg" | "--wireguard" | "--warp" => set("AETHER_PROTOCOL", "wg"),
+    639|             "--gool" | "--wiw" => set("AETHER_PROTOCOL", "gool"),
+    640|             "--gool-peer" => {
+    641|                 set("AETHER_PROTOCOL", "gool");
+    642|                 set("AETHER_GOOL_INNER", next_value!())
+    643|             }
+    644|             "--gool-classic" => {
+    645|                 set("AETHER_PROTOCOL", "gool");
+    646|                 set("AETHER_GOOL_MODE", "classic")
+    647|             }
+    648|             "--mim" | "--masque-in-masque" => set("AETHER_PROTOCOL", "mim"),
+    649|             "--mim-outer" => set("AETHER_MIM_OUTER_PEER", next_value!()),
+    650|             "--mim-inner" => set("AETHER_MIM_INNER_PEER", next_value!()),
+    651|             "--mim-peers" => set("AETHER_MIM_PEERS", next_value!()),
+    652|             "--mim-scan" => set("AETHER_MIM_PEERS", "auto"),
+    653|             "--protocol" => set("AETHER_PROTOCOL", next_value!()),
+
+--- 17. counts ---
+  parser flag-arm rows extracted: 113
+  environment-variable rows extracted: 117

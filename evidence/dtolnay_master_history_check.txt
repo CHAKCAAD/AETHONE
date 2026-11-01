@@ -1,0 +1,56 @@
+--- merge-base and branch-only commit details (completing the record) ---
+
+[stable] branch head b725eda525362e7cf34af9a7243cac1e3f01a7ec
+  merge-base with master: 683b588c487a69d01f6c6ddf40f036ff682cc2c8
+  merge-base subject: Add 1.99.1 patch release
+  files changed in branch-only commit:
+     action.yml | 3 ++-
+     1 file changed, 2 insertions(+), 1 deletion(-)
+  patch (branch-only commit):
+    diff --git a/action.yml b/action.yml
+    index 27e3e93..6225250 100644
+    --- a/action.yml
+    +++ b/action.yml
+    @@ -8,7 +8,8 @@ branding:
+     inputs:
+       toolchain:
+         description: Rust toolchain specification -- see https://rust-lang.github.io/rustup/concepts/toolchains.html#toolchain-specification
+    -    required: true
+    +    required: false
+    +    default: stable
+       targets:
+         description: Comma-separated list of target triples to install for this toolchain
+         required: false
+
+[1.99.1] branch head d124f86f28ff42855784ff3319f48ac182c248f8
+  merge-base with master: 683b588c487a69d01f6c6ddf40f036ff682cc2c8
+  merge-base subject: Add 1.99.1 patch release
+  files changed in branch-only commit:
+     action.yml | 5 +----
+     1 file changed, 1 insertion(+), 4 deletions(-)
+  patch (branch-only commit):
+    diff --git a/action.yml b/action.yml
+    index 27e3e93..fe9254f 100644
+    --- a/action.yml
+    +++ b/action.yml
+    @@ -6,9 +6,6 @@ branding:
+       color: purple
+     
+     inputs:
+    -  toolchain:
+    -    description: Rust toolchain specification -- see https://rust-lang.github.io/rustup/concepts/toolchains.html#toolchain-specification
+    -    required: true
+       targets:
+         description: Comma-separated list of target triples to install for this toolchain
+         required: false
+    @@ -53,7 +50,7 @@ runs:
+               printf 'toolchain<<%s\n%s\n%s\n' "$delimiter" "$toolchain" "$delimiter" >> $GITHUB_OUTPUT
+             fi
+           env:
+    -        toolchain: ${{inputs.toolchain}}
+    +        toolchain: 1.99.1
+           shell: bash
+     
+         - name: Set $CARGO_HOME
+
+--- what the workflow actually passes: with: toolchain: 1.99.1 (env RUST_VERSION) — branch default irrelevant to us; recorded for completeness ---

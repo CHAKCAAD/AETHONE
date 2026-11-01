@@ -1,0 +1,1 @@
+2b2cfc7148493da5e73981bffbf3353af381d5f93e789c82c79aff64962eb556  go1.26.3.linux-amd64.tar.gz (official sha256 from go.dev/dl — the N8-frozen Go pin, verified before use)

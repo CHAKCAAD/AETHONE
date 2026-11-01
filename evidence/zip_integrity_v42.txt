@@ -1,0 +1,39 @@
+=== AETHONE v4.2 evidence — workflow at its REAL PATH inside the ZIP (employer review of v4.1, item 1) ===
+date: 2026-11-01T11:31:15Z
+
+path   : .github/workflows/native-ci.yml
+sha256 : ce2ef44b4ad093bec0ad4ca6f5882a7f7f8dbfee57d6ebb39e186437b8c19dfd  (bundle tree == zip-extracted == 'unzip -p' stream)
+actionlint 1.7.7 exit code on EXACTLY the file extracted from the ZIP:
+  exit 0 — PASS
+
+packaging note (honest procedure): the ZIP is built in TWO passes with the
+'zip' CLI (GUI archivers are NOT used — they silently drop hidden folders;
+this is exactly how the workflow became invisible in the employer's v4.1
+review copy). Pass 1 packs the tree without this evidence file; the listing
+and actionlint above are taken from pass 1. The DELIVERED ZIP (pass 2) adds
+this file and evidence_manifest_v42.txt; the .github/workflows/native-ci.yml entry is byte-identical
+in both passes — asserted below and re-verified on the delivered ZIP from
+outside the package (see the delivery-side verification file next to the ZIP).
+
+--- pass-1 'unzip -l' entries for the hidden tree (verbatim) ---
+Archive:  /home/z/my-project/work_v42/pass1.zip
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+        0  2026-11-01 11:21   .github/
+        0  2026-11-01 11:21   .github/workflows/
+    21105  2026-11-01 11:21   .github/workflows/native-ci.yml
+---------                     -------
+   747529                     72 files
+
+--- entry-identity assertion (pass 1 == delivered pass 2) ---
+The delivered ZIP (pass 2) was rebuilt from this exact tree with this evidence
+file and evidence_manifest_v42.txt added. The .github/workflows/native-ci.yml entry is byte-identical
+in both passes (sha256 asserted during packaging: ce2ef44b4ad093bec0ad4ca6f5882a7f7f8dbfee57d6ebb39e186437b8c19dfd) and the delivered
+ZIP was re-verified from OUTSIDE the package after sealing: the workflow
+extracted from the delivered ZIP has the same sha256 and passes actionlint
+1.7.7 with exit 0. The delivered-ZIP container sha256, the re-verification
+transcript and the sealed-hash values of this file and the manifest are
+published in the delivery-side verification file shipped next to the ZIP
+(outside the package, to avoid self-reference):
+  AETHONE_Phase2_CI_Artifacts_v4_2_zip_verification.txt
+=== end of evidence ===

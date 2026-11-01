@@ -1,0 +1,261 @@
+diff --git a/scripts/inspect_elf.sh b/scripts/inspect_elf.sh
+index e333253..acba8f0 100755
+--- a/scripts/inspect_elf.sh
++++ b/scripts/inspect_elf.sh
+@@ -1,5 +1,23 @@
+ #!/usr/bin/env bash
+-# AETHONE — post-build ELF/ABI inspection (v3), pass/fail exit code.
++# AETHONE — post-build ELF/ABI inspection (v4), pass/fail exit code.
++#
++# v4 (employer review of bundle v3, 2026-10-31) — one functional change:
++#
++#   0. MULTI-SEGMENT RELRO: EVERY PT_GNU_RELRO segment is now analyzed
++#      INDEPENDENTLY with the full v3 two-case logic. v3 analyzed only the
++#      FIRST segment and merely warned about the rest — an unchecked segment
++#      could hide under a PASS. In v4 each segment gets its own covering
++#      LOAD, placement decision and placement-specific rule; the aggregate
++#      kb16_relro is  FAIL if ANY segment fails, WARN if any warns, N/A only
++#      if every segment is N/A (4 KB arch), PASS only if EVERY segment
++#      passes. A segment that cannot be analyzed (no covering LOAD) is a
++#      FAIL — never a silent skip. The per-file manifest additionally
++#      records relro.segment_count and, for multi-segment files, the full
++#      per-segment raw data. Files with exactly one PT_GNU_RELRO segment
++#      (all 9 official Aether v2.4.0 artifacts — raw counts in the
++#      regenerated manifest) receive the identical v3 verdict; proof that
++#      the multi-segment path itself works: evidence/relro_multi_segment_test.txt
++#      (synthetic two-RELRO ELF, one passing + one failing segment).
+ #
+ # v3 (employer review of bundle v2, 2026-10-31) supersedes the v2 checker:
+ #
+@@ -153,40 +171,31 @@ dump_phdrs() { # file
+ 
+ # ---------------------------------------------------------------------------
+ # RELRO-16KB analysis per the OFFICIAL two-case rule (see header note 1).
++# v4: EVERY PT_GNU_RELRO segment is analyzed independently (per-segment
++# covering LOAD, placement and placement-specific rule). Aggregate:
++#   any FAIL -> FAIL | any WARN -> WARN | all N/A -> N/A | else PASS.
++# No segment is ever left unanalyzed under a PASS.
+ # Emits log lines; sets the globals RELRO_JSON and KB16_RELRO.
+ # ---------------------------------------------------------------------------
++LOAD_ROWS=()                  # all PT_LOAD rows, file order: "vaddr|memsz|flags|align|off"
++SEG_KB="ABSENT"; SEG_JSON="null"
+ RELRO_JSON="null"; KB16_RELRO="ABSENT"
+-analyze_relro() { # abi file
+-  local abi="$1" file="$2"
+-  KB16_RELRO="ABSENT"; RELRO_JSON="null"
+-  local rows; rows=$(dump_phdrs "$file")
+-  local rcount; rcount=$(grep -c '^RELRO|' <<<"$rows")
+-  if [ "$rcount" -eq 0 ]; then
+-    emit "  RELRO: no PT_GNU_RELRO segment — no RELRO requirement (trivially compliant; recorded ABSENT)"
+-    RELRO_JSON='{"present":false,"placement":"absent","kb16_relro":"ABSENT"}'
+-    return
+-  fi
+-  if [ "$rcount" -gt 1 ]; then
+-    warn "multiple PT_GNU_RELRO segments ($rcount) — analyzing the first, others recorded"
+-  fi
+-  IFS='|' read -r _ roff rvaddr rfilesz rmesz rflags ralign <<<"$(grep -m1 '^RELRO|' <<<"$rows")"
++
++# -- two-case analysis of ONE PT_GNU_RELRO row; sets SEG_KB + SEG_JSON ------
++analyze_relro_seg() { # abi rrow
++  local abi="$1" rrow="$2"
++  IFS='|' read -r _ roff rvaddr rfilesz rmesz rflags ralign <<<"$rrow"
++  SEG_KB="ABSENT"; SEG_JSON="null"
+   local rv rm rend rem16
+   rv=$(hex "$rvaddr"); rm=$(hex "$rmesz"); rend=$((rv + rm))
+   rem16=$((rend % 16384))
+   local rflags_t; rflags_t=$(echo "$rflags" | tr -d ' ')
+   emit "  RELRO row: offset=$roff vaddr=$rvaddr filesz=$rfilesz memsz=$rmesz flags=$rflags_t"
+ 
+-  # all LOAD rows in file order
+-  local loads=() idx=0
+-  while IFS='|' read -r _ loff lvaddr lfilesz lmemsz lflags lalign; do
+-    [ -n "$lvaddr" ] || continue
+-    loads[idx++]="$lvaddr|$lmemsz|$lflags|$lalign|$loff"
+-  done < <(grep '^LOAD|' <<<"$rows")
+-
+   # find the covering LOAD: the LOAD whose [vaddr, vaddr+memsz) contains relro.vaddr
+   local cov_i=-1 i
+-  for i in "${!loads[@]}"; do
+-    IFS='|' read -r lv lmsz lflg lal loff <<<"${loads[$i]}"
++  for i in "${!LOAD_ROWS[@]}"; do
++    IFS='|' read -r lv lmsz lflg lal loff <<<"${LOAD_ROWS[$i]}"
+     local lvd lmd
+     lvd=$(hex "$lv"); lmd=$(hex "$lmsz")
+     if [ "$rv" -ge "$lvd" ] && [ "$rv" -lt "$((lvd + lmd))" ]; then
+@@ -204,17 +213,17 @@ analyze_relro() { # abi file
+ 
+   if [ "$cov_i" -lt 0 ]; then
+     if is_16kb_arch "$abi"; then
+-      KB16_RELRO="FAIL"
++      SEG_KB="FAIL"
+       fail "RELRO vaddr $rvaddr not inside any PT_LOAD — layout irregular, 16KB safety NOT provable"
+     else
+-      KB16_RELRO="N/A"
++      SEG_KB="N/A"
+       emit "  RELRO vaddr not inside any PT_LOAD — recorded (4KB arch, 16KB rule N/A)"
+     fi
+-    RELRO_JSON=$(printf '{"present":true,"vaddr":"%s","memsz":"%s","placement":"irregular","kb16_relro":"%s"}' "$rvaddr" "$rmesz" "$KB16_RELRO")
++    SEG_JSON=$(printf '{"vaddr":"%s","memsz":"%s","placement":"irregular","kb16_relro":"%s"}' "$rvaddr" "$rmesz" "$SEG_KB")
+     return
+   fi
+ 
+-  IFS='|' read -r clv clmsz clflg clal cloff <<<"${loads[$cov_i]}"
++  IFS='|' read -r clv clmsz clflg clal cloff <<<"${LOAD_ROWS[$cov_i]}"
+   local clvd clmd clend data_before data_after cov_writable clflg_t clend_hex
+   clvd=$(hex "$clv"); clmd=$(hex "$clmsz"); clend=$((clvd + clmd))
+   data_before=$((rv - clvd))
+@@ -232,9 +241,9 @@ analyze_relro() { # abi file
+ 
+   # subsequent LOAD rows (after the covering one), with flags
+   local sub_json="" sub_log="" w after_ok lvd lvflg_t
+-  for i in "${!loads[@]}"; do
++  for i in "${!LOAD_ROWS[@]}"; do
+     [ "$i" -gt "$cov_i" ] || continue
+-    IFS='|' read -r lv lmsz lflg lal loff <<<"${loads[$i]}"
++    IFS='|' read -r lv lmsz lflg lal loff <<<"${LOAD_ROWS[$i]}"
+     lvd=$(hex "$lv")
+     lvflg_t=$(echo "$lflg" | tr -d ' ')
+     case "$lflg" in *W*) w=true ;; *) w=false ;; esac
+@@ -246,9 +255,9 @@ analyze_relro() { # abi file
+   [ -n "$sub_log" ] && emit "$sub_log"
+ 
+   if ! is_16kb_arch "$abi"; then
+-    KB16_RELRO="N/A"
++    SEG_KB="N/A"
+     emit "  RELRO-16KB: N/A (armeabi-v7a is a 4 KB architecture — placement recorded, no 16 KB requirement)"
+-    RELRO_JSON=$(printf '{"present":true,"offset":"%s","vaddr":"%s","filesz":"%s","memsz":"%s","flags":"%s","end":"%s","formula_remainder_16384":%d,"placement":"recorded-4kb-arch","covering_load":{"vaddr":"%s","memsz":"%s","flags":"%s"},"protection_range":["%s","%s"],"subsequent_loads":[%s],"kb16_relro":"N/A"}' \
++    SEG_JSON=$(printf '{"present":true,"offset":"%s","vaddr":"%s","filesz":"%s","memsz":"%s","flags":"%s","end":"%s","formula_remainder_16384":%d,"placement":"recorded-4kb-arch","covering_load":{"vaddr":"%s","memsz":"%s","flags":"%s"},"protection_range":["%s","%s"],"subsequent_loads":[%s],"kb16_relro":"N/A"}' \
+       "$roff" "$rvaddr" "$rfilesz" "$rmesz" "$rflags_t" "$rend_hex" "$rem16" "$clv" "$clmsz" "$clflg_t" "$prot_start_hex" "$prot_end_hex" "$sub_json")
+     return
+   fi
+@@ -271,9 +280,9 @@ analyze_relro() { # abi file
+     # OWN LOAD: the official formula does NOT apply here. Safety condition:
+     # no subsequent writable LOAD may start inside the mprotect range.
+     local viol=0
+-    for i in "${!loads[@]}"; do
++    for i in "${!LOAD_ROWS[@]}"; do
+       [ "$i" -gt "$cov_i" ] || continue
+-      IFS='|' read -r lv lmsz lflg lal loff <<<"${loads[$i]}"
++      IFS='|' read -r lv lmsz lflg lal loff <<<"${LOAD_ROWS[$i]}"
+       case "$lflg" in *W*) ;; *) continue ;; esac
+       lvd=$(hex "$lv")
+       if [ "$lvd" -lt "$prot_end" ]; then
+@@ -282,31 +291,83 @@ analyze_relro() { # abi file
+       fi
+     done
+     if [ "$viol" -eq 0 ]; then
+-      KB16_RELRO="PASS"
++      SEG_KB="PASS"
+       emit "  RELRO-16KB: PASS — own-LOAD placement (LOAD contains only RELRO data; official formula (VirtAddr+MemSiz)%16384 NOT applicable); remainder $rem16 is expected and harmless here; no subsequent writable LOAD enters the protection range [$prot_start_hex, $prot_end_hex)"
+     else
+-      KB16_RELRO="FAIL"
++      SEG_KB="FAIL"
+     fi
+-    RELRO_JSON="$base_json$(printf ',"rule_applied":"own-load: every subsequent writable LOAD must start at/after page_up(relro_end)","kb16_relro":"%s"}' "$KB16_RELRO")"
++    SEG_JSON="$base_json$(printf ',"rule_applied":"own-load: every subsequent writable LOAD must start at/after page_up(relro_end)","kb16_relro":"%s"}' "$SEG_KB")"
+     return
+   fi
+ 
+   # SHARED LOAD: the official formula applies.
+   emit "  RELRO-16KB: SHARED-LOAD placement — official formula applies: (VirtAddr+MemSiz) % 16384 = $rem16"
+-  local rule_tail
+-  rule_tail=$(printf ',"rule_applied":"shared-load: official formula (VirtAddr+MemSiz) %% 16384 == 0","kb16_relro":"%s","formula_result":"%s"}')
+   if [ "$rem16" -eq 0 ]; then
+-    KB16_RELRO="PASS"
++    SEG_KB="PASS"
+     emit "  RELRO-16KB: PASS (shared-load, formula satisfied)"
+-    RELRO_JSON="$base_json$(printf ',"rule_applied":"shared-load: official formula (VirtAddr+MemSiz) % 16384 == 0","kb16_relro":"%s","formula_result":"PASS"}' "$KB16_RELRO")"
++    SEG_JSON="$base_json$(printf ',"rule_applied":"shared-load: official formula (VirtAddr+MemSiz) %% 16384 == 0","kb16_relro":"%s","formula_result":"PASS"}' "$SEG_KB")"
+   elif [ "$cov_writable" = "true" ]; then
+-    KB16_RELRO="FAIL"
++    SEG_KB="FAIL"
+     fail "RELRO-16KB (shared-load): (VirtAddr+MemSiz) % 16384 = $rem16 != 0 and the covering LOAD is writable — the loader would mprotect past the RELRO end over writable data (segfault per official doc)"
+-    RELRO_JSON="$base_json$(printf ',"rule_applied":"shared-load: official formula (VirtAddr+MemSiz) % 16384 == 0","kb16_relro":"%s","formula_result":"FAIL"}' "$KB16_RELRO")"
++    SEG_JSON="$base_json$(printf ',"rule_applied":"shared-load: official formula (VirtAddr+MemSiz) %% 16384 == 0","kb16_relro":"%s","formula_result":"FAIL"}' "$SEG_KB")"
+   else
+-    KB16_RELRO="WARN"
++    SEG_KB="WARN"
+     warn "RELRO-16KB (shared-load): formula remainder $rem16 != 0, but the covering LOAD is not writable — recorded, no crash mechanism"
+-    RELRO_JSON="$base_json$(printf ',"rule_applied":"shared-load: official formula (VirtAddr+MemSiz) % 16384 == 0","kb16_relro":"%s","formula_result":"FAIL (covering LOAD not writable — no crash mechanism)"}' "$KB16_RELRO")"
++    SEG_JSON="$base_json$(printf ',"rule_applied":"shared-load: official formula (VirtAddr+MemSiz) %% 16384 == 0","kb16_relro":"%s","formula_result":"FAIL (covering LOAD not writable — no crash mechanism)"}' "$SEG_KB")"
++  fi
++}
++
++analyze_relro() { # abi file
++  local abi="$1" file="$2"
++  KB16_RELRO="ABSENT"; RELRO_JSON="null"
++  local rows; rows=$(dump_phdrs "$file")
++  local rcount; rcount=$(grep -c '^RELRO|' <<<"$rows")
++  # all LOAD rows in file order (shared by every RELRO segment of this file)
++  LOAD_ROWS=()
++  while IFS='|' read -r _ loff lvaddr lfilesz lmemsz lflags lalign; do
++    [ -n "$lvaddr" ] || continue
++    LOAD_ROWS+=("$lvaddr|$lmemsz|$lflags|$lalign|$loff")
++  done < <(grep '^LOAD|' <<<"$rows")
++
++  if [ "$rcount" -eq 0 ]; then
++    emit "  RELRO: no PT_GNU_RELRO segment — no RELRO requirement (trivially compliant; recorded ABSENT)"
++    RELRO_JSON='{"present":false,"segment_count":0,"placement":"absent","kb16_relro":"ABSENT"}'
++    return
++  fi
++  if [ "$rcount" -eq 1 ]; then
++    emit "  PT_GNU_RELRO segments found: 1 — full two-case analysis (v4; per-segment independent)"
++  else
++    emit "  PT_GNU_RELRO segments found: $rcount — MULTI-SEGMENT: each segment is analyzed independently (v4); aggregate FAIL>WARN>N/A>PASS; no segment left unanalyzed"
++  fi
++
++  local segs_json="" seg_kbs="" sidx=0 rrow
++  while IFS= read -r rrow; do
++    [ -n "$rrow" ] || continue
++    sidx=$((sidx+1))
++    [ "$rcount" -gt 1 ] && emit "  --- RELRO segment $sidx/$rcount ---"
++    analyze_relro_seg "$abi" "$rrow"
++    segs_json+="${segs_json:+,}$SEG_JSON"
++    seg_kbs+="${seg_kbs:+,}$SEG_KB"
++  done < <(grep '^RELRO|' <<<"$rows")
++
++  # aggregate (v4): any FAIL -> FAIL, any WARN -> WARN, all N/A -> N/A, else PASS
++  local agg="PASS" all_na=1 kb
++  IFS=',' read -r -a SEG_KB_ARR <<<"$seg_kbs"
++  for kb in "${SEG_KB_ARR[@]}"; do
++    case "$kb" in
++      FAIL) agg="FAIL" ;;
++      WARN) [ "$agg" != "FAIL" ] && agg="WARN" ;;
++      PASS) all_na=0 ;;
++    esac
++  done
++  [ "$agg" = "PASS" ] && [ "$all_na" -eq 1 ] && agg="N/A"
++  KB16_RELRO="$agg"
++  if [ "$rcount" -gt 1 ]; then
++    emit "  RELRO-16KB aggregate: $agg — per-segment results: ${seg_kbs} (all $rcount segments independently analyzed; a PASS cannot hide an unanalyzed segment)"
++    RELRO_JSON=$(printf '{"present":true,"segment_count":%d,"placement":"multi-segment","segments":[%s],"kb16_relro":"%s"}' "$rcount" "$segs_json" "$agg")
++  else
++    # single segment: identical v3 JSON shape (flat), plus segment_count
++    RELRO_JSON="${SEG_JSON%\}},\"segment_count\":1}"
+   fi
+ }
+ 
+@@ -473,12 +534,12 @@ record_missing() { # abi rel group
+   printf '{"abi":"%s","path":"%s","group":"%s","kind":"missing","verdict":"MISSING","runtime_16kb_env":"NOT TESTED"}\n' "$abi" "$rel" "$group" >> "$RECORDS"
+ }
+ 
+-emit "=== AETHONE ELF/ABI inspection v3 — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
++emit "=== AETHONE ELF/ABI inspection v4 — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+ emit "dir: $DIR"
+ emit "mode: $([ $EVIDENCE_MODE -eq 1 ] && echo 'EVIDENCE (violations recorded, exit 0 — upstream artifact runs only)' || echo 'CI (strict)') / missing-artifacts: $([ $ALLOW_MISSING -eq 1 ] && echo 'allowed+recorded (NOT TESTED)' || echo 'fatal')"
+ emit "rules: developer.android.com/guide/practices/page-sizes —"
+ emit "  LOAD: p_align >= 16384 on arm64-v8a & x86_64 (16KB arches), p_vaddr = p_offset (mod p_align) and (mod 16384); armeabi-v7a = 4KB arch -> 16KB N/A, 4KB validity enforced"
+-emit "  RELRO (two-case, v3): shared-load -> official formula (VirtAddr+MemSiz)%16384==0; own-load -> formula NOT applicable, every subsequent writable LOAD must start at/after page_up(relro_end)"
++emit "  RELRO (two-case, v4): EVERY PT_GNU_RELRO segment analyzed independently; shared-load -> official formula (VirtAddr+MemSiz)%16384==0; own-load -> formula NOT applicable, every subsequent writable LOAD must start at/after page_up(relro_end); aggregate FAIL>WARN>N/A>PASS"
+ emit "  zipalign -P 16 stays a SEPARATE check (no APK exists — NOT TESTED)"
+ emit "  static ELF compliance != runtime proof: runtime_16kb_env = NOT TESTED for every artifact"
+ emit ""
+@@ -538,7 +599,7 @@ verdict="PASS"
+ {
+   echo '{'
+   echo "  \"generated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+-  echo "  \"inspector_version\": \"v3 (two-case RELRO, armv7 N/A, [] NEEDED, PASS_WITH_WARNINGS, runtime separation)\","
++  echo "  \"inspector_version\": \"v4 (independent multi-PT_GNU_RELRO analysis, two-case RELRO, armv7 N/A, [] NEEDED, PASS_WITH_WARNINGS, runtime separation)\","
+   echo "  \"mode\": \"$([ $EVIDENCE_MODE -eq 1 ] && echo evidence || echo ci)\","
+   echo "  \"inspected\": $found,"
+   echo "  \"missing\": $MISSING,"

@@ -1,0 +1,48 @@
+=== AETHONE v4.4 — focused validation of the corrective round ===
+
+scripts/build_native.sh unchanged vs delivered v4.3: True  (d7d9a7325d26b3c8…)
+scripts/inspect_elf.sh unchanged vs delivered v4.3: True  (392ca7a37ac33729…)
+scripts/pt-build-pin.patch unchanged vs delivered v4.3: True  (951791e1d338eb59…)
+rust-toolchain.toml unchanged: True
+docs/SMART_AUTO_SPEC.md unchanged: True
+evidence/actions_pins_raw_evidence.txt unchanged (history preserved): True
+evidence/protocol_surface_pinned_commit_v43.txt unchanged (history preserved): True
+evidence/surface_facts_v43.json unchanged (history preserved): True
+evidence/feature_matrix_counts_v43.txt unchanged (history preserved): True
+evidence/evidence_manifest_v43.txt unchanged (history preserved): True
+evidence/evidence_manifest_v42.txt unchanged (history preserved): True
+evidence/pins_summary.json unchanged (history preserved): True
+
+native-ci.yml YAML parse: OK (jobs: ['native-build', 'elf-inspect', 'status-summary'])
+actionlint: NOT available in this delivery environment (release downloads blocked).
+  v4.2's actionlint 1.7.7 result remains valid for every UNCHANGED byte of the
+  workflow; for the changed block, YAML parse + bash -n were run here.
+
+correction assertions:
+  [PASS] NDK_VERSION == r26d
+  [PASS] NDK_PKG_REVISION == 26.3.11579264
+  [PASS] input ndk-version: ${{ env.NDK_VERSION }}
+  [PASS] fail-closed verify step present
+  [PASS] verify step exits 1 on mismatch
+  [PASS] verify step aborts on empty output
+  [PASS] setup-ndk action SHA unchanged
+  [PASS] old direct canonical-form input removed
+  [PASS] no other NDK_VERSION consumer changed
+  [PASS] dtolnay line untouched (no final selection)
+  [PASS] three ABIs unchanged
+  [PASS] API_LEVEL 29 unchanged
+  [PASS] fail-closed run block passes bash -n
+  [PASS] matrix title is v4.4
+  [PASS] matrix mentions 28 env-only
+  [PASS] matrix mentions corrected 105/25
+  [PASS] CLI totals line says 28
+  [PASS] CLI has exactly one RUST_LOG row
+  [PASS] CLI parser arms still 113
+  [PASS] CLI env table rows == 28
+  [PASS] counts v44: 105/12/117/25 asserted
+  [PASS] no frozen file modified (workflow only file outside docs/README)
+  docs/FEATURE_MATRIX.md: placeholder-scan CLEAN
+  docs/SMART_AUTO_SPEC.md: placeholder-scan CLEAN
+  docs/CLI_REFERENCE.md: placeholder-scan CLEAN
+  README.md: placeholder-scan CLEAN
+ALL ASSERTIONS: PASS

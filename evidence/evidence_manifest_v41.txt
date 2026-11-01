@@ -1,0 +1,24 @@
+=== AETHONE v4.1 addendum — raw evidence manifest (delivered folder) ===
+generated: 2026-10-31T16:27:04Z
+all checks executed 2026-10-31 (UTC) in the analysis environment
+
+FILE                                         SHA256
+bionic_relro_16kb_evidence.txt               83bbdfca73eedcf47ded9c17ceed4257ff6b0e758a78d8f8d0a346208b4fc970
+dtolnay_lsremote_raw.txt                     b3c656d694ebb918d913b52f7aba17b23375dd192527d4f16e1fd04d5a5f7e1f
+dtolnay_master_history_check.txt             6973111dbabc2b872819ebd8c10f35f7bc691279859469e4af7bfd4c4582c750
+lyrebird_dirhash_verification.txt            62b1d508f4db92f5ac5358a5f45b39bd78d3812df478015ef3ff85c14c9d23a5
+lyrebird_proxy.zip                           e460a90a67c8831d5e8f70b652b39cba0bc05190412c7034bbb8c90fb1b9baff
+lyrebird_proxy_evidence.txt                  be965ed6463b50964766ce1538f61d626043af4d24b1ff5aef8528c569d6a982
+lyrebird_sumdb_lookup.txt                    51562edf124c627d136612d993b41afb86b25676bb12431996eb65e1b40b4836
+lyrebird_v_info.json                         fda8f5784d43e7cca84b4ad5ea84b7a1ccd062d739c68b1728750639ff658316
+lyrebird_v_mod.txt                           ac4bddbc3f5b5e12afb9bb3af7ec02cb36675305dfc1acdd446b445ad1f6a3f0
+lyrebird_zip_listing.txt                     70b2daff2f20e7d591244dd01f0025329f40e4abe20cf7e6241642db34073762
+official_artifacts_relro_enumeration.txt     e1cd0930983065fdbcb91bd490f23fe719d6c877d06022a91a31f38e70e55550
+verify_lyrebird_dirhash.py                   1a01a7dd17eb5eed8f9c5127cc65536bb7f80ff1a6c88873035f1584f5aff43d
+
+Notes:
+ - lyrebird_proxy.zip is the exact zip served by proxy.golang.org for the pinned
+   pseudo-version; run 'python3 verify_lyrebird_dirhash.py' in this folder to reproduce
+   the content-hash match against the sum.golang.org records.
+ - bionic_relro_16kb_evidence.txt embeds fetch provenance (URLs + sha256) for the
+   AOSP bionic linker sources and the official 16KB documentation text.

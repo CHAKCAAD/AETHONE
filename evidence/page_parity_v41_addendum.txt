@@ -1,0 +1,53 @@
+=== AETHONE v4.2 evidence — report DOCX/PDF parity (employer review of v4.1, item 4) ===
+date: 2026-11-01T11:28:54Z
+
+part 1 — v4 main report delivery (item 4, first half):
+  DOCX: /tmp/my-project/download/AETHONE_گزارش_تفاوت_باندل_CI_نسخه۴.docx
+  PDF : /tmp/my-project/download/AETHONE_گزارش_تفاوت_باندل_CI_نسخه۴.pdf
+  -rw-rw-r-- 1 z z  29659 Oct 31 15:30 /tmp/my-project/download/AETHONE_گزارش_تفاوت_باندل_CI_نسخه۴.docx
+  -rw-rw-r-- 1 z z 384770 Oct 31 15:30 /tmp/my-project/download/AETHONE_گزارش_تفاوت_باندل_CI_نسخه۴.pdf
+  => the final v4 report is delivered as BOTH DOCX and PDF (PDF rendered
+     from the same DOCX with the same LibreOffice pipeline).
+
+--- v4.1 addendum DOCX <-> PDF (mandated by item 4) ---
+DOCX: /tmp/my-project/download/AETHONE_Phase2_v4.1_Addendum/AETHONE_گزارش_فاز۲_ضمیمه۴-۱.docx
+PDF : /tmp/my-project/download/AETHONE_Phase2_v4.1_Addendum/AETHONE_گزارش_فاز۲_ضمیمه۴-۱.pdf
+-rw-rw-r-- 1 z z  27581 Oct 31 16:26 /tmp/my-project/download/AETHONE_Phase2_v4.1_Addendum/AETHONE_گزارش_فاز۲_ضمیمه۴-۱.docx
+-rw-rw-r-- 1 z z 384383 Oct 31 16:26 /tmp/my-project/download/AETHONE_Phase2_v4.1_Addendum/AETHONE_گزارش_فاز۲_ضمیمه۴-۱.pdf
+page count: DOCX re-rendered = 10 | delivered PDF = 10
+  page 1: page-break signature MATCH
+  page 2: page-break signature MATCH
+  page 3: page-break signature MATCH
+  page 4: page-break signature MATCH
+  page 5: page-break signature MATCH
+  page 6: page-break signature MATCH
+  page 7: page-break signature MATCH
+  page 8: page-break signature MATCH
+  page 9: page-break signature MATCH
+  page 10: page-break signature MATCH
+PARITY: PASS — identical page count AND identical page-break sequence
+
+--- v4 main report DOCX <-> PDF (same check, bonus) ---
+DOCX: /tmp/my-project/download/AETHONE_گزارش_تفاوت_باندل_CI_نسخه۴.docx
+PDF : /tmp/my-project/download/AETHONE_گزارش_تفاوت_باندل_CI_نسخه۴.pdf
+-rw-rw-r-- 1 z z  29659 Oct 31 15:30 /tmp/my-project/download/AETHONE_گزارش_تفاوت_باندل_CI_نسخه۴.docx
+-rw-rw-r-- 1 z z 384770 Oct 31 15:30 /tmp/my-project/download/AETHONE_گزارش_تفاوت_باندل_CI_نسخه۴.pdf
+page count: DOCX re-rendered = 10 | delivered PDF = 10
+  page 1: page-break signature MATCH
+  page 2: page-break signature MATCH
+  page 3: page-break signature MATCH
+  page 4: page-break signature MATCH
+  page 5: page-break signature MATCH
+  page 6: page-break signature MATCH
+  page 7: page-break signature MATCH
+  page 8: page-break signature MATCH
+  page 9: page-break signature MATCH
+  page 10: page-break signature MATCH
+PARITY: PASS — identical page count AND identical page-break sequence
+
+=== RESULT ===
+v4.1 addendum: DOCX and PDF carry the SAME page count and the SAME page
+breaks (page-by-page text-signature comparison of an independent re-render
+against the delivered PDF).
+v4 main report: same parity result; delivered below as DOCX + PDF pair.
+=== end of evidence ===

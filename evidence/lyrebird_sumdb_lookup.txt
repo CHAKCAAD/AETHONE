@@ -1,0 +1,9 @@
+51157806
+gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird v0.0.0-20260312101154-fc105a03c0e0 h1:uzPZpf45zlpdB/Gyk8P+QGjsuEeReitMpsaPiBmHncM=
+gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird v0.0.0-20260312101154-fc105a03c0e0/go.mod h1:uCIr865SJMJ4LHn90G3+L/MmMCA8cix7ZAvV74HcWLo=
+
+go.sum database tree
+70533680
+FSoRG4RdijtY1QaetV5/QOlCk7OQlHVWoxeoQP2I8Xg=
+
+— sum.golang.org Az3gruWEZKBmYohjRv4OpiVeWd2rmmVq+uL6dDgMCZB1aYXE1EJQtlf5dWYaPfdTFXGkcP4rCPvL3MsEuFvqIc/YTAM=

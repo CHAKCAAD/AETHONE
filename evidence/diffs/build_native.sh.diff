@@ -1,0 +1,130 @@
+diff --git a/scripts/build_native.sh b/scripts/build_native.sh
+index f4c2bf1..79b386c 100755
+--- a/scripts/build_native.sh
++++ b/scripts/build_native.sh
+@@ -1,8 +1,30 @@
+ #!/usr/bin/env bash
+-# AETHONE — build all native components for ONE ABI at the frozen pins. (v3)
+-# Status: DELIVERED, NOT TESTED (no toolchain in the analysis environment;
+-# first execution happens on GitHub Actions after the employer pushes this
+-# repository). Every build command replicates the upstream evidence exactly.
++# AETHONE — build all native components for ONE ABI at the frozen pins. (v4)
++# Status: DELIVERED, NOT TESTED (no Android toolchain in the analysis
++# environment; first execution happens on GitHub Actions after the employer
++# pushes this repository). Every build command replicates the upstream
++# evidence exactly. The lyrebird SOURCE-ORIGIN proof, however, was executed
++# end-to-end in the analysis environment: evidence/lyrebird_pin_independent_test.txt.
++#
++# v4 changes (employer review of bundle v3, 2026-10-31):
++#   Lyrebird pin proof reworked (fix #3) — the pin itself is UNCHANGED
++#   (fc105a03c0e0, N8):
++#     * pt-build-pin.patch v4 makes the proxy fallback prove the source:
++#       the zip is verified against sum.golang.org (H1 dirhash locally
++#       recomputed); mismatch/missing/unreachable => HARD ABORT. The proof
++#       file $SRC_CACHE/lyrebird-source-proof.json (OUTSIDE the uploaded
++#       artifact tree) is copied into manifest.json.
++#     * The binary check becomes path-aware: git path still requires the
++#       pin inside `go version -m` (vcs.revision == pin — mechanism proven
++#       in evidence/lyrebird_pin_independent_test.txt [7]); proxy path
++#       REQUIRES the sumdb-verified proof file instead — a binary built
++#       from the .git-less proxy zip records NO main-module commit
++#       ("(devel)"; proven in the same evidence file [6]), so the v3
++#       grep-on-binary was structurally impossible there and would have
++#       aborted every proxy-path build even with a perfectly pinned source.
++#     * buildvcs HAZARD recorded: a proxy-path build inside ANY enclosing
++#       git worktree stamps THAT worktree's unrelated vcs.revision — vcs.*
++#       lines are never treated as pin evidence on this path.
+ #
+ # v3 changes (employer review of bundle v2, 2026-10-31):
+ #   1. Zeptun intermediate build products can no longer enter the artifact.
+@@ -53,8 +75,8 @@ set -euo pipefail
+ 
+ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # <repo>/scripts
+ PT_PATCH="$SCRIPT_DIR/pt-build-pin.patch"
+-# sha256 of the patched pt-build.sh (Aether @ d58f9d56 + pt-build-pin.patch)
+-PT_PATCHED_SHA256="ab291fc1767edf1019ec669ce1e90debef56d59c8297c16a2218873860faa76d"
++# sha256 of the patched pt-build.sh (Aether @ d58f9d56 + pt-build-pin.patch v4)
++PT_PATCHED_SHA256="6bd5fa747c0c77097d3bc654ce3e89cb1051d3c8630592aa555d2591ec6f8754"
+ 
+ ABI=""; RUST_TARGET=""; GOARCH=""; GOARM=""; API_LEVEL=""; SRC_CACHE=""; OUT=""
+ while [ $# -gt 0 ]; do
+@@ -172,7 +194,13 @@ clone_pin "$AETHER_REPO" "$AETHER_SHA" "$AETHER_SRC"
+ echo "== [3/4] lyrebird via Aether pt-build.sh @ $AETHER_SHA (pin $LYREBIRD_PIN enforced) =="
+ # The frozen script's fallback ("pinned commit is gone, using the default
+ # branch") violates N8. Apply the recorded patch (aborts on checkout failure,
+-# verifies HEAD == pin, asserts the proxy pseudo-version embeds the pin).
++# verifies HEAD == pin, proves the proxy zip against sum.golang.org).
++# v4: the patch writes a source-origin PROOF file; it lives under $SRC_CACHE
++# (never inside $OUT, which is uploaded as the artifact and guarded by an
++# exact whitelist).
++PT_LYREBIRD_PROOF_FILE="$SRC_CACHE/lyrebird-source-proof.json"
++rm -f "$PT_LYREBIRD_PROOF_FILE"
++export PT_LYREBIRD_PROOF_FILE
+ if grep -q "AETHONE (N8 pin hardening" "$AETHER_SRC/pt-build.sh"; then
+   echo "pt-build.sh already carries the pin-hardening patch (cached tree)"
+ else
+@@ -187,15 +215,46 @@ patched_sha=$(sha256sum "$AETHER_SRC/pt-build.sh" | cut -d' ' -f1)
+   bash pt-build.sh linux "$GOARCH" "$OUT/aether/pt" "$GOARM" ""
+ )
+ require_file "$OUT/aether/pt/lyrebird"
+-# Artifact-level pin proof: Go stamps the source revision into the binary.
+-#   git path   -> vcs.revision = full fc105a03c0e0... sha
+-#   proxy path -> module version v0.0.0-...-fc105a03c0e0
+-# v3 fix 2b: a failing `go version -m` is a hard abort (was `|| true` in v2) —
+-# if the proof command itself fails, the pin is NOT proven and the build fails.
+-prov=$(go version -m "$OUT/aether/pt/lyrebird" 2>&1) || die "go version -m failed on lyrebird — pin cannot be proven (N8)"
++# ---- Artifact-level lyrebird source-origin proof (v4, employer fix #3) -----
++#   git path   -> proof file (path=git, head=FULL sha) AND the binary's
++#                 `go version -m` contains the pin (vcs.revision == pin;
++#                 buildvcs mechanism proven in
++#                 evidence/lyrebird_pin_independent_test.txt [7])
++#   proxy path -> proof file (path=proxy, version, zip sha256, dirhash
++#                 verified against sum.golang.org). A binary built from the
++#                 .git-less proxy zip records NO main-module commit —
++#                 "(devel)", no vcs.* lines when built outside any git
++#                 worktree, and UNRELATED worktree metadata when built
++#                 inside one (proven in the same evidence file [6]). The
++#                 v3 grep-on-binary was therefore structurally impossible
++#                 on this path; the sumdb-verified zip is the proof here.
++# Any missing proof still aborts the build with an explicit message (N8).
++[ -f "$PT_LYREBIRD_PROOF_FILE" ] || die "lyrebird source-origin proof file missing — pt-build.sh did not record it; pin NOT proven (N8)"
++proof_path=$(sed -n 's/.*"path":"\([^"]*\)".*/\1/p' "$PT_LYREBIRD_PROOF_FILE")
++prov=$(go version -m "$OUT/aether/pt/lyrebird" 2>&1) || die "go version -m failed on lyrebird — build info cannot be recorded (N8)"
+ echo "$prov" | sed -n '1,40p'
+-grep -q "${LYREBIRD_PIN}" <<<"$prov" || die "lyrebird pin NOT proven in the built binary (go version -m lacks $LYREBIRD_PIN)"
+-echo "[lyrebird $ABI] pin $LYREBIRD_PIN proven in binary"
++binary_pin="absent (expected on the proxy path: no .git in the source; proven in evidence/lyrebird_pin_independent_test.txt [6])"
++case "$proof_path" in
++  git)
++    grep -q "${LYREBIRD_PIN}" <<<"$prov" || die "lyrebird pin NOT proven in the built binary (go version -m lacks $LYREBIRD_PIN; git path requires vcs.revision == pin)"
++    binary_pin="vcs.revision contains the pin"
++    echo "[lyrebird $ABI] pin $LYREBIRD_PIN proven in binary (git path)"
++    ;;
++  proxy)
++    grep -q '"pin":"'"${LYREBIRD_PIN}"'"' "$PT_LYREBIRD_PROOF_FILE" || die "lyrebird proof file does not reference the pin (N8)"
++    grep -q '"dirhash":"h1:' "$PT_LYREBIRD_PROOF_FILE" || die "lyrebird proof file lacks the sumdb-verified dirhash (N8)"
++    if grep -q "${LYREBIRD_PIN}" <<<"$prov"; then
++      binary_pin="build info contains the pin"
++    else
++      echo "[lyrebird $ABI] NOTE: binary build info carries no pin — EXPECTED on the proxy path (no .git; evidence/lyrebird_pin_independent_test.txt [6]); pin proven via the sumdb-verified source zip instead"
++    fi
++    echo "[lyrebird $ABI] pin $LYREBIRD_PIN proven via sumdb-verified source zip (proxy path)"
++    ;;
++  *)
++    die "unknown lyrebird source-origin path in proof file: '$proof_path' (N8)"
++    ;;
++esac
++echo "$prov" > "$SRC_CACHE/lyrebird-buildinfo.txt"   # raw, for the record
+ 
+ # ---------------------------------- psiphon (AETHONE N1 pin 2956a96 — NOT aether's 83aa73b) ----
+ echo "== [4/4] psiphon @ $PSIPHON_FORK_SHA (N1 pin; fork of 83aa73b, +566/-3 noise profiles) =="
+@@ -223,6 +282,9 @@ MANIFEST="$OUT/manifest.json"
+   echo "    \"psiphon_fork\": \"$PSIPHON_FORK_SHA\","
+   echo "    \"lyrebird\": \"$LYREBIRD_PIN (enforced by scripts/pt-build-pin.patch @ $AETHER_SHA)\""
+   echo "  },"
++  # v4: record HOW the pinned lyrebird source was proven (git checkout or
++  # sumdb-verified proxy zip) + the binary build-info check outcome.
++  echo "  \"lyrebird_pin_proof\": $(sed "s/}$/,\"binary_build_info_pin\":\"$binary_pin\"}/" "$PT_LYREBIRD_PROOF_FILE" | tr -d '\n'),"
+   echo '  "artifacts": ['
+   first=1
+   # path  = real location relative to OUT

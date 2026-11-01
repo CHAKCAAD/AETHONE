@@ -1,0 +1,110 @@
+=== AETHONE v4.2 evidence — official Go-client SumDB verification (employer review of v4.1, item 2) ===
+date: 2026-11-01T11:18:03Z   environment: analysis sandbox (NOT CI, NOT a real build)
+
+purpose: the v4.1 proxy-path proof (curl lookup + h1 grep) did NOT validate the
+record SIGNATURE. This run validates the SIGNED record with the official Go
+client and proves the zip entering the build is byte-identical to the zip the
+Go client verified.
+
+toolchain: go version go1.26.3 linux/amd64  (N8 pinned Go 1.26.3, GOTOOLCHAIN=local)
+module:    gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird
+version:   v0.0.0-20260312101154-fc105a03c0e0   (pin fc105a03c0e0 — frozen, N8: unchanged)
+GOSUMDB:   sum.golang.org   GOPROXY: https://proxy.golang.org,direct
+bypass env cleared: GOFLAGS GONOPROXY GONOSUMDB GOPRIVATE (all empty)
+
+--- step 1: scratch module requiring EXACTLY the pinned pseudo-version ---
+module aethone-sumdb-verify
+
+go 1.26.3
+
+require gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird v0.0.0-20260312101154-fc105a03c0e0
+
+--- step 2: 'go mod download -x' — official client fetches the module AND the
+    sum.golang.org signed record, verifies tree head + inclusion proof + record
+    signature. Exit 0 == signed record verified by the official client. ---
+# get https://proxy.golang.org/gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird/@v/v0.0.0-20260312101154-fc105a03c0e0.info
+# get https://proxy.golang.org/gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird/@v/v0.0.0-20260312101154-fc105a03c0e0.info: 200 OK (0.059s)
+# get https://proxy.golang.org/gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird/@v/v0.0.0-20260312101154-fc105a03c0e0.mod
+# get https://proxy.golang.org/gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird/@v/v0.0.0-20260312101154-fc105a03c0e0.mod: 200 OK (0.008s)
+# get https://proxy.golang.org/sumdb/sum.golang.org/supported
+# get https://proxy.golang.org/sumdb/sum.golang.org/supported: 404 Not Found (0.010s)
+# get https://sum.golang.org/lookup/gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0
+# get https://sum.golang.org/lookup/gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0: 200 OK (0.046s)
+# get https://sum.golang.org/tile/8/0/x199/835
+# get https://sum.golang.org/tile/8/3/000.p/4
+# get https://sum.golang.org/tile/8/0/x275/685.p/121
+# get https://sum.golang.org/tile/8/2/004.p/52
+# get https://sum.golang.org/tile/8/1/x001/076.p/229
+# get https://sum.golang.org/tile/8/2/003
+# get https://sum.golang.org/tile/8/1/780
+# get https://sum.golang.org/tile/8/0/x275/685.p/121: 200 OK (0.017s)
+# get https://sum.golang.org/tile/8/1/780: 200 OK (0.023s)
+# get https://sum.golang.org/tile/8/2/003: 200 OK (0.024s)
+# get https://sum.golang.org/tile/8/3/000.p/4: 200 OK (0.024s)
+# get https://sum.golang.org/tile/8/2/004.p/52: 200 OK (0.025s)
+# get https://sum.golang.org/tile/8/0/x199/835: 200 OK (0.025s)
+# get https://sum.golang.org/tile/8/1/x001/076.p/229: 200 OK (0.026s)
+# get https://proxy.golang.org/gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird/@v/v0.0.0-20260312101154-fc105a03c0e0.zip
+# get https://proxy.golang.org/gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird/@v/v0.0.0-20260312101154-fc105a03c0e0.zip: 200 OK (0.006s)
+(second download run: exit 0 — module already verified in cache)
+
+--- step 3: go.sum entries written by the official client ---
+gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird v0.0.0-20260312101154-fc105a03c0e0 h1:uzPZpf45zlpdB/Gyk8P+QGjsuEeReitMpsaPiBmHncM=
+gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird v0.0.0-20260312101154-fc105a03c0e0/go.mod h1:uCIr865SJMJ4LHn90G3+L/MmMCA8cix7ZAvV74HcWLo=
+
+--- step 4: 'go mod verify' — official client re-verifies the module cache ---
+all modules verified
+
+--- step 5: identity of the zip the official client verified ---
+sha256              : e460a90a67c8831d5e8f70b652b39cba0bc05190412c7034bbb8c90fb1b9baff
+expected (v4 + v4.1 evidence): e460a90a67c8831d5e8f70b652b39cba0bc05190412c7034bbb8c90fb1b9baff
+=> IDENTITY MATCH: the zip our build script downloads (same proxy URL) and the zip the official client verified are byte-identical.
+
+--- step 6: independent dirhash re-check of the go-verified zip (v4.1 mechanism kept) ---
+zip: /tmp/tmp.e8val7JnfX/gomodcache/cache/download/gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird/@v/v0.0.0-20260312101154-fc105a03c0e0.zip
+files hashed: 67
+computed module h1:  h1:uzPZpf45zlpdB/Gyk8P+QGjsuEeReitMpsaPiBmHncM=
+sum.golang.org h1:   h1:uzPZpf45zlpdB/Gyk8P+QGjsuEeReitMpsaPiBmHncM=
+RESULT: MATCH — proxy zip content == checksum-DB-recorded content for lyrebird@v0.0.0-20260312101154-fc105a03c0e0
+computed go.mod h1:  h1:uCIr865SJMJ4LHn90G3+L/MmMCA8cix7ZAvV74HcWLo=
+sum.golang.org:      h1:uCIr865SJMJ4LHn90G3+L/MmMCA8cix7ZAvV74HcWLo=
+go.mod hash: MATCH
+go.mod content sha256: ac4bddbc3f5b5e12afb9bb3af7ec02cb36675305dfc1acdd446b445ad1f6a3f0
+=> H1 MATCH: h1:uzPZpf45zlpdB/Gyk8P+QGjsuEeReitMpsaPiBmHncM= (sum.golang.org record from v4.1 lyrebird_sumdb_lookup.txt)
+
+--- step 7: enforcement controls ---
+  A) GOSUMDB='sum.golang.org+033de0ae+<CORRUPTED-SUFFIX>' -> still exit 0.
+     Reason (recorded, not hidden): 'sum.golang.org' is a toolchain
+     special-case name; the official go binary uses its OWN hard-coded
+     sum.golang.org public key and IGNORES any env-supplied key for this
+     name. Security consequence (favourable): the verification key cannot
+     be weakened through the environment.
+  B) GOSUMDB='<unknown name + a key-hash prefix bound to another key>' ->
+     the client must REFUSE the untrusted/invalid sumdb configuration
+     instead of silently proceeding (fail-closed).
+=== control A (corrupted key suffix on the special-cased name) ===
+control A exit: 0 — built-in key used (special-cased name), verification PASSED with the toolchain-hardcoded key
+=== control B (valid-format, unknown sumdb host) ===
+  NOTE: control B runs with a FRESH module directory AND fresh caches —
+  a go.sum that already carries verified h1 entries satisfies 'go mod
+  download' without consulting the sumdb (observed go behaviour, recorded
+  here for reproducibility; the CI patch therefore always verifies in a
+  fresh temp module so the signed record is genuinely checked).
+exit code: 1 (expected: non-zero — fail-closed on untrusted sumdb config)
+go: creating new go.mod: module aethone-sumdb-verify-ctrl
+go: gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0: verifying go.mod: invalid GOSUMDB: invalid verifier hash
+=> CONTROL B OK: the official client refuses an untrusted/invalid sumdb configuration and never proceeds without verified signed records.
+
+=== RESULT (this environment) ===
+SIGNED RECORD VERIFICATION (official Go client, GOSUMDB=sum.golang.org): VERIFIED
+  - the sum.golang.org public key is hard-coded inside the official go 1.26.3
+    binary (control A); the client verified the lookup record against the
+    signed tree (lookup + tile fetches in step 2) and re-verified from cache.
+  - control B: an untrusted/invalid GOSUMDB configuration is REFUSED with an
+    explicit error ('invalid GOSUMDB: invalid verifier hash', exit 1) — the
+    client never proceeds without a trusted sumdb configuration (fail-closed).
+ZIP IDENTITY (build zip == go-client-verified zip):                       VERIFIED
+SCOPE: analysis environment only. The SAME mechanism is written into
+scripts/pt-build-pin.patch v4.2 (proxy path) for CI; CI execution of that
+code path stays NOT TESTED until the first real CI run (no push approved).
+=== end of evidence ===

@@ -1,0 +1,140 @@
+=== Lyrebird Go Module Proxy evidence ===
+date: 2026-10-31T16:12:31Z
+module: gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird
+pseudo-version (from Aether pt-build.sh @ d58f9d56): v0.0.0-20260312101154-fc105a03c0e0
+
+--- @v/list (proxy) ---
+
+--- @v/v0.0.0-20260312101154-fc105a03c0e0.info (proxy metadata) ---
+{"Version":"v0.0.0-20260312101154-fc105a03c0e0","Time":"2026-03-12T10:11:54Z","Origin":{"VCS":"git","URL":"https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird.git","Hash":"fc105a03c0e0acc2479301c361c012ffed359c43"}}
+--- @v/v0.0.0-20260312101154-fc105a03c0e0.mod (go.mod at that version) ---
+module gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird
+
+require (
+	filippo.io/edwards25519 v1.1.0
+	github.com/dchest/siphash v1.2.3
+	github.com/refraction-networking/utls v1.6.7
+	gitlab.com/yawning/edwards25519-extra v0.0.0-20231005122941-2149dcafc266
+	gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/goptlib v1.6.0
+	gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake/v2 v2.11.0
+	gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/webtunnel v0.0.3
+	golang.org/x/crypto v0.33.0
+	golang.org/x/net v0.35.0
+)
+
+require (
+	github.com/andybalholm/brotli v1.1.1 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.36.1 // indirect
+	github.com/aws/aws-sdk-go-v2/config v1.29.6 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.59 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.28 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.32 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.32 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.13 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sqs v1.37.14 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.24.15 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.28.14 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.33.14 // indirect
+	github.com/aws/smithy-go v1.22.2 // indirect
+	github.com/cloudflare/circl v1.5.0 // indirect
+	github.com/golang/mock v1.6.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
+	github.com/klauspost/reedsolomon v1.12.4 // indirect
+	github.com/miekg/dns v1.1.63 // indirect
+	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
+	github.com/pion/datachannel v1.5.10 // indirect
+	github.com/pion/dtls/v3 v3.0.4 // indirect
+	github.com/pion/ice/v4 v4.0.7 // indirect
+	github.com/pion/interceptor v0.1.37 // indirect
+	github.com/pion/logging v0.2.3 // indirect
+	github.com/pion/mdns/v2 v2.0.7 // indirect
+	github.com/pion/randutil v0.1.0 // indirect
+	github.com/pion/rtcp v1.2.15 // indirect
+	github.com/pion/rtp v1.8.12 // indirect
+	github.com/pion/sctp v1.8.37 // indirect
+	github.com/pion/sdp/v3 v3.0.11 // indirect
+	github.com/pion/srtp/v3 v3.0.4 // indirect
+	github.com/pion/stun/v3 v3.0.0 // indirect
+	github.com/pion/transport/v3 v3.0.7 // indirect
+	github.com/pion/turn/v4 v4.0.0 // indirect
+	github.com/pion/webrtc/v4 v4.0.13 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/realclientip/realclientip-go v1.0.0 // indirect
+	github.com/templexxx/cpu v0.1.1 // indirect
+	github.com/templexxx/xorsimd v0.4.3 // indirect
+	github.com/tjfoc/gmsm v1.4.1 // indirect
+	github.com/txthinking/runnergroup v0.0.0-20241229123329-7b873ad00768 // indirect
+	github.com/txthinking/socks5 v0.0.0-20230325130024-4230056ae301 // indirect
+	github.com/wlynxg/anet v0.0.5 // indirect
+	github.com/xtaci/kcp-go/v5 v5.6.18 // indirect
+	github.com/xtaci/smux v1.5.34 // indirect
+	gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/ptutil v0.0.0-20250130151315-efaf4e0ec0d3 // indirect
+	golang.org/x/mod v0.22.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/tools v0.29.0 // indirect
+)
+
+go 1.22.0
+
+replace github.com/refraction-networking/utls v1.6.7 => gitlab.torproject.org/shelikhoo/utls-temporary v0.0.0-20260114141111-0f042ad603ef
+
+--- @v/v0.0.0-20260312101154-fc105a03c0e0.zip download + sha256 ---
+e460a90a67c8831d5e8f70b652b39cba0bc05190412c7034bbb8c90fb1b9baff  lyrebird_proxy.zip
+size: 189445 bytes
+
+--- zip listing (top 25 entries + count) ---
+Archive:  lyrebird_proxy.zip
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+       20  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/.gitignore
+      480  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/.gitlab-ci.yml
+     5391  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/ChangeLog
+     2936  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/LICENSE
+    35149  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/LICENSE-GPL3.txt
+      147  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/Makefile
+     3384  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/README.md
+    11571  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/cmd/lyrebird/lyrebird.go
+     4273  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/cmd/lyrebird/proxy_http.go
+     4703  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/cmd/lyrebird/proxy_socks4.go
+     5861  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/cmd/lyrebird/pt_extras.go
+     4385  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/cmd/lyrebird/termmon.go
+     1963  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/cmd/lyrebird/termmon_linux.go
+     3122  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/common/csrand/csrand.go
+     4466  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/common/drbg/hash_drbg.go
+     6350  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/common/log/log.go
+    13592  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/common/ntor/ntor.go
+    11899  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/common/ntor/ntor_test.go
+     7003  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/common/probdist/weighted_dist.go
+     2433  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/common/probdist/weighted_dist_test.go
+     4643  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/common/replayfilter/replay_filter.go
+     3197  1980-00-00 00:00   gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird@v0.0.0-20260312101154-fc105a03c0e0/common/replayfilter/replay_filter_test.go
+...
+total entries: 67
+
+--- key files present? ---
+PRESENT: go.mod
+PRESENT: cmd/lyrebird
+vendor/ directory: ABSENT (deps fetched via Go module system at build time)
+
+--- sum.golang.org lookup (what the checksum DB attests) ---
+51157806
+gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird v0.0.0-20260312101154-fc105a03c0e0 h1:uzPZpf45zlpdB/Gyk8P+QGjsuEeReitMpsaPiBmHncM=
+gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/lyrebird v0.0.0-20260312101154-fc105a03c0e0/go.mod h1:uCIr865SJMJ4LHn90G3+L/MmMCA8cix7ZAvV74HcWLo=
+
+go.sum database tree
+70533680
+FSoRG4RdijtY1QaetV5/QOlCk7OQlHVWoxeoQP2I8Xg=
+
+— sum.golang.org Az3gruWEZKBmYohjRv4OpiVeWd2rmmVq+uL6dDgMCZB1aYXE1EJQtlf5dWYaPfdTFXGkcP4rCPvL3MsEuFvqIc/YTAM=
+--- proxy .ziphash endpoint ---
+curl: (22) The requested URL returned error: 404
+
+--- gitlab.torproject.org reachability from analysis environment (git path status) ---
+https://gitlab.torproject.org → HTTP 400
+git smart-http info/refs → HTTP 400

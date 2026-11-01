@@ -1,0 +1,43 @@
+diff --git a/.github/workflows/native-ci.yml b/.github/workflows/native-ci.yml
+index b2b26de..8669b50 100755
+--- a/.github/workflows/native-ci.yml
++++ b/.github/workflows/native-ci.yml
+@@ -1,4 +1,4 @@
+-# AETHONE Native CI — Phase 2 bootstrap (report v3, bundle v3)
++# AETHONE Native CI — Phase 2 bootstrap (report v4, bundle v4)
+ # ---------------------------------------------------------------------------
+ # Status: DELIVERED, NOT TESTED — this workflow has never been executed.
+ #         It must be pushed to the AETHONE repository and run there
+@@ -7,6 +7,32 @@
+ # evidence/verification_log*.txt (commit existence proven by `git checkout`
+ # of the exact SHA — stronger than an API lookup). Raw tag->SHA proof for
+ # every Actions pin: evidence/actions_pins_raw_evidence.txt (v3).
++# actionlint 1.7.7 exit 0 on THIS exact file: evidence/validation_log.txt (v4).
++#
++# v4 changes (employer review of bundle v3, 2026-10-31) — NO pin changed:
++#   * The final workflow is delivered AT THIS PATH in the bundle ZIP
++#     (employer fix #1).
++#   * inspect_elf.sh v4: EVERY PT_GNU_RELRO segment is analyzed independently
++#     (v3 analyzed only the first and warned about the rest — an unchecked
++#     segment could hide under a PASS). Aggregate FAIL>WARN>N/A>PASS. All 9
++#     official Aether v2.4.0 artifacts carry exactly one RELRO segment
++#     (relro.segment_count in the regenerated manifest), so every official
++#     verdict is IDENTICAL to v3 — compared bit-for-bit in
++#     evidence/validation_log.txt; multi-segment behaviour proven on
++#     synthetic fixtures in evidence/relro_multi_segment_test.txt.
++#   * build_native.sh v4 + pt-build-pin.patch v4: the lyrebird pin proof is
++#     path-aware (employer fix #3). The pin fc105a03c0e0 is UNCHANGED. The
++#     proxy fallback now proves the source zip against sum.golang.org (H1
++#     dirhash locally recomputed — hard abort on mismatch/missing), because
++#     a binary built from the .git-less proxy zip records NO main-module
++#     commit: `go version -m` cannot carry the pin there (proven end-to-end
++#     with go1.26.3 in evidence/lyrebird_pin_independent_test.txt). The git
++#     path keeps the binary vcs.revision check (buildvcs mechanism proven in
++#     the same evidence file). Proof recorded in manifest.json.
++#   * Artifact-flow simulation corrected: the ARM64 upstream evidence path
++#     is aether-android-arm64.d (v3 wrongly used aether-android-arm64-v8a.d);
++#     the whole validation now runs under set -euo pipefail and inspect_elf.sh
++#     runs on the FINAL rearranged tree (evidence/validation_log.txt).
+ #
+ # v3 changes (employer review of bundle v2, 2026-10-31):
+ #   * inspect_elf.sh v3: RELRO-16KB is a TWO-CASE analysis per the official

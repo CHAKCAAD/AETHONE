@@ -1,0 +1,69 @@
+SOURCE: https://developer.android.com/guide/practices/page-sizes
+FETCHED: 2026-10-31 (WebFetch, raw excerpt)
+SCOPE: "Check the RELRO security flag" section — VERBATIM QUOTES ONLY
+
+------------------------------------------------------------------------
+"To mitigate security exploits, modern linkers use the Relocation
+Read-Only (RELRO) flag to make relocation sections of the shared object
+file read-only after loading. Enable the RELRO flag in your build.
+
+A RELRO section having a start address plus segment size (MemSize) that
+is not 16 KB aligned crashes the app at runtime with a segmentation
+fault. This happens if the .so file was built with NDK tool chain r27
+and lower without enabling the relevant flags."
+
+"Next, check the RELRO segment alignment by summing its virtual offset
+address (VirtAddr) with the segment memory size (MemSiz) and dividing by
+16 KB (0x4000). If the remainder (modulo) is zero, then the RELRO
+segment is 16 KB aligned."
+
+NON-ALIGNED EXAMPLE (crashes):
+  GNU_RELRO      0x0cfaf0 0x00000000000dfaf0 0x00000000000dfaf0 0x01510 0x01510 R   0x1
+  "Formula: (VirtAddr + MemSiz) % 0x4000 == 0"
+  "Result: (0xdfaf0 + 0x01510) % 0x4000 = 0xE1000 % 0x4000 == 0x1000"
+  "Since 0x1000 is not zero, this .so file isn't 16 KB compliant. The
+   RELRO protection range from DC000 (the previous page break) to E4000
+   is read-only, but Android Linker expects the sub-range from E1000 to
+   E4000 to be writable, resulting in a segmentation fault."
+
+ALIGNED EXAMPLE where GNU_RELRO is IN ITS OWN LOAD SEGMENT (the decisive case):
+  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+  LOAD           0x000000 0x0000000000000000 0x0000000000000000 0x000680 0x000680 R E 0x4000
+  LOAD           0x000680 0x0000000000004680 0x0000000000004680 0x0001d8 0x000980 RW  0x4000
+  GNU_RELRO      0x000680 0x0000000000004680 0x0000000000004680 0x0001d8 0x000980 R   0x1
+  "Formula: (VirtAddr + MemSiz) % 0x4000 == 0"
+  "Result: (0x4680 + 0x0980) % 0x4000 = 0x5000 % 0x4000 == 0x1000"
+  "Although 0x1000 isn't zero, this .so file is still 16 KB compliant."
+
+THE RULE (verbatim):
+  "The modulo formula applies when GNU_RELRO shares a LOAD segment with
+   subsequent writable data (such as .data or .bss)."
+
+  "To check whether GNU_RELRO is in its own LOAD segment, inspect the
+   program headers by running llvm-readelf -Wl and filtering with
+   grep 'LOAD\|RELRO\|Type'. Compare the VirtAddr and MemSiz of
+   GNU_RELRO against the containing LOAD segment. In this example, both
+   have VirtAddr 0x4680 and MemSiz 0x0980. Because the entire LOAD
+   segment contains only RELRO data, there's no writable data in the
+   sub-range from 0x5000 to 0x8000. Additionally, any subsequent
+   writable LOAD segment begins on a separate 16 KB page boundary (at
+   0x8000 or beyond). The linker's read-only protection won't overlap
+   with any writable data, so no segmentation fault occurs."
+
+ALSO RELEVANT (LOAD rule):
+  "Check the output lines to ensure that the load segments don't have
+   values less than 2**14. If any load segments are 2**13, 2**12, or
+   lower values, you'll need to update the packaging for those
+   libraries, then recompile your app and retest."
+
+ZIP ALIGNMENT RULE:
+  "SDK_ROOT_LOCATION/Android/sdk/build-tools/35.0.0/zipalign -v -c -P 16 4 APK_NAME.apk"
+  -> last line says "Verification successful" if all aligned.
+
+NOTE ON SCOPE: the doc's RELRO section is written for shared objects
+(.so), but the identical bionic-linker mechanism (mprotect
+[page_down(PT_GNU_RELRO.p_vaddr), page_up(p_vaddr+p_memsz)) to
+PROT_READ) applies to every ELF image the Android dynamic linker loads,
+including PIE executables such as `aether` (loaded from
+nativeLibraryDir, N7). The crash condition is: writable bytes inside
+that mprotect range. Hence the two-case analysis is applied to aether.
