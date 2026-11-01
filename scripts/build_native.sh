@@ -169,10 +169,11 @@ rm -rf "$ZBUILD"   # v3 fix 1: intermediates never survive the copy
 # the exported tree (N5 — an x86 file must never ship).
 nfiles=$(find "$OUT/zeptun" -maxdepth 1 -type f | wc -l)
 [ "$nfiles" -eq 3 ] || die "zeptun export must contain exactly 3 files, got $nfiles"
-while IFS= read -r foreign; do
-  [ -z "$foreign" ] && continue
-  die "foreign ABI directory in export dir (x86 must never ship, N5): $foreign"
-done < <(find "$OUT" -type d \( -name x86 -o -name armeabi-v7a -o -name arm64-v8a -o -name x86_64 \) 2>/dev/null)
+# N5: reject only the forbidden legacy 32-bit x86 ABI in exported artifacts.
+while IFS= read -r forbidden; do
+  [ -z "$forbidden" ] && continue
+  die "forbidden x86 ABI directory in export dir (N5): $forbidden"
+done < <(find "$OUT" -mindepth 1 -type d -name x86 -print 2>/dev/null)
 echo "[zeptun $ABI] exported: libzeptun.so libzeptun-jni.so libzeptun.a (intermediates wiped: $ZBUILD)"
 
 # ---------------------------------------------------------------- aether ----
