@@ -190,8 +190,10 @@ clone_pin "$AETHER_REPO" "$AETHER_SHA" "$AETHER_SRC"
   # "pub const ERR_LIB_SSL : _bindgen_ty_2 = ...". That whitespace makes the
   # helper fall back to the wrong anonymous type (_bindgen_ty_1).
   # Fetch with --locked, patch only that exact helper in the exact pinned
-  # crate source, then clear only this target's boring-sys artifacts so Cargo
-  # must regenerate bindings and recompile the crate.
+  # crate source, then clear both the host-side build-script cache and this
+  # Android target's boring-sys cache. With Cargo --target, build scripts are
+  # compiled for the host in target/release, separately from target/<triple>.
+  # Clearing only target/<triple> leaves the old host build script executable.
   echo "== [boring-sys] fetch locked sources and apply 5.3.0 enum-name fix =="
   cargo fetch --locked --target "$RUST_TARGET"
   python3 - "${CARGO_HOME:-$HOME/.cargo}" <<'PY_BORING_SYS'
@@ -253,7 +255,31 @@ print(f"SHA256 before: {before}")
 print(f"SHA256 after:  {after}")
 PY_BORING_SYS
 
-  cargo clean -p boring-sys --target "$RUST_TARGET"
+  removed=0
+  for profile_root in "target/release" "target/$RUST_TARGET/release"; do
+    for subdir in build .fingerprint deps; do
+      dir="$profile_root/$subdir"
+      [ -d "$dir" ] || continue
+      count=$(find "$dir" -mindepth 1 -maxdepth 1 \\
+        \\( -name 'boring-sys-*' -o -name 'libboring_sys-*' \\) -print | wc -l)
+      if [ "$count" -gt 0 ]; then
+        find "$dir" -mindepth 1 -maxdepth 1 \\
+          \\( -name 'boring-sys-*' -o -name 'libboring_sys-*' \\) -exec rm -rf {} +
+        echo "Removed $count stale boring-sys entries from $dir"
+        removed=$((removed + count))
+      fi
+    done
+  done
+  echo "Total stale boring-sys cache entries removed: $removed"
+
+  # Fail closed if a stale build-script output directory survived.
+  for dir in target/release/build "target/$RUST_TARGET/release/build"; do
+    if [ -d "$dir" ] && find "$dir" -mindepth 1 -maxdepth 1 \\
+       -type d -name 'boring-sys-*' -print -quit | grep -q .; then
+      echo "FATAL: stale boring-sys build directory remains under $dir" >&2
+      exit 1
+    fi
+  done
 
   # The upstream cargo-ndk build invocation remains unchanged.
   if cargo ndk -t "$ABI" --platform "$API_LEVEL" build --release --features tor; then
