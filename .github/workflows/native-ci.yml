@@ -501,6 +501,18 @@ jobs:
           # stable path "emulator"; previews are separate "emulators;<build>").
           # N8 pin discipline is kept via the fail-closed version assert below.
           sdkmanager --install "emulator" "platform-tools" "${SYSIMG_PKG}" | tail -3
+          # The emulator 37.x qemu binary links libpulse.so.0, which is NOT
+          # preinstalled on the runner image (run 41346199245 failed with
+          # 'error while loading shared libraries: libpulse.so.0'). Install
+          # it (idempotent) before any emulator invocation.
+          if ! ldconfig -p 2>/dev/null | grep -q "libpulse.so.0"; then
+            sudo apt-get update -qq >/dev/null 2>&1 || true
+            sudo apt-get install -y -qq libpulse0 >/dev/null 2>&1 || {
+              echo "::error::failed to install libpulse0 (required by the emulator qemu binary)"
+              exit 1
+            }
+          fi
+          ldconfig -p | grep "libpulse.so.0" || true
           echo "--- installed tool versions (evidence) ---"
           "$SDK_ROOT/emulator/emulator" -version | head -2
           "$SDK_ROOT/platform-tools/adb" version | head -2
