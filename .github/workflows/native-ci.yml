@@ -252,18 +252,22 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          base=".srccache/aether/aether/target/${{ matrix.rust_target }}/release/build"
-          echo "=== boring-sys Bindgen diagnostics ==="
+          base="$SRC_CACHE/aether/aether/target/${{ matrix.rust_target }}/release/build"
+          diag="boring-sys-diagnostics/${{ matrix.abi }}"
+          mkdir -p "$diag"
+
+          echo "=== boring-sys diagnostic capture ==="
           echo "Rust target: ${{ matrix.rust_target }}"
           echo "Build directory: $base"
 
           if [ ! -d "$base" ]; then
-            echo "::warning::Aether build directory not found; failure may have occurred earlier."
+            echo "::warning::Aether build directory not found."
             exit 0
           fi
 
           mapfile -d '' binding_files < <(
-            find "$base" -type f -path '*/boring-sys-*/out/bindings.rs' -print0
+            find "$base" -type f \
+              -path '*/boring-sys-*/out/bindings.rs' -print0
           )
 
           if [ "${#binding_files[@]}" -eq 0 ]; then
@@ -272,16 +276,43 @@ jobs:
           fi
 
           for f in "${binding_files[@]}"; do
-            echo "=== FILE: $f ==="
-            echo "--- First 25 lines ---"
-            sed -n '1,25p' "$f"
-            echo "--- ERR_LIB and Bindgen type declarations ---"
-            awk '/ERR_LIB_SSL|ERR_LIB_[A-Z_]+|bindgen_ty|ErrLib/ {
-              print NR ":" $0
-              count++
-              if (count >= 100) exit
-            }' "$f"
+            outdir="${f%/bindings.rs}"
+            build_dir="$(dirname "$outdir")"
+
+            cp "$f" "$diag/bindings.rs"
+
+            {
+              echo "ABI=${{ matrix.abi }}"
+              echo "TARGET=${{ matrix.rust_target }}"
+              wc -lc "$f"
+              sha256sum "$f"
+            } > "$diag/manifest.txt"
+
+            python3 -c 'import sys; data=open(sys.argv[1], "rb").read(); print("File bytes:", len(data)); print("Line count:", len(data.splitlines())); needles=(b"ERR_LIB_SSL:", b"ERR_LIB_SSL", b"_bindgen_ty_1", b"pub type _bindgen_ty_1", b"pub use _bindgen_ty_1 as ErrLib"); [(print(chr(10) + needle.decode() + ": position=" + str(pos)), print(data[max(0, pos-180):min(len(data), pos+350)].decode("utf-8", "replace")) if pos >= 0 else None) for needle in needles for pos in [data.find(needle)]]' "$f"
+
+            n=0
+            for h in \
+              "$outdir/boringssl/include/openssl/err.h" \
+              "$outdir/boringssl/src/include/openssl/err.h"; do
+              if [ -f "$h" ]; then
+                cp "$h" "$diag/err-$n.h"
+                n=$((n + 1))
+              fi
+            done
+
+            if [ -f "$build_dir/output" ]; then
+              cp "$build_dir/output" "$diag/boring-sys-output.txt"
+            fi
           done
+
+      - name: Upload boring-sys diagnostics (${{ matrix.abi }})
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: boring-sys-diagnostics-${{ matrix.abi }}
+          path: boring-sys-diagnostics/${{ matrix.abi }}/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload native artifacts (${{ matrix.abi }}) — kept per-ABI, NEVER merged
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
