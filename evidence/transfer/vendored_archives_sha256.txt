@@ -1,0 +1,21 @@
+Vendored native exports — deterministic git-archive stream SHA256
+(git archive --format=tar <sha> | sha256sum, 2026-11-01)
+
+aether
+  upstream: https://github.com/CluvexStudio/Aether.git
+  pin:      d58f9d568083129ce2c767c85054021eb3ee6a38
+  vendored: native/aether
+  archive sha256: 0d54bdad1db08e2c89f48441cfc5c5053e40c9fb96249eb1610316deb21b83ab
+
+zeptun
+  upstream: https://github.com/Noisemux/zeptun.git
+  pin:      08a1ab05aab315b7872ed582c52b7c230930d05d
+  vendored: native/zeptun
+  archive sha256: d310e48f40ccd16e23c4d9f65aef32854676573b4360fcbe2f049377ff2ae472
+
+psiphon-fork
+  upstream: https://github.com/CluvexStudio/psiphon-tunnel-core.git
+  pin:      2956a96b56fe09b99e72a8eb4bed3e79d29e3543
+  vendored: native/psiphon-tunnel-core
+  archive sha256: dcb2b861f8c8fdd2d1c050169c90c81877b9f2a3c366d16c56f4e4d2632bf5a7
+

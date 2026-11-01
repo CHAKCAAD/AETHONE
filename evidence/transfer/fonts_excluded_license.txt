@@ -1,0 +1,24 @@
+EXCLUDED FROM TRANSFER — commercial font family, no license evidence
+date: 2026-11-01
+
+Family: IRANYekanX (fontiran.com, Copyright (c) 2021 Moslem Ebrahimi)
+Embedded license string (name table, ID 13):
+  "To use this font, it is necessary to obtain the license from www.fontiran.com"
+License URL (name table, ID 14): https://fontiran.com/licenses
+
+The workspace contains no license document for this family. Under the
+fail-closed rule the files below were NOT committed. Once the owner
+confirms a valid license, add them under design/fonts/ verbatim.
+
+SHA256 inventory of the excluded files (workspace copies):
+  0e7bf7dd4dcf7f2ee852ee3ea66c4f3839a2e646973528100981bf6bf8bd2f94  IRANYekanX-Black.ttf  (82800 bytes)
+  9a0d593d228274b4df7a4d61916d18fefbc9d460df112fbed3c4ba3521dd2346  IRANYekanX-Bold.ttf  (84420 bytes)
+  ab4829d4a0790d66d78221276cbda97cb8d99780a6c9e103f43ad3511daf4a5c  IRANYekanX-DemiBold.ttf  (84836 bytes)
+  9368da2325cb20a0e9dbdf761bda722f9ffab913ddc16ff2baf9bd59eb3d7c5e  IRANYekanX-ExtraBlack.ttf  (83148 bytes)
+  81135322b7c68d165b063641c9ad10321af18f17a7f003db5a4d94ab65067cc9  IRANYekanX-ExtraBold.ttf  (84156 bytes)
+  5862a29f297ea05871a839fcb6190841ef6e9d3d3b3c8b287e32d695aa348e22  IRANYekanX-Heavy.ttf  (82724 bytes)
+  1a22096b6afdf28d5cc600eceda5c8c5516cde1c80e9fe950107a9600d874815  IRANYekanX-Light.ttf  (85272 bytes)
+  0066e48b127b984e5c9e2afd3b582cf917cac2e878c621a5357e3c8b0919a0a0  IRANYekanX-Medium.ttf  (84836 bytes)
+  09e10ff46992174c024b87ebebdbf6e8a1684f882a26d133fa3c114bfec87c4d  IRANYekanX-Regular.ttf  (84240 bytes)
+  acfea36e5bcb7b44a5155668b20768f1e5b81052217d60322ecbfcc9ba12d6e0  IRANYekanX-Thin.ttf  (84404 bytes)
+  22e037f580f4938ee667cf986105766f23be2e88eb40a7277137dfba0bca1284  IRANYekanX-UltraLight.ttf  (85288 bytes)

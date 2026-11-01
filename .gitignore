@@ -1,0 +1,53 @@
+# =============================================================================
+# AETHONE .gitignore (ci-bootstrap/v4.4)
+# Patterns are deliberately scoped/anchored so that NOTHING on this branch
+# (native/, design/, docs/, evidence/, scripts/) is ignored. Machine-verified:
+# tracked file count == on-disk file count (see evidence/transfer/).
+# =============================================================================
+
+# --- Credentials & signing material (NEVER commit) ---
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.keytab
+key.properties
+**/key.properties
+keystore/
+secrets/
+*.secrets
+
+# --- Flutter / Dart (root-anchored — applies when the app source lands here) ---
+/build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/coverage/
+
+# --- Android app build outputs (root-anchored) ---
+/android/.gradle/
+/android/captures/
+/android/gradlew
+/android/gradlew.bat
+/android/local.properties
+/android/**/build/
+/android/.cxx/
+/android/*.iml
+
+# --- IDE / OS noise ---
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- CI outputs (never commit build artifacts) ---
+/out/
+/.srccache/
+/.tools/

@@ -1,0 +1,94 @@
+AETHONE ci-bootstrap/v4.4 transfer — security scan of the assembled repository tree
+date: 2026-11-01   scanner: evidence/transfer/tools/transfer_security_scan.py
+scope: the whole staging tree EXCEPT evidence/transfer/ itself (this file set)
+verdict: 0 keystores, 0 .env, 0 live tokens; upstream test fixtures enumerated below
+==============================================================================
+SCANNED 9310 files, 88.5 MiB across 1 sets
+
+== KEYSTORE-FILE: 0 ==
+
+== ENV-FILE: 0 ==
+
+== PRIVATE-KEY-BLOCK: 15 ==
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/elazarl/goproxy/certs.go :: -----BEGIN RSA PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/elazarl/goproxy/key.pem :: -----BEGIN RSA PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/psiphon/common/crypto/ssh/testdata/keys.go :: -----BEGIN RSA PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/psiphon/common/crypto/ssh/testdata/keys.go :: -----BEGIN DSA PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/psiphon/common/crypto/ssh/testdata/keys.go :: -----BEGIN EC PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/psiphon/common/crypto/ssh/testdata/keys.go :: -----BEGIN OPENSSH PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/psiphon/common/crypto/ssh/testdata/keys.go :: -----BEGIN PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/psiphon/common/crypto/ssh/test/session_test.go :: -----BEGIN OPENSSH PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/MobileLibrary/go-mobile/cmd/gomobile/build_androidapp.go :: -----BEGIN RSA PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/MobileLibrary/go-mobile/cmd/gomobile/cert_test.go :: -----BEGIN RSA PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/aether/quiche/quiche/examples/cert.key :: -----BEGIN PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/aether/quiche/fuzz/cert.key :: -----BEGIN EC PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/aether/quiche/apps/src/bin/cert.key :: -----BEGIN PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/aether/quiche/tokio-quiche/examples/cert.key :: -----BEGIN PRIVATE KEY-----
+  [/home/z/my-project/work_v44/AETHONE_staging] native/aether/aether/src/config.rs :: -----BEGIN PRIVATE KEY-----
+
+== TOKEN: 0 ==
+
+== PASSWORD-ASSIGN (triage): 423 ==
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/replace/dtls/state.go :: L92: Secret=<15 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/replace/dtls/state.go :: L126: Secret=<23 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/replace/dtls/flight0handler.go :: L104: Secret=<8 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/replace/dtls/flight1handler.go :: L117: Secret=<8 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/replace/dtls/flight5handler.go :: L57: Secret=<19 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/replace/dtls/flight3handler.go :: L109: Secret=<8 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/replace/dtls/flight3handler.go :: L205: Secret=<27 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/replace/dtls/flight4handler.go :: L116: Secret=<27 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/replace/dtls/flight4handler.go :: L158: Secret=<19 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/replace/dtls/conn.go :: L170: Secret=<28 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/replace/dtls/pkg/crypto/prf/prf.go :: L227: Secret=<13 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/state.go :: L124: Secret=<15 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/state.go :: L161: Secret=<23 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/flight0handler.go :: L149: Secret=<8 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/flight1handler.go :: L142: Secret=<8 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/flight5handler.go :: L63: Secret=<19 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/options.go :: L86: Secret=<27 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/options.go :: L99: Secret=<23 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/flight3handler.go :: L133: Secret=<8 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/flight3handler.go :: L242: Secret=<27 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/flight4handler.go :: L137: Secret=<27 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/flight4handler.go :: L193: Secret=<19 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/conn.go :: L189: Secret=<28 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v3/pkg/crypto/prf/prf.go :: L235: Secret=<13 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v2/state.go :: L92: Secret=<15 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v2/state.go :: L126: Secret=<23 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v2/flight0handler.go :: L104: Secret=<8 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v2/flight1handler.go :: L117: Secret=<8 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v2/flight5handler.go :: L57: Secret=<19 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v2/flight3handler.go :: L109: Secret=<8 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v2/flight3handler.go :: L205: Secret=<27 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v2/flight4handler.go :: L116: Secret=<27 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v2/flight4handler.go :: L158: Secret=<19 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v2/conn.go :: L170: Secret=<28 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/dtls/v2/pkg/crypto/prf/prf.go :: L227: Secret=<13 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/pion/turn/v4/client.go :: L128: password=<16 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/pion-ice/v4/gather.go :: L1058: Password=<13 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/goptlib/args.go :: L114: secret=<50 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/goptlib/socks.go :: L335: Password=<6 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/goptlib/socks.go :: L353: Password=<6 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/goptlib/socks.go :: L476: Password=<14 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/pion-webrtc/v4/settingengine.go :: L565: Secret=<20 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/pion-webrtc/v4/peerconnection_js.go :: L654: AccessToken=<23 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/pion-webrtc/v4/iceserver.go :: L108: AccessToken=<12 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/pion-webrtc/v4/iceserver.go :: L144: Password=<12 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/pion-webrtc/v4/icecredentialtype.go :: L44: Password=<6 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/pion-webrtc/v4/peerconnection.go :: L2777: Password=<10 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/quic-go/internal/handshake/updatable_aead.go :: L104: Secret=<36 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/quic-go/internal/handshake/updatable_aead.go :: L105: Secret=<36 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/quic-go/internal/handshake/updatable_aead.go :: L130: Secret=<34 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/quic-go/internal/handshake/updatable_aead.go :: L144: Secret=<34 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/quic-go/internal/handshake/crypto_setup.go :: L260: Secret=<22 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/quic-go/internal/handshake/crypto_setup.go :: L263: Secret=<23 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/quic-go/internal/handshake/initial_aead.go :: L38: Secret=<12 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/quic-go/internal/handshake/initial_aead.go :: L39: Secret=<12 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/quic-go/internal/handshake/initial_aead.go :: L41: Secret=<12 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/quic-go/internal/handshake/initial_aead.go :: L42: Secret=<12 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/quic-go/internal/handshake/initial_aead.go :: L56: Secret=<30 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/quic-go/internal/handshake/initial_aead.go :: L57: Secret=<30 chars>
+  [/home/z/my-project/work_v44/AETHONE_staging] native/psiphon-tunnel-core/vendor/github.com/Psiphon-Labs/utls/handshake_messages.go :: L736: Secret=<23 chars>
+  ... and 363 more
+
+SUMMARY: keystores=0 envfiles=0 privkeyblocks=15 tokens=0 pwassign=423
