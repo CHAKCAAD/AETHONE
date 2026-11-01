@@ -134,6 +134,15 @@ inspect_archive() { # abi file group rel
     return 1
   fi
   local count=0 okmach=1 okclass=1
+  # Zig-built archives store members under nested paths (e.g.
+  # ".zig-cache/o/<hash>/libzeptun_zcu.o"). GNU ar x does NOT create
+  # intermediate directories, so extraction fails with
+  # "<member>: No such file or directory" unless every member's parent
+  # directory is pre-created. v3.1: pre-create the whole tree first.
+  while IFS= read -r m; do
+    [ -n "$m" ] || continue
+    mkdir -p -- "$mdir/$(dirname -- "$m")"
+  done <<<"$members"
   ( cd "$mdir" && ar x "$(abs_path "$file")" ) || { fail "ar x failed"; return 1; }
   local mjson=""
   while IFS= read -r m; do
