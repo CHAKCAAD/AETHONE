@@ -185,7 +185,61 @@ clone_pin "$AETHER_REPO" "$AETHER_SHA" "$AETHER_SRC"
   under=$(echo "$RUST_TARGET" | tr '-' '_')
   export "BORING_BSSL_RUST_CPPLIB_${under}=static:-bundle=c++"   # exactly as upstream release.yml
   # Upstream android job command, replicated verbatim (no --locked there):
-  cargo ndk -t "$ABI" --platform "$API_LEVEL" build --release --features tor
+  if cargo ndk -t "$ABI" --platform "$API_LEVEL" build --release --features tor; then
+    :
+  else
+    cargo_status=$?
+    echo "========== BORING-SYS FAILURE SNAPSHOT =========="
+    echo "ABI=$ABI TARGET=$RUST_TARGET"
+    build_root="target/$RUST_TARGET/release/build"
+
+    mapfile -d '' binding_files < <(
+      find "$build_root" -type f \
+        -path '*/boring-sys-*/out/bindings.rs' -print0 2>/dev/null
+    )
+
+    if [ "${#binding_files[@]}" -eq 0 ]; then
+      echo "No bindings.rs found after cargo failure."
+    fi
+
+    for f in "${binding_files[@]}"; do
+      outdir="${f%/bindings.rs}"
+      build_dir="$(dirname "$outdir")"
+
+      echo "========== BINDINGS FILE =========="
+      echo "PATH=$f"
+      stat "$f"
+      wc -lc "$f"
+      sha256sum "$f"
+      echo "--- First 80 lines ---"
+      sed -n '1,80p' "$f"
+      echo "--- Relevant Rust declarations ---"
+      if grep -n -E 'ERR_LIB_SSL|ERR_LIB_NONE|bindgen_ty_1|ErrLib' "$f"; then
+        :
+      else
+        echo "No relevant declaration found."
+      fi
+
+      echo "========== BORINGSSL ERR.H =========="
+      for h in \
+        "$outdir/boringssl/include/openssl/err.h" \
+        "$outdir/boringssl/src/include/openssl/err.h"; do
+        if [ -f "$h" ]; then
+          echo "HEADER=$h"
+          grep -n -C 5 -E 'ERR_LIB_SSL|ERR_LIB_NONE|ERR_LIB_SYS' "$h" || :
+        fi
+      done
+
+      echo "========== BORING-SYS BUILD OUTPUT =========="
+      if [ -f "$build_dir/output" ]; then
+        sed -n '1,240p' "$build_dir/output"
+      else
+        echo "No build output file."
+      fi
+    done
+
+    exit "$cargo_status"
+  fi
   bin="target/$RUST_TARGET/release/aether"
   [ -f "$bin" ] || { echo "FATAL: aether binary missing: $bin" >&2; exit 1; }
   # Upstream's own guard: aether must never need libc++_shared.so
