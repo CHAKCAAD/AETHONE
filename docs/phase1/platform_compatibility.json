@@ -1,0 +1,171 @@
+{
+ "android": {
+  "status": "feasible - source-supported + prior art; runtime PoC required",
+  "aether": {
+   "binary_availability": "official release binaries: aether-android-arm64 / armv7 / x86_64 (v2.4.0, .sha256 published)",
+   "embedding": "build libaether for Android targets from source with cargo-ndk (crate-type includes staticlib/cdylib); boring+quiche cross-compile required - not verified here",
+   "process_mode": "possible (PattNG prior art runs the aether binary on Android; ship as executable nativeLibraryDir entry); exec from app data dir is blocked by noexec on modern Android",
+   "mark_support": "--mark works (SO_MARK) with root/CAP_NET_ADMIN only - not available to a normal VpnService app",
+   "evidence": "release assets list; DOCS.en.md; OPENWRT.en.md references PattNG; egress.rs cfg(linux/android)"
+  },
+  "zeptun": {
+   "binary_availability": "zig build android + scripts/build_android.sh: libzeptun.so/.a for armeabi-v7a, arm64-v8a, x86, x86_64 + libzeptun-jni.so (ndk-build, APP_PLATFORM android-24, 16 KB load-segment alignment for Android 15+)",
+   "jni": "dev.zeptun.Zeptun: nativeStart(service, fd, config) / nativeStop / nativeVersion / nativeCounter; protect callback calls VpnService.protect(int) for every upstream socket; engine runs on its own pthread (zeptun_run)",
+   "routing": "WITHOUT root: VpnService.Builder owns routes (addRoute/addAllowedApplication/addDisallowedApplication); auto_route must be OFF; mobile build compiles out the route module by default. WITH root: /dev/tun + policy rules + package rules via /data/system/packages.list + fwmark bit 0x200000",
+   "evidence": "README 'Build/Android'; docs/wiki/Android.md; build.zig (mobile default for android); src/jni/zeptun_jni.c; src/route/android.zig"
+  },
+  "vpn_integration": "Android VpnService: Builder.establish() fd passed to zeptun (ZEPTUN_DEVICE_FD / --tun-fd); foreground service required for running VPN; onRevoke -> nativeStop",
+  "loop_prevention": "1) zeptun protect() callback protects zeptun upstream sockets; 2) Aether's own sockets are NOT protected by that callback -> addDisallowedApplication(own package) is the recommended app-level exclusion (covers aether + app UI + zeptun at once); with root, --mark 0x200000 or --exclude-uid also possible",
+  "dns": "VpnService.Builder.addDnsServer (in-tunnel DNS address); zeptun dns hijack/fake-ip on top",
+  "risks": [
+   "aether-on-Android cross-compile not verified here (no toolchain per audit rules)",
+   "single-process JNI engine (one tunnel at a time)",
+   "Android 15 16 KB alignment requirement is handled by zeptun's build; aether Android builds must match (cargo/rustc default aligns 16 KB on aarch64 since mid-2024 - verify per target)",
+   "memory ceiling per app process on low-end devices"
+  ],
+  "architectures": "arm64-v8a (primary), armeabi-v7a, x86_64, x86"
+ },
+ "windows": {
+  "status": "feasible - source-supported; runtime PoC required; elevation + loop-prevention are the open questions",
+  "aether": {
+   "binary_availability": "official release aether-windows-x86_64.zip (v2.4.0); arm64 Windows NOT in release list",
+   "embedding": "cdylib -> DLL possible from source; cross-compile with x86_64-pc-windows-gnu/msvc toolchain - not verified here",
+   "mark_support": "--mark DOES NOT WORK on Windows (warning + unmarked sockets; egress.rs cfg linux/android)",
+   "evidence": "release assets; egress.rs L49-50"
+  },
+  "zeptun": {
+   "binary_availability": "zig build -Dtarget=x86_64-windows-gnu (+ msvc) and arm64; Wintun DLLs vendored for amd64/arm64/x86/arm; released Windows archives already contain wintun.dll",
+   "device": "Wintun adapter via LoadLibraryEx/GetProcAddress; GUID pinning (zeptun_set_adapter_guid / --tun-guid) keeps adapter identity across reinstalls",
+   "routing_dns": "IP Helper (routes + DNS); upstream sockets bound with IP_UNICAST_IF; --strict-route installs a WFP session (permits engine + tunnel interface, can block IPv6 and port 53 outside)",
+   "io": "IOCP",
+   "evidence": "README 'Build/Windows'; docs/wiki/Building.md + Routing.md; src/device/wintun.zig; src/route/windows.zig; src/route/wfp.zig; third-part/wintun/*"
+  },
+  "vpn_integration": "No OS VPN framework for third-party apps: the app creates a Wintun adapter and installs routes (zeptun auto_route) - requires Administrator (adapter creation + route changes + firewall rules)",
+  "loop_prevention": "SO_MARK unavailable; zeptun protects only its own sockets (IP_UNICAST_IF). Aether outbound MUST bypass via: (a) zeptun flow-callback returning ZEPTUN_FLOW_DIRECT for Cloudflare WARP/API destination ranges (engine-level, cross-platform), and/or (b) route exclude list for WARP anycast ranges (104.16.0.0/12-ish pools + 162.159.0.0/16 + 188.114.96.0/22 + 172.64.0.0/13). PoC MUST verify no loop",
+  "dns": "IP Helper DNS settings; zeptun dns hijack option; strict-route WFP blocks port 53 outside tunnel while hijacked",
+  "risks": [
+   "admin elevation flow (run-as-admin or service wrapper) unverified",
+   "Windows port reservation can break aether --bind (aether prints a netsh hint)",
+   "Wintun driver redistribution licensing is permissive for API-only use (zeptun wiki), still needs legal review",
+   "aether arm64-windows build absent from releases"
+  ],
+  "architectures": "x86_64 (primary), arm64 (zeptun only until an aether build exists)"
+ },
+ "linux": {
+  "status": "verified feasible - highest confidence; zeptun's own 189-check integration suite runs on Linux",
+  "aether": {
+   "binary_availability": "official releases: x86_64, x86_64-musl, aarch64, aarch64-musl (v2.4.0 list includes aarch64 + arm64), armv7-musl",
+   "embedding": "libaether.a/.so from source; also prebuilt-engine use",
+   "mark_support": "--mark works (SO_MARK, root or CAP_NET_ADMIN); probe at startup fails fast",
+   "evidence": "release assets; egress.rs; DOCS.en.md 'Firewall mark'"
+  },
+  "zeptun": {
+   "binary_availability": "make / zig build; 13 Linux architectures as static musl binaries in releases; systemd unit included",
+   "device": "/dev/net/tun, multi-queue, vnet header, TSO/USO offloads, NAPI; io_uring or epoll; auto_route installs table 2022 + policy rules 9000-9009; upstream fwmark 0x2022; nftables auto-redirect (system stack); netns mode; route monitoring via netlink",
+   "evidence": "README; docs/wiki (Routing, Stacks); src/route/linux.zig; scripts/netns_integration.sh; docs/wiki/Testing.md"
+  },
+  "vpn_integration": "TUN requires root or CAP_NET_ADMIN (device creation + routes). Aether --mark 0xff + 'ip rule add fwmark 0xff lookup main priority 100' (priority < 9000) is the documented loop-prevention pair; engine-level flow-callback DIRECT is the portable alternative",
+  "dns": "full set: --dns-address, --dns-hijack, --fake-ip, --dns-upstream, --systemd-resolved (resolvectl handover with ~. routing domain, reverted on exit)",
+  "risks": [
+   "Aether env-var mutation constrains embedded single-instance use",
+   "auto_redirect requires system stack (userspace default on mobile builds)"
+  ],
+  "architectures": "x86_64, aarch64 (both engines); more via musl cross builds",
+  "verified_by_tests": "zeptun integration suite: every stack mode, both io backends, 1 and 4 queues, direct and SOCKS5, offloads on/off, UDP over TCP, fake-IP, strict routing, auto-redirect, elastic rotation, netns - on Linux (docs/wiki/Testing.md)"
+ },
+ "macos": {
+  "status": "feasible - source-supported; NEPacketTunnelProvider or privileged-helper decision needed",
+  "aether": {
+   "binary_availability": "official releases: aether-macos-arm64, aether-macos-x86_64",
+   "embedding": "static lib from source; the aether C API was built for exactly this kind of client (DOCS.en.md 'Using Aether as a library')",
+   "mark_support": "--mark DOES NOT WORK on macOS (warning; egress.rs)",
+   "evidence": "release assets; DOCS.en.md"
+  },
+  "zeptun": {
+   "binary_availability": "make xcframework produces macOS slice; universal CLI binary in releases",
+   "device": "utun; kqueue; split default routes; exclusions via previous gateway; upstream sockets bound IP_BOUND_IF; route socket monitoring",
+   "evidence": "docs/wiki/Apple.md, Routing.md; src/device/utun.zig; src/route/macos.zig"
+  },
+  "vpn_integration": "Two options: (a) NEPacketTunnelProvider (system extension; entitlement + user approval; sandboxed; tunnel fd or EXTERNAL callbacks) - App Store path; (b) CLI/root service with utun + auto_route (CLI binary needs sudo)",
+  "loop_prevention": "SO_MARK unavailable; same as Windows: flow-callback DIRECT for WARP ranges and/or route excludes; IP_BOUND_IF protects only zeptun sockets",
+  "dns": "route socket based; hijack/fake-ip options apply",
+  "risks": [
+   "NetworkExtension entitlement + notarization/distribution overhead",
+   "system-extension approval UX",
+   "sandbox of the provider process may restrict aether's file/state paths"
+  ],
+  "architectures": "arm64, x86_64 (both engines)"
+ },
+ "ios": {
+  "status": "feasible with additional native integration - NEPacketTunnelProvider REQUIRED; process spawning is forbidden; memory limit is the top risk",
+  "aether": {
+   "binary_availability": "NO iOS release binary; must cross-compile libaether (staticlib) for ios-arm64 from source (boring/quiche cross-compile) - NOT verified in this audit",
+   "embedding": "the C API exists specifically for the iOS use case ('This is what the iOS client needs', DOCS.en.md); aether_core_start(job-polled) is the intended entry",
+   "mark_support": "irrelevant - routing is owned by NetworkExtension, not marks",
+   "evidence": "DOCS.en.md 'Using Aether as a library'; ffi.rs; Cargo.toml crate-type"
+  },
+  "zeptun": {
+   "binary_availability": "scripts/make_xcframework.sh -> Zeptun.xcframework with ios-arm64 + ios-simulator (arm64/x86_64) + macos slices; Package.swift for SwiftPM",
+   "device": "NEPacketTunnelProvider: pass tunnelFileDescriptor (utun fd found by walking open fds) as ZEPTUN_DEVICE_FD, or ZEPTUN_DEVICE_EXTERNAL with packet callbacks inside packetFlow",
+   "preset": "mobile preset (1 queue, no offload, userspace stack, 24 MB memory budget) for the extension's tight memory limit",
+   "evidence": "docs/wiki/Apple.md (NetworkExtension Swift example); README 'Build/iOS and macOS'"
+  },
+  "vpn_integration": "NEPacketTunnelProvider + NEPacketTunnelNetworkSettings (addresses, includedRoutes, dnsSettings, mtu); entitlements: network-extension + packet-tunnel-provider capability; App Store VPN apps require review; the extension process hosts BOTH engines (aether + zeptun linked into the extension)",
+  "loop_prevention": "NE routing is per-flow owned by the system: the provider's own traffic does not re-enter its tunnel by construction (the tunnel has no routes back into itself); flow-callback DIRECT remains available as defense in depth",
+  "dns": "NEDNSSettings in tunnel settings + zeptun hijack/fake-ip",
+  "risks": [
+   "packet-tunnel-provider memory limit (~50 MB class) vs aether (quiche+boringssl+tokio) footprint - MEASURE in PoC",
+   "iOS cross-compile of aether not verified here (needs Xcode; audit had no Apple toolchain)",
+   "extension + UI process split requires IPC (App Group / XPC) between Flutter UI and provider",
+   "tor feature (arti) on iOS is heavy - build WITHOUT the tor feature"
+  ],
+  "architectures": "arm64 device, arm64/x86_64 simulator"
+ },
+ "summary_table": [
+  {
+   "platform": "Android",
+   "aether_build": "release binaries + source (unverified cross-compile)",
+   "zeptun_build": "build_android.sh + JNI (verified pipeline)",
+   "device": "VpnService fd",
+   "routing_owner": "VpnService.Builder (no root) / policy rules (root)",
+   "loop_prevention": "protect() + addDisallowedApplication(own pkg) [+ mark with root]",
+   "status": "feasible; PoC required"
+  },
+  {
+   "platform": "Windows",
+   "aether_build": "release binary x86_64 / DLL from source",
+   "zeptun_build": "windows-gnu/msvc + vendored Wintun",
+   "device": "Wintun adapter (admin)",
+   "routing_owner": "zeptun auto_route (IP Helper)",
+   "loop_prevention": "flow-callback DIRECT / route excludes (PoC gate)",
+   "status": "feasible; PoC required"
+  },
+  {
+   "platform": "Linux",
+   "aether_build": "release binaries (glibc+musl) / lib from source",
+   "zeptun_build": "make (13 musl arches in releases)",
+   "device": "/dev/net/tun",
+   "routing_owner": "zeptun auto_route (table 2022, rules 9000-9009)",
+   "loop_prevention": "aether --mark + ip rule priority<9000 (documented) / flow-callback",
+   "status": "verified feasible (zeptun test suite on Linux)"
+  },
+  {
+   "platform": "macOS",
+   "aether_build": "release binaries / lib from source",
+   "zeptun_build": "xcframework macos slice",
+   "device": "utun / NEPacketTunnelProvider",
+   "routing_owner": "NE or split routes (auto_route)",
+   "loop_prevention": "flow-callback DIRECT / route excludes",
+   "status": "feasible; provider-vs-helper decision"
+  },
+  {
+   "platform": "iOS",
+   "aether_build": "MUST cross-compile static lib (no release)",
+   "zeptun_build": "xcframework ios slices",
+   "device": "NEPacketTunnelProvider fd / EXTERNAL callbacks",
+   "routing_owner": "NetworkExtension",
+   "loop_prevention": "by construction (NE) + flow callback",
+   "status": "feasible with additional native integration; memory-limit PoC gate"
+  }
+ ]
+}

@@ -1,0 +1,441 @@
+{
+ "$schema_note": "Native API inventory for embedding: Aether C API (Rust, JSON-over-C-ABI, job-polled) and Zeptun C ABI + JNI (Zig, error-code style).",
+ "aether": {
+  "library": "libaether.a / libaether.so (crate-type lib+staticlib+cdylib; aether/Cargo.toml L12)",
+  "header": "no header in this repository; the docs reference ios/Shared/aether.h in the (separate) Oblivion client project; functions declared via #[no_mangle] pub extern \"C\" in aether/src/ffi.rs",
+  "style": "handle-based, polled (no callbacks into the host); every call returns a *mut c_char JSON string that the caller frees with aether_string_free; panics are caught at the boundary; async work runs on an internal tokio runtime as jobs",
+  "functions": [
+   {
+    "name": "aether_version",
+    "signature": "() -> *mut c_char",
+    "purpose": "{\"ok\":true,\"version\":\"2.4.0\"}",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L275-278",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_string_free",
+    "signature": "(*mut c_char)",
+    "purpose": "free a returned JSON string; null-safe",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L280-288",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_job_poll",
+    "signature": "(u64) -> *mut c_char",
+    "purpose": "poll a job: {state:running} or {state:done, result:{...}}",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L290-303",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_job_cancel",
+    "signature": "(u64) -> *mut c_char",
+    "purpose": "cancel a job",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L305-315",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_job_free",
+    "signature": "(u64) -> *mut c_char",
+    "purpose": "drop a finished/running job (cancels it)",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L317-329",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_identity_open",
+    "signature": "(*const c_char json) -> *mut c_char",
+    "purpose": "open or provision an identity: {path, transport?, model?, locale?, team?{team,client_id,client_secret,token,email}} -> job -> {identity:id, summary, path, lastconn_path}",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L331-369; api.rs open_identity L324",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_identity_summary",
+    "signature": "(u64) -> *mut c_char",
+    "purpose": "device/ipv4/ipv6/organization summary",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L371-377",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_identity_free",
+    "signature": "(u64) -> *mut c_char",
+    "purpose": "drop an identity handle",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L379-385",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_scan_start",
+    "signature": "(u64 identity, *const c_char json) -> *mut c_char",
+    "purpose": "scan for an endpoint: {transport?, mode?, ip?, profile?, ports?, excluded?, ech?} -> job -> {endpoint:{addr,rtt_ms}}",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L387-428; api.rs scan L401",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_verify_start",
+    "signature": "(u64 identity, *const c_char json) -> *mut c_char",
+    "purpose": "verify an endpoint before connecting: {peer, transport?, socks?, http?, profile?, keepalive?, ech?} -> job -> {reachable:bool}",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L449-467; api.rs verify_endpoint L512",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_tunnel_start",
+    "signature": "(u64 identity, *const c_char json) -> *mut c_char",
+    "purpose": "connect the tunnel and serve SOCKS5 (and optional HTTP) until it closes or is cancelled: same payload as verify -> job -> {state:closed|stopped}",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L469-489; api.rs connect L551",
+    "verification": "source-verified",
+    "notes": "Reconnect behavior: this is the api::connect path; the full CLI core (run_with) additionally loops across tunnels. The tunnel job ending does NOT necessarily mean the process should exit - poll and restart as needed. NOTE: api::connect sets AETHER_HTTP_PROXY via env (api.rs L558) - process-global."
+   },
+   {
+    "name": "aether_core_start",
+    "signature": "(*const c_char json-array-of-strings) -> *mut c_char",
+    "purpose": "run the WHOLE CLI core in-process with the given argument vector (same parser as the binary); null/empty = no args (interactive questions would read stdin - always pass args)",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L491-518; lib.rs run_with L77",
+    "verification": "source-verified",
+    "notes": "CAUTION: the CLI parser mutates process environment variables (std::env::set_var) - one core instance per process; do not run two cores or a core plus other env-sensitive code concurrently."
+   },
+   {
+    "name": "aether_team_sign_in",
+    "signature": "(*const c_char) -> *mut c_char",
+    "purpose": "Zero Trust interactive sign-in -> {token}",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L520-531",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_team_code_request",
+    "signature": "(*const c_char) -> *mut c_char",
+    "purpose": "request an email login code -> {session:id,email}",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L533-555",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_team_code_resend",
+    "signature": "(u64 session)",
+    "purpose": "resend the code",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L557-570",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_team_code_submit",
+    "signature": "(u64 session, *const c_char code)",
+    "purpose": "submit the code -> {signed_in, token?}",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L572-589",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_team_session_free",
+    "signature": "(u64)",
+    "purpose": "drop a sign-in session",
+    "thread_safety": "any thread",
+    "evidence": "ffi.rs L591-597",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_team_token_set",
+    "signature": "(*const c_char token)",
+    "purpose": "store a Zero Trust token",
+    "thread_safety": "any thread (blocks)",
+    "evidence": "ffi.rs L599-609",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "aether_team_token_clear",
+    "signature": "()",
+    "purpose": "forget the token",
+    "thread_safety": "any thread (blocks)",
+    "evidence": "ffi.rs L611-618",
+    "verification": "source-verified",
+    "notes": ""
+   }
+  ],
+  "caveats": [
+   "No official C header in this repository - generate one from ffi.rs declarations (cbindgen or hand-written) or reuse the Oblivion client's ios/Shared/aether.h.",
+   "Job-based: results are polled; no blocking wait and no host callbacks.",
+   "The fine-grained API (identity/scan/verify/tunnel) does NOT expose every CLI option; aether_core_start with an argument vector covers the full surface (at the cost of env-var mutation and single-instance limits).",
+   "The data path is channel-based with no TUN code (DOCS.en.md 'Using Aether as a library').",
+   "std::env::set_var in a multi-threaded process is thread-unsafe by Rust semantics (UB risk in strict builds); Aether itself calls it extensively - embed, don't run concurrent cores, and keep the host single-threaded around core start."
+  ],
+  "prior_art": [
+   "PattNG (https://github.com/patterniha/PattNG) - Android app running Aether with a tun front end (referenced by Docs/OPENWRT.en.md)",
+   "An iOS client ('Oblivion', header ios/Shared/aether.h) is referenced by DOCS.en.md as the consumer of this C API"
+  ]
+ },
+ "zeptun": {
+  "library": "libzeptun.a + shared library (zig build) / libzeptun.so (Android) / Zeptun.xcframework (Apple)",
+  "header": "include/zeptun.h (hand-written, stable; integer error codes, fixed-size structs with struct_size + reserved fields, no Zig types)",
+  "version": "1.1.3",
+  "error_codes": [
+   "ZEPTUN_OK 0",
+   "INVALID_ARGUMENT -1",
+   "OUT_OF_MEMORY -2",
+   "PERMISSION_DENIED -3",
+   "NOT_SUPPORTED -4",
+   "DEVICE -5",
+   "IO -6",
+   "ALREADY_RUNNING -7",
+   "NOT_RUNNING -8",
+   "WOULD_BLOCK -9",
+   "NOT_FOUND -10",
+   "LIMIT_EXCEEDED -11",
+   "ADDRESS_IN_USE -12",
+   "SYSTEM_OUTDATED -13",
+   "CLOSED -14",
+   "TIMEOUT -15",
+   "CONFIG -16",
+   "ROUTE -17",
+   "BUSY -18",
+   "UNKNOWN -99"
+  ],
+  "functions": [
+   {
+    "name": "zeptun_version / zeptun_version_string",
+    "signature": "() -> u32 / const char*",
+    "purpose": "ABI version / human version",
+    "thread_safety": "pure, any thread",
+    "evidence": "zeptun.h L188-189",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_strerror",
+    "signature": "(int) -> const char*",
+    "purpose": "error code -> message",
+    "thread_safety": "pure",
+    "evidence": "zeptun.h L190",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_config_init",
+    "signature": "(ZeptunConfig*, u32 preset)",
+    "purpose": "fill config struct with preset defaults (struct_size must be set)",
+    "thread_safety": "pure",
+    "evidence": "zeptun.h L192",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_create",
+    "signature": "(const ZeptunConfig*, Zeptun**)",
+    "purpose": "create an engine (validates config)",
+    "thread_safety": "any thread; handles independent",
+    "evidence": "zeptun.h L193",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_create_from_json / zeptun_create_from_toml",
+    "signature": "(const char*, size_t, Zeptun**)",
+    "purpose": "create from a JSON/TOML document (unknown keys rejected)",
+    "thread_safety": "any thread",
+    "evidence": "zeptun.h L194-195",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_destroy",
+    "signature": "(Zeptun*)",
+    "purpose": "join workers, remove routes, free everything; once; never from a callback; never concurrent",
+    "thread_safety": "owner thread",
+    "evidence": "zeptun.h L196; wiki C-API thread table",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_set_log_callback",
+    "signature": "(zeptun_log_cb, void*, int level)",
+    "purpose": "process-wide log sink (message NOT NUL-terminated); call before creating engines",
+    "thread_safety": "before engine creation",
+    "evidence": "zeptun.h L198",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_set_read_callback",
+    "signature": "(Zeptun*, zeptun_packets_cb, void*)",
+    "purpose": "packets leaving the engine, batches up to 128 (EXTERNAL mode)",
+    "thread_safety": "before start",
+    "evidence": "zeptun.h L199",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_set_passthrough_callback",
+    "signature": "(Zeptun*, zeptun_packets_cb, void*)",
+    "purpose": "packets for passthrough handler",
+    "thread_safety": "before start",
+    "evidence": "zeptun.h L200",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_set_protect_callback",
+    "signature": "(Zeptun*, zeptun_protect_cb, void*)",
+    "purpose": "called with every upstream socket fd before it connects; return false to fail the connection (Android VpnService.protect)",
+    "thread_safety": "before start",
+    "evidence": "zeptun.h L201; jni/zeptun_jni.c L31-44",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_set_flow_callback",
+    "signature": "(Zeptun*, zeptun_flow_cb, void*)",
+    "purpose": "per-flow verdict: PROXY | DIRECT | DROP | REJECT (TCP reset / ICMP unreachable); ZeptunFlow = {protocol 6|17, family 4|6, src, dst, sport, dport}",
+    "thread_safety": "before start",
+    "evidence": "zeptun.h L202; wiki C-API Policy",
+    "verification": "source-verified",
+    "notes": "THE cross-platform loop-prevention hook: return DIRECT for Aether's WARP endpoint/API destinations so they are dialed outside the tunnel on every OS."
+   },
+   {
+    "name": "zeptun_set_device_fd",
+    "signature": "(Zeptun*, int fd)",
+    "purpose": "adopt a TUN descriptor (VpnService / NEPacketTunnelProvider)",
+    "thread_safety": "before start",
+    "evidence": "zeptun.h L203",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_set_adapter_guid",
+    "signature": "(Zeptun*, const char*)",
+    "purpose": "pin the Wintun adapter GUID (used only at creation)",
+    "thread_safety": "before start",
+    "evidence": "zeptun.h L204",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_start",
+    "signature": "(Zeptun*)",
+    "purpose": "spawn workers; with a TUN device returns once every queue is ready and routes are installed",
+    "thread_safety": "any thread",
+    "evidence": "zeptun.h L206",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_run",
+    "signature": "(Zeptun*)",
+    "purpose": "run ONE worker on the calling thread until zeptun_stop (host owns threads; libc-free Android lib requires this)",
+    "thread_safety": "one thread",
+    "evidence": "zeptun.h L207; wiki C-API Linking",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_stop",
+    "signature": "(Zeptun*)",
+    "purpose": "stop from any thread, including from a callback; returns immediately",
+    "thread_safety": "any thread incl. callbacks",
+    "evidence": "zeptun.h L208",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_write_packet / zeptun_write_packets",
+    "signature": "(Zeptun*, data | ZeptunPacket[], count)",
+    "purpose": "inject packets into the engine (EXTERNAL mode)",
+    "thread_safety": "any number of threads; WOULD_BLOCK/short count on full queue",
+    "evidence": "zeptun.h L210-211",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_inject_packets",
+    "signature": "(Zeptun*, ZeptunPacket[], count)",
+    "purpose": "inject packets that skip the stack (passthrough)",
+    "thread_safety": "any number of threads",
+    "evidence": "zeptun.h L212",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_network_changed",
+    "signature": "(Zeptun*, u32 interface_index)",
+    "purpose": "tell the engine the default route moved (rebinds upstreams, drops cached proxy connections, refreshes routes)",
+    "thread_safety": "any thread",
+    "evidence": "zeptun.h L214",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_stats",
+    "signature": "(Zeptun*, ZeptunStats*)",
+    "purpose": "lock-free counter snapshot (version 3; 35 counters incl. socks5_pool_hits, dns_fake_answers, tcp/udp_migrated)",
+    "thread_safety": "any thread",
+    "evidence": "zeptun.h L215",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_memory",
+    "signature": "(Zeptun*, ZeptunMemory*)",
+    "purpose": "packet pool usage: buffers, in_use, resident_bytes, released_bytes, starved_flows, exhausted",
+    "thread_safety": "any thread",
+    "evidence": "zeptun.h L216",
+    "verification": "source-verified",
+    "notes": ""
+   },
+   {
+    "name": "zeptun_interface_name",
+    "signature": "(Zeptun*, char*, size_t)",
+    "purpose": "name of the created interface",
+    "thread_safety": "any thread",
+    "evidence": "zeptun.h L217",
+    "verification": "source-verified",
+    "notes": ""
+   }
+  ],
+  "structs": {
+   "ZeptunConfig": "struct_size + preset + device_kind(TUN/FD/EXTERNAL) + tun_fd + tun_name[16] + mtu + queues + offload + configure + address4[64] + address6[64] + stack_mode + handler_kind + socks5_server[64]/username[256]/password[256]/udp/pipeline + auto_route + passthrough_gso + fwmark + route_table + rule_priority + io_backend + max/tcp/udp sessions + tcp_rx_window/tx_buffer + udp/tcp idle timeouts + memory_budget + log_level + workers + reserved[8]",
+   "ZeptunFlow": "protocol (6|17), family (4|6), source[16], destination[16], source_port, destination_port",
+   "ZeptunStats": "version, workers, rx/tx packets+bytes, drops, parse_errors, pool_exhausted, gso/gro counters, tcp_* lifecycle, udp_*, icmp_*, nat_active, handoffs, upstream bytes, fragments_reassembled, timeouts, socks5_pool_*, dns_*",
+   "ZeptunMemory": "version, workers, buffers, in_use, resident_bytes, released_bytes, starved_flows, exhausted"
+  },
+  "jni_bridge": {
+   "library": "libzeptun-jni.so (built by ndk-build from src/jni/zeptun_jni.c; class dev/zeptun/Zeptun, override ZEPTUN_JNI_CLASS at compile time)",
+   "methods": [
+    "nativeStart(service: Any?, fd: Int, config: String?): Int - creates engine from TOML (or mobile preset), adopts fd, installs protect callback (calls VpnService.protect(int) via global ref), runs zeptun_run on a pthread",
+    "nativeStop(): Unit - zeptun_stop + pthread_join + zeptun_destroy + release global ref",
+    "nativeVersion(): String",
+    "nativeCounter(index: Int): Long - raw field index into ZeptunStats after version/workers (fragile across versions; prefer stats struct via C API)"
+   ],
+   "constraints": "ONE engine per process (static context); no per-instance handles exposed to Java"
+  },
+  "thread_safety_table": "version/strerror/config_init pure; set_log_callback process-wide before engines; create any thread; all other setters before start/run else ALREADY_RUNNING; write/inject any threads (WOULD_BLOCK); stats/memory/stop any thread incl. callbacks; destroy once, never from callback; callbacks run on worker threads and must not block",
+  "linking": "Linux libs link libc (worker threads in any C host); Android library is libc-free unless -Dandroid-libc (then call zeptun_run on your own thread - the JNI bridge does exactly this with pthread_create)"
+ },
+ "embedding_summary": {
+  "aether": "Link libaether (staticlib/cdylib). Recommended entry: aether_core_start with a JSON array of CLI arguments for full option coverage, OR the fine-grained identity->scan->verify->tunnel flow for a managed UI. Poll jobs; free strings; one core per process (env-var mutation).",
+  "zeptun": "Link libzeptun (static or shared; xcframework on Apple). zeptun_config_init(preset) or create_from_toml/json, set device fd (VpnService/NE) or EXTERNAL callbacks, set protect + flow + log callbacks before start, then zeptun_start (spawns workers) or zeptun_run (own thread). zeptun_stats/memory for live counters; zeptun_stop + destroy for teardown; routes removed on destroy even after crash."
+ }
+}

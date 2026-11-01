@@ -1,0 +1,212 @@
+{
+ "$schema_note": "Aether<->Zeptun compatibility test matrix. Statuses: proven-by-source | proven-by-existing-tests | proposed (needs runtime PoC) | blocked.",
+ "interfaces_distinguished": [
+  "Aether UPSTREAM client (aether -> external proxy): irrelevant to zeptun",
+  "Aether LOCAL SOCKS5 server (zeptun connects here): THE integration surface",
+  "Aether internal tunnel transport (QUIC/WG/h2 sockets): must bypass the TUN (loop prevention)",
+  "Zeptun SOCKS5 client: connects to aether's local server"
+ ],
+ "checks": [
+  {
+   "id": "T1",
+   "area": "handshake",
+   "what": "SOCKS5 greeting/method negotiation",
+   "expectation": "zeptun offers [0x00] (or [0x00,0x02]); aether replies 0x00 no-auth regardless",
+   "aether_evidence": "socks.rs handshake() L475-486 always writes [05 00]",
+   "zeptun_evidence": "socks5.zig encodeGreeting; handler.zig warm path",
+   "status": "proven-by-source",
+   "poc": null
+  },
+  {
+   "id": "T2",
+   "area": "tcp",
+   "what": "TCP CONNECT bidirectional + half-close + cleanup",
+   "expectation": "data flows both ways; half-closed conns linger at most AETHER_HALF_CLOSE_SECS=30",
+   "aether_evidence": "socks.rs handle_connect L825+, relay_direct, half_close_linger L1175",
+   "zeptun_evidence": "userspace terminator + early accept",
+   "status": "proven-by-source; end-to-end PoC required",
+   "poc": "curl through stack"
+  },
+  {
+   "id": "T3",
+   "area": "udp",
+   "what": "UDP ASSOCIATE (udp_mode=udp) full relay",
+   "expectation": "associate with zero target -> relay addr; datagrams with RSV/FRAG=0 headers; replies with source addr; association ends on control-conn close",
+   "aether_evidence": "socks.rs L1516-1631 handle_udp_associate; parse_udp_request (frag!=0 dropped); build_udp_reply",
+   "zeptun_evidence": "socks5.zig Command.udp_associate; handler.zig L681-714, L1105-1141",
+   "status": "proven-by-source BOTH sides; end-to-end PoC REQUIRED (per protocol mode)",
+   "poc": "DNS + QUIC + game-style UDP through tunnel"
+  },
+  {
+   "id": "T4",
+   "area": "udp",
+   "what": "udp_mode=tcp (fwd_udp 0x05)",
+   "expectation": "Aether replies REP 0x07 command-not-supported -> all UDP fails",
+   "aether_evidence": "socks.rs handle_client L452-459 only 0x01/0x03",
+   "zeptun_evidence": "handler.zig L403, L681 (cmd .fwd_udp)",
+   "status": "BLOCKED-INCOMPATIBLE by source; app must pin udp_mode=udp",
+   "poc": null
+  },
+  {
+   "id": "T5",
+   "area": "udp",
+   "what": "UDP through each aether protocol mode",
+   "expectation": "masque-h3 (QUIC datagrams), masque-h2 (over h2), wg, gool, mim all carry UDP via netstack",
+   "aether_evidence": "netstack.rs open_udp; masque/masque_h2/wireguard data paths",
+   "zeptun_evidence": "n/a",
+   "status": "proven-by-source (architecture); runtime PoC per mode REQUIRED",
+   "poc": "run T3 against each of the 5 protocol modes"
+  },
+  {
+   "id": "T6",
+   "area": "udp-carrier",
+   "what": "UDP ASSOCIATE on tor-only/psiphon-only listeners",
+   "expectation": "DNS (port 53) only, carried over TCP; other UDP dropped with log",
+   "aether_evidence": "socks.rs handle_udp_over_connector L1084-1093",
+   "zeptun_evidence": "n/a",
+   "status": "proven-by-source (documented limitation); hide these modes or document",
+   "poc": null
+  },
+  {
+   "id": "T7",
+   "area": "dns",
+   "what": "DNS paths + leak check",
+   "expectation": "zeptun fake_ip -> domain-target SOCKS dials -> aether --dns resolvers inside tunnel; hijack -> upstream; no cleartext DNS outside",
+   "aether_evidence": "socks.rs dns_resolve via stack.open_udp; --dns default 1.1.1.1,1.0.0.1",
+   "zeptun_evidence": "stack/dns.zig fake-IP table (A/AAAA only, LRU); upstream forwarding",
+   "status": "proven-by-source; leak PoC REQUIRED (capture on physical iface)",
+   "poc": "tcpdump/wireshark on non-tunnel interface during resolutions"
+  },
+  {
+   "id": "T8",
+   "area": "ipv6",
+   "what": "IPv4 + IPv6 destinations end-to-end",
+   "expectation": "both families proxied when both stacks configured",
+   "aether_evidence": "ATYP_V6 in parse/build; netstack dual-stack",
+   "zeptun_evidence": "dual stack + fragment reassembly",
+   "status": "proven-by-source; PoC REQUIRED (and: omit v6 TUN address when upstream lacks v6 - wiki Android note)",
+   "poc": "curl -4/-6 through stack"
+  },
+  {
+   "id": "T9",
+   "area": "startup",
+   "what": "Startup ordering/race",
+   "expectation": "aether binds listener immediately but only answers the greeting once the tunnel serves; app must wait for readiness (connect+greeting+[05 00] reply) BEFORE zeptun start",
+   "aether_evidence": "socks.rs answers()/until_answered L278-313; Listeners::bind before tunnel",
+   "zeptun_evidence": "warm pool would block on unanswered greeting",
+   "status": "proven-by-source; PoC REQUIRED (measure zeptun warm-pool behavior against held listener)",
+   "poc": "start zeptun before aether; expect pool retries then success"
+  },
+  {
+   "id": "T10",
+   "area": "lifecycle",
+   "what": "Reconnect/recovery",
+   "expectation": "tunnel drop -> aether holds listener, reconnects after reconnect-secs; zeptun pool drops dead conns (recv 0) and refills (socks5_pool_retries)",
+   "aether_evidence": "lib.rs run loops; held listener between tunnels",
+   "zeptun_evidence": "handler.zig dropWarm/pool refill; monitor_network drops cached conns",
+   "status": "proven-by-source; PoC REQUIRED (kill network / block endpoint mid-transfer)",
+   "poc": "firewall-drop the WARP endpoint, verify recovery without app restart"
+  },
+  {
+   "id": "T11",
+   "area": "lifecycle",
+   "what": "Shutdown ordering + cleanup",
+   "expectation": "stop zeptun first (routes removed), then aether (listener closed); no orphaned processes; no stale routes (zeptun clears its rule range on exit, even after crash)",
+   "aether_evidence": "listener drop on process/job end",
+   "zeptun_evidence": "route/linux.zig teardown; wiki Routing 'removed when the process stops'",
+   "status": "proven-by-source; PoC REQUIRED (kill -9 both, verify no stale rules/adapters)",
+   "poc": "SIGKILL test on Linux; taskkill on Windows"
+  },
+  {
+   "id": "T12",
+   "area": "loop",
+   "what": "Routing-loop prevention per platform",
+   "expectation": "Linux: aether --mark 0xff + 'ip rule add fwmark 0xff lookup main priority 100' (must sort BEFORE zeptun rules 9000-9009; zeptun rule 9005 sends everything NOT marked 0x2022 to the tunnel table, so an unmarked aether loops). Android no-root: addDisallowedApplication(own package) (+ zeptun protect()). Windows/macOS: zeptun flow-callback ZEPTUN_FLOW_DIRECT for WARP ranges (and/or route excludes)",
+   "aether_evidence": "egress.rs (mark all egress incl. QUIC/WG); DOCS.en.md 'Firewall mark'",
+   "zeptun_evidence": "route/linux.zig L640-706 rules; protect callback; flow callback verdicts",
+   "status": "proven-by-source (Linux recipe documented); cross-platform PoC REQUIRED - TOP RISK",
+   "poc": "with tunnel up, verify aether's egress leaves the physical interface and curl through the stack works (no blackhole)"
+  },
+  {
+   "id": "T13",
+   "area": "security",
+   "what": "Bind-address exposure",
+   "expectation": "default 127.0.0.1 keeps the unauthenticated proxy local; aether logs a warning on world-reachable binds",
+   "aether_evidence": "socks.rs warn_if_world_reachable L121-129",
+   "zeptun_evidence": "n/a",
+   "status": "proven-by-source; app pins loopback",
+   "poc": null
+  },
+  {
+   "id": "T14",
+   "area": "routing-rules",
+   "what": "Aether route rules apply to TUN-originated IP connections",
+   "expectation": "SNI/Host sniffing (AETHER_ROUTE_SNIFF on) lets domain rules work when zeptun hands IPs",
+   "aether_evidence": "socks.rs decide_route/read_sniff_head L786-852; DOCS.en.md 'Name rules behind a tun'",
+   "zeptun_evidence": "n/a",
+   "status": "proven-by-source; PoC: route-block a domain, visit it, expect refusal",
+   "poc": "route-block test"
+  },
+  {
+   "id": "T15",
+   "area": "limits",
+   "what": "Client/session limits under load",
+   "expectation": "aether AETHER_MAX_CLIENTS (512-8192) vs zeptun max_tcp/udp sessions (mobile 1200/512) - zeptun mobile caps bind first",
+   "aether_evidence": "socks.rs client_limit L201-220",
+   "zeptun_evidence": "config.zig mobile preset",
+   "status": "proven-by-source; capacity PoC on target hardware",
+   "poc": "500 concurrent connections (zeptun integration suite does this on Linux)"
+  },
+  {
+   "id": "T16",
+   "area": "icmp",
+   "what": "ICMP behavior with socks5 handler",
+   "expectation": "icmp=auto -> local: the engine answers echo requests itself (socks5 cannot carry ICMP)",
+   "aether_evidence": "n/a (SOCKS5 has no ICMP)",
+   "zeptun_evidence": "Config.icmpForward() - auto means forward only with direct handler",
+   "status": "proven-by-source",
+   "poc": null
+  },
+  {
+   "id": "T17",
+   "area": "gso",
+   "what": "UDP GSO/GRO through SOCKS5 association",
+   "expectation": "UDP_SEGMENT/UDP_GRO per-datagram headers inside one sendmsg work against aether's relay (buffers sized 65535)",
+   "aether_evidence": "socks.rs 65535-byte relay buffers",
+   "zeptun_evidence": "wiki Stacks 'Offloads'; packet/gso.zig",
+   "status": "proven-by-zeptun-tests against zeptun's own server; against AETHER needs PoC",
+   "poc": "large-UDP-DNS/QUIC burst test"
+  },
+  {
+   "id": "T18",
+   "area": "memory",
+   "what": "iOS extension memory ceiling",
+   "expectation": "zeptun mobile 24 MB + aether (quiche+boring+tokio) footprint must fit the packet-tunnel-provider limit",
+   "aether_evidence": "unknown - not measured",
+   "zeptun_evidence": "wiki Apple 'Memory limit'; mobile preset",
+   "status": "UNKNOWN - measuring PoC is a gate for iOS",
+   "poc": "run both engines in an extension on device, watch jetsam"
+  },
+  {
+   "id": "T19",
+   "area": "concurrency",
+   "what": "Aether env-var mutation under embedding",
+   "expectation": "one aether core per process; flags overwrite env; do not run two cores concurrently",
+   "aether_evidence": "cli.rs set()/append(); api.rs connect() sets AETHER_HTTP_PROXY",
+   "zeptun_evidence": "n/a",
+   "status": "proven-by-source (constraint)",
+   "poc": null
+  },
+  {
+   "id": "T20",
+   "area": "stats",
+   "what": "Real traffic evidence for 'connected' state",
+   "expectation": "'connected' requires: aether tunnel serving (socks greeting answered) AND zeptun up (routes/fd active) AND a real end-to-end probe through the stack (curl via SOCKS or zeptun_stats counters advancing)",
+   "aether_evidence": "answers()/until_answered",
+   "zeptun_evidence": "zeptun_stats rx/tx/socks5 counters",
+   "status": "design rule; enforce in app state machine",
+   "poc": "health-check probe"
+  }
+ ],
+ "verdict": "COMPATIBLE with two hard pins: (1) zeptun udp_mode MUST be 'udp' (standard UDP ASSOCIATE) - Aether implements it fully; (2) startup order + loop-prevention per platform must be engineered (T9, T12). tor-only/psiphon-only aether modes carry DNS-only UDP - treat as TCP-only transports for full-device routing."
+}

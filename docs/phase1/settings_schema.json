@@ -1,0 +1,570 @@
+{
+ "$schema_note": "Application-level settings model mapping UI concepts to verified engine capabilities. UI-level config is separate from low-level launch parameters. No fake settings for unsupported features.",
+ "principles": [
+  "Ordinary settings = the connectivity-relevant choices a normal user can safely make.",
+  "Advanced settings = power-user options, still engine-supported.",
+  "Diagnostics = logging/stats/health.",
+  "Developer/internal = not exposed in the UI (pinned internally or fixed by the app).",
+  "Every setting maps to a verified Aether flag/env or zeptun key; unsupported combos are hidden, not merely disabled."
+ ],
+ "categories": [
+  {
+   "id": "connection",
+   "title": "Connection & protocol",
+   "settings": [
+    {
+     "key": "aether.protocol",
+     "type": "enum",
+     "default": "masque",
+     "values": [
+      "masque",
+      "wg",
+      "gool",
+      "mim"
+     ],
+     "maps_to": "AETHER_PROTOCOL (--masque/--wg/--gool/--mim/--protocol)",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "gool/mim are two-hop modes that change the exit address",
+     "conflicts": "--gool-classic and --tor-reverse/--psiphon-reverse mutually exclusive",
+     "ui": "normal"
+    },
+    {
+     "key": "aether.scan_mode",
+     "type": "enum",
+     "default": "balanced",
+     "values": [
+      "turbo",
+      "balanced",
+      "thorough",
+      "verified",
+      "ironclad"
+     ],
+     "maps_to": "AETHER_SCAN (--scan/...)",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "verified only dials measured edges; ironclad proves each gateway with real traffic",
+     "ui": "normal"
+    },
+    {
+     "key": "aether.ip_version",
+     "type": "enum",
+     "default": "v4",
+     "values": [
+      "v4",
+      "v6",
+      "both"
+     ],
+     "maps_to": "AETHER_IP (-4/-6/--dual/--ip)",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "pick both only if the network really has IPv6",
+     "ui": "normal"
+    },
+    {
+     "key": "aether.quick_reconnect",
+     "type": "boolean",
+     "default": true,
+     "maps_to": "AETHER_QUICK_RECONNECT=1 (app should pin to avoid interactive question)",
+     "restart": "none (next connect)",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "reuse the last working gateway",
+     "ui": "normal"
+    },
+    {
+     "key": "aether.endpoint_override",
+     "type": "string|null",
+     "default": null,
+     "format": "ip:port",
+     "maps_to": "AETHER_PEER / AETHER_WG_PEER (by protocol)",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": false,
+     "help": "skip scanning; for experts",
+     "ui": "advanced"
+    },
+    {
+     "key": "aether.exit_country",
+     "type": "string|null",
+     "default": null,
+     "format": "'!IR,AZ,RU' style",
+     "maps_to": "AETHER_EXIT_LOC",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "refuse tunnels exiting in listed countries",
+     "ui": "advanced"
+    }
+   ]
+  },
+  {
+   "id": "transport",
+   "title": "Transport & obfuscation",
+   "settings": [
+    {
+     "key": "aether.carrier",
+     "type": "enum",
+     "default": "h3",
+     "values": [
+      "h3",
+      "h2"
+     ],
+     "maps_to": "AETHER_MASQUE_HTTP2 (--h2/--h3)",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "h2 = MASQUE over TCP (helps on UDP-blocked networks)",
+     "ui": "normal"
+    },
+    {
+     "key": "aether.quic_v2_opener",
+     "type": "boolean",
+     "default": true,
+     "maps_to": "AETHER_QUIC_V2 (--no-quic-v2 to disable)",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "QUIC v2 version-negotiation opener",
+     "ui": "advanced"
+    },
+    {
+     "key": "aether.noize",
+     "type": "enum",
+     "default": "auto (firewall for masque, balanced for wg/gool)",
+     "values": [
+      "off",
+      "light",
+      "firewall",
+      "balanced",
+      "gfw",
+      "aggressive"
+     ],
+     "maps_to": "AETHER_NOIZE",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "traffic-shaping/padding profile; gfw for strict networks",
+     "ui": "advanced"
+    },
+    {
+     "key": "aether.fragment",
+     "type": "boolean",
+     "default": false,
+     "maps_to": "AETHER_MASQUE_H2_FRAGMENT (--fragment)",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "split the TLS ClientHello (h2 carrier + WARP API calls)",
+     "ui": "advanced"
+    },
+    {
+     "key": "aether.tls_profile",
+     "type": "enum",
+     "default": "chrome",
+     "values": [
+      "chrome",
+      "custom"
+     ],
+     "maps_to": "--tls-ciphers/--tls13-ciphers/--tls-groups/--tls-key-shares/--tls-sigalgs/... (developer)",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": false,
+     "ui": "developer"
+    },
+    {
+     "key": "aether.ech",
+     "type": "enum",
+     "default": "off",
+     "values": [
+      "off",
+      "auto",
+      "base64-key"
+     ],
+     "maps_to": "AETHER_ECH",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "Encrypted Client Hello (MASQUE + WARP API)",
+     "ui": "advanced"
+    }
+   ]
+  },
+  {
+   "id": "proxy_ports",
+   "title": "Local proxy & ports",
+   "settings": [
+    {
+     "key": "aether.socks_bind",
+     "type": "string",
+     "default": "127.0.0.1:1819",
+     "format": "ip:port",
+     "maps_to": "AETHER_SOCKS (--bind)",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": false,
+     "help": "local SOCKS5 address zeptun connects to; keep loopback (no auth)",
+     "ui": "advanced"
+    },
+    {
+     "key": "aether.http_proxy",
+     "type": "string|null",
+     "default": null,
+     "maps_to": "AETHER_HTTP_PROXY",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": false,
+     "ui": "developer"
+    },
+    {
+     "key": "aether.upstream",
+     "type": "string|null",
+     "default": null,
+     "maps_to": "AETHER_UPSTREAM",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": false,
+     "help": "chain behind another proxy; SOCKS5-with-UDP upstream carries all transports",
+     "ui": "developer"
+    }
+   ]
+  },
+  {
+   "id": "dns",
+   "title": "DNS",
+   "settings": [
+    {
+     "key": "aether.tunnel_dns",
+     "type": "string list",
+     "default": [
+      "1.1.1.1",
+      "1.0.0.1"
+     ],
+     "maps_to": "AETHER_DNS (--dns)",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "resolvers used inside the tunnel",
+     "ui": "normal"
+    },
+    {
+     "key": "zeptun.fake_ip",
+     "type": "boolean",
+     "default": true,
+     "maps_to": "zeptun [dns] fake_ip (requires socks5 handler)",
+     "restart": "tun",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "answer A/AAAA with fake IPs and dial by domain - best anti-leak behavior with Aether",
+     "ui": "advanced (default on)"
+    },
+    {
+     "key": "zeptun.dns_hijack",
+     "type": "boolean",
+     "default": true,
+     "maps_to": "zeptun [dns] hijack (+ dns.upstream = aether tunnel resolver)",
+     "restart": "tun",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "capture DNS sent to any address",
+     "ui": "advanced (default on)"
+    }
+   ]
+  },
+  {
+   "id": "routing",
+   "title": "Routing & bypass",
+   "settings": [
+    {
+     "key": "app.split_tunnel_mode",
+     "type": "enum",
+     "default": "full_device",
+     "values": [
+      "full_device",
+      "per_app",
+      "exclude_list"
+     ],
+     "maps_to": "Android: VpnService.Builder addAllowed/addDisallowedApplication; zeptun flow callback elsewhere",
+     "restart": "tun",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "per-app routing is a platform-VPN feature (Android/iOS), not an aether feature",
+     "ui": "normal"
+    },
+    {
+     "key": "app.bypass_packages",
+     "type": "string list",
+     "default": [],
+     "maps_to": "VpnService.Builder.addDisallowedApplication / NE includedRoutes equivalents",
+     "restart": "tun",
+     "persistent": true,
+     "safe_for_users": true,
+     "ui": "normal"
+    },
+    {
+     "key": "aether.route_block",
+     "type": "string list",
+     "default": [],
+     "maps_to": "AETHER_ROUTE_BLOCK",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "block ads/trackers at the SOCKS layer (domains, CIDRs, ports)",
+     "ui": "normal"
+    },
+    {
+     "key": "aether.route_direct",
+     "type": "string list",
+     "default": [],
+     "maps_to": "AETHER_ROUTE_DIRECT",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "send banks/LAN direct",
+     "ui": "normal"
+    },
+    {
+     "key": "zeptun.route_exclude",
+     "type": "string list",
+     "default": [],
+     "maps_to": "zeptun [route] exclude (prefixes off the tunnel)",
+     "restart": "tun",
+     "persistent": true,
+     "safe_for_users": true,
+     "ui": "advanced"
+    },
+    {
+     "key": "app.protect_infrastructure_ranges",
+     "type": "boolean",
+     "default": true,
+     "maps_to": "zeptun flow callback: ZEPTUN_FLOW_DIRECT for Cloudflare WARP/API ranges (loop prevention on Windows/macOS)",
+     "restart": "tun",
+     "persistent": true,
+     "safe_for_users": false,
+     "help": "keeps aether's own traffic out of the tunnel",
+     "ui": "internal (always on)"
+    }
+   ]
+  },
+  {
+   "id": "identity",
+   "title": "Identity & organization",
+   "settings": [
+    {
+     "key": "aether.team",
+     "type": "string|null",
+     "default": null,
+     "maps_to": "AETHER_TEAM (--team)",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "Zero Trust enrollment; enables cert pin verification by default",
+     "ui": "normal (advanced tab)"
+    },
+    {
+     "key": "aether.access_credentials",
+     "type": "secret bundle",
+     "default": null,
+     "maps_to": "AETHER_ACCESS_CLIENT_ID/SECRET/TOKEN (store in platform secure storage; never log)",
+     "restart": "full",
+     "persistent": "secure-storage",
+     "safe_for_users": true,
+     "ui": "advanced (secret)"
+    },
+    {
+     "key": "aether.gateway",
+     "type": "boolean",
+     "default": false,
+     "maps_to": "AETHER_GATEWAY (requires team)",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "help": "org filtering/logging proxy inside the tunnel",
+     "ui": "advanced"
+    },
+    {
+     "key": "aether.register_on_start",
+     "type": "enum",
+     "default": "auto",
+     "maps_to": "AETHER_REGISTER (developer; the core auto-provisions when the identity file is missing)",
+     "restart": "n/a",
+     "persistent": false,
+     "safe_for_users": false,
+     "ui": "internal"
+    }
+   ]
+  },
+  {
+   "id": "reliability",
+   "title": "Timeouts & reliability",
+   "settings": [
+    {
+     "key": "aether.keepalive",
+     "type": "integer",
+     "default": 5,
+     "maps_to": "AETHER_WG_KEEPALIVE",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": true,
+     "ui": "advanced"
+    },
+    {
+     "key": "aether.reconnect_secs",
+     "type": "integer",
+     "default": 2,
+     "maps_to": "AETHER_MASQUE_RECONNECT_SECS + AETHER_WG_RECONNECT_SECS",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": false,
+     "ui": "developer"
+    },
+    {
+     "key": "aether.startup_secs",
+     "type": "integer",
+     "default": 30,
+     "maps_to": "AETHER_MASQUE_STARTUP_SECS",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": false,
+     "ui": "developer"
+    },
+    {
+     "key": "aether.validate_secs",
+     "type": "integer",
+     "default": 10,
+     "maps_to": "AETHER_MASQUE_VALIDATE_SECS + AETHER_WG_VALIDATE_SECS",
+     "restart": "full",
+     "persistent": true,
+     "safe_for_users": false,
+     "ui": "developer"
+    },
+    {
+     "key": "zeptun.pool_size",
+     "type": "integer",
+     "default": 4,
+     "maps_to": "zeptun [handler.socks5] pool_size",
+     "restart": "tun",
+     "persistent": true,
+     "safe_for_users": false,
+     "ui": "developer"
+    }
+   ]
+  },
+  {
+   "id": "diagnostics",
+   "title": "Diagnostics",
+   "settings": [
+    {
+     "key": "aether.log_level",
+     "type": "enum",
+     "default": "info",
+     "values": [
+      "error",
+      "warn",
+      "info",
+      "debug",
+      "trace"
+     ],
+     "maps_to": "AETHER_LOG_LEVEL (RUST_LOG overrides)",
+     "restart": "none (next start)",
+     "persistent": true,
+     "safe_for_users": true,
+     "ui": "normal (diagnostics screen)"
+    },
+    {
+     "key": "aether.stats",
+     "type": "boolean",
+     "default": false,
+     "maps_to": "AETHER_STATS + AETHER_STATS_SECS",
+     "restart": "none",
+     "persistent": false,
+     "safe_for_users": true,
+     "ui": "normal (diagnostics)"
+    },
+    {
+     "key": "zeptun.log_level",
+     "type": "enum",
+     "default": "warn",
+     "values": [
+      "err",
+      "warn",
+      "info",
+      "debug",
+      "trace"
+     ],
+     "maps_to": "zeptun [top] log_level / zeptun_set_log_callback level",
+     "restart": "none",
+     "persistent": true,
+     "safe_for_users": true,
+     "ui": "normal (diagnostics)"
+    },
+    {
+     "key": "zeptun.stats_interval_s",
+     "type": "integer",
+     "default": 5,
+     "maps_to": "zeptun [top] stats_interval_s (app polls zeptun_stats instead)",
+     "restart": "none",
+     "persistent": false,
+     "safe_for_users": true,
+     "ui": "normal (diagnostics)"
+    }
+   ]
+  }
+ ],
+ "cross_cutting_rules": [
+  "protocol=wg + carrier h2 is meaningless (wg has no TLS carrier) - hide carrier on wg",
+  "ech applies to masque only - hide on wg",
+  "fragment applies to the h2 carrier and WARP API calls - hide on h3 unless user understands",
+  "team set => tls-verify pins on by default (AETHER_TLS_VERIFY=1) - do not surface an off-switch to normal users",
+  "upstream=http(s):// requires carrier=h2 - enforce in validation",
+  "zeptun fake_ip requires handler=socks5 - always true in this app; keep validated",
+  "Android no-root: zeptun route.* keys are inert (mobile build has no route module) - split tunneling via VpnService.Builder only",
+  "Windows/macOS: app.protect_infrastructure_ranges must stay on unless the user provides route excludes"
+ ],
+ "example_valid": {
+  "aether.protocol": "masque",
+  "aether.scan_mode": "verified",
+  "aether.ip_version": "v4",
+  "aether.carrier": "h3",
+  "aether.tunnel_dns": [
+   "1.1.1.1",
+   "1.0.0.1"
+  ],
+  "zeptun.fake_ip": true,
+  "zeptun.dns_hijack": true,
+  "app.split_tunnel_mode": "full_device",
+  "aether.log_level": "info"
+ },
+ "example_invalid": [
+  {
+   "cfg": {
+    "aether.protocol": "wg",
+    "aether.ech": "auto"
+   },
+   "reason": "ech has no effect on WireGuard (no TLS handshake); hide/disable"
+  },
+  {
+   "cfg": {
+    "aether.upstream": "http://proxy:8080",
+    "aether.carrier": "h3"
+   },
+   "reason": "HTTP CONNECT upstream cannot carry QUIC; carrier must be h2"
+  },
+  {
+   "cfg": {
+    "zeptun.udp_mode": "tcp"
+   },
+   "reason": "zeptun udp_mode=tcp uses non-standard SOCKS5 command 0x05 which Aether rejects (0x07); app pins udp_mode=udp"
+  },
+  {
+   "cfg": {
+    "aether.protocol": "gool-classic",
+    "aether.tor": "reverse"
+   },
+   "reason": "tor carries TCP only; wg-in-warp needs UDP - aether refuses at startup"
+  }
+ ]
+}
