@@ -525,20 +525,43 @@ jobs:
           echo "EMULATOR PIN VERIFIED: 37.2.13"
 
       - name: Create AVD and boot the 16KB emulator
+        env:
+          # avdmanager and emulator resolve AVD homes differently when
+          # ANDROID_SDK_HOME is set (run 41346491176: 'Unknown AVD name' /
+          # 'no aethone-smoke.ini in $HOME/.android/avd'). Pin BOTH tools to
+          # one explicit AVD home — the documented override they both honor.
+          ANDROID_AVD_HOME: ${{ github.workspace }}/.avd
         run: |
           set -euo pipefail
           export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$PATH"
+          mkdir -p "$ANDROID_AVD_HOME"
           echo no | avdmanager create avd -n aethone-smoke -k "${SYSIMG_PKG}"
+          echo "--- AVD diagnostics after creation ---"
+          avdmanager list avd || true
+          ls -la "$ANDROID_AVD_HOME" || true
+          ls -la "$HOME/.android/avd" 2>/dev/null || true
           adb start-server
           emulator -avd aethone-smoke \
             -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics \
             -accel on -gpu swiftshader_indirect -memory 4096 -cores 2 \
             > emulator-boot.log 2>&1 &
+          echo $! > emulator.pid
+          sleep 30
+          if ! kill -0 "$(cat emulator.pid)" 2>/dev/null; then
+            echo "::error::emulator process died right after launch"
+            cat emulator-boot.log || true
+            exit 1
+          fi
           booted=0
           i=0
           while [ "$i" -lt 90 ]; do
             b="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
             if [ "$b" = "1" ]; then booted=1; break; fi
+            if ! kill -0 "$(cat emulator.pid)" 2>/dev/null; then
+              echo "::error::emulator process exited during the boot wait (iteration $i)"
+              tail -60 emulator-boot.log || true
+              exit 1
+            fi
             i=$((i + 1))
             sleep 10
           done
