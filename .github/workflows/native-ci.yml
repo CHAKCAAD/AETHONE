@@ -248,6 +248,41 @@ jobs:
             --src-cache "$SRC_CACHE" \
             --out "$OUT_DIR"
 
+      - name: Diagnose boring-sys bindings after build failure
+        if: failure()
+        shell: bash
+        run: |
+          base=".srccache/aether/aether/target/${{ matrix.rust_target }}/release/build"
+          echo "=== boring-sys Bindgen diagnostics ==="
+          echo "Rust target: ${{ matrix.rust_target }}"
+          echo "Build directory: $base"
+
+          if [ ! -d "$base" ]; then
+            echo "::warning::Aether build directory not found; failure may have occurred earlier."
+            exit 0
+          fi
+
+          mapfile -d '' binding_files < <(
+            find "$base" -type f -path '*/boring-sys-*/out/bindings.rs' -print0
+          )
+
+          if [ "${#binding_files[@]}" -eq 0 ]; then
+            echo "::warning::No boring-sys bindings.rs file found."
+            exit 0
+          fi
+
+          for f in "${binding_files[@]}"; do
+            echo "=== FILE: $f ==="
+            echo "--- First 25 lines ---"
+            sed -n '1,25p' "$f"
+            echo "--- ERR_LIB and Bindgen type declarations ---"
+            awk '/ERR_LIB_SSL|ERR_LIB_[A-Z_]+|bindgen_ty|ErrLib/ {
+              print NR ":" $0
+              count++
+              if (count >= 100) exit
+            }' "$f"
+          done
+
       - name: Upload native artifacts (${{ matrix.abi }}) — kept per-ABI, NEVER merged
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
