@@ -184,7 +184,78 @@ clone_pin "$AETHER_REPO" "$AETHER_SHA" "$AETHER_SRC"
   cd "$AETHER_SRC/aether"
   under=$(echo "$RUST_TARGET" | tr '-' '_')
   export "BORING_BSSL_RUST_CPPLIB_${under}=static:-bundle=c++"   # exactly as upstream release.yml
-  # Upstream android job command, replicated verbatim (no --locked there):
+
+  # Aether's Cargo.lock pins boring-sys 5.3.0. Its upstream helper searches for
+  # the literal "ERR_LIB_SSL:", but Bindgen 0.72 emits
+  # "pub const ERR_LIB_SSL : _bindgen_ty_2 = ...". That whitespace makes the
+  # helper fall back to the wrong anonymous type (_bindgen_ty_1).
+  # Fetch with --locked, patch only that exact helper in the exact pinned
+  # crate source, then clear only this target's boring-sys artifacts so Cargo
+  # must regenerate bindings and recompile the crate.
+  echo "== [boring-sys] fetch locked sources and apply 5.3.0 enum-name fix =="
+  cargo fetch --locked --target "$RUST_TARGET"
+  python3 - "${CARGO_HOME:-$HOME/.cargo}" <<'PY_BORING_SYS'
+import hashlib
+import sys
+from pathlib import Path
+
+cargo_home = Path(sys.argv[1]).expanduser()
+lock_path = Path("Cargo.lock")
+if not lock_path.is_file():
+    raise SystemExit("FATAL: Cargo.lock is missing; refusing an unpinned boring-sys patch.")
+
+lock_text = lock_path.read_text(encoding="utf-8")
+if 'name = "boring-sys"\\nversion = "5.3.0"\\n' not in lock_text:
+    raise SystemExit("FATAL: Cargo.lock does not pin boring-sys 5.3.0 exactly.")
+
+registry_src = cargo_home / "registry" / "src"
+matches = sorted(registry_src.glob("*/boring-sys-5.3.0/build/main.rs"))
+if len(matches) != 1:
+    raise SystemExit(
+        "FATAL: expected exactly one boring-sys 5.3.0 build/main.rs under "
+        f"{registry_src}, found {len(matches)}."
+    )
+
+path = matches[0]
+source = path.read_text(encoding="utf-8")
+old = """    let enum_type = src
+        .split_once("ERR_LIB_SSL:")
+        .and_then(|(_, def)| Some(def.split_once('=')?.0))
+        .unwrap_or("_bindgen_ty_1");"""
+new = """    let enum_type = src
+        .split_once("pub const ERR_LIB_SSL")
+        .and_then(|(_, def)| {
+            let declaration = def.split_once('=')?.0;
+            declaration.rsplit_once(':').map(|(_, ty)| ty.trim())
+        })
+        .filter(|ty| {
+            !ty.is_empty() && ty.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        })
+        .unwrap_or("_bindgen_ty_1");"""
+
+before = hashlib.sha256(source.encode("utf-8")).hexdigest()
+if source.count(old) == 1:
+    source = source.replace(old, new, 1)
+    path.write_text(source, encoding="utf-8")
+    state = "APPLIED"
+elif source.count(new) == 1:
+    state = "ALREADY_APPLIED"
+else:
+    raise SystemExit(
+        "FATAL: boring-sys 5.3.0 helper did not match the one expected upstream "
+        "implementation; no source was changed."
+    )
+
+after = hashlib.sha256(source.encode("utf-8")).hexdigest()
+print(f"boring-sys source: {path}")
+print(f"Patch state: {state}")
+print(f"SHA256 before: {before}")
+print(f"SHA256 after:  {after}")
+PY_BORING_SYS
+
+  cargo clean -p boring-sys --target "$RUST_TARGET"
+
+  # The upstream cargo-ndk build invocation remains unchanged.
   if cargo ndk -t "$ABI" --platform "$API_LEVEL" build --release --features tor; then
     :
   else
