@@ -13,7 +13,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-import '../../core/design_tokens.dart';
+import '../../../core/design_tokens.dart';
 
 /// A pill whose 4 stacked layers fade between [colorOff] and [colorOn]
 /// according to [active]. [child] is rendered on the core layer.

@@ -76,7 +76,7 @@ class _PowerPainter extends CustomPainter {
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = size * 0.083 // ~2px at 24
+      ..strokeWidth = size.width * 0.083 // ~2px at 24
       ..strokeCap = StrokeCap.round;
     final c = Offset(size.width / 2, size.height * 0.6);
     final r = size.width * 0.30;
@@ -86,7 +86,7 @@ class _PowerPainter extends CustomPainter {
     final line = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = size * 0.083
+      ..strokeWidth = size.width * 0.083
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(
       Offset(size.width / 2, size.height * 0.12),

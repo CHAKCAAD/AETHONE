@@ -319,7 +319,7 @@ class _PowerTinted extends StatelessWidget {
             : AethColors.onPillDisconnected,
       ),
       duration: const Duration(milliseconds: 300),
-      builder: (context, color) => PowerIcon(
+      builder: (context, color, _) => PowerIcon(
         size: size,
         color: color ?? AethColors.onPillDisconnected,
       ),

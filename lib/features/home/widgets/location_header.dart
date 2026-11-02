@@ -224,7 +224,7 @@ class _FlagCarousel extends StatelessWidget {
     final codes = kCarouselFlagCodes;
     return SizedBox(
       height: flagSize * 1.35,
-      child: ListView.builder(
+      child: ListView(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(horizontal: 24 * s),
         itemExtent: flagSize * 1.25,

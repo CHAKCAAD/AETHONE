@@ -45,7 +45,7 @@ class HeroLogo extends StatelessWidget {
         ),
         duration: duration,
         curve: curve,
-        builder: (context, color) => SvgPicture.asset(
+        builder: (context, color, _) => SvgPicture.asset(
           AppAssets.appLogoNeutralWhite,
           width: size,
           height: size,

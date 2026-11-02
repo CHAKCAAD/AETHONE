@@ -187,7 +187,7 @@ class _CenterConnectButton extends StatelessWidget {
         ),
         duration: duration,
         curve: style.curve,
-        builder: (context, color) => PowerIcon(
+        builder: (context, color, _) => PowerIcon(
           size: 48 * s,
           color: color ?? AethColors.onPillDisconnected,
         ),
