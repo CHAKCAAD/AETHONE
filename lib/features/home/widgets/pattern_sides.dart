@@ -4,16 +4,14 @@
 /// rasterize — on device the blurred edge circles rendered as SOLID blobs,
 /// the single worst visual defect of the first preview build).
 ///
-/// v4.11 placement (owner defect report #1: «پترن‌ها تمام عرض صفحه رو نگرفتن؛
-/// چپ کمی پایین‌تر از وسط، راست کمی بالاتر از وسط»):
-///   * Each PNG canvas now spans the FULL screen width (the soft green wash
-///     + line art reach across the screen like the reference frames).
-///   * LEFT canvas: artwork bottom (969/1232 of the canvas) pinned to the
-///     screen bottom → the art band sits below mid-screen.
-///   * RIGHT canvas: artwork top (205/1178 of the canvas) pinned to the
-///     screen top → the art band sits above mid-screen.
-///   Measured against حالت متصل-ضاهر1: left art lands y251..874 (frame:
-///   261..870), right art y0..618 (frame: 0..760 incl. halo tail).
+/// v4.12 placement (owner: «پترن‌های چپ و راست رو ۴۰ درصد کوچک‌تر کن، الان
+/// خیلی بزرگن»): each canvas renders at [AethGeometry.patternScale] (0.6) of
+/// the screen width — the artwork is 40% smaller than the v4.11 full-width
+/// span. Anchors keep the v4.11 composition, mirrored to the artwork side:
+///   * LEFT canvas (art hugs its left edge): pinned to the screen LEFT edge,
+///     art bottom on the screen bottom → the art band sits below mid-screen.
+///   * RIGHT canvas (art hugs its right edge): pinned to the screen RIGHT
+///     edge, art top on the screen top → the art band sits above mid-screen.
 ///
 /// The color change is animated as a crossfade between the two artwork
 /// variants (owner: «با انیمیشن به رنگ سبز تغییر پیدا می‌کنند»).
@@ -26,11 +24,7 @@ import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 
 class PatternSides extends StatelessWidget {
-  const PatternSides({
-    super.key,
-    required this.connected,
-    required this.style,
-  });
+  const PatternSides({super.key, required this.connected, required this.style});
 
   final bool connected;
   final MotionStyle style;
@@ -43,12 +37,15 @@ class PatternSides extends StatelessWidget {
         final w = box.maxWidth;
         final h = box.maxHeight;
 
-        // Left canvas: full width; art bottom anchored to screen bottom.
-        final leftH = w * AethGeometry.patternLeftAspect;
+        // v4.12: canvases at 60% of the screen width (art 40% smaller).
+        // Left canvas: pinned to the LEFT edge; art bottom on screen bottom.
+        final leftW = w * AethGeometry.patternScale;
+        final leftH = leftW * AethGeometry.patternLeftAspect;
         final leftTop = h - leftH * AethGeometry.patternLeftAnchorBottom;
 
-        // Right canvas: full width; art top anchored to screen top.
-        final rightH = w * AethGeometry.patternRightAspect;
+        // Right canvas: pinned to the RIGHT edge; art top on screen top.
+        final rightW = w * AethGeometry.patternScale;
+        final rightH = rightW * AethGeometry.patternRightAspect;
         final rightTop = -rightH * AethGeometry.patternRightAnchorTop;
 
         return IgnorePointer(
@@ -58,7 +55,7 @@ class PatternSides extends StatelessWidget {
               Positioned(
                 left: 0,
                 top: leftTop,
-                width: w,
+                width: leftW,
                 height: leftH,
                 child: AnimatedSwitcher(
                   duration: duration,
@@ -75,7 +72,7 @@ class PatternSides extends StatelessWidget {
               Positioned(
                 right: 0,
                 top: rightTop,
-                width: w,
+                width: rightW,
                 height: rightH,
                 child: AnimatedSwitcher(
                   duration: duration,

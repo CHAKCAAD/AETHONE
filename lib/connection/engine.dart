@@ -107,11 +107,13 @@ class EngineNotWiredAdapter implements EngineAdapter {
 
   @override
   Future<void> connect() async {
-    _controller.add(const EngineStateChanged(
-      VpnState.failed,
-      errorCode: 'engineNotWired',
-      message: 'Native engine layer is not wired yet (milestone M2).',
-    ));
+    _controller.add(
+      const EngineStateChanged(
+        VpnState.failed,
+        errorCode: 'engineNotWired',
+        message: 'Native engine layer is not wired yet (milestone M2).',
+      ),
+    );
   }
 
   @override
@@ -159,10 +161,12 @@ class PreviewEngineAdapter implements EngineAdapter {
     // End-to-end probe "passed" in preview — this is a SIMULATION, clearly
     // documented; production Connected only comes from the real probe.
     _emit(const EngineStateChanged(VpnState.connected));
-    _emit(EngineStatsUpdated(
-      pingMs: samplePingMs,
-      exitCountryCode: sampleExitCountry,
-    ));
+    _emit(
+      EngineStatsUpdated(
+        pingMs: samplePingMs,
+        exitCountryCode: sampleExitCountry,
+      ),
+    );
   }
 
   @override

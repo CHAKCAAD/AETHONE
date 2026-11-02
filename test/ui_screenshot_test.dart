@@ -53,18 +53,15 @@ Future<void> _loadRealFonts() async {
 }
 
 Widget _booth(Widget child) => MaterialApp(
-      locale: const Locale('fa'),
-      supportedLocales: AethoneApp.supportedLocales,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      home: RepaintBoundary(
-        key: _shotKey,
-        child: child,
-      ),
-    );
+  locale: const Locale('fa'),
+  supportedLocales: AethoneApp.supportedLocales,
+  localizationsDelegates: const [
+    GlobalMaterialLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+  ],
+  home: RepaintBoundary(key: _shotKey, child: child),
+);
 
 Future<void> _save(WidgetTester tester, String name) async {
   for (var i = 0; i < 15; i++) {
@@ -93,8 +90,9 @@ Future<void> _save(WidgetTester tester, String name) async {
 void main() {
   Directory('/tmp/ui_shots').createSync(recursive: true);
 
-  testWidgets('render disconnected + connected home screens to PNG',
-      (tester) async {
+  testWidgets('render disconnected + connected home screens to PNG', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(402, 874);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -121,12 +119,14 @@ void main() {
     await _save(tester, 'home_connecting');
     print('EMIT CONNECTED');
     engine.emit(const EngineStateChanged(VpnState.connected));
-    engine.emit(const EngineStatsUpdated(
-      pingMs: 146,
-      downBytes: 145 * 1024 * 1024,
-      upBytes: 425 * 1024 * 1024,
-      exitCountryCode: 'ir',
-    ));
+    engine.emit(
+      const EngineStatsUpdated(
+        pingMs: 146,
+        downBytes: 145 * 1024 * 1024,
+        upBytes: 425 * 1024 * 1024,
+        exitCountryCode: 'ir',
+      ),
+    );
     await _save(tester, 'home_connected');
     expect(store.isConnected, isTrue);
   }, timeout: const Timeout(Duration(minutes: 5)));

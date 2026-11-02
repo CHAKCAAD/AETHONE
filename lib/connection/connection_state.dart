@@ -38,39 +38,39 @@ class VpnStateMachine {
   static bool isValidTransition(VpnState from, VpnState to) {
     if (to == VpnState.failed) return true;
     return switch (from) {
-      VpnState.disconnected =>
-        next(to, {VpnState.starting, VpnState.disconnecting}),
+      VpnState.disconnected => next(to, {
+        VpnState.starting,
+        VpnState.disconnecting,
+      }),
       VpnState.starting => next(to, {
-          VpnState.waitingForPermissions,
-          VpnState.connecting,
-        }),
+        VpnState.waitingForPermissions,
+        VpnState.connecting,
+      }),
       VpnState.waitingForPermissions => next(to, {
-          VpnState.connecting,
-          VpnState.disconnecting,
-        }),
+        VpnState.connecting,
+        VpnState.disconnecting,
+      }),
       VpnState.connecting => next(to, {
-          VpnState.connected,
-          VpnState.disconnecting,
-        }),
+        VpnState.connected,
+        VpnState.disconnecting,
+      }),
       VpnState.connected => next(to, {
-          VpnState.reconnecting,
-          VpnState.disconnecting,
-        }),
+        VpnState.reconnecting,
+        VpnState.disconnecting,
+      }),
       // Retry from Reconnecting goes back to Connecting (prompt §8).
       VpnState.reconnecting => next(to, {
-          VpnState.connecting,
-          VpnState.disconnecting,
-        }),
-      VpnState.disconnecting =>
-        next(to, {VpnState.disconnected}),
+        VpnState.connecting,
+        VpnState.disconnecting,
+      }),
+      VpnState.disconnecting => next(to, {VpnState.disconnected}),
       // Retry from Failed goes to Connecting (prompt §8).
       VpnState.failed => next(to, {
-          VpnState.connecting,
-          VpnState.disconnecting,
-        }),
+        VpnState.connecting,
+        VpnState.disconnecting,
+      }),
     };
   }
 
-  static bool next(VpnState to, Set<VpnState> allowed) =>
-      allowed.contains(to);
+  static bool next(VpnState to, Set<VpnState> allowed) => allowed.contains(to);
 }

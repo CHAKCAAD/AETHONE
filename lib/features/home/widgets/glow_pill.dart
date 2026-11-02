@@ -100,7 +100,10 @@ class _LayerStackPainter extends CustomPainter {
       final paint = Paint()
         ..color = widget.color.withValues(alpha: spec.opacity);
       if (spec.blurSigma > 0) {
-        paint.maskFilter = MaskFilter.blur(BlurStyle.normal, spec.blurSigma * s);
+        paint.maskFilter = MaskFilter.blur(
+          BlurStyle.normal,
+          spec.blurSigma * s,
+        );
       }
       canvas.drawRRect(
         RRect.fromRectAndRadius(rect, Radius.circular(spec.radius * s)),
@@ -122,11 +125,7 @@ class _LayerStackPainter extends CustomPainter {
 /// fa locale it lays out exactly like the reference frames: text visual-left,
 /// shield visual-right.
 class StatusPill extends StatelessWidget {
-  const StatusPill({
-    super.key,
-    required this.state,
-    required this.style,
-  });
+  const StatusPill({super.key, required this.state, required this.style});
 
   final VpnState state;
   final MotionStyle style;
@@ -140,16 +139,21 @@ class StatusPill extends StatelessWidget {
 
     final connected = state == VpnState.connected;
     final (label, iconAsset) = switch (state) {
-      VpnState.connected =>
-        (strings.statusConnected, AppAssets.iconShieldTick),
-      VpnState.connecting => (strings.statusConnecting, AppAssets.iconShieldCross),
-      VpnState.reconnecting =>
-        (strings.statusReconnecting, AppAssets.iconShieldCross),
+      VpnState.connected => (strings.statusConnected, AppAssets.iconShieldTick),
+      VpnState.connecting => (
+        strings.statusConnecting,
+        AppAssets.iconShieldCross,
+      ),
+      VpnState.reconnecting => (
+        strings.statusReconnecting,
+        AppAssets.iconShieldCross,
+      ),
       VpnState.failed => (strings.statusFailed, AppAssets.iconShieldCross),
       _ => (strings.statusDisconnected, AppAssets.iconShieldCross),
     };
-    final accent =
-        connected ? AethColors.accentConnected : AethColors.statusDisconnected;
+    final accent = connected
+        ? AethColors.accentConnected
+        : AethColors.statusDisconnected;
     final fg = connected
         ? AethColors.onPillConnected
         : AethColors.onPillDisconnected;
@@ -207,7 +211,7 @@ class StatusPill extends StatelessWidget {
           // longer «در حال اتصال») inside the 125.76 core at ANY font.
           FittedBox(
             fit: BoxFit.scaleDown,
-              child: TweenAnimationBuilder<Color?>(
+            child: TweenAnimationBuilder<Color?>(
               tween: ColorTween(
                 begin: connected
                     ? AethColors.onPillDisconnected
@@ -246,8 +250,8 @@ class StatusPill extends StatelessWidget {
                 ),
               ),
             ),
-
-          ),        ],
+          ),
+        ],
       ),
     );
   }

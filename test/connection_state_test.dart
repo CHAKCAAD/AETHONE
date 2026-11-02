@@ -6,16 +6,19 @@ void main() {
   group('state set', () {
     test('has exactly the 8 prompt-§8 states', () {
       expect(VpnState.values.length, 8);
-      expect(VpnState.values, containsAll(<VpnState>[
-        VpnState.disconnected,
-        VpnState.starting,
-        VpnState.waitingForPermissions,
-        VpnState.connecting,
-        VpnState.connected,
-        VpnState.reconnecting,
-        VpnState.disconnecting,
-        VpnState.failed,
-      ]));
+      expect(
+        VpnState.values,
+        containsAll(<VpnState>[
+          VpnState.disconnected,
+          VpnState.starting,
+          VpnState.waitingForPermissions,
+          VpnState.connecting,
+          VpnState.connected,
+          VpnState.reconnecting,
+          VpnState.disconnecting,
+          VpnState.failed,
+        ]),
+      );
     });
   });
 
@@ -38,18 +41,20 @@ void main() {
       m.transition(VpnState.connected);
     });
 
-    test('health failure: connected → reconnecting → connecting → connected',
-        () {
-      final m = VpnStateMachine();
-      m
-        ..transition(VpnState.starting)
-        ..transition(VpnState.connecting)
-        ..transition(VpnState.connected)
-        ..transition(VpnState.reconnecting);
-      // Retry from Reconnecting goes to Connecting (prompt §8).
-      m.transition(VpnState.connecting);
-      m.transition(VpnState.connected);
-    });
+    test(
+      'health failure: connected → reconnecting → connecting → connected',
+      () {
+        final m = VpnStateMachine();
+        m
+          ..transition(VpnState.starting)
+          ..transition(VpnState.connecting)
+          ..transition(VpnState.connected)
+          ..transition(VpnState.reconnecting);
+        // Retry from Reconnecting goes to Connecting (prompt §8).
+        m.transition(VpnState.connecting);
+        m.transition(VpnState.connected);
+      },
+    );
 
     test('user disconnect from any active state', () {
       final m = VpnStateMachine();
@@ -58,10 +63,7 @@ void main() {
         ..transition(VpnState.connecting)
         ..transition(VpnState.connected)
         ..transition(VpnState.disconnecting);
-      expect(
-        m.transition(VpnState.disconnected),
-        VpnState.disconnected,
-      );
+      expect(m.transition(VpnState.disconnected), VpnState.disconnected);
     });
 
     test('retry from failed goes to connecting (prompt §8)', () {
@@ -79,10 +81,7 @@ void main() {
           final reached = _forceState(m, from);
           expect(reached, isTrue, reason: 'setup for $from failed');
           expect(
-            VpnStateMachine.isValidTransition(
-              m.current,
-              VpnState.failed,
-            ),
+            VpnStateMachine.isValidTransition(m.current, VpnState.failed),
             isTrue,
             reason: '$from → failed must be legal',
           );
@@ -124,8 +123,10 @@ void main() {
 
     test('machine throws StateError on illegal transition', () {
       final m = VpnStateMachine();
-      expect(() => m.transition(VpnState.connected),
-          throwsA(isA<StateError>()));
+      expect(
+        () => m.transition(VpnState.connected),
+        throwsA(isA<StateError>()),
+      );
     });
 
     test('waitingForPermissions is only reachable from starting', () {
@@ -134,8 +135,11 @@ void main() {
           from,
           VpnState.waitingForPermissions,
         );
-        expect(legal, from == VpnState.starting,
-            reason: '$from → waitingForPermissions');
+        expect(
+          legal,
+          from == VpnState.starting,
+          reason: '$from → waitingForPermissions',
+        );
       }
     });
   });

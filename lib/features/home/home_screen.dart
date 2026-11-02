@@ -79,7 +79,8 @@ class HomeScreen extends StatelessWidget {
         final connected = store.isConnected;
         final isLookOne = store.homeLook == HomeLook.one;
         // The scanning walk: starting → connecting (→ reconnecting).
-        final showScan = !connected &&
+        final showScan =
+            !connected &&
             (store.state == VpnState.starting ||
                 store.state == VpnState.connecting ||
                 store.state == VpnState.reconnecting);
@@ -95,6 +96,11 @@ class HomeScreen extends StatelessWidget {
               SafeArea(
                 child: Column(
                   children: [
+                    // v4.12: extra top gap so the app never crowds the
+                    // status-bar / notch area (owner: «کمی از بالا کل اپ رو
+                    // فاصله بده تا اپ وارد فرورفتگی نمایش درصد شارژ و ...
+                    // گوشی نشه»).
+                    SizedBox(height: AethGeometry.topSafeExtraGap * s),
                     HomeTopBar(
                       onSettings: () => _openPlaceholderSheet(
                         context,
@@ -135,6 +141,32 @@ class HomeScreen extends StatelessWidget {
                                     )
                                   : const SizedBox.shrink(
                                       key: ValueKey('scan-off'),
+                                    ),
+                            ),
+                            // v4.12 connected aura: a soft breathing halo
+                            // BEHIND the central icon in BOTH looks, so the
+                            // connected screen keeps a quiet life (owner:
+                            // «بعد از اتصال هم آیکون وسط صفحه یک انیمیشن
+                            // جذاب داشته باشه تا صفحه بی روح نباشه»). The
+                            // hero adds its own breathing scale pulse.
+                            AnimatedSwitcher(
+                              duration: motionDuration(
+                                style,
+                                MotionDurations.state,
+                              ),
+                              child: connected
+                                  ? ConnectedAura(
+                                      key: const ValueKey('connected-aura'),
+                                      color: AethColors.accentConnected,
+                                      size:
+                                          (isLookOne
+                                              ? AethGeometry.heroSize
+                                              : AethGeometry.centerButtonSize) *
+                                          1.25 *
+                                          s,
+                                    )
+                                  : const SizedBox.shrink(
+                                      key: ValueKey('aura-off'),
                                     ),
                             ),
                             if (isLookOne)
@@ -181,10 +213,13 @@ class HomeScreen extends StatelessWidget {
                           context,
                           strings.protocolSheetComingNext,
                         ),
-                        // Swipe-only connect (defect #11): up = connect,
-                        // down = disconnect. No tap surface at all.
-                        onSwipeUp: store.connect,
-                        onSwipeDown: store.disconnect,
+                        // Tap connect (owner v4.12: «دکمه اتصال رو به حالت
+                        // کلیک قبلش برگردون، نمیخوام حالت سوییپ داشته باشه»)
+                        // — the FAB toggles: tap connects, tap again
+                        // disconnects. The center look-2 button behaves the
+                        // same.
+                        onConnect: store.connect,
+                        onDisconnect: store.disconnect,
                       ),
                     ),
                     SizedBox(height: AethGeometry.gapPanelToBottom * s),
@@ -200,15 +235,14 @@ class HomeScreen extends StatelessWidget {
 }
 
 /// Look 2: the hero IS the connect button (112px core, 4-layer glow) with
-/// the set's real Off.svg icon. Owner defect #11: SWIPE-ONLY — up connects,
-/// down disconnects; no tap surface.
+/// the set's real Off.svg icon. Owner v4.12: back to CLICK — a tap toggles
+/// (connect when disconnected, disconnect when connected); the swipe-only
+/// interaction from defect #11 is reverted.
 class _CenterConnectButton extends StatelessWidget {
   const _CenterConnectButton({required this.store, required this.style});
 
   final ConnectionStore store;
   final MotionStyle style;
-
-  static const double _swipeVelocityThreshold = 250;
 
   @override
   Widget build(BuildContext context) {
@@ -216,41 +250,32 @@ class _CenterConnectButton extends StatelessWidget {
     final connected = store.isConnected;
     final duration = motionDuration(style, MotionDurations.state);
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onVerticalDragEnd: (details) {
-        final dy = details.velocity.pixelsPerSecond.dy;
-        if (dy < -_swipeVelocityThreshold) {
-          store.connect();
-        } else if (dy > _swipeVelocityThreshold) {
-          store.disconnect();
-        }
-      },
-      child: GlowCircle(
-        active: connected,
+    void toggle() => connected ? store.disconnect() : store.connect();
+
+    return GlowCircle(
+      active: connected,
+      duration: duration,
+      curve: style.curve,
+      onTap: toggle, // tap-to-toggle (owner v4.12)
+      child: TweenAnimationBuilder<Color?>(
+        tween: ColorTween(
+          begin: connected
+              ? AethColors.onPillDisconnected
+              : AethColors.onPillConnected,
+          end: connected
+              ? AethColors.onPillConnected
+              : AethColors.onPillDisconnected,
+        ),
         duration: duration,
         curve: style.curve,
-        onTap: null, // swipe-only (defect #11)
-        child: TweenAnimationBuilder<Color?>(
-          tween: ColorTween(
-            begin: connected
-                ? AethColors.onPillDisconnected
-                : AethColors.onPillConnected,
-            end: connected
-                ? AethColors.onPillConnected
-                : AethColors.onPillDisconnected,
-          ),
-          duration: duration,
-          curve: style.curve,
-          builder: (context, color, _) => SvgPicture.asset(
-            AppAssets.iconOff,
-            width: 48 * s,
-            height: 48 * s,
-            fit: BoxFit.contain,
-            colorFilter: ColorFilter.mode(
-              color ?? AethColors.onPillDisconnected,
-              BlendMode.srcIn,
-            ),
+        builder: (context, color, _) => SvgPicture.asset(
+          AppAssets.iconOff,
+          width: 48 * s,
+          height: 48 * s,
+          fit: BoxFit.contain,
+          colorFilter: ColorFilter.mode(
+            color ?? AethColors.onPillDisconnected,
+            BlendMode.srcIn,
           ),
         ),
       ),

@@ -1,13 +1,19 @@
 /// Look-1 hero: the central app logo. Disconnected: the artwork as committed
-/// (correlation 0.997 against the reference frame). Connected: rotated 60°
-/// counter-clockwise — the pose measured on حالت متصل-ضاهر1 (correlation
-/// 0.933 vs 45°: 0.771 and 75°: 0.624), where the mark's tip points EXACTLY
-/// upward (owner defect #6: «نوک آن دقیقا رو به بالا نیست»). Tint animates
-/// red ↔ green with the state.
+/// (correlation 0.997 against the reference frame). Connected: rotated 57°
+/// counter-clockwise (v4.12 — owner: «میزان چرخش آیکون وسط صفحه به اندازه ۶۰
+/// درجه زیاده، کمترش کن به ۵۷ درجه»; the v4.11 pose was the measured 60°).
+/// Tint animates red ↔ green with the state.
 ///
 /// While the engine is walking toward a connection (starting / connecting /
 /// reconnecting) an animated scanning halo (expanding rings, defect #10)
 /// plays BEHIND the logo — see [ScanRings].
+///
+/// CONNECTED IDLE (v4.12 — owner: «بعد از اتصال هم آیکون وسط صفحه یک انیمیشن
+/// جذاب داشته باشه تا صفحه بی روح نباشه»): the logo breathes — a slow,
+/// gentle scale pulse driven by [ConnectedAura]'s phase — and the
+/// [ConnectedAura] radial halo breathes BEHIND it (see home_screen: the aura
+/// is mounted for BOTH looks). MotionStyle.off disables the idle motion
+/// (accessibility rule) — the state change animations stay.
 library;
 
 import 'package:flutter/material.dart';
@@ -18,18 +24,14 @@ import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 
 class HeroLogo extends StatelessWidget {
-  const HeroLogo({
-    super.key,
-    required this.connected,
-    required this.style,
-  });
+  const HeroLogo({super.key, required this.connected, required this.style});
 
   final bool connected;
   final MotionStyle style;
 
-  /// Reference-measured pose: 60° CCW = 1/6 turn. Flutter `turns` are
-  /// clockwise-positive, hence the negative fraction.
-  static const double _connectedTurns = -1 / 6;
+  /// v4.12 pose: 57° CCW (owner-tuned down from the measured 60°). Flutter
+  /// `turns` are clockwise-positive, hence the negative fraction.
+  static const double _connectedTurns = -57 / 360;
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +40,7 @@ class HeroLogo extends StatelessWidget {
     final duration = motionDuration(style, MotionDurations.state);
     final curve = style.curve;
 
-    return AnimatedRotation(
+    final Widget logo = AnimatedRotation(
       turns: connected ? _connectedTurns : 0.0,
       duration: duration,
       curve: curve,
@@ -57,10 +59,150 @@ class HeroLogo extends StatelessWidget {
           AppAssets.appLogoNeutralWhite,
           width: size,
           height: size,
-          colorFilter: ColorFilter.mode(color ?? AethColors.statusDisconnected,
-              BlendMode.srcIn),
+          colorFilter: ColorFilter.mode(
+            color ?? AethColors.statusDisconnected,
+            BlendMode.srcIn,
+          ),
         ),
       ),
+    );
+
+    // Connected idle life: a gentle breathing pulse of the logo itself.
+    return _BreathingWhileConnected(
+      connected: connected,
+      style: style,
+      child: logo,
+    );
+  }
+}
+
+/// Slow scale pulse (1.00 → 1.02) that runs ONLY while [connected].
+/// With MotionStyle.off the child renders statically (accessibility clamp).
+class _BreathingWhileConnected extends StatefulWidget {
+  const _BreathingWhileConnected({
+    required this.connected,
+    required this.style,
+    required this.child,
+  });
+
+  final bool connected;
+  final MotionStyle style;
+  final Widget child;
+
+  @override
+  State<_BreathingWhileConnected> createState() =>
+      _BreathingWhileConnectedState();
+}
+
+class _BreathingWhileConnectedState extends State<_BreathingWhileConnected>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.connected && widget.style != MotionStyle.off) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _BreathingWhileConnected old) {
+    super.didUpdateWidget(old);
+    final animate = widget.connected && widget.style != MotionStyle.off;
+    if (animate && !_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    } else if (!animate) {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.connected || widget.style == MotionStyle.off) {
+      return widget.child;
+    }
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = Curves.easeInOut.transform(_controller.value);
+        return Transform.scale(scale: 1.0 + 0.02 * t, child: child);
+      },
+      child: widget.child,
+    );
+  }
+}
+
+/// The connected aura (v4.12): a soft radial halo BEHIND the central icon
+/// that breathes in the same 2.6 s phase as the logo pulse — the connected
+/// screen stays alive without stealing attention. Mounted for BOTH looks by
+/// home_screen (hero logo / look-2 connect button).
+class ConnectedAura extends StatefulWidget {
+  const ConnectedAura({super.key, required this.color, required this.size});
+
+  final Color color;
+  final double size;
+
+  @override
+  State<ConnectedAura> createState() => _ConnectedAuraState();
+}
+
+class _ConnectedAuraState extends State<ConnectedAura>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = Curves.easeInOut.transform(_controller.value);
+        final d = widget.size * (0.92 + 0.14 * t);
+        return SizedBox(
+          width: widget.size,
+          height: widget.size,
+          child: Center(
+            child: Container(
+              width: d,
+              height: d,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    widget.color.withValues(alpha: 0.05 + 0.09 * t),
+                    widget.color.withValues(alpha: 0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

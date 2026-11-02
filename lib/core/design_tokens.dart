@@ -113,17 +113,22 @@ abstract final class AethGeometry {
   static const double connectButtonSize = 48;
   static const double connectButtonRise = 72;
 
-  /// Edge patterns (v4.11): each PNG canvas spans the FULL screen width so
-  /// the wash + line art cover the width like the reference frames. Vertical
-  /// anchoring from the artwork's alpha bbox (left art y263..969 of 1232;
-  /// right art y205..918 of 1178): the LEFT art bottom sits on the screen
-  /// bottom (art center ≈ y563 — «کمی پایین‌تر از وسط»), the RIGHT art top on
-  /// the screen top (art center ≈ y311 — «کمی بالاتر از وسط»), matching the
-  /// measured frame extents (left art y261..870, right y0..760).
+  /// Edge patterns. v4.11 anchored each canvas (LEFT art bottom on the
+  /// screen bottom, RIGHT art top on the screen top). v4.12 — owner
+  /// «پترن‌های چپ و راست رو ۴۰ درصد کوچک‌تر کن، الان خیلی بزرگن»: the
+  /// canvases render at [patternScale] of the screen width (art 40% smaller
+  /// than the v4.11 full-width span), keeping the same anchors — left art
+  /// hugging the LEFT edge, right art the RIGHT edge.
+  static const double patternScale = 0.6;
   static const double patternLeftAspect = 1232 / 456; // h/w of the canvas
   static const double patternRightAspect = 1178 / 464;
   static const double patternLeftAnchorBottom = 969 / 1232;
   static const double patternRightAnchorTop = 205 / 1178;
+
+  /// v4.12 — owner «کمی از بالا کل اپ رو فاصله بده تا اپ وارد فرورفتگی
+  /// نمایش درصد شارژ و ... گوشی نشه»: extra top gap UNDER the SafeArea so
+  /// the content never crowds the status bar / notch on any device.
+  static const double topSafeExtraGap = 12;
 
   /// Look-2 center connect button core: 112px circle (144,328)–(256,432).
   static const double centerButtonSize = 112;
@@ -215,7 +220,12 @@ abstract final class AethGeometry {
   static const double gapPillToPanel = 63;
   static const double gapPanelToBottom = 30;
 
-  /// Location row insets (ref: name x 95–130, ping ends x 324).
+  /// Location header (v4.12): the name · map icon · ping render as ONE
+  /// compact cluster at the LEFT-OF-CENTER — [locationInsetStart] is the
+  /// cluster's start inset (ref name start x95) and [locationGroupGap] the
+  /// gap between the three cluster elements. (v4.11 spread them name-left /
+  /// icon-center / ping-right; the owner asked for the left-of-center
+  /// cluster instead.)
   static const double locationInsetStart = 95;
-  static const double locationInsetEnd = 78;
+  static const double locationGroupGap = 12;
 }

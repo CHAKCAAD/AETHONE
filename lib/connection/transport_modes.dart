@@ -174,6 +174,5 @@ abstract final class TransportModes {
     psiphonOnly,
   ];
 
-  static TransportMode byId(ProtocolId id) =>
-      all.firstWhere((m) => m.id == id);
+  static TransportMode byId(ProtocolId id) => all.firstWhere((m) => m.id == id);
 }

@@ -14,11 +14,7 @@ void main() {
     for (final path in AppAssets.allReferenced) {
       if (!File(path).existsSync()) missing.add(path);
     }
-    expect(
-      missing,
-      isEmpty,
-      reason: 'missing assets: $missing',
-    );
+    expect(missing, isEmpty, reason: 'missing assets: $missing');
   });
 
   test('every referenced asset is BUNDLED (declared in pubspec)', () async {
@@ -35,26 +31,34 @@ void main() {
         notBundled.add(path);
       }
     }
-    expect(notBundled, isEmpty,
-        reason: 'assets missing from the bundle (pubspec): $notBundled');
+    expect(
+      notBundled,
+      isEmpty,
+      reason: 'assets missing from the bundle (pubspec): $notBundled',
+    );
   });
 
   test('flag helper resolves existing files', () {
     for (final code in ['ir', 'tm', 'ru', 'cn', 'de', 'us', 'fr']) {
-      expect(File(AppAssets.flag(code)).existsSync(), isTrue,
-          reason: 'flag $code');
+      expect(
+        File(AppAssets.flag(code)).existsSync(),
+        isTrue,
+        reason: 'flag $code',
+      );
     }
   });
 
-  test('all five UI languages resolve strings (tk documented to fall back)',
-      () {
-    for (final lang in ['fa', 'en', 'ru', 'zh', 'tk']) {
-      final s = AppStrings.forLocale(lang);
-      expect(s.statusConnected, isNotEmpty);
-      expect(s.statusDisconnected, isNotEmpty);
-      expect(s.protocol, isNotEmpty);
-    }
-  });
+  test(
+    'all five UI languages resolve strings (tk documented to fall back)',
+    () {
+      for (final lang in ['fa', 'en', 'ru', 'zh', 'tk']) {
+        final s = AppStrings.forLocale(lang);
+        expect(s.statusConnected, isNotEmpty);
+        expect(s.statusDisconnected, isNotEmpty);
+        expect(s.protocol, isNotEmpty);
+      }
+    },
+  );
 
   test('fa strings are the exact reference-screen texts', () {
     final fa = AppStrings.forLocale('fa');

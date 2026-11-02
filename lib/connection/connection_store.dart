@@ -12,6 +12,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/app_assets.dart';
 import '../core/motion.dart';
@@ -24,7 +25,7 @@ enum HomeLook { one, two }
 
 class ConnectionStore extends ChangeNotifier {
   ConnectionStore({EngineAdapter? engine})
-      : _engine = engine ?? _defaultEngine() {
+    : _engine = engine ?? _defaultEngine() {
     _subscription = _engine.events.listen(_onEvent);
   }
 
@@ -114,8 +115,7 @@ class ConnectionStore extends ChangeNotifier {
 
   Future<void> disconnect() async {
     if (_operationInFlight) return;
-    if (state == VpnState.disconnected ||
-        state == VpnState.disconnecting) {
+    if (state == VpnState.disconnected || state == VpnState.disconnecting) {
       return;
     }
     _operationInFlight = true;
@@ -171,8 +171,12 @@ class ConnectionStore extends ChangeNotifier {
       case EngineEndpointChanged():
         // TODO(M2): track active endpoint for the ActiveTransportSession.
         break;
-      case EngineStatsUpdated(:final pingMs, :final downBytes,
-            :final upBytes, :final exitCountryCode):
+      case EngineStatsUpdated(
+        :final pingMs,
+        :final downBytes,
+        :final upBytes,
+        :final exitCountryCode,
+      ):
         this.pingMs = pingMs;
         this.downBytes = downBytes;
         this.upBytes = upBytes;
@@ -194,8 +198,7 @@ class ConnectionStore extends ChangeNotifier {
       );
       return;
     }
-    if (next == VpnState.disconnected ||
-        next == VpnState.connecting) {
+    if (next == VpnState.disconnected || next == VpnState.connecting) {
       // Leaving/never-reaching connected ⇒ no stale ping/exit data.
       pingMs = null;
       exitCountryCode = null;
@@ -203,6 +206,11 @@ class ConnectionStore extends ChangeNotifier {
       upBytes = 0;
     }
     _machine.transition(next);
+    if (next == VpnState.connected) {
+      // Owner v4.12: a SMALL haptic pulse the moment the connection really
+      // lands (state-machine-verified, never on a fake/optimistic path).
+      HapticFeedback.mediumImpact();
+    }
   }
 
   void _fail({String? errorCode, String? message}) {

@@ -36,8 +36,8 @@ class BottomPanel extends StatelessWidget {
     required this.upBytes,
     required this.showConnectButton,
     required this.onProtocolCardTap,
-    required this.onSwipeUp,
-    required this.onSwipeDown,
+    required this.onConnect,
+    required this.onDisconnect,
   });
 
   final bool connected;
@@ -51,10 +51,12 @@ class BottomPanel extends StatelessWidget {
   final bool showConnectButton;
   final VoidCallback onProtocolCardTap;
 
-  /// Swipe-only connect gestures (owner defect #11): up connects, down
-  /// disconnects — the FAB has NO tap action.
-  final VoidCallback onSwipeUp;
-  final VoidCallback onSwipeDown;
+  /// Tap-to-toggle connect actions (owner v4.12: «دکمه اتصال رو به حالت
+  /// کلیک قبلش برگردون، نمیخوام حالت سوییپ داشته باشه» — the v4.11
+  /// swipe-only interaction is reverted): the FAB tap connects when
+  /// disconnected and disconnects when connected.
+  final VoidCallback onConnect;
+  final VoidCallback onDisconnect;
 
   @override
   Widget build(BuildContext context) {
@@ -94,8 +96,8 @@ class BottomPanel extends StatelessWidget {
           FabColumn(
             connected: connected,
             style: style,
-            onSwipeUp: onSwipeUp,
-            onSwipeDown: onSwipeDown,
+            onConnect: onConnect,
+            onDisconnect: onDisconnect,
           ),
         ],
       ),
@@ -348,46 +350,36 @@ class StatCard extends StatelessWidget {
 /// (disconnected) + three tiny red chevrons pinned near the bottom (covered
 /// by the button in its lower position, exactly like the reference frames).
 ///
-/// Owner defect #11: the button is SWIPE-ONLY — dragging UP connects,
-/// dragging DOWN disconnects; a plain tap never toggles. The slot slide +
-/// color crossfade + icon swap are all animated (defect #5).
+/// Owner v4.12: back to CLICK — a plain tap toggles (connect when
+/// disconnected, disconnect when connected); the v4.11 swipe-only rule is
+/// reverted. The slot slide + color crossfade + icon swap stay animated
+/// (defect #5).
 class FabColumn extends StatelessWidget {
   const FabColumn({
     super.key,
     required this.connected,
     required this.style,
-    required this.onSwipeUp,
-    required this.onSwipeDown,
+    required this.onConnect,
+    required this.onDisconnect,
   });
 
   final bool connected;
   final MotionStyle style;
-  final VoidCallback onSwipeUp;
-  final VoidCallback onSwipeDown;
-
-  /// Vertical speed (px/s) the finger must carry for the gesture to count.
-  static const double _swipeVelocityThreshold = 250;
-
-  void _onDragEnd(DragEndDetails details) {
-    final dy = details.velocity.pixelsPerSecond.dy;
-    if (dy < -_swipeVelocityThreshold) {
-      onSwipeUp();
-    } else if (dy > _swipeVelocityThreshold) {
-      onSwipeDown();
-    }
-  }
+  final VoidCallback onConnect;
+  final VoidCallback onDisconnect;
 
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final duration = motionDuration(style, MotionDurations.state);
     final size = AethGeometry.connectButtonSize * s;
-    final color =
-        connected ? AethColors.accentConnected : AethColors.statusDisconnected;
+    final color = connected
+        ? AethColors.accentConnected
+        : AethColors.statusDisconnected;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onVerticalDragEnd: _onDragEnd,
+      onTap: connected ? onDisconnect : onConnect,
       child: Container(
         width: AethGeometry.fabColumnWidth * s,
         height: AethGeometry.fabColumnHeight * s,
