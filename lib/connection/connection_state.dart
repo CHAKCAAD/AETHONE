@@ -9,7 +9,7 @@
 library;
 
 /// The 8 connection states (prompt §8).
-enum ConnectionState {
+enum VpnState {
   disconnected,
   starting,
   waitingForPermissions,
@@ -21,12 +21,12 @@ enum ConnectionState {
 }
 
 /// Pure, side-effect-free transition table — fully unit-tested.
-class ConnectionStateMachine {
-  ConnectionState _current = ConnectionState.disconnected;
+class VpnStateMachine {
+  VpnState _current = VpnState.disconnected;
 
-  ConnectionState get current => _current;
+  VpnState get current => _current;
 
-  ConnectionState transition(ConnectionState next) {
+  VpnState transition(VpnState next) {
     if (!isValidTransition(_current, next)) {
       throw StateError('invalid transition: $_current → $next');
     }
@@ -35,42 +35,42 @@ class ConnectionStateMachine {
   }
 
   /// Any state → failed is always legal (prompt §8).
-  static bool isValidTransition(ConnectionState from, ConnectionState to) {
-    if (to == ConnectionState.failed) return true;
+  static bool isValidTransition(VpnState from, VpnState to) {
+    if (to == VpnState.failed) return true;
     return switch (from) {
-      ConnectionState.disconnected =>
-        next(to, {ConnectionState.starting, ConnectionState.disconnecting}),
-      ConnectionState.starting => next(to, {
-          ConnectionState.waitingForPermissions,
-          ConnectionState.connecting,
+      VpnState.disconnected =>
+        next(to, {VpnState.starting, VpnState.disconnecting}),
+      VpnState.starting => next(to, {
+          VpnState.waitingForPermissions,
+          VpnState.connecting,
         }),
-      ConnectionState.waitingForPermissions => next(to, {
-          ConnectionState.connecting,
-          ConnectionState.disconnecting,
+      VpnState.waitingForPermissions => next(to, {
+          VpnState.connecting,
+          VpnState.disconnecting,
         }),
-      ConnectionState.connecting => next(to, {
-          ConnectionState.connected,
-          ConnectionState.disconnecting,
+      VpnState.connecting => next(to, {
+          VpnState.connected,
+          VpnState.disconnecting,
         }),
-      ConnectionState.connected => next(to, {
-          ConnectionState.reconnecting,
-          ConnectionState.disconnecting,
+      VpnState.connected => next(to, {
+          VpnState.reconnecting,
+          VpnState.disconnecting,
         }),
       // Retry from Reconnecting goes back to Connecting (prompt §8).
-      ConnectionState.reconnecting => next(to, {
-          ConnectionState.connecting,
-          ConnectionState.disconnecting,
+      VpnState.reconnecting => next(to, {
+          VpnState.connecting,
+          VpnState.disconnecting,
         }),
-      ConnectionState.disconnecting =>
-        next(to, {ConnectionState.disconnected}),
+      VpnState.disconnecting =>
+        next(to, {VpnState.disconnected}),
       // Retry from Failed goes to Connecting (prompt §8).
-      ConnectionState.failed => next(to, {
-          ConnectionState.connecting,
-          ConnectionState.disconnecting,
+      VpnState.failed => next(to, {
+          VpnState.connecting,
+          VpnState.disconnecting,
         }),
     };
   }
 
-  static bool next(ConnectionState to, Set<ConnectionState> allowed) =>
+  static bool next(VpnState to, Set<VpnState> allowed) =>
       allowed.contains(to);
 }

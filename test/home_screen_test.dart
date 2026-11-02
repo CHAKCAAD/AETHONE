@@ -62,9 +62,9 @@ void main() {
 
     // Walk the machine legally, exactly like the real engine would.
     await store.connect(); // store applies `starting`
-    engine.emit(const EngineStateChanged(ConnectionState.connecting));
+    engine.emit(const EngineStateChanged(VpnState.connecting));
     await tester.pumpAndSettle();
-    engine.emit(const EngineStateChanged(ConnectionState.connected));
+    engine.emit(const EngineStateChanged(VpnState.connected));
     engine.emit(const EngineStatsUpdated(
       pingMs: 146,
       downBytes: 145 * 1024 * 1024,
@@ -73,7 +73,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(store.state, ConnectionState.connected);
+    expect(store.state, VpnState.connected);
     expect(find.text('متصل'), findsOneWidget);
     expect(find.text('غیرفعال'), findsNothing);
     expect(find.text('146 ms'), findsOneWidget);
@@ -90,7 +90,7 @@ void main() {
     await store.connect();
     await tester.pumpAndSettle();
 
-    expect(store.state, ConnectionState.failed);
+    expect(store.state, VpnState.failed);
     expect(store.lastErrorCode, 'engineNotWired');
     expect(find.text('خطا'), findsOneWidget);
     expect(find.text('متصل'), findsNothing);
@@ -110,6 +110,6 @@ void main() {
 
     // Still in a legal, non-corrupted state — no StateError thrown, machine
     // holds `starting` (engine here never reports further).
-    expect(store.state, ConnectionState.starting);
+    expect(store.state, VpnState.starting);
   });
 }

@@ -5,83 +5,83 @@ import 'package:aethone/connection/connection_state.dart';
 void main() {
   group('state set', () {
     test('has exactly the 8 prompt-§8 states', () {
-      expect(ConnectionState.values.length, 8);
-      expect(ConnectionState.values, containsAll(<ConnectionState>[
-        ConnectionState.disconnected,
-        ConnectionState.starting,
-        ConnectionState.waitingForPermissions,
-        ConnectionState.connecting,
-        ConnectionState.connected,
-        ConnectionState.reconnecting,
-        ConnectionState.disconnecting,
-        ConnectionState.failed,
+      expect(VpnState.values.length, 8);
+      expect(VpnState.values, containsAll(<VpnState>[
+        VpnState.disconnected,
+        VpnState.starting,
+        VpnState.waitingForPermissions,
+        VpnState.connecting,
+        VpnState.connected,
+        VpnState.reconnecting,
+        VpnState.disconnecting,
+        VpnState.failed,
       ]));
     });
   });
 
   group('legal happy paths', () {
     test('cold connect walk (no permissions)', () {
-      final m = ConnectionStateMachine();
-      expect(m.transition(ConnectionState.starting), ConnectionState.starting);
-      expect(m.transition(ConnectionState.connecting), ConnectionState.connecting);
-      expect(m.transition(ConnectionState.connected), ConnectionState.connected);
+      final m = VpnStateMachine();
+      expect(m.transition(VpnState.starting), VpnState.starting);
+      expect(m.transition(VpnState.connecting), VpnState.connecting);
+      expect(m.transition(VpnState.connected), VpnState.connected);
     });
 
     test('cold connect walk with permissions (Android/iOS)', () {
-      final m = ConnectionStateMachine();
-      m.transition(ConnectionState.starting);
+      final m = VpnStateMachine();
+      m.transition(VpnState.starting);
       expect(
-        m.transition(ConnectionState.waitingForPermissions),
-        ConnectionState.waitingForPermissions,
+        m.transition(VpnState.waitingForPermissions),
+        VpnState.waitingForPermissions,
       );
-      m.transition(ConnectionState.connecting);
-      m.transition(ConnectionState.connected);
+      m.transition(VpnState.connecting);
+      m.transition(VpnState.connected);
     });
 
     test('health failure: connected → reconnecting → connecting → connected',
         () {
-      final m = ConnectionStateMachine();
+      final m = VpnStateMachine();
       m
-        ..transition(ConnectionState.starting)
-        ..transition(ConnectionState.connecting)
-        ..transition(ConnectionState.connected)
-        ..transition(ConnectionState.reconnecting);
+        ..transition(VpnState.starting)
+        ..transition(VpnState.connecting)
+        ..transition(VpnState.connected)
+        ..transition(VpnState.reconnecting);
       // Retry from Reconnecting goes to Connecting (prompt §8).
-      m.transition(ConnectionState.connecting);
-      m.transition(ConnectionState.connected);
+      m.transition(VpnState.connecting);
+      m.transition(VpnState.connected);
     });
 
     test('user disconnect from any active state', () {
-      final m = ConnectionStateMachine();
+      final m = VpnStateMachine();
       m
-        ..transition(ConnectionState.starting)
-        ..transition(ConnectionState.connecting)
-        ..transition(ConnectionState.connected)
-        ..transition(ConnectionState.disconnecting);
+        ..transition(VpnState.starting)
+        ..transition(VpnState.connecting)
+        ..transition(VpnState.connected)
+        ..transition(VpnState.disconnecting);
       expect(
-        m.transition(ConnectionState.disconnected),
-        ConnectionState.disconnected,
+        m.transition(VpnState.disconnected),
+        VpnState.disconnected,
       );
     });
 
     test('retry from failed goes to connecting (prompt §8)', () {
-      final m = ConnectionStateMachine();
-      m.transition(ConnectionState.starting);
-      m.transition(ConnectionState.failed);
-      m.transition(ConnectionState.connecting);
+      final m = VpnStateMachine();
+      m.transition(VpnState.starting);
+      m.transition(VpnState.failed);
+      m.transition(VpnState.connecting);
     });
 
     test('any state can reach failed (prompt §8)', () {
-      for (final from in ConnectionState.values) {
-        for (var i = 0; i < ConnectionState.values.length; i++) {
+      for (final from in VpnState.values) {
+        for (var i = 0; i < VpnState.values.length; i++) {
           // Build a machine that lands exactly on `from` via its own path.
-          final m = ConnectionStateMachine();
+          final m = VpnStateMachine();
           final reached = _forceState(m, from);
           expect(reached, isTrue, reason: 'setup for $from failed');
           expect(
-            ConnectionStateMachine.isValidTransition(
+            VpnStateMachine.isValidTransition(
               m.current,
-              ConnectionState.failed,
+              VpnState.failed,
             ),
             isTrue,
             reason: '$from → failed must be legal',
@@ -94,9 +94,9 @@ void main() {
   group('illegal jumps are refused', () {
     test('disconnected cannot jump to connected', () {
       expect(
-        ConnectionStateMachine.isValidTransition(
-          ConnectionState.disconnected,
-          ConnectionState.connected,
+        VpnStateMachine.isValidTransition(
+          VpnState.disconnected,
+          VpnState.connected,
         ),
         isFalse,
       );
@@ -104,9 +104,9 @@ void main() {
 
     test('disconnected cannot jump to connecting (must pass starting)', () {
       expect(
-        ConnectionStateMachine.isValidTransition(
-          ConnectionState.disconnected,
-          ConnectionState.connecting,
+        VpnStateMachine.isValidTransition(
+          VpnState.disconnected,
+          VpnState.connecting,
         ),
         isFalse,
       );
@@ -114,27 +114,27 @@ void main() {
 
     test('connected cannot go back to starting', () {
       expect(
-        ConnectionStateMachine.isValidTransition(
-          ConnectionState.connected,
-          ConnectionState.starting,
+        VpnStateMachine.isValidTransition(
+          VpnState.connected,
+          VpnState.starting,
         ),
         isFalse,
       );
     });
 
     test('machine throws StateError on illegal transition', () {
-      final m = ConnectionStateMachine();
-      expect(() => m.transition(ConnectionState.connected),
+      final m = VpnStateMachine();
+      expect(() => m.transition(VpnState.connected),
           throwsA(isA<StateError>()));
     });
 
     test('waitingForPermissions is only reachable from starting', () {
-      for (final from in ConnectionState.values) {
-        final legal = ConnectionStateMachine.isValidTransition(
+      for (final from in VpnState.values) {
+        final legal = VpnStateMachine.isValidTransition(
           from,
-          ConnectionState.waitingForPermissions,
+          VpnState.waitingForPermissions,
         );
-        expect(legal, from == ConnectionState.starting,
+        expect(legal, from == VpnState.starting,
             reason: '$from → waitingForPermissions');
       }
     });
@@ -142,39 +142,39 @@ void main() {
 }
 
 /// Drives the machine onto [target] through a legal path.
-bool _forceState(ConnectionStateMachine m, ConnectionState target) {
+bool _forceState(VpnStateMachine m, VpnState target) {
   switch (target) {
-    case ConnectionState.disconnected:
+    case VpnState.disconnected:
       return true; // initial
-    case ConnectionState.starting:
-      m.transition(ConnectionState.starting);
+    case VpnState.starting:
+      m.transition(VpnState.starting);
       return true;
-    case ConnectionState.waitingForPermissions:
+    case VpnState.waitingForPermissions:
       m
-        ..transition(ConnectionState.starting)
-        ..transition(ConnectionState.waitingForPermissions);
+        ..transition(VpnState.starting)
+        ..transition(VpnState.waitingForPermissions);
       return true;
-    case ConnectionState.connecting:
+    case VpnState.connecting:
       m
-        ..transition(ConnectionState.starting)
-        ..transition(ConnectionState.connecting);
+        ..transition(VpnState.starting)
+        ..transition(VpnState.connecting);
       return true;
-    case ConnectionState.connected:
+    case VpnState.connected:
       m
-        ..transition(ConnectionState.starting)
-        ..transition(ConnectionState.connecting)
-        ..transition(ConnectionState.connected);
+        ..transition(VpnState.starting)
+        ..transition(VpnState.connecting)
+        ..transition(VpnState.connected);
       return true;
-    case ConnectionState.reconnecting:
-      _forceState(m, ConnectionState.connected);
-      m.transition(ConnectionState.reconnecting);
+    case VpnState.reconnecting:
+      _forceState(m, VpnState.connected);
+      m.transition(VpnState.reconnecting);
       return true;
-    case ConnectionState.disconnecting:
-      _forceState(m, ConnectionState.connected);
-      m.transition(ConnectionState.disconnecting);
+    case VpnState.disconnecting:
+      _forceState(m, VpnState.connected);
+      m.transition(VpnState.disconnecting);
       return true;
-    case ConnectionState.failed:
-      m.transition(ConnectionState.failed);
+    case VpnState.failed:
+      m.transition(VpnState.failed);
       return true;
   }
 }

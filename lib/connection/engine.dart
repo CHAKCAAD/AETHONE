@@ -47,7 +47,7 @@ sealed class EngineEvent {
 /// the transition table; the store enforces it.
 class EngineStateChanged extends EngineEvent {
   const EngineStateChanged(this.state, {this.errorCode, this.message});
-  final ConnectionState state;
+  final VpnState state;
   final String? errorCode;
   final String? message;
 }
@@ -108,7 +108,7 @@ class EngineNotWiredAdapter implements EngineAdapter {
   @override
   Future<void> connect() async {
     _controller.add(const EngineStateChanged(
-      ConnectionState.failed,
+      VpnState.failed,
       errorCode: 'engineNotWired',
       message: 'Native engine layer is not wired yet (milestone M2).',
     ));
@@ -116,7 +116,7 @@ class EngineNotWiredAdapter implements EngineAdapter {
 
   @override
   Future<void> disconnect() async {
-    _controller.add(const EngineStateChanged(ConnectionState.disconnected));
+    _controller.add(const EngineStateChanged(VpnState.disconnected));
   }
 
   void dispose() => _controller.close();
@@ -151,11 +151,11 @@ class PreviewEngineAdapter implements EngineAdapter {
 
   @override
   Future<void> connect() async {
-    _emit(const EngineStateChanged(ConnectionState.connecting));
+    _emit(const EngineStateChanged(VpnState.connecting));
     await Future<void>.delayed(stepDelay);
     // End-to-end probe "passed" in preview — this is a SIMULATION, clearly
     // documented; production Connected only comes from the real probe.
-    _emit(const EngineStateChanged(ConnectionState.connected));
+    _emit(const EngineStateChanged(VpnState.connected));
     _emit(EngineStatsUpdated(
       pingMs: samplePingMs,
       exitCountryCode: sampleExitCountry,
@@ -165,7 +165,7 @@ class PreviewEngineAdapter implements EngineAdapter {
   @override
   Future<void> disconnect() async {
     await Future<void>.delayed(stepDelay);
-    _emit(const EngineStateChanged(ConnectionState.disconnected));
+    _emit(const EngineStateChanged(VpnState.disconnected));
   }
 
   void _emit(EngineEvent e) => _controller.add(e);

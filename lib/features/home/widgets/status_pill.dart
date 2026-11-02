@@ -24,8 +24,8 @@ class StatusPill extends StatelessWidget {
     required this.style,
   });
 
-  final ConnectionState state;
-  final AnimationStyle style;
+  final VpnState state;
+  final MotionStyle style;
 
   @override
   Widget build(BuildContext context) {
@@ -34,14 +34,14 @@ class StatusPill extends StatelessWidget {
     final duration = motionDuration(style, MotionDurations.quick);
     final curve = style.curve;
 
-    final connected = state == ConnectionState.connected;
+    final connected = state == VpnState.connected;
     final (label, iconAsset) = switch (state) {
-      ConnectionState.connected =>
+      VpnState.connected =>
         (strings.statusConnected, AppAssets.iconShieldTick),
-      ConnectionState.connecting => (strings.statusConnecting, AppAssets.iconShieldCross),
-      ConnectionState.reconnecting =>
+      VpnState.connecting => (strings.statusConnecting, AppAssets.iconShieldCross),
+      VpnState.reconnecting =>
         (strings.statusReconnecting, AppAssets.iconShieldCross),
-      ConnectionState.failed => (strings.statusFailed, AppAssets.iconShieldCross),
+      VpnState.failed => (strings.statusFailed, AppAssets.iconShieldCross),
       _ => (strings.statusDisconnected, AppAssets.iconShieldCross),
     };
     final fg = connected
@@ -94,7 +94,7 @@ class SpeedTestButton extends StatelessWidget {
   });
 
   final bool visible;
-  final AnimationStyle style;
+  final MotionStyle style;
   final VoidCallback onTap;
 
   @override

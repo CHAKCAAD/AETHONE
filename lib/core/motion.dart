@@ -11,7 +11,7 @@ library;
 import 'package:flutter/animation.dart';
 
 /// The five user-selectable animation styles (prompt §11.8).
-enum AnimationStyle {
+enum MotionStyle {
   /// ×1.0, easeInOutCubic — default.
   standard,
 
@@ -29,29 +29,29 @@ enum AnimationStyle {
   off,
 }
 
-extension AnimationStyleX on AnimationStyle {
+extension MotionStyleX on MotionStyle {
   double get durationMultiplier => switch (this) {
-        AnimationStyle.standard => 1.0,
-        AnimationStyle.smooth => 1.5,
-        AnimationStyle.dynamic => 0.8,
-        AnimationStyle.minimal => 0.4,
-        AnimationStyle.off => 0.0,
+        MotionStyle.standard => 1.0,
+        MotionStyle.smooth => 1.5,
+        MotionStyle.dynamic => 0.8,
+        MotionStyle.minimal => 0.4,
+        MotionStyle.off => 0.0,
       };
 
   Curve get curve => switch (this) {
-        AnimationStyle.standard => Curves.easeInOutCubic,
-        AnimationStyle.smooth => Curves.easeOutQuint,
-        AnimationStyle.dynamic => Curves.easeOutBack,
-        AnimationStyle.minimal => Curves.easeOut,
-        AnimationStyle.off => Curves.linear,
+        MotionStyle.standard => Curves.easeInOutCubic,
+        MotionStyle.smooth => Curves.easeOutQuint,
+        MotionStyle.dynamic => Curves.easeOutBack,
+        MotionStyle.minimal => Curves.easeOut,
+        MotionStyle.off => Curves.linear,
       };
 }
 
 /// Clamp for the OS "reduce motion" accessibility setting (top-level so any
 /// Dart version resolves it identically).
-AnimationStyle clampForReduceMotion(AnimationStyle style) =>
-    style == AnimationStyle.dynamic || style == AnimationStyle.smooth
-        ? AnimationStyle.minimal
+MotionStyle clampForReduceMotion(MotionStyle style) =>
+    style == MotionStyle.dynamic || style == MotionStyle.smooth
+        ? MotionStyle.minimal
         : style;
 
 /// Base durations (ms, before style scaling).
@@ -70,6 +70,6 @@ abstract final class MotionDurations {
 }
 
 /// Scales [baseMs] by the style multiplier; OFF yields [Duration.zero].
-Duration motionDuration(AnimationStyle style, int baseMs) => Duration(
+Duration motionDuration(MotionStyle style, int baseMs) => Duration(
       milliseconds: (baseMs * style.durationMultiplier).round(),
     );

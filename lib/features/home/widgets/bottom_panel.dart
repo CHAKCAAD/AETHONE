@@ -26,7 +26,7 @@ class BottomPanel extends StatelessWidget {
   });
 
   final bool connected;
-  final AnimationStyle style;
+  final MotionStyle style;
   final String selectedProtocolIcon;
   final String protocolLabel;
   final int downBytes;
@@ -256,7 +256,7 @@ class ConnectButton extends StatelessWidget {
   });
 
   final bool connected;
-  final AnimationStyle style;
+  final MotionStyle style;
   final VoidCallback onTap;
 
   @override

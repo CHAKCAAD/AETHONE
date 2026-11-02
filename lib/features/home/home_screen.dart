@@ -75,7 +75,7 @@ class HomeScreen extends StatelessWidget {
         final strings = AppStrings.of(context);
         final size = MediaQuery.sizeOf(context);
         final s = size.width / AethGeometry.refWidth;
-        final style = store.effectiveAnimationStyle(context);
+        final style = store.effectiveMotionStyle(context);
         final connected = store.isConnected;
         final isLookOne = store.homeLook == HomeLook.one;
 
@@ -163,7 +163,7 @@ class _CenterConnectButton extends StatelessWidget {
   const _CenterConnectButton({required this.store, required this.style});
 
   final ConnectionStore store;
-  final AnimationStyle style;
+  final MotionStyle style;
 
   @override
   Widget build(BuildContext context) {

@@ -19,7 +19,7 @@ class PatternSides extends StatelessWidget {
   });
 
   final bool connected;
-  final AnimationStyle style;
+  final MotionStyle style;
 
   @override
   Widget build(BuildContext context) {

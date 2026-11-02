@@ -5,7 +5,7 @@
 /// endpoint of the SELECTED mode only — no fallback, no guessing.
 library;
 
-import 'app_assets.dart';
+import '../core/app_assets.dart';
 
 /// What leaves the tunnel (defines which listener Zeptun must use).
 enum ExitKind { warp, torExit, psiphonExit }

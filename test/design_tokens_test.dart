@@ -53,21 +53,21 @@ void main() {
 
   group('motion styles (report table 15)', () {
     test('duration multipliers', () {
-      expect(AnimationStyle.standard.durationMultiplier, 1.0);
-      expect(AnimationStyle.smooth.durationMultiplier, 1.5);
-      expect(AnimationStyle.dynamic.durationMultiplier, 0.8);
-      expect(AnimationStyle.minimal.durationMultiplier, 0.4);
-      expect(AnimationStyle.off.durationMultiplier, 0.0);
+      expect(MotionStyle.standard.durationMultiplier, 1.0);
+      expect(MotionStyle.smooth.durationMultiplier, 1.5);
+      expect(MotionStyle.dynamic.durationMultiplier, 0.8);
+      expect(MotionStyle.minimal.durationMultiplier, 0.4);
+      expect(MotionStyle.off.durationMultiplier, 0.0);
     });
 
     test('OFF collapses durations to zero', () {
-      expect(motionDuration(AnimationStyle.off, 400), Duration.zero);
+      expect(motionDuration(MotionStyle.off, 400), Duration.zero);
     });
 
     test('reduce-motion clamp', () {
-      expect(clampForReduceMotion(AnimationStyle.smooth), AnimationStyle.minimal);
-      expect(clampForReduceMotion(AnimationStyle.dynamic), AnimationStyle.minimal);
-      expect(clampForReduceMotion(AnimationStyle.off), AnimationStyle.off);
+      expect(clampForReduceMotion(MotionStyle.smooth), MotionStyle.minimal);
+      expect(clampForReduceMotion(MotionStyle.dynamic), MotionStyle.minimal);
+      expect(clampForReduceMotion(MotionStyle.off), MotionStyle.off);
     });
   });
 

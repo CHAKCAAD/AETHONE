@@ -36,15 +36,15 @@ class ConnectionStore extends ChangeNotifier {
   final EngineAdapter _engine;
   late final StreamSubscription<EngineEvent> _subscription;
 
-  final ConnectionStateMachine _machine = ConnectionStateMachine();
+  final VpnStateMachine _machine = VpnStateMachine();
 
   /// Single-flight guard (prompt §8: only one transition in flight).
   bool _operationInFlight = false;
 
   // ---- state surface consumed by the UI ----
-  ConnectionState get state => _machine.current;
+  VpnState get state => _machine.current;
 
-  bool get isConnected => state == ConnectionState.connected;
+  bool get isConnected => state == VpnState.connected;
 
   String? lastErrorCode;
   String? lastErrorMessage;
@@ -57,10 +57,10 @@ class ConnectionStore extends ChangeNotifier {
   ProtocolId selectedProtocol = ProtocolId.masque; // Aether's real default
 
   HomeLook homeLook = HomeLook.one;
-  AnimationStyle animationStyle = AnimationStyle.standard;
+  MotionStyle animationStyle = MotionStyle.standard;
 
   /// Effective style after the OS reduce-motion clamp.
-  AnimationStyle effectiveAnimationStyle(BuildContext context) {
+  MotionStyle effectiveMotionStyle(BuildContext context) {
     final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     return reduce ? clampForReduceMotion(animationStyle) : animationStyle;
   }
@@ -73,22 +73,22 @@ class ConnectionStore extends ChangeNotifier {
   /// (prompt §8: «از Failed یا Reconnecting هنگام تلاش مجدد به Connecting برو»).
   Future<void> connect() async {
     if (_operationInFlight) return;
-    if (state == ConnectionState.connected ||
-        state == ConnectionState.connecting ||
-        state == ConnectionState.starting ||
-        state == ConnectionState.waitingForPermissions ||
-        state == ConnectionState.disconnecting) {
+    if (state == VpnState.connected ||
+        state == VpnState.connecting ||
+        state == VpnState.starting ||
+        state == VpnState.waitingForPermissions ||
+        state == VpnState.disconnecting) {
       return;
     }
     _operationInFlight = true;
     notifyListeners();
     try {
       switch (state) {
-        case ConnectionState.failed:
-        case ConnectionState.reconnecting:
-          _apply(ConnectionState.connecting);
+        case VpnState.failed:
+        case VpnState.reconnecting:
+          _apply(VpnState.connecting);
         default:
-          _apply(ConnectionState.starting);
+          _apply(VpnState.starting);
       }
       await _engine.connect();
     } catch (e) {
@@ -101,14 +101,14 @@ class ConnectionStore extends ChangeNotifier {
 
   Future<void> disconnect() async {
     if (_operationInFlight) return;
-    if (state == ConnectionState.disconnected ||
-        state == ConnectionState.disconnecting) {
+    if (state == VpnState.disconnected ||
+        state == VpnState.disconnecting) {
       return;
     }
     _operationInFlight = true;
     notifyListeners();
     try {
-      _apply(ConnectionState.disconnecting);
+      _apply(VpnState.disconnecting);
       await _engine.disconnect();
     } catch (e) {
       _fail(errorCode: 'engineException', message: e.toString());
@@ -120,7 +120,7 @@ class ConnectionStore extends ChangeNotifier {
 
   /// Retry from Failed/Reconnecting → Connecting (prompt §8).
   Future<void> retry() async {
-    if (state == ConnectionState.failed || state == ConnectionState.reconnecting) {
+    if (state == VpnState.failed || state == VpnState.reconnecting) {
       await connect();
     }
   }
@@ -131,7 +131,7 @@ class ConnectionStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setAnimationStyle(AnimationStyle style) {
+  void setMotionStyle(MotionStyle style) {
     if (animationStyle == style) return;
     animationStyle = style;
     notifyListeners();
@@ -146,14 +146,14 @@ class ConnectionStore extends ChangeNotifier {
         errorCode: final errorCode,
         message: final message,
       ):
-        if (eventState == ConnectionState.failed) {
+        if (eventState == VpnState.failed) {
           _fail(errorCode: errorCode, message: message);
         } else {
           _apply(eventState);
         }
       case EngineHealthProbeFailed():
-        if (state == ConnectionState.connected) {
-          _apply(ConnectionState.reconnecting);
+        if (state == VpnState.connected) {
+          _apply(VpnState.reconnecting);
         }
       case EngineEndpointChanged():
         // TODO(M2): track active endpoint for the ActiveTransportSession.
@@ -170,10 +170,10 @@ class ConnectionStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _apply(ConnectionState next) {
+  void _apply(VpnState next) {
     // Dedupe: adapters may re-report the state the store already entered.
     if (next == _machine.current) return;
-    if (!ConnectionStateMachine.isValidTransition(_machine.current, next)) {
+    if (!VpnStateMachine.isValidTransition(_machine.current, next)) {
       // An illegal jump is a bug in the adapter: fail loudly, never fake.
       _fail(
         errorCode: 'illegalTransition',
@@ -181,8 +181,8 @@ class ConnectionStore extends ChangeNotifier {
       );
       return;
     }
-    if (next == ConnectionState.disconnected ||
-        next == ConnectionState.connecting) {
+    if (next == VpnState.disconnected ||
+        next == VpnState.connecting) {
       // Leaving/never-reaching connected ⇒ no stale ping/exit data.
       pingMs = null;
       exitCountryCode = null;
@@ -196,7 +196,7 @@ class ConnectionStore extends ChangeNotifier {
     lastErrorCode = errorCode;
     lastErrorMessage = message;
     // any → failed is always legal (prompt §8).
-    _machine.transition(ConnectionState.failed);
+    _machine.transition(VpnState.failed);
   }
 
   @override
