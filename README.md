@@ -45,6 +45,18 @@ runs zeptun's own upstream test gate on the pinned source for the first time:
 - Evidence artifacts: `zig-test-evidence` (env.txt + zig-test.log) and
   `zig-test-status`; full scope/fidelity analysis:
   `evidence/zig_test_scope_v47.txt`.
+- **First CI execution — run 41410063261 (2026-11-02, commit 2badf0c):**
+  the job is GREEN end-to-end and every one of the 7 gate steps actually
+  executed: unit tests **109/117 passed (8 platform skips)** in Debug,
+  ReleaseSafe AND the mobile preset; `test-ffi` exit 0; namespace probe
+  ok; **test-netns 104 passed / 5 skipped / 0 failed**; **test-integration
+  "189 passed, 0 failed"** (real TUN device inside the namespace).
+  Verbatim CI log preserved in `evidence/zig_test_ci_run_v47.txt`.
+  actionlint 1.7.7 exit 0 on the exact modified workflow.
+  Sandbox-vs-runner note (recorded): the namespace leg executed MORE
+  tests on the runner (104 passed / 5 skipped) than in the analysis
+  sandbox pre-validation (101 passed / 8 skipped) — 3 network-dependent
+  unit tests detect namespace capabilities at runtime; 0 failed in both.
 
 N2 boundary unchanged: the zeptun gate is **HOST + namespace CI evidence**
 — NOT Android execution, NOT device evidence, NOT a tunnel test. zeptun's

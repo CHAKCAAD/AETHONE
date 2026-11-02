@@ -2,14 +2,41 @@
 # ---------------------------------------------------------------------------
 # Status: DELIVERED — v4.4 fully green since run 41341450121; v4.5
 #         (runtime-smoke) fully green since run 41352644421; v4.6
-#         (cargo-test + go-test) fully green since run 41399287433 —
-#         all 8 jobs, incl. the quic non-gating probe (exit 0 there,
-#         FAIL on its first run 41397588337 — recorded, never a gate).
+#         (cargo-test + go-test) fully green since run 41399287433;
+#         v4.7 (zig-test, zeptun upstream linux CI gate) fully green
+#         since run 41410063261 — all 9 jobs, incl. the quic non-gating
+#         probe (exit 0 there, FAIL on its first run 41397588337 —
+#         recorded, never a gate).
 # Evidence for every pin is recorded in docs/CI_BOOTSTRAP_PoC.md and
 # evidence/verification_log*.txt (commit existence proven by `git checkout`
 # of the exact SHA — stronger than an API lookup). Raw tag->SHA proof for
 # every Actions pin: evidence/actions_pins_raw_evidence.txt (v3).
 # actionlint 1.7.7 exit 0 on THIS exact file: evidence/validation_log.txt (v4).
+#
+# v4.7 changes (2026-11-02) — zeptun test gate, NO frozen pin changed:
+#   * Job 6 zig-test: upstream zeptun's own 'linux' CI job
+#     (zeptun@08a1ab0 .github/workflows/ci.yml) replicated step-for-step
+#     at the frozen pin: unit tests Debug + ReleaseSafe + the shipped
+#     mobile preset (-Dmobile=true), C-ABI smoke (test-ffi), namespace
+#     prep, test-netns (unit tests with NO ambient network), and the TUN
+#     end-to-end integration pass (test-integration -Doptimize=ReleaseSafe).
+#     Zeptun is materialized with clone_pin semantics + fail-closed
+#     rev-parse proof; Zig is the pinned 0.16.0 tarball with the sha256
+#     gate (the native-build install step — no third-party setup action).
+#     Fail-closed: exit codes under pipefail; the log must carry >= 4
+#     'Build Summary:' blocks + the [7/7] marker (hollow pass impossible).
+#   * FIRST RUN (41410063261): all 7 gate steps executed — unit
+#     109/117 passed (8 platform skips) in Debug, ReleaseSafe and mobile;
+#     netns 104 passed / 5 skipped / 0 failed; TUN integration
+#     '189 passed, 0 failed'. Evidence: zig-test-evidence artifact +
+#     evidence/zig_test_ci_run_v47.txt; scope/fidelity + sandbox
+#     pre-validation: evidence/zig_test_scope_v47.txt.
+#   * status-summary: honest exit gate 8/8 (3 build legs + elf-inspect +
+#     runtime-smoke + cargo-test + go-test + zig-test); zeptun Zig unit
+#     tests moved from NOT-TESTED to COVERED.
+#   * Boundary (N2): the zeptun gate is HOST + namespace CI evidence —
+#     NOT Android execution, NOT device evidence, NOT an AETHONE tunnel
+#     test.
 #
 # v4.6 changes (2026-11-02) — first UNIT-TEST evidence, NO frozen pin changed:
 #   * Job 4 cargo-test: the aether crate's own test suite (480 test

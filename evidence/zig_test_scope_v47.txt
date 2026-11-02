@@ -93,3 +93,29 @@ The zig-test job produces HOST + NAMESPACE CI evidence only:
   * arm64-v8a / armeabi-v7a runtime execution (static-only this phase)
   * System.loadLibrary("zeptun-jni") inside the app (N7 — app context)
   * zeptun performance gates (bench gate stays upstream-only this phase)
+
+--- 5. FIRST CI EXECUTION (recorded after run 41410063261 went green) ---
+
+The job ran for the first time in CI on 2026-11-02 (push of commit 2badf0c,
+run 41410063261) and was GREEN with every one of the 7 gate steps actually
+executed. Verbatim evidence: evidence/zig_test_ci_run_v47.txt (built from
+the zig-test-evidence artifact #13125118287 downloaded via the Actions API).
+
+  [1/7] unit Debug        -> 109/117 tests passed (8 skipped) ... PASS
+  [2/7] unit ReleaseSafe  -> 109/117 tests passed (8 skipped) ... PASS
+  [3/7] test-ffi          -> exit 0                            ... PASS
+  [4/7] unit mobile       -> 109/117 tests passed (8 skipped) ... PASS
+  [5/7] unshare probe     -> exit 0                            ... PASS
+  [6/7] test-netns        -> 104 passed; 5 skipped; 0 failed    ... PASS
+  [7/7] TUN integration   -> "integration: 189 passed, 0 failed" ... PASS
+
+Fail-closed assertions in CI: 4 "Build Summary:" blocks found (>= 4
+required), markers 1/7..7/7 all present, honest exit gate 8/8 green
+(status-summary).
+
+Runner-vs-sandbox note (honest delta, recorded): the namespace leg
+executed MORE tests on the runner (104 passed / 5 skipped) than in the
+sandbox pre-validation (101 passed / 8 skipped) — 3 network-dependent
+unit tests detect namespace capabilities at runtime. 0 failed in both
+environments; the runtime number is authoritative for the CI record.
+

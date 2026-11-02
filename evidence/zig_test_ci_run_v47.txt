@@ -1,0 +1,48 @@
+=== AETHONE v4.7 — zig-test FIRST CI RUN evidence (real execution) ===
+
+run_id: 41410063261 (push event, branch ci-bootstrap/v4.4)
+head_sha: 2badf0c9096383a0f5aa704e1ee234dba2e21944 (commit: 'Add zig-test CI job: replicate upstream zeptun linux gate at the frozen pin (v4.7)')
+job: 'Unit tests (zeptun @ pin — host linux/amd64, upstream linux CI gate)' — conclusion: success
+artifact: zig-test-evidence #13125118287 (env.txt + zig-test.log, downloaded via Actions API)
+
+--- env.txt (verbatim) ---
+run_id=41410063261
+head_sha=2badf0c9096383a0f5aa704e1ee234dba2e21944
+zig=0.16.0
+zig_tarball_sha256=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+zeptun_pin=08a1ab05aab315b7872ed582c52b7c230930d05d
+runner_kernel=7.0.0-1017-azure
+upstream_gate=zeptun .github/workflows/ci.yml job 'linux' @ 08a1ab05aab315b7872ed582c52b7c230930d05d
+
+--- gate step markers (verbatim, proves every step ran) ---
+=== [1/7] zig build test --summary all (Debug) ===
+=== [2/7] zig build test -Doptimize=ReleaseSafe --summary all ===
+=== [3/7] zig build test-ffi (C ABI smoke against libzeptun.a) ===
+=== [4/7] zig build test -Dmobile=true --summary all (shipped feature preset) ===
+=== [5/7] unprivileged-namespace prep (upstream-faithful) ===
+=== [6/7] zig build test-netns (unit tests inside a user+net namespace) ===
+=== [7/7] zig build test-integration -Doptimize=ReleaseSafe (TUN end-to-end) ===
+
+--- per-step results (verbatim lines) ---
+Build Summary: 10/10 steps succeeded; 109/117 tests passed (8 skipped)
+Build Summary: 10/10 steps succeeded; 109/117 tests passed (8 skipped)
+Build Summary: 10/10 steps succeeded; 109/117 tests passed (8 skipped)
+Build Summary: 4/4 steps succeeded
+104 passed; 5 skipped; 0 failed.
+
+--- integration verdict (verbatim tail) ---
+  ok    netns-userspace host namespace untouched         
+  ok    netns-userspace interface removed on stop        
+
+integration: 189 passed, 0 failed
+
+--- fail-closed assertions ---
+'Build Summary:' blocks found: 4 (required >= 4)
+markers 1/7..7/7 present: 7/7
+
+--- N2 classification ---
+This is HOST + NAMESPACE CI evidence (runner kernel 7.0.0-1017-azure):
+unit Debug/ReleaseSafe/mobile = host; test-ffi = host; test-netns +
+test-integration = isolated unprivileged user+network namespace with a
+TUN device created inside it (no ambient network). NOT Android execution,
+NOT device evidence, NOT an AETHONE tunnel test.
