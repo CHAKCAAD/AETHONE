@@ -1439,16 +1439,23 @@ jobs:
           java -version 2>&1 | head -2
           echo "JDK pin: ${JDK_VERSION} | AGP: ${AGP_VERSION} | wrapper Gradle: ${GRADLE_VERSION}"
 
-      - name: Accept Android SDK licenses (fail-closed)
+      - name: Accept Android SDK licenses (runtime-smoke precedent)
         run: |
           set -euo pipefail
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
-          echo "SDK licenses accepted"
+          # Same pattern as the runtime-smoke job (license acceptance is not a
+          # build gate — the fail-closed verifier is the pinned build-tools
+          # install assert in the next step). The plain-pipe form aborts under
+          # pipefail when sdkmanager exits and `yes` dies by SIGPIPE (exit
+          # 141) — root cause of the android-apk failure on run 41438805265.
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          echo "SDK license acceptance done (verified by the build-tools install next)"
 
       - name: Install pinned build-tools (verification gates, not AGP's choice)
         run: |
           set -euo pipefail
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;${BUILD_TOOLS_VERSION}" > /dev/null
+          # NO yes-pipe here: licenses are accepted above, so sdkmanager runs
+          # non-interactive and its REAL exit code is enforced by set -e.
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "build-tools;${BUILD_TOOLS_VERSION}" > /dev/null
           [ -x "$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}/zipalign" ] || { echo "::error::zipalign missing for build-tools ${BUILD_TOOLS_VERSION}"; exit 1; }
           [ -x "$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}/apksigner" ] || { echo "::error::apksigner missing for build-tools ${BUILD_TOOLS_VERSION}"; exit 1; }
           echo "build-tools ${BUILD_TOOLS_VERSION} ready (zipalign + apksigner)"
