@@ -39,8 +39,15 @@ Job: cargo-test. Command: cargo test --locked --features tor
       tunnelping.rs  3/0     upstream.rs    24/9     wg_prober.rs    8/0
       wireguard.rs  12/1     zerotrust.rs   23/2
 
-    TOTAL: 471 test functions (391 #[test] + 80 #[tokio::test])
+    TOTAL (static count): 471 test functions (391 #[test] + 80 #[tokio::test])
            across 32 source files; 53 #[cfg(test)] blocks.
+
+    RUNTIME (run 41399287433, authoritative): test result: ok.
+    478 passed; 0 failed; 2 ignored (= 480 test functions executed
+    across 5 test-result lines: lib suite 478+2, plus zero-test lines for
+    the bin/doc targets). The static regex under-counted by 9
+    (attribute-line patterns); the RUNTIME number supersedes the static
+    one wherever they differ.
 
 1.2 Offline-safety analysis (why these can run in CI without tunnels):
 
@@ -183,6 +190,12 @@ Job: go-test. Commands: go vet <allowlist>; go test -count=1 -timeout 15m <allow
       retried, never silently dropped. Re-evaluation triggers: a 4-core
       runner class or an upstream fix to the check's sleep budget.
 
+      SECOND EXECUTION (run 41399287433, same code): quic-probe exit 0 —
+      the identical package FAILED run 41397588337 and PASSED this run,
+      which is direct evidence of the non-determinism and confirms the
+      non-gating decision. Recorded: quic_probe=exit 0 (run 2) after
+      quic_probe=FAIL (run 1).
+
 ================================================================================
 SECTION 3 — ZEPTUN (Zig): scope check, NOT RUN this phase
 ================================================================================
@@ -246,6 +259,33 @@ VALIDATION PASSED — all checks green
 
 --------------------------------------------------------------------------------
 RE-VALIDATION TRANSCRIPT (after the quic gate-out fix, pre-push)
+--------------------------------------------------------------------------------
+
+[PASS] yaml parse — 6 jobs: native-build, elf-inspect, runtime-smoke, cargo-test, go-test, status-summary
+[PASS] job exists: cargo-test
+[PASS] job exists: go-test
+[PASS] job exists: status-summary
+[PASS] actionlint 1.7.7 — exit 0
+[PASS] boring-sys python block byte-identical to build_native.sh — wf=2214 bytes, orig=1984 bytes
+[PASS] status-summary needs all jobs — ['native-build', 'elf-inspect', 'runtime-smoke', 'cargo-test', 'go-test']
+[PASS] honest gate includes cargo-test/go-test
+[PASS] cargo-test: pin assert present
+[PASS] cargo-test: uses frozen pin env
+[PASS] go-test: pin assert present
+[PASS] go-test: uses frozen pin env
+[PASS] go-test runs exactly 23 gated packages — found 23 './' refs in the gated go test list
+[PASS] go-test carries a non-gating quic probe (rc-capture, no || true)
+[PASS] go-test status file records quic_probe
+[PASS] go-test asserts ok+no-test-files==23
+[PASS] cargo-test asserts execution (test result:)
+[PASS] coverage table mentions unit tests v1
+[PASS] NOT TESTED mentions controller_test.config exclusions
+[PASS] NOT TESTED mentions zeptun zig tests
+
+VALIDATION PASSED — all checks green
+
+--------------------------------------------------------------------------------
+FINAL VALIDATION TRANSCRIPT (after first-green evidence recording)
 --------------------------------------------------------------------------------
 
 [PASS] yaml parse — 6 jobs: native-build, elf-inspect, runtime-smoke, cargo-test, go-test, status-summary

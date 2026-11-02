@@ -1,9 +1,10 @@
 # AETHONE Native CI — Phase 2 bootstrap (report v4, bundle v4)
 # ---------------------------------------------------------------------------
 # Status: DELIVERED — v4.4 fully green since run 41341450121; v4.5
-#         (runtime-smoke) fully green since run 41352644421 (all 5 jobs).
-#         v4.6 (cargo-test + go-test) first executes on the push that
-#         carries this change; the result is recorded below once known.
+#         (runtime-smoke) fully green since run 41352644421; v4.6
+#         (cargo-test + go-test) fully green since run 41399287433 —
+#         all 8 jobs, incl. the quic non-gating probe (exit 0 there,
+#         FAIL on its first run 41397588337 — recorded, never a gate).
 # Evidence for every pin is recorded in docs/CI_BOOTSTRAP_PoC.md and
 # evidence/verification_log*.txt (commit existence proven by `git checkout`
 # of the exact SHA — stronger than an API lookup). Raw tag->SHA proof for
@@ -11,8 +12,8 @@
 # actionlint 1.7.7 exit 0 on THIS exact file: evidence/validation_log.txt (v4).
 #
 # v4.6 changes (2026-11-02) — first UNIT-TEST evidence, NO frozen pin changed:
-#   * Job 4 cargo-test: the aether crate's own test suite (471 test
-#     functions at the pin d58f9d5 — 391 #[test] + 80 #[tokio::test];
+#   * Job 4 cargo-test: the aether crate's own test suite (480 test
+#     functions executed at runtime — 478 passed + 2 ignored; static
 #     inventory + offline analysis in evidence/unit_test_scope_v46.txt)
 #     runs on the HOST (x86_64-unknown-linux-gnu) with the PRODUCTION
 #     feature set (--features tor — identical to build_native.sh) and
@@ -769,8 +770,8 @@ jobs:
 
   # =========================================================================
   # Job 4 — cargo-test (v4.6): FIRST unit-test evidence for the Rust core.
-  # The aether crate's own test suite (471 test functions at the frozen pin
-  # d58f9d5 — 391 #[test] + 80 #[tokio::test]; inventory + offline analysis
+  # The aether crate's own test suite (480 test functions executed at
+  # runtime — 478 passed + 2 ignored; inventory + offline analysis
   # in evidence/unit_test_scope_v46.txt) runs on the HOST target
   # (x86_64-unknown-linux-gnu) with the SAME feature set as the production
   # build (--features tor — build_native.sh parity) and --locked. NO frozen
@@ -1251,7 +1252,8 @@ jobs:
               CI/emulator evidence — NOT device evidence.
             - unit tests v1 (HOST target only, N2): aether crate —
               cargo test --locked --features tor on x86_64-unknown-linux-gnu
-              (471 test functions at the pin; offline: loopback binds and
+              (480 test functions executed at runtime — 478 passed + 2
+              ignored; offline: loopback binds and
               in-process shims; boring-sys 5.3.0 patch identical to the
               build legs); psiphon fork — go vet + go test over the
               23-package gated allowlist mirroring the fork's own CI

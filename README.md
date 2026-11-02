@@ -14,8 +14,9 @@ jobs run the pinned sources' own test suites on the HOST for the first time:
 - **cargo-test** — the aether crate's suite at the frozen pin `d58f9d5`:
   `cargo test --locked --features tor` on `x86_64-unknown-linux-gnu` — the
   SAME feature set as the production builds (`build_native.sh` parity).
-  Inventory at the pin: **471 test functions** (391 `#[test]` + 80
-  `#[tokio::test]`) across 32 source files (53 `#[cfg(test)]` blocks);
+  Inventory at the pin: **480 test functions executed** (runtime, run
+  41399287433: `test result: ok. 478 passed; 0 failed; 2 ignored`; static
+  regex count 471 across 32 files — the runtime number is authoritative)
   offline by design
   (loopback binds + in-process shims; no external URLs in `src/`). The
   boring-sys 5.3.0 enum-alias patch is applied by a **byte-identical copy**
@@ -40,7 +41,10 @@ jobs run the pinned sources' own test suites on the HOST for the first time:
   dangling-goroutine check (PSK=true legs, empty-name goroutine records) —
   quic is now GATED OUT and runs as a recorded **non-gating probe**
   (executed, uploaded, reported; never trusted as a gate; analysis in
-  `evidence/unit_test_scope_v46.txt` §2.4). Fail-closed: pin assert,
+  `evidence/unit_test_scope_v46.txt` §2.4). Direct confirmation of the
+  non-determinism: the identical package FAILED run 41397588337 and
+  PASSED (exit 0) on its very next execution in run 41399287433.
+  Fail-closed: pin assert,
   vet/test exit codes, and the gated log must carry 23 package result
   lines and zero `^FAIL` lines.
 - **status-summary** — the honest exit gate and the covered/NOT-TESTED
