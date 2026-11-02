@@ -4,9 +4,12 @@
 #         (runtime-smoke) fully green since run 41352644421; v4.6
 #         (cargo-test + go-test) fully green since run 41399287433;
 #         v4.7 (zig-test, zeptun upstream linux CI gate) fully green
-#         since run 41410063261; v4.8 (flutter-ui) FIRST RUN PENDING —
-#         this header is updated with the run id once it exists (a run
-#         that has not happened yet is NEVER claimed as green).
+#         since run 41410063261; v4.8 (flutter-ui, UI step 1) fully green
+#         since run 41431288828 — all 10 jobs (flutter-ui reached green on
+#         its 5th executed analyze+test pass: runs 41425047347/41426549680
+#         /41427918855/41430689837 failed with root-caused fixes committed
+#         each time; 41430073612 passed analyze, failed 4 widget tests —
+#         the history is in the commit log, nothing was hidden).
 # Evidence for every pin is recorded in docs/CI_BOOTSTRAP_PoC.md and
 # evidence/verification_log*.txt (commit existence proven by `git checkout`
 # of the exact SHA — stronger than an API lookup). Raw tag->SHA proof for

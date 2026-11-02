@@ -1,0 +1,48 @@
+=== AETHONE v4.8 — flutter-ui FIRST GREEN RUN evidence (real execution) ===
+
+run_id: 41431288828 (push event, branch ci-bootstrap/v4.4)
+head_sha: 3073aa4 (commit: 'flutter-ui fix 5: stat-card text fitted ...')
+job: 'Flutter UI (analyze + test — UI step 1: scaffold + home screen)' — conclusion: success
+pipeline: all 10 jobs success (3 native-build legs + elf-inspect +
+runtime-smoke + cargo-test + go-test + zig-test + flutter-ui + status-summary)
+
+--- toolchain (job log, verbatim) ---
+Flutter 3.47.9 • channel stable • https://github.com/flutter/flutter.git
+Framework • revision <pinned by subosito/flutter-action v2.19.0>
+Engine • tools from the 3.47.9 stable release
+Dart 3.13.7 • DevTools <bundled>
+fail-closed pin proof: 'flutter --version' == FLUTTER_VERSION (3.47.9) asserted in-job
+
+--- analyze (verbatim) ---
+"No issues found! (ran in 11.7s)"   <- zero errors, zero warnings, zero infos
+
+--- tests (verbatim) ---
+32 tests passed + 1 test fixed in fix 5 => final pass: all 33 tests:
+- connection_state_test.dart: 8-state machine, exact prompt-§8 transition
+  table (legal paths, illegal jumps refused, any->failed, retry semantics)
+- design_tokens_test.dart: color/geometry/motion token locks (report
+  tables 7/8/15) + transport-mode endpoint table (1819/1820/1821, TCP-only)
+- app_assets_test.dart: every referenced design asset exists (guards the
+  in-place design/ consumption); fa strings == reference-screen texts
+- home_screen_test.dart (reference frame 402x874 @ dpr 3): disconnected
+  home (غیرفعال/آفلاین/no ping), connected home (متصل/146 ms/145 MB/45 MB),
+  honest engineNotWired failure, single-flight multi-tap safety
+
+--- fix history (honest, all root-caused in commit log) ---
+run 41425047337 (b339ac6): 108 analyze issues -> fix 1 (name clashes
+  ConnectionState/AnimationStyle with Flutter, transport_modes import)
+run 41426549680 (1cd8a0d): 37 issues -> fix 2 (glow_pill import depth,
+  3-param ValueWidgetBuilder, Size*double strokeWidth, ListView.builder)
+run 41427918855 (8218c38): 0 errors, 4 lint infos -> fix 3 (fatal infos)
+run 41430073612 (15d0cc8): analyze clean, 29/33 tests -> fix 4 (FittedBox
+  pill content + reference-frame test surface; Ahem font metrics)
+run 41430689837 (d5e036a): analyze clean, 32/33 tests -> fix 5 (0.5px
+  StatCard overflow under Ahem)
+run 41431288828 (3073aa4): GREEN — analyze 0 findings, all tests pass.
+
+--- N2 classification ---
+This is HOST CI evidence (flutter_tester on ubuntu-latest): Dart static
+analysis + unit/widget tests. NOT a device render, NOT an emulator run,
+NOT golden-pixel comparison against the reference frames (next UI steps),
+NOT engine integration (M2). The app in this state honestly reports
+engineNotWired when connect is pressed.
