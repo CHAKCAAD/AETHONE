@@ -1111,14 +1111,161 @@ jobs:
           if-no-files-found: error
 
   # =========================================================================
-  # Job 6 — status summary with the REAL results of this run (employer
+  # Job 6 — zig-test (v4.7): the zeptun Zig test gate at the frozen pin.
+  # Replicates upstream zeptun's own "linux" CI job (zeptun@08a1ab0
+  # .github/workflows/ci.yml) step-for-step, under AETHONE discipline:
+  #   * zeptun source is materialized at ZEPTUN_SHA with clone_pin
+  #     semantics (fail-closed rev-parse proof) — NOT from a moving branch
+  #   * Zig is the pinned 0.16.0 tarball with the sha256 gate (the same
+  #     install step native-build uses; no third-party setup action)
+  # Steps (upstream order preserved):
+  #   1. zig build test --summary all                      (unit, Debug)
+  #   2. zig build test -Doptimize=ReleaseSafe --summary all
+  #   3. zig build test-ffi                                (C ABI smoke vs libzeptun.a)
+  #   4. zig build test -Dmobile=true --summary all        (the feature preset the
+  #      AETHONE Android library actually ships: userspace stack, no io_uring)
+  #   5. unprivileged-namespace prep (upstream-faithful sysctls + probe)
+  #   6. zig build test-netns — unit tests re-run inside a user+network
+  #      namespace (proves the suite passes with NO ambient network access)
+  #   7. zig build test-integration -Doptimize=ReleaseSafe — end-to-end
+  #      through a real TUN device inside that namespace
+  # Fail-closed assertions:
+  #   * every step's exit code (set -euo pipefail over the tee'd block)
+  #   * the aggregated log must carry >= 4 "Build Summary:" blocks (3 unit
+  #     invocations + netns) and the [7/7] marker — a hollow pass (nothing
+  #     executed) is structurally impossible
+  # Pre-validated in the analysis sandbox with the pinned Zig 0.16.0
+  # (evidence/zig_test_scope_v47.txt): steps 1-6 green locally; step 7 needs
+  # a kernel TUN device (root-only modprobe) — runner-side only there.
+  # Boundary (N2): host + namespace CI evidence — NOT Android execution,
+  # NOT device evidence, NOT an AETHONE tunnel test.
+  # =========================================================================
+  zig-test:
+    name: Unit tests (zeptun @ pin — host linux/amd64, upstream linux CI gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SRC_CACHE: ${{ github.workspace }}/.srccache
+      ZIG_PREFIX: ${{ github.workspace }}/.tools/zig
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Restore source caches (frozen SHAs)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ env.SRC_CACHE }}
+          key: srccache-${{ env.AETHER_SHA }}-${{ env.ZEPTUN_SHA }}-${{ env.PSIPHON_FORK_SHA }}
+
+      - name: Install Zig toolchain (exact pin + sha256)
+        run: |
+          url="https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
+          curl -fsSL "$url" -o /tmp/zig.tar.xz
+          echo "${ZIG_SHA256_X86_64}  /tmp/zig.tar.xz" | sha256sum -c -
+          rm -rf "$ZIG_PREFIX" && mkdir -p "$ZIG_PREFIX"
+          tar -xJf /tmp/zig.tar.xz -C "$ZIG_PREFIX" --strip-components=1
+          "$ZIG_PREFIX/zig" version
+
+      - name: Materialize the pinned zeptun tree (clone_pin semantics)
+        run: |
+          set -euo pipefail
+          src="$SRC_CACHE/zeptun"
+          if [ ! -d "$src/.git" ]; then
+            git clone --filter=blob:none "$ZEPTUN_REPO" "$src"
+          fi
+          git -C "$src" checkout "$ZEPTUN_SHA"
+          [ "$(git -C "$src" rev-parse HEAD)" = "$ZEPTUN_SHA" ] \
+            || { echo "::error::zeptun pin mismatch: expected $ZEPTUN_SHA, got $(git -C "$src" rev-parse HEAD)"; exit 1; }
+          echo "zeptun pin verified: $(git -C "$src" rev-parse HEAD)"
+
+      - name: Run the zeptun test gate (upstream linux CI job, order preserved)
+        run: |
+          set -euo pipefail
+          ZIG="$ZIG_PREFIX/zig"
+          cd "$SRC_CACHE/zeptun"
+          mkdir -p "$GITHUB_WORKSPACE/test-evidence"
+          {
+            echo "run_id=${{ github.run_id }}"
+            echo "head_sha=${{ github.sha }}"
+            echo "zig=$("$ZIG" version)"
+            echo "zig_tarball_sha256=$ZIG_SHA256_X86_64"
+            echo "zeptun_pin=$ZEPTUN_SHA"
+            echo "runner_kernel=$(uname -r)"
+            echo "upstream_gate=zeptun .github/workflows/ci.yml job 'linux' @ $ZEPTUN_SHA"
+          } | tee "$GITHUB_WORKSPACE/test-evidence/env.txt"
+          {
+            echo "=== [1/7] zig build test --summary all (Debug) ==="
+            "$ZIG" build test --summary all
+            echo "=== [2/7] zig build test -Doptimize=ReleaseSafe --summary all ==="
+            "$ZIG" build test -Doptimize=ReleaseSafe --summary all
+            echo "=== [3/7] zig build test-ffi (C ABI smoke against libzeptun.a) ==="
+            "$ZIG" build test-ffi
+            echo "=== [4/7] zig build test -Dmobile=true --summary all (shipped feature preset) ==="
+            "$ZIG" build test -Dmobile=true --summary all
+            echo "=== [5/7] unprivileged-namespace prep (upstream-faithful) ==="
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+            sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+            sudo modprobe tun || true
+            unshare --user --map-root-user --net true
+            echo "=== [6/7] zig build test-netns (unit tests inside a user+net namespace) ==="
+            "$ZIG" build test-netns --summary all
+            echo "=== [7/7] zig build test-integration -Doptimize=ReleaseSafe (TUN end-to-end) ==="
+            "$ZIG" build test-integration -Doptimize=ReleaseSafe
+          } 2>&1 | tee "$GITHUB_WORKSPACE/test-evidence/zig-test.log"
+
+      - name: Assert the gate actually executed (fail-closed)
+        if: success()
+        run: |
+          set -euo pipefail
+          log="$GITHUB_WORKSPACE/test-evidence/zig-test.log"
+          [ -f "$log" ] || { echo "::error::no zig-test.log — the gate did not run"; exit 1; }
+          n=$(grep -c 'Build Summary:' "$log" || true)
+          echo "Build Summary blocks: $n"
+          [ "$n" -ge 4 ] || { echo "::error::expected >=4 'Build Summary:' blocks (3 unit invocations + netns) — found $n (a hollow pass is not a pass)"; exit 1; }
+          grep -q '=== \[7/7\]' "$log" || { echo "::error::integration step marker missing from the log"; exit 1; }
+          echo "gate execution proof: OK"
+
+      - name: Record test status (real result, uploaded even on failure)
+        if: always()
+        run: |
+          mkdir -p status
+          {
+            echo "job=${{ github.job }}"
+            echo "status=${{ job.status }}"
+            echo "run_id=${{ github.run_id }}"
+            echo "test=zig-test (zeptun @ $ZEPTUN_SHA, host linux/amd64, upstream linux CI gate: unit Debug+ReleaseSafe+mobile preset, C-ABI smoke, netns, TUN integration)"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > status/zig-test-status.txt
+          cat status/zig-test-status.txt
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: zig-test-evidence
+          path: test-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload test status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: zig-test-status
+          path: status/zig-test-status.txt
+          if-no-files-found: error
+
+  # =========================================================================
+  # Job 7 — status summary with the REAL results of this run (employer
   # directive 6): per-ABI build outcomes from the uploaded status files and
   # the actual needs.*.result values. FAILED and NOT RUN are explicit.
   # CI results and real-device results stay SEPARATE (decision N2).
   # =========================================================================
   status-summary:
     name: Status summary (real CI results vs NOT TESTED)
-    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test]
+    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -1142,7 +1289,7 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: leg-status
-          pattern: "*-test-status"   # cargo-test-status, go-test-status (build/runtime names cannot match)
+          pattern: "*-test-status"   # cargo-test-status, go-test-status, zig-test-status (build/runtime names cannot match)
           merge-multiple: true       # safe: filenames are unique per job
         continue-on-error: true  # a lost status artifact must not hide the failure
 
@@ -1157,11 +1304,13 @@ jobs:
           rs="${{ needs.runtime-smoke.result }}"
           ct="${{ needs.cargo-test.result }}"
           gt="${{ needs.go-test.result }}"
+          zt="${{ needs.zig-test.result }}"
           echo "native-build : $nb"
           echo "elf-inspect  : $ei"
           echo "runtime-smoke: $rs"
           echo "cargo-test   : $ct"
           echo "go-test      : $gt"
+          echo "zig-test     : $zt"
           case "$nb" in
             success) echo "  -> native build: PASS (all three legs; see per-ABI below)" ;;
             failure|cancelled) echo "  -> native build: FAILED" ;;
@@ -1192,6 +1341,12 @@ jobs:
             skipped) echo "  -> go test: NOT RUN (NOT TESTED)" ;;
             *) echo "  -> go test: $gt (NOT TESTED)" ;;
           esac
+          case "$zt" in
+            success) echo "  -> zig test: PASS (zeptun @ pin, host linux/amd64, upstream linux CI gate: unit Debug+ReleaseSafe+mobile preset, C-ABI smoke, netns, TUN integration)" ;;
+            failure|cancelled) echo "  -> zig test: FAILED (see zig-test-evidence artifact)" ;;
+            skipped) echo "  -> zig test: NOT RUN (NOT TESTED)" ;;
+            *) echo "  -> zig test: $zt (NOT TESTED)" ;;
+          esac
           echo ""
           echo "--- REAL per-ABI build results (uploaded by the legs themselves) ---"
           if [ -d leg-status ]; then
@@ -1220,13 +1375,13 @@ jobs:
               echo ""
             done
           fi
-          for t in cargo-test go-test; do
+          for t in cargo-test go-test zig-test; do
             if [ ! -f "leg-status/${t}-status.txt" ]; then
               echo "MISSING status for ${t} -> FAILED / NOT TESTED"
             fi
           done
           if [ -d leg-status ]; then
-            for f in leg-status/cargo-test-status.txt leg-status/go-test-status.txt; do
+            for f in leg-status/cargo-test-status.txt leg-status/go-test-status.txt leg-status/zig-test-status.txt; do
               [ -f "$f" ] || continue
               echo "[$f]"
               cat "$f"
@@ -1234,7 +1389,7 @@ jobs:
             done
           fi
 
-      - name: What this run did and did NOT test (v4.6, N2)
+      - name: What this run did and did NOT test (v4.7, N2)
         run: |
           cat <<'EOF'
           --- COVERED BY THIS CI RUN (when the jobs above succeeded) ---
@@ -1258,9 +1413,13 @@ jobs:
               build legs); psiphon fork — go vet + go test over the
               23-package gated allowlist mirroring the fork's own CI
               detector leg (config-secret, root/netfilter and
-              upstream-disabled packages excluded and recorded). HOST CI
-              evidence — NOT Android execution, NOT device evidence, NOT
-              tunnel tests.
+              upstream-disabled packages excluded and recorded); zeptun —
+              the upstream 'linux' CI gate replicated at the frozen pin:
+              unit tests Debug + ReleaseSafe + the shipped mobile preset,
+              C-ABI smoke against libzeptun.a, unit tests re-run inside a
+              user+network namespace, and a TUN end-to-end integration pass
+              inside that namespace. HOST/namespace CI evidence — NOT
+              Android execution, NOT device evidence, NOT a tunnel test.
           --- NOT TESTED BY THIS RUN (stays BLOCKED / NOT TESTED — decision N2) ---
             - real-device tests: connection, lifecycle, UDP, memory, battery
               (emulator cannot substitute — runtime smoke is CI evidence only)
@@ -1290,10 +1449,8 @@ jobs:
               reported, never trusted as a gate)
             - -race data-race detector, gofmt -s, go-licenses checks
               (upstream CI extras — NOT RUN this phase)
-            - zeptun Zig unit tests (upstream ships a `zig build test` step
-              at the pin — candidate for a follow-up job, NOT RUN here)
-            - Android-target execution of any unit test (host-only this
-              phase; no on-device test harness exists yet)
+            - Android-target execution of any unit test (host and namespace
+              only this phase; no on-device test harness exists yet)
           EOF
 
       - name: Fail the summary if the pipeline failed (honest exit code)
@@ -1303,8 +1460,9 @@ jobs:
           rs="${{ needs.runtime-smoke.result }}"
           ct="${{ needs.cargo-test.result }}"
           gt="${{ needs.go-test.result }}"
-          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ]; then
-            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt"
+          zt="${{ needs.zig-test.result }}"
+          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ] || [ "$zt" != "success" ]; then
+            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt zig-test=$zt"
             exit 1
           fi
-          echo "PIPELINE GREEN (7/7: 3 build legs + elf-inspect + runtime-smoke + cargo-test + go-test)"
+          echo "PIPELINE GREEN (8/8: 3 build legs + elf-inspect + runtime-smoke + cargo-test + go-test + zig-test)"

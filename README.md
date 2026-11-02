@@ -1,10 +1,55 @@
-# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.6**, unit-test jobs added)
+# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.7**, zeptun Zig test gate added)
 
 Deliverable of directive 6 of report v3: *"start the next phase with GitHub Actions
 setup and the initial native build."* — revised after the employer's reviews of
 bundle v1, v2, v3, v4, the v4.1 addendum, v4.2 and v4.3 (2026-10-31 / 2026-11-01). No frozen
 pin (source commits, Rust/Go/Zig versions, NDK r26d, API 29, three-ABI matrix, N1–N8)
-was changed in v4.2, v4.3, v4.4, v4.5 or v4.6.
+was changed in v4.2, v4.3, v4.4, v4.5, v4.6 or v4.7.
+
+## v4.7 — zig-test job: the zeptun test gate at the frozen pin (2026-11-02)
+
+**Scope change only — NO frozen pin changed (N1/N8 untouched).** A new CI job
+runs zeptun's own upstream test gate on the pinned source for the first time:
+
+- **zig-test** — replicates upstream zeptun's own `linux` CI job
+  (`zeptun@08a1ab0 .github/workflows/ci.yml`) **step-for-step**, under
+  AETHONE discipline: the source is materialized at the frozen
+  `ZEPTUN_SHA` (clone_pin semantics, fail-closed rev-parse proof) and Zig
+  is the pinned `0.16.0` tarball with the sha256 gate — the same install
+  native-build uses (no third-party setup action). Steps, upstream order
+  preserved: unit tests **Debug** + **ReleaseSafe** + the **mobile preset**
+  (`-Dmobile=true` — the feature set the AETHONE Android library actually
+  ships), **C-ABI smoke** (`zig build test-ffi` against `libzeptun.a`),
+  upstream-faithful namespace prep (sysctls + `unshare` probe), unit tests
+  re-run inside a **user+network namespace** (`zig build test-netns` — the
+  suite must pass with NO ambient network access), and the **TUN
+  end-to-end integration** pass inside that namespace
+  (`zig build test-integration -Doptimize=ReleaseSafe`).
+- Fail-closed: every step's exit code under `set -euo pipefail`; the tee'd
+  log must carry `>= 4` `Build Summary:` blocks and the `[7/7]` marker (a
+  hollow pass — nothing executed — is structurally impossible); pin assert
+  on the zeptun tree; sha256 gate on the Zig tarball.
+- Pre-push sandbox validation with the exact pinned toolchain and a
+  pristine `git archive` tree of the pin (full log:
+  `evidence/zig_test_scope_v47.txt`): steps 1–6 green (109/117 host unit
+  tests with 8 platform skips in Debug and mobile; 101 passed / 0 failed
+  inside the namespace; C-ABI smoke exit 0); step 7 (TUN integration)
+  needs a kernel TUN device (root-only `modprobe`) — it executes only on
+  the GitHub runner, upstream-faithful, and stays NOT TESTED until the
+  first CI run records it.
+- **status-summary** — needs the new job, reports its result, checks its
+  status artifact, and moves "zeptun Zig unit tests" from the NOT-TESTED
+  list into the covered list with the explicit N2 boundary; the honest
+  exit gate becomes **8/8** (3 build legs + elf-inspect + runtime-smoke +
+  cargo-test + go-test + zig-test).
+- Evidence artifacts: `zig-test-evidence` (env.txt + zig-test.log) and
+  `zig-test-status`; full scope/fidelity analysis:
+  `evidence/zig_test_scope_v47.txt`.
+
+N2 boundary unchanged: the zeptun gate is **HOST + namespace CI evidence**
+— NOT Android execution, NOT device evidence, NOT a tunnel test. zeptun's
+`bench` performance gates, Android-target test execution and on-device
+harnesses stay NOT TESTED and are recorded.
 
 ## v4.6 — cargo-test + go-test jobs: the first unit-test evidence (2026-11-02)
 
@@ -55,8 +100,8 @@ jobs run the pinned sources' own test suites on the HOST for the first time:
 
 N2 boundary unchanged: host unit tests are **HOST-target CI evidence** —
 NOT Android execution, NOT device evidence, NOT tunnel tests. Android-target
-execution of the unit tests, the `-race` detector, and zeptun's Zig unit
-tests (`zig build test` exists upstream) stay NOT TESTED and are recorded.
+execution of the unit tests and the `-race` detector stay NOT TESTED and are
+recorded. (zeptun's Zig unit tests graduated to their own job in v4.7.)
 
 ## v4.5 — runtime smoke job: the first runtime evidence (2026-11-01)
 

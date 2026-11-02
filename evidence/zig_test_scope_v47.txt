@@ -1,0 +1,95 @@
+=== AETHONE v4.7 — zig-test job: scope, upstream fidelity, and pre-push sandbox validation ===
+
+Prepared: 2026-11-02 (analysis sandbox, BEFORE the first CI execution)
+Status of the zig-test job at the time of writing: DELIVERED, NOT YET RUN IN CI.
+Nothing in this file upgrades the CI run to "pass" — decision N2 discipline:
+the first GitHub Actions run log is the only CI evidence (recorded separately
+once it exists).
+
+--- 1. What the job replicates (upstream fidelity) ---
+
+Upstream reference: zeptun @ ZEPTUN_SHA 08a1ab05aab315b7872ed582c52b7c230930d05d
+(1.1.3), file .github/workflows/ci.yml, job "linux" (ubuntu-24.04). Upstream
+steps, in order:
+  1. zig build test --summary all
+  2. zig build test -Doptimize=ReleaseSafe --summary all
+  3. zig build test-ffi
+  4. zig build test -Dmobile=true --summary all
+  5. sysctls (apparmor_restrict_unprivileged_userns=0, unprivileged_userns_clone=1,
+     modprobe tun) + probe: unshare --user --map-root-user --net true
+  6. zig build test-netns
+  7. zig build test-integration -Doptimize=ReleaseSafe
+
+AETHONE deviations (all recorded, none silent):
+  * Runs on ubuntu-latest (workflow-internal consistency; ubuntu-latest is
+    24.04 today — upstream pins 24.04 explicitly).
+  * Zeptun is materialized at the frozen ZEPTUN_SHA (clone_pin semantics with
+    a fail-closed rev-parse proof) — upstream checks out its own branch HEAD.
+  * Zig 0.16.0 is installed from the pinned tarball with the sha256 gate
+    (70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00) — the
+    same install native-build uses; upstream uses mlugg/setup-zig@v2.
+  * Everything is tee'd to test-evidence/zig-test.log and a fail-closed
+    assertion requires >= 4 "Build Summary:" blocks + the [7/7] marker, so a
+    hollow pass (nothing actually executed) is structurally impossible.
+  * Upstream's own boundary note: steps 1-4 are host unit/FFI evidence,
+    steps 5-7 run inside unprivileged user+network namespaces (NO ambient
+    network access inside the namespace; the integration pass talks only to
+    loopback servers started inside it through a real TUN device).
+
+--- 2. Pre-push sandbox validation (executed, real output) ---
+
+Environment: analysis sandbox, x86_64 Linux, Zig 0.16.0 from the pinned
+tarball (sha256 verified against the pin above), zeptun tree extracted via
+`git archive HEAD` from the pin — pristine tree, no mode/content drift.
+Raw commands and tails of the outputs are preserved in the session transcript.
+
+  [1/7] zig build test --summary all
+        -> Build Summary: 10/10 steps succeeded; 109/117 tests passed (8 skipped)
+        -> wall 17.3s ... PASS (exit 0)
+  [2/7] zig build test -Doptimize=ReleaseSafe --summary all
+        -> all test legs pass (compile legs 17-35s each)
+        -> wall 1m48s ... PASS (exit 0)
+  [3/7] zig build test-ffi
+        -> silent success (zig prints nothing on a green non-summary run);
+           exit 0 verified explicitly, steps cached/green
+        -> wall 6.2s ... PASS (exit 0)
+  [4/7] zig build test -Dmobile=true --summary all
+        -> Build Summary: 10/10 steps succeeded; 109/117 tests passed (8 skipped)
+        -> wall 14.3s ... PASS (exit 0)
+  [5/7] unshare --user --map-root-user --net true
+        -> probe exit 0 (userns available in the sandbox)
+        ... PASS (exit 0)
+  [6/7] zig build test-netns --summary all
+        -> "101 passed; 8 skipped; 0 failed." inside the user+net namespace;
+           Build Summary: 4/4 steps succeeded; test-netns success
+        -> wall 2.2s ... PASS (exit 0)
+  [7/7] zig build test-integration -Doptimize=ReleaseSafe
+        -> NOT RUN in the sandbox: requires a kernel TUN device
+           (/dev/net/tun) that needs a root `modprobe tun`; the sandbox has
+           neither. Direct probe: inside `unshare --user --map-root-user
+           --net`, `ip tuntap add dev zt0 mode tun` -> "open: No such file
+           or directory", exit 1. This step therefore executes ONLY on the
+           GitHub runner (sudo + modprobe available there; upstream's own
+           CI runs exactly this step), and its first result is CI evidence.
+
+Summary: 6/7 steps pre-validated green with the exact pinned toolchain and
+the exact pinned source tree; step 7 is runner-side and stays NOT TESTED
+until the first CI run.
+
+--- 3. Boundary (N2) ---
+
+The zig-test job produces HOST + NAMESPACE CI evidence only:
+  - NOT Android execution of zeptun (the shipped libzeptun.so keeps being
+    built by native-build and inspected by elf-inspect; runtime-smoke's
+    on-device coverage is x86_64 exec of the produced binaries only)
+  - NOT a device test, NOT an AETHONE tunnel test, NOT a battery/memory/UDP
+    device metric
+  - The mobile preset is tested as HOST code compiled with the mobile feature
+    set — not on an Android device.
+
+--- 4. What remains NOT TESTED for zeptun after v4.7 ---
+
+  * Android-target execution of unit tests (no on-device test harness)
+  * arm64-v8a / armeabi-v7a runtime execution (static-only this phase)
+  * System.loadLibrary("zeptun-jni") inside the app (N7 — app context)
+  * zeptun performance gates (bench gate stays upstream-only this phase)
