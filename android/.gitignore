@@ -1,0 +1,18 @@
+# AETHONE deviation from the Flutter template (v4.9): the Gradle wrapper
+# (jar + gradlew scripts) IS committed so any clone builds reproducibly
+# with the pinned 9.8.2 distribution — no template/network re-generation
+# step can drift. Version is pinned in gradle/wrapper/gradle-wrapper.properties.
+!gradle-wrapper.jar
+!gradlew
+!gradlew.bat
+/.gradle
+/captures/
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# Remember to never publicly share your keystore.
+# See https://flutter.dev/to/reference-keystore
+key.properties
+**/*.keystore
+**/*.jks

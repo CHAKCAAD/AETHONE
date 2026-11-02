@@ -123,7 +123,7 @@ Flutter UI.
 | API level | `29` | aether `cargo ndk … --platform 29` **and** zeptun `Application.mk: APP_PLATFORM := android-29` |
 | cargo-ndk | `4.1.2` | crates.io latest — pinned exactly (upstream installs unpinned) |
 | GitHub Actions | full commit SHAs | `git ls-remote <repo> <tag>` raw output 2026-10-31 in `evidence/actions_pins_raw_evidence.txt`; SHA changes only via the N8 gate |
-| JDK / Gradle / AGP / Build-Tools | `17.0.21+9` / `9.8.2` / `9.4.0` / `36.0.0` | adoptium / services.gradle.org / developer.android.com — packaging baseline, not used by this workflow yet |
+| JDK / Gradle / AGP / Build-Tools | `17.0.21+9` / `9.8.2` / `9.4.0` / `36.0.0` | adoptium / services.gradle.org / developer.android.com — packaging baseline; **used by the android-apk job since v4.9** (AGP in `android/settings.gradle.kts`, wrapper in `gradle-wrapper.properties`, JDK via setup-java, build-tools for the zipalign/apksigner gates) |
 
 The `--platform 29 vs 24` question is closed with primary evidence: zeptun's real
 `Application.mk` says **android-29** while zeptun's wiki (same commit) still claims

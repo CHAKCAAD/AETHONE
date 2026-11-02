@@ -1,10 +1,36 @@
-# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.8**, Flutter UI step 1 added)
+# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.9**, Android APK packaging added)
 
 Deliverable of directive 6 of report v3: *"start the next phase with GitHub Actions
 setup and the initial native build."* — revised after the employer's reviews of
 bundle v1, v2, v3, v4, the v4.1 addendum, v4.2 and v4.3 (2026-10-31 / 2026-11-01). No frozen
 pin (source commits, Rust/Go/Zig versions, NDK r26d, API 29, three-ABI matrix, N1–N8)
-was changed in v4.2, v4.3, v4.4, v4.5, v4.6, v4.7 or v4.8.
+was changed in v4.2, v4.3, v4.4, v4.5, v4.6, v4.7, v4.8 or v4.9.
+
+## v4.9 — android-apk job: first installable APK, UI step 1 scope (2026-11-02)
+
+**Scope addition only — NO frozen pin changed (N1/N8 untouched).** The Android
+scaffolding is committed and CI now packages an installable APK after the Dart
+gate passes:
+
+- **android/ scaffolding** (Flutter 3.47.9 template, Kotlin DSL):
+  `applicationId com.chakcaad.aethone`, `minSdk=24` (explicitly the recorded
+  CANDIDATE — symbol/runtime proof NOT TESTED yet), compile/target SDK 36
+  (Flutter defaults), **AGP promoted from the template 9.1.0 to the recorded
+  baseline 9.4.0**, Gradle wrapper pinned to the baseline **9.8.2** (-bin),
+  Kotlin 2.4.0 (template — no recorded baseline). Template deviation: the
+  Gradle wrapper (jar + gradlew) IS committed so any clone builds
+  reproducibly with the pinned distribution.
+- **android-apk job** (needs flutter-ui — Dart gate first): JDK `17.0.21+9`
+  Temurin via actions/setup-java v4 (SHA cf277c60…, ls-remote proof
+  2026-11-02); SDK license acceptance; pinned build-tools `36.0.0` for the
+  verification gates; universal **release APK (debug-signed — test install
+  ONLY)** + **preview-debug APK** (`--dart-define=PREVIEW_MODE=true`,
+  debug-only by code); gates `zipalign -c -P 16 -v 4` + `apksigner verify` on
+  the release APK; sha256 manifest; artifact `aethone-apk-r<run_number>`.
+- **The APK is UI-ONLY.** No engine is wired yet (M2): the release app
+  honestly fails connect with `engineNotWired`; the preview APK runs the UI
+  simulator on a real phone. CI never installs or launches the APK.
+- **status-summary**: honest exit gate **10/10** (+ android-apk).
 
 ## v4.8 — flutter-ui job: Flutter UI layer, step 1 (2026-11-02)
 

@@ -5,16 +5,40 @@
 #         (cargo-test + go-test) fully green since run 41399287433;
 #         v4.7 (zig-test, zeptun upstream linux CI gate) fully green
 #         since run 41410063261; v4.8 (flutter-ui, UI step 1) fully green
-#         since run 41431288828 — all 10 jobs (flutter-ui reached green on
-#         its 5th executed analyze+test pass: runs 41425047347/41426549680
-#         /41427918855/41430689837 failed with root-caused fixes committed
-#         each time; 41430073612 passed analyze, failed 4 widget tests —
-#         the history is in the commit log, nothing was hidden).
+#         since run 41431288828; v4.9 (android-apk packaging, UI step 1
+#         scope) DELIVERED — first-green evidence recorded after its run.
 # Evidence for every pin is recorded in docs/CI_BOOTSTRAP_PoC.md and
 # evidence/verification_log*.txt (commit existence proven by `git checkout`
 # of the exact SHA — stronger than an API lookup). Raw tag->SHA proof for
 # every Actions pin: evidence/actions_pins_raw_evidence.txt (v3).
 # actionlint 1.7.7 exit 0 on THIS exact file: evidence/validation_log.txt (v4).
+#
+# v4.9 changes (2026-11-02) — Android APK packaging (UI step 1 scope), NO
+#   frozen native pin changed:
+#   * android/ scaffolding committed (Flutter 3.47.9 template, Kotlin DSL):
+#     applicationId com.chakcaad.aethone; minSdk=24 EXPLICITLY the recorded
+#     CANDIDATE (not proven yet); compileSdk/targetSdk = flutter defaults
+#     (36); AGP promoted from template 9.1.0 to the recorded baseline 9.4.0;
+#     Gradle wrapper pinned 9.8.2 (-bin, baseline); Kotlin 2.4.0 (template,
+#     no recorded baseline). Template deviation: gradle-wrapper jar + gradlew
+#     scripts ARE committed so any clone builds reproducibly. Release APK
+#     stays debug-signed — test install ONLY; a real keystore is a recorded
+#     open item and no public release may ship from this config.
+#   * Job 8 android-apk (needs flutter-ui — Dart gate first): JDK
+#     17.0.21+9 Temurin via actions/setup-java v4 (SHA cf277c60…, git
+#     ls-remote proof 2026-11-02), fail-closed Flutter 3.47.9 proof, SDK
+#     license acceptance, pinned build-tools 36.0.0 installed for the
+#     verification gates, universal release APK + preview-debug APK
+#     (--dart-define=PREVIEW_MODE=true — debug builds only BY CODE, the
+#     release engine adapter is fail-closed), zipalign -c -P 16 -v 4 gate
+#     + apksigner verify on the release APK, sha256 manifest, artifact
+#     aethone-apk-r<run_number>. The APK is UI-ONLY: no engine is wired
+#     (M2) and the release app honestly reports engineNotWired on connect
+#     — packaging claims NO tunnel functionality. CI never installs or
+#     launches the APK.
+#   * status-summary: honest exit gate 10/10 (+ android-apk); packaging
+#     evidence classified CI-only (N2) — device install/launch stays NOT
+#     TESTED.
 #
 # v4.8 changes (2026-11-02) — Flutter UI layer, UI step 1, NO frozen
 #   native pin changed:
@@ -237,6 +261,7 @@ env:
   # Any change to these SHAs = an upgrade decision → N8 gate only.
   ACTIONS_CHECKOUT_SHA:     "11d5960a326750d5838078e36cf38b85af677262"  # actions/checkout        v4.4.0 (lightweight tag -> this commit, VERIFIED)
   ACTIONS_CACHE_SHA:        "0057852bfaa89a56745cba8c7296529d2fc39830"  # actions/cache           v4.3.0 (lightweight tag -> this commit, VERIFIED)
+  ACTIONS_SETUP_JAVA_SHA:   "cf277c60eb25467037889841efdb72551f06f6c3"  # actions/setup-java      v4 (latest v4.x; lightweight tag -> this commit, VERIFIED via git ls-remote 2026-11-02)
   ACTIONS_SETUP_GO_SHA:     "40f1582b2485089dde7abd97c1529aa768e1baff"  # actions/setup-go        v5.6.0 (lightweight tag -> this commit, VERIFIED)
   ACTIONS_UPLOAD_ARTIFACT_SHA: "ea165f8d65b6e75b540449e92b4886f43607fa02"  # actions/upload-artifact v4.6.2 (lightweight tag -> this commit, VERIFIED)
   ACTIONS_DOWNLOAD_ARTIFACT_SHA: "d3f86a106a0bac45b974a628896c90dbdf5c8093"  # actions/download-artifact v4.3.0 (lightweight tag -> this commit, VERIFIED)
@@ -1372,14 +1397,142 @@ jobs:
           if-no-files-found: error
 
   # =========================================================================
-  # Job 8 — status summary with the REAL results of this run (employer
+  # Job 8 — android-apk: package the Flutter UI as an installable Android
+  # APK (UI step 1 scope). The APK is UI-ONLY: no engine is wired yet (M2)
+  # and the release build honestly reports engineNotWired on connect.
+  # This job packages the app — it claims NO tunnel functionality, and CI
+  # never installs or launches the APK on any device/emulator (N2).
+  # =========================================================================
+  android-apk:
+    name: "Android APK (release + preview-debug — UI-only, engine M2 pending)"
+    needs: [flutter-ui]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Same exact Flutter pin as flutter-ui (single source: the env var).
+      FLUTTER_VERSION: "3.47.9"
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK (recorded packaging baseline, Temurin)
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4 (lightweight tag -> commit, git ls-remote 2026-11-02)
+        with:
+          distribution: temurin
+          java-version: ${{ env.JDK_VERSION }}
+
+      - name: Install Flutter (exact pin)
+        uses: subosito/flutter-action@e938fdf56512cc96ef2f93601a5a40bde3801046 # v2.19.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Toolchain proof (fail-closed)
+        run: |
+          set -euo pipefail
+          flutter --version
+          actual="$(flutter --version | awk '/^Flutter /{print $2}')"
+          [ "$actual" = "$FLUTTER_VERSION" ] || { echo "::error::flutter $actual != pinned $FLUTTER_VERSION"; exit 1; }
+          java -version 2>&1 | head -2
+          echo "JDK pin: ${JDK_VERSION} | AGP: ${AGP_VERSION} | wrapper Gradle: ${GRADLE_VERSION}"
+
+      - name: Accept Android SDK licenses (fail-closed)
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          echo "SDK licenses accepted"
+
+      - name: Install pinned build-tools (verification gates, not AGP's choice)
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;${BUILD_TOOLS_VERSION}" > /dev/null
+          [ -x "$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}/zipalign" ] || { echo "::error::zipalign missing for build-tools ${BUILD_TOOLS_VERSION}"; exit 1; }
+          [ -x "$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}/apksigner" ] || { echo "::error::apksigner missing for build-tools ${BUILD_TOOLS_VERSION}"; exit 1; }
+          echo "build-tools ${BUILD_TOOLS_VERSION} ready (zipalign + apksigner)"
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Build universal release APK (debug-signed — test install only)
+        run: |
+          set -euo pipefail
+          flutter build apk --release
+          ls -la build/app/outputs/flutter-apk/
+
+      - name: Build preview-debug APK (UI demo — PREVIEW_MODE is debug-only BY CODE)
+        run: |
+          set -euo pipefail
+          flutter build apk --debug --dart-define=PREVIEW_MODE=true
+          ls -la build/app/outputs/flutter-apk/
+
+      - name: Packaging gates on the release APK (zipalign -P 16 + apksigner)
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          BT="$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}"
+          "$BT/zipalign" -c -P 16 -v 4 "$APK" > zipalign-release.log 2>&1 \
+            || { echo "::error::zipalign -c -P 16 FAILED on the release APK"; tail -40 zipalign-release.log; exit 1; }
+          echo "zipalign -c -P 16 -v 4: PASS (build-tools ${BUILD_TOOLS_VERSION})"
+          "$BT/apksigner" verify --print-certs "$APK" | sed -n '1,3p'
+          echo "apksigner verify: PASS (debug-signed — test install ONLY, not a release signature)"
+
+      - name: Dist naming + sha256 manifest
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/aethone-ui-r${{ github.run_number }}-release.apk"
+          cp build/app/outputs/flutter-apk/app-debug.apk   "dist/aethone-ui-r${{ github.run_number }}-preview-debug.apk"
+          {
+            echo "run_id=${{ github.run_id }}"
+            echo "commit=${{ github.sha }}"
+            echo "flutter=${FLUTTER_VERSION} agp=${AGP_VERSION} gradle_wrapper=${GRADLE_VERSION} build_tools=${BUILD_TOOLS_VERSION} jdk=${JDK_VERSION}"
+            echo "application_id=com.chakcaad.aethone minSdk=24 (CANDIDATE, not proven) targetSdk=36"
+            echo "scope=UI-ONLY (engine NOT wired — M2). The release APK honestly fails connect with engineNotWired; the preview-debug APK runs the PREVIEW_MODE simulator (debug builds only, by code)."
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > dist/BUILD_INFO.txt
+          sha256sum dist/*.apk | tee dist/SHA256SUMS.txt
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aethone-apk-r${{ github.run_number }}
+          path: dist/
+          if-no-files-found: error
+
+      - name: Record packaging status (real result, uploaded even on failure)
+        if: always()
+        run: |
+          mkdir -p status
+          {
+            echo "job=${{ github.job }}"
+            echo "status=${{ job.status }}"
+            echo "run_id=${{ github.run_id }}"
+            echo "leg=android-apk (UI-only packaging: universal release debug-signed + preview-debug, zipalign -P 16 gate, apksigner verify, build-tools ${BUILD_TOOLS_VERSION}; engine M2 pending)"
+            echo "flutter=$FLUTTER_VERSION"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > status/build-status-android-apk.txt
+          cat status/build-status-android-apk.txt
+
+      - name: Upload packaging status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: build-status-android-apk
+          path: status/build-status-android-apk.txt
+          if-no-files-found: error
+
+  # =========================================================================
+  # Job 9 — status summary with the REAL results of this run (employer
   # directive 6): per-ABI build outcomes from the uploaded status files and
   # the actual needs.*.result values. FAILED and NOT RUN are explicit.
   # CI results and real-device results stay SEPARATE (decision N2).
   # =========================================================================
   status-summary:
     name: Status summary (real CI results vs NOT TESTED)
-    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui]
+    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui, android-apk]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -1420,6 +1573,7 @@ jobs:
           gt="${{ needs.go-test.result }}"
           zt="${{ needs.zig-test.result }}"
           fu="${{ needs.flutter-ui.result }}"
+          aa="${{ needs.android-apk.result }}"
           echo "native-build : $nb"
           echo "elf-inspect  : $ei"
           echo "runtime-smoke: $rs"
@@ -1427,6 +1581,7 @@ jobs:
           echo "go-test      : $gt"
           echo "zig-test     : $zt"
           echo "flutter-ui   : $fu"
+          echo "android-apk  : $aa"
           case "$nb" in
             success) echo "  -> native build: PASS (all three legs; see per-ABI below)" ;;
             failure|cancelled) echo "  -> native build: FAILED" ;;
@@ -1468,6 +1623,12 @@ jobs:
             failure|cancelled) echo "  -> flutter ui: FAILED (analyze or tests — see job log)" ;;
             skipped) echo "  -> flutter ui: NOT RUN (NOT TESTED)" ;;
             *) echo "  -> flutter ui: $fu (NOT TESTED)" ;;
+          esac
+          case "$aa" in
+            success) echo "  -> android apk: PASS (universal release APK debug-signed for test install + preview-debug artifact; zipalign -c -P 16 -v 4 + apksigner verify with build-tools ${BUILD_TOOLS_VERSION}; UI-ONLY — engine M2 pending, CI never installs/launches it, N2)" ;;
+            failure|cancelled) echo "  -> android apk: FAILED (see aethone-apk-r* artifact / job log)" ;;
+            skipped) echo "  -> android apk: NOT RUN (NOT TESTED)" ;;
+            *) echo "  -> android apk: $aa (NOT TESTED)" ;;
           esac
           echo ""
           echo "--- REAL per-ABI build results (uploaded by the legs themselves) ---"
@@ -1552,6 +1713,13 @@ jobs:
               machine states, honest fail on the unwired engine, single-
               flight multi-tap). NOT a device/emulator render, NOT golden-
               pixel comparison (next UI steps), NOT engine integration (M2).
+            - android apk packaging v1 (UI step 1 scope): universal release
+              APK (debug-signed — test install ONLY) + a preview-debug APK
+              (PREVIEW_MODE is debug-only BY CODE, never in release),
+              zipalign -c -P 16 -v 4 gate + apksigner verify with the pinned
+              build-tools 36.0.0, sha256 manifest. The APK is UI-ONLY — no
+              engine is wired (M2) and the release app honestly reports
+              engineNotWired on connect. CI never installs or launches it.
           --- NOT TESTED BY THIS RUN (stays BLOCKED / NOT TESTED — decision N2) ---
             - real-device tests: connection, lifecycle, UDP, memory, battery
               (emulator cannot substitute — runtime smoke is CI evidence only)
@@ -1561,13 +1729,14 @@ jobs:
               here the .so files are push- and sha256-verified only)
             - actual Tor / Psiphon network connections (no tunnel attempted;
               Psiphon also blocked by N6 credentials)
-            - zipalign -c -P 16 -v 4 app-release.apk (no APK exists yet)
             - minSdk=24 proof (symbol-level vs bionic API 24 + runtime at API 24)
             - Speed Test native implementation + latency method on a live session (N3)
             - golden-pixel UI comparison against the reference frames (next
               UI steps: golden tests + screenshot diffing)
-            - Flutter UI on an Android emulator/device (flutter_tester host
-              only this phase; no APK exists yet)
+            - Flutter UI renders from the CI-built APK on an emulator/device
+              (the artifact is packaged and statically verified — CI never
+              installs or launches it; device evidence stays the real-device
+              domain, N2)
             - Psiphon official credentials for public release (N6) — BLOCKED
             - psiphon controller/memory/clientlib test packages (they
               ReadFile controller_test.config, paved upstream from the
@@ -1598,8 +1767,9 @@ jobs:
           gt="${{ needs.go-test.result }}"
           zt="${{ needs.zig-test.result }}"
           fu="${{ needs.flutter-ui.result }}"
-          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ] || [ "$zt" != "success" ] || [ "$fu" != "success" ]; then
-            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt zig-test=$zt flutter-ui=$fu"
+          aa="${{ needs.android-apk.result }}"
+          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ] || [ "$zt" != "success" ] || [ "$fu" != "success" ] || [ "$aa" != "success" ]; then
+            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt zig-test=$zt flutter-ui=$fu android-apk=$aa"
             exit 1
           fi
-          echo "PIPELINE GREEN (9/9: 3 build legs + elf-inspect + runtime-smoke + cargo-test + go-test + zig-test + flutter-ui)"
+          echo "PIPELINE GREEN (10/10: 3 build legs + elf-inspect + runtime-smoke + cargo-test + go-test + zig-test + flutter-ui + android-apk)"
