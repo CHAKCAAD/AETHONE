@@ -1,0 +1,82 @@
+name: aethone
+description: >-
+  AETHONE — cross-platform VPN client. Flutter UI layer; network engines are
+  Aether (Rust, WARP client) and zeptun (Zig, userspace TUN router).
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  # SVG rendering for the ZIP-provided asset set (mandatory: the owner requires
+  # the exact SVGs from the design package — no generic icon packs).
+  flutter_svg: 2.3.2
+  # Telegram channel link (t.me/AETHONE) — owner-specified behavior of the
+  # top-bar info button (decision D1, option A).
+  url_launcher: 6.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Fonts: IRANYekanX committed under design/fonts (11 weights exist; 6 wired
+  # per design-token report table 2 — pending decision D12 for the rest).
+  # LICENSE WARNING (report §2.2 / D10): IRANYekanX is a commercial Fontiran
+  # family; confirm the license before any public release build.
+  fonts:
+    - family: IRANYekanX
+      fonts:
+        - asset: design/fonts/IRANYekanX-Light.ttf
+          weight: 300
+        - asset: design/fonts/IRANYekanX-Regular.ttf
+          weight: 400
+        - asset: design/fonts/IRANYekanX-Medium.ttf
+          weight: 500
+        - asset: design/fonts/IRANYekanX-DemiBold.ttf
+          weight: 600
+        - asset: design/fonts/IRANYekanX-Bold.ttf
+          weight: 700
+        - asset: design/fonts/IRANYekanX-ExtraBold.ttf
+          weight: 800
+
+  assets:
+    # --- reference screens are NOT bundled as app assets (documentation only) ---
+    # --- app logo (design/آیکون اپ) ---
+    - design/آیکون اپ/1.svg
+    - design/آیکون اپ/2.svg
+    - design/آیکون اپ/3.svg
+    # --- protocol logos (design/آیکون پروتکل ها) ---
+    - design/آیکون پروتکل ها/تور.svg
+    - design/آیکون پروتکل ها/سایفون.svg
+    - design/آیکون پروتکل ها/ماسک.svg
+    - design/آیکون پروتکل ها/میم.svg
+    - design/آیکون پروتکل ها/وایرگارد.svg
+    - design/آیکون پروتکل ها/گول.svg
+    - design/آیکون پروتکل ها/گول کلاسیک.svg
+    # --- background patterns (design/پترن پس زمینه صفحه اصلی) ---
+    - design/پترن پس زمینه صفحه اصلی/پترن حالت غیر متصل-سمت راست.svg
+    - design/پترن پس زمینه صفحه اصلی/پترن حالت غیر متصل-سمت چپ.svg
+    - design/پترن پس زمینه صفحه اصلی/پترن حالت متصل-سمت راست.svg
+    - design/پترن پس زمینه صفحه اصلی/پترن حالت متصل-سمت چپ.svg
+    # --- country flags: full directory (266 squircle SVGs + mapping guide) ---
+    - design/آیکون پرچم کشورها با کد کشور به همراه راهنما/
+    # --- linear icon set: only the icons the UI actually uses ---
+    - design/آیکون های اپ/Shield Tick.svg
+    - design/آیکون های اپ/Shield Cross.svg
+    - design/آیکون های اپ/Graph Down.svg
+    - design/آیکون های اپ/Graph Up.svg
+    - design/آیکون های اپ/Download.svg
+    - design/آیکون های اپ/Upload.svg
+    - design/آیکون های اپ/Setting.svg
+    - design/آیکون های اپ/Information Circle.svg
+    - design/آیکون های اپ/Map.svg
+    - design/آیکون های اپ/Send 1.svg

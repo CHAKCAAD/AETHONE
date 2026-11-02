@@ -4,14 +4,29 @@
 #         (runtime-smoke) fully green since run 41352644421; v4.6
 #         (cargo-test + go-test) fully green since run 41399287433;
 #         v4.7 (zig-test, zeptun upstream linux CI gate) fully green
-#         since run 41410063261 — all 9 jobs, incl. the quic non-gating
-#         probe (exit 0 there, FAIL on its first run 41397588337 —
-#         recorded, never a gate).
+#         since run 41410063261; v4.8 (flutter-ui) FIRST RUN PENDING —
+#         this header is updated with the run id once it exists (a run
+#         that has not happened yet is NEVER claimed as green).
 # Evidence for every pin is recorded in docs/CI_BOOTSTRAP_PoC.md and
 # evidence/verification_log*.txt (commit existence proven by `git checkout`
 # of the exact SHA — stronger than an API lookup). Raw tag->SHA proof for
 # every Actions pin: evidence/actions_pins_raw_evidence.txt (v3).
 # actionlint 1.7.7 exit 0 on THIS exact file: evidence/validation_log.txt (v4).
+#
+# v4.8 changes (2026-11-02) — Flutter UI layer, UI step 1, NO frozen
+#   native pin changed:
+#   * Job 7 flutter-ui: static analysis + unit/widget tests of the Dart UI
+#     layer (scaffold, design tokens, asset manifest, prompt-§8 connection
+#     state machine, transport-mode endpoint table, home screen both looks).
+#     Flutter pinned exactly to stable 3.47.9 (dart 3.13.7,
+#     releases_linux.json 2026-10-29) via subosito/flutter-action v2.19.0
+#     (tag SHA e938fdf56512cc96ef2f93601a5a40bde3801046, git ls-remote
+#     proof), fail-closed version proof after install. The UI code consumes
+#     the committed design/ package in place (single source of truth); the
+#     asset-manifest test fails CI if any referenced asset is missing.
+#   * status-summary: honest exit gate 9/9 (+ flutter-ui); UI evidence
+#     classified as HOST flutter_tester only (N2) — golden-pixel comparison
+#     and device/emulator renders stay NOT TESTED.
 #
 # v4.7 changes (2026-11-02) — zeptun test gate, NO frozen pin changed:
 #   * Job 6 zig-test: upstream zeptun's own 'linux' CI job
@@ -1285,14 +1300,83 @@ jobs:
           if-no-files-found: error
 
   # =========================================================================
-  # Job 7 — status summary with the REAL results of this run (employer
+  # Job 7 — flutter-ui: static analysis + tests for the Flutter UI layer.
+  # UI step 1 scope: project scaffold, design tokens (evidence-locked),
+  # asset manifest (existence-guarded), connection state machine (prompt §8),
+  # transport-mode endpoint table (report table 11), and the home screen
+  # (both looks × machine states). Dart-only — no android/ios folders exist
+  # yet (they land with M2/packaging); `flutter analyze` + `flutter test`
+  # run without them. UI tests are HOST evidence (N2): widget tests run in
+  # the flutter_tester, NOT on a device/emulator.
+  # =========================================================================
+  flutter-ui:
+    name: "Flutter UI (analyze + test — UI step 1: scaffold + home screen)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Flutter stable 2026-10-29, dart 3.13.7 — storage.googleapis.com
+      # flutter_infra_release/releases/releases_linux.json current_release.
+      FLUTTER_VERSION: "3.47.9"
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install Flutter (exact pin)
+        uses: subosito/flutter-action@e938fdf56512cc96ef2f93601a5a40bde3801046 # v2.19.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Toolchain proof (fail-closed)
+        run: |
+          set -euo pipefail
+          flutter --version
+          actual="$(flutter --version | awk '/^Flutter /{print $2}')"
+          [ "$actual" = "$FLUTTER_VERSION" ] || { echo "::error::flutter $actual != pinned $FLUTTER_VERSION"; exit 1; }
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Static analysis (warnings fatal)
+        run: flutter analyze
+
+      - name: Unit + widget tests
+        run: flutter test
+
+      - name: Record test status (real result, uploaded even on failure)
+        if: always()
+        run: |
+          mkdir -p status
+          {
+            echo "job=${{ github.job }}"
+            echo "status=${{ job.status }}"
+            echo "run_id=${{ github.run_id }}"
+            echo "test=flutter-ui (UI step 1: analyze + tests — design tokens, asset manifest, state machine, transport table, home screen; HOST flutter_tester evidence, N2)"
+            echo "flutter=$FLUTTER_VERSION"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > status/flutter-test-status.txt
+          cat status/flutter-test-status.txt
+
+      - name: Upload test status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: flutter-test-status
+          path: status/flutter-test-status.txt
+          if-no-files-found: error
+
+  # =========================================================================
+  # Job 8 — status summary with the REAL results of this run (employer
   # directive 6): per-ABI build outcomes from the uploaded status files and
   # the actual needs.*.result values. FAILED and NOT RUN are explicit.
   # CI results and real-device results stay SEPARATE (decision N2).
   # =========================================================================
   status-summary:
     name: Status summary (real CI results vs NOT TESTED)
-    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test]
+    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -1316,7 +1400,7 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: leg-status
-          pattern: "*-test-status"   # cargo-test-status, go-test-status, zig-test-status (build/runtime names cannot match)
+          pattern: "*-test-status"   # cargo/go/zig/flutter-test-status (build/runtime names cannot match)
           merge-multiple: true       # safe: filenames are unique per job
         continue-on-error: true  # a lost status artifact must not hide the failure
 
@@ -1332,12 +1416,14 @@ jobs:
           ct="${{ needs.cargo-test.result }}"
           gt="${{ needs.go-test.result }}"
           zt="${{ needs.zig-test.result }}"
+          fu="${{ needs.flutter-ui.result }}"
           echo "native-build : $nb"
           echo "elf-inspect  : $ei"
           echo "runtime-smoke: $rs"
           echo "cargo-test   : $ct"
           echo "go-test      : $gt"
           echo "zig-test     : $zt"
+          echo "flutter-ui   : $fu"
           case "$nb" in
             success) echo "  -> native build: PASS (all three legs; see per-ABI below)" ;;
             failure|cancelled) echo "  -> native build: FAILED" ;;
@@ -1374,6 +1460,12 @@ jobs:
             skipped) echo "  -> zig test: NOT RUN (NOT TESTED)" ;;
             *) echo "  -> zig test: $zt (NOT TESTED)" ;;
           esac
+          case "$fu" in
+            success) echo "  -> flutter ui: PASS (UI step 1 — analyze + unit/widget tests on the pinned Flutter 3.47.9: tokens, asset manifest, state machine, transport table, home screen; HOST flutter_tester evidence, N2)" ;;
+            failure|cancelled) echo "  -> flutter ui: FAILED (analyze or tests — see job log)" ;;
+            skipped) echo "  -> flutter ui: NOT RUN (NOT TESTED)" ;;
+            *) echo "  -> flutter ui: $fu (NOT TESTED)" ;;
+          esac
           echo ""
           echo "--- REAL per-ABI build results (uploaded by the legs themselves) ---"
           if [ -d leg-status ]; then
@@ -1402,13 +1494,13 @@ jobs:
               echo ""
             done
           fi
-          for t in cargo-test go-test zig-test; do
+          for t in cargo-test go-test zig-test flutter-test; do
             if [ ! -f "leg-status/${t}-status.txt" ]; then
               echo "MISSING status for ${t} -> FAILED / NOT TESTED"
             fi
           done
           if [ -d leg-status ]; then
-            for f in leg-status/cargo-test-status.txt leg-status/go-test-status.txt leg-status/zig-test-status.txt; do
+            for f in leg-status/cargo-test-status.txt leg-status/go-test-status.txt leg-status/zig-test-status.txt leg-status/flutter-test-status.txt; do
               [ -f "$f" ] || continue
               echo "[$f]"
               cat "$f"
@@ -1416,7 +1508,7 @@ jobs:
             done
           fi
 
-      - name: What this run did and did NOT test (v4.7, N2)
+      - name: What this run did and did NOT test (v4.8, N2)
         run: |
           cat <<'EOF'
           --- COVERED BY THIS CI RUN (when the jobs above succeeded) ---
@@ -1447,6 +1539,16 @@ jobs:
               user+network namespace, and a TUN end-to-end integration pass
               inside that namespace. HOST/namespace CI evidence — NOT
               Android execution, NOT device evidence, NOT a tunnel test.
+            - flutter ui v1 (UI step 1, HOST flutter_tester only, N2): static
+              analysis + unit/widget tests of the Dart UI layer — design
+              tokens locked to the evidence tables, asset-manifest existence
+              guard over the committed design package, the prompt-§8
+              connection state machine (legal/illegal transitions), the
+              transport-mode endpoint table (ports 1819/1820/1821 per mode,
+              TCP-only flags), and the home screen widget (both looks ×
+              machine states, honest fail on the unwired engine, single-
+              flight multi-tap). NOT a device/emulator render, NOT golden-
+              pixel comparison (next UI steps), NOT engine integration (M2).
           --- NOT TESTED BY THIS RUN (stays BLOCKED / NOT TESTED — decision N2) ---
             - real-device tests: connection, lifecycle, UDP, memory, battery
               (emulator cannot substitute — runtime smoke is CI evidence only)
@@ -1459,6 +1561,10 @@ jobs:
             - zipalign -c -P 16 -v 4 app-release.apk (no APK exists yet)
             - minSdk=24 proof (symbol-level vs bionic API 24 + runtime at API 24)
             - Speed Test native implementation + latency method on a live session (N3)
+            - golden-pixel UI comparison against the reference frames (next
+              UI steps: golden tests + screenshot diffing)
+            - Flutter UI on an Android emulator/device (flutter_tester host
+              only this phase; no APK exists yet)
             - Psiphon official credentials for public release (N6) — BLOCKED
             - psiphon controller/memory/clientlib test packages (they
               ReadFile controller_test.config, paved upstream from the
@@ -1488,8 +1594,9 @@ jobs:
           ct="${{ needs.cargo-test.result }}"
           gt="${{ needs.go-test.result }}"
           zt="${{ needs.zig-test.result }}"
-          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ] || [ "$zt" != "success" ]; then
-            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt zig-test=$zt"
+          fu="${{ needs.flutter-ui.result }}"
+          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ] || [ "$zt" != "success" ] || [ "$fu" != "success" ]; then
+            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt zig-test=$zt flutter-ui=$fu"
             exit 1
           fi
-          echo "PIPELINE GREEN (8/8: 3 build legs + elf-inspect + runtime-smoke + cargo-test + go-test + zig-test)"
+          echo "PIPELINE GREEN (9/9: 3 build legs + elf-inspect + runtime-smoke + cargo-test + go-test + zig-test + flutter-ui)"

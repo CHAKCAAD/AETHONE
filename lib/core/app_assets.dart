@@ -1,0 +1,134 @@
+/// Typed asset manifest — single source of truth for every design asset the
+/// UI uses. Paths point INTO the committed `design/` package (single source of
+/// truth, no duplication). File and folder names are used EXACTLY as committed
+/// (owner rule: never rename). See `test/app_assets_test.dart` — it fails CI
+/// if any referenced file is missing.
+library;
+
+/// Protocol identifiers — the 11 transport modes of the evidence table
+/// (phase-1 report table 11) plus the AUTO/SMART selector.
+enum ProtocolId {
+  auto,
+  masque,
+  wireguard,
+  gool,
+  goolClassic,
+  mim,
+  torChain,
+  torReverse,
+  torOnly,
+  psiphonChain,
+  psiphonReverse,
+  psiphonOnly,
+}
+
+extension ProtocolIdX on ProtocolId {
+  /// Tor/Psiphon families replace the flag carousel with protocol selection
+  /// (owner: the top area acts as the protocol selector in these modes).
+  bool get isTor =>
+      this == ProtocolId.torChain ||
+      this == ProtocolId.torReverse ||
+      this == ProtocolId.torOnly;
+
+  bool get isPsiphon =>
+      this == ProtocolId.psiphonChain ||
+      this == ProtocolId.psiphonReverse ||
+      this == ProtocolId.psiphonOnly;
+}
+
+abstract final class AppAssets {
+  static const String _icons = 'design/آیکون های اپ';
+  static const String _protocols = 'design/آیکون پروتکل ها';
+  static const String _patterns = 'design/پترن پس زمینه صفحه اصلی';
+  static const String _logo = 'design/آیکون اپ';
+  static const String _flags = 'design/آیکون پرچم کشورها با کد کشور به همراه راهنما';
+
+  // --- app logo: 1 = green (connected artwork, rotated), 3 = clean white
+  // (tintable — used for BOTH states with the owner's rotation animation).
+  static const String appLogoConnected = '$_logo/1.svg';
+  static const String appLogoNeutralWhite = '$_logo/3.svg';
+
+  // --- background patterns (red when disconnected, green when connected).
+  static const String patternDisconnectedLeft = '$_patterns/پترن حالت غیر متصل-سمت چپ.svg';
+  static const String patternDisconnectedRight = '$_patterns/پترن حالت غیر متصل-سمت راست.svg';
+  static const String patternConnectedLeft = '$_patterns/پترن حالت متصل-سمت چپ.svg';
+  static const String patternConnectedRight = '$_patterns/پترن حالت متصل-سمت راست.svg';
+
+  // --- linear icon set (subset actually used; owner forbids other icon
+  // sources — no Material icons, no emoji, no online images).
+  static const String iconShieldTick = '$_icons/Shield Tick.svg';
+  static const String iconShieldCross = '$_icons/Shield Cross.svg';
+  static const String iconGraphDown = '$_icons/Graph Down.svg';
+  static const String iconGraphUp = '$_icons/Graph Up.svg';
+  static const String iconDownload = '$_icons/Download.svg';
+  static const String iconUpload = '$_icons/Upload.svg';
+  static const String iconSetting = '$_icons/Setting.svg';
+  static const String iconInformationCircle = '$_icons/Information Circle.svg';
+  static const String iconMap = '$_icons/Map.svg';
+  static const String iconSend = '$_icons/Send 1.svg';
+
+  // --- protocol logos.
+  static const String _protoMasque = '$_protocols/ماسک.svg';
+  static const String _protoWireguard = '$_protocols/وایرگارد.svg';
+  static const String _protoGool = '$_protocols/گول.svg';
+  static const String _protoGoolClassic = '$_protocols/گول کلاسیک.svg';
+  static const String _protoMim = '$_protocols/میم.svg';
+  static const String _protoTor = '$_protocols/تور.svg';
+  static const String _protoPsiphon = '$_protocols/سایفون.svg';
+
+  /// Logo for a transport mode. AUTO/SMART has NO dedicated SVG in the ZIP —
+  /// pending design decision D-pending (report §6.9 suggests Shield Tick with
+  /// gold accent); until decided it maps to Shield Tick (documented stopgap).
+  static String protocolIcon(ProtocolId id) => switch (id) {
+        ProtocolId.auto => iconShieldTick,
+        ProtocolId.masque => _protoMasque,
+        ProtocolId.wireguard => _protoWireguard,
+        ProtocolId.gool => _protoGool,
+        ProtocolId.goolClassic => _protoGoolClassic,
+        ProtocolId.mim => _protoMim,
+        ProtocolId.torChain => _protoTor,
+        ProtocolId.torReverse => _protoTor,
+        ProtocolId.torOnly => _protoTor,
+        ProtocolId.psiphonChain => _protoPsiphon,
+        ProtocolId.psiphonReverse => _protoPsiphon,
+        ProtocolId.psiphonOnly => _protoPsiphon,
+      };
+
+  /// Country flag by ISO code (lowercase), e.g. `ir` → ir.svg.
+  /// All 266 codes verified present in the committed set.
+  static String flag(String code) => '$_flags/$code.svg';
+
+  /// All asset paths referenced above (used by the existence test).
+  static List<String> get allReferenced => [
+        appLogoConnected,
+        appLogoNeutralWhite,
+        patternDisconnectedLeft,
+        patternDisconnectedRight,
+        patternConnectedLeft,
+        patternConnectedRight,
+        iconShieldTick,
+        iconShieldCross,
+        iconGraphDown,
+        iconGraphUp,
+        iconDownload,
+        iconUpload,
+        iconSetting,
+        iconInformationCircle,
+        iconMap,
+        iconSend,
+        _protoMasque,
+        _protoWireguard,
+        _protoGool,
+        _protoGoolClassic,
+        _protoMim,
+        _protoTor,
+        _protoPsiphon,
+        ...ProtocolId.values.map(protocolIcon),
+        flag('ir'),
+        flag('tm'),
+        flag('ru'),
+        flag('cn'),
+        flag('de'),
+        flag('us'),
+      ];
+}

@@ -1,10 +1,49 @@
-# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.7**, zeptun Zig test gate added)
+# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.8**, Flutter UI step 1 added)
 
 Deliverable of directive 6 of report v3: *"start the next phase with GitHub Actions
 setup and the initial native build."* — revised after the employer's reviews of
 bundle v1, v2, v3, v4, the v4.1 addendum, v4.2 and v4.3 (2026-10-31 / 2026-11-01). No frozen
 pin (source commits, Rust/Go/Zig versions, NDK r26d, API 29, three-ABI matrix, N1–N8)
-was changed in v4.2, v4.3, v4.4, v4.5, v4.6 or v4.7.
+was changed in v4.2, v4.3, v4.4, v4.5, v4.6, v4.7 or v4.8.
+
+## v4.8 — flutter-ui job: Flutter UI layer, step 1 (2026-11-02)
+
+**Scope addition only — NO frozen pin changed (N1/N8 untouched).** The employer
+approved starting the UI stage; per the implementation prompt the first step is
+the scaffold + design system + home screen, verified by CI:
+
+- **Flutter app at the repository root** (the layout `.gitignore` anticipated):
+  `pubspec.yaml` (Flutter 3.47.9 / Dart 3.13.0+, flutter_svg 2.3.2,
+  url_launcher 6.3.3 — every dependency justified in `docs/UI_IMPLEMENTATION.md`),
+  IRANYekanX wired from `design/fonts/` (6 of 11 weights, D12 recommendation),
+  assets consumed **in place** from the committed `design/` package — single
+  source of truth, no duplication; an existence test fails CI if any referenced
+  asset is missing.
+- **Design system** (`lib/core/`): tokens locked to the phase-1 evidence tables
+  (colors incl. the 4-layer pill opacities 0.53/0.45/0.19, radii 32/13/11/9,
+  blur 57, reference frame 402x874) + motion tokens with the five ANIMATION
+  SETTINGS styles and the OS reduce-motion clamp.
+- **Connection layer** (`lib/connection/`): the prompt-§8 eight-state machine
+  with the exact transition table; typed engine events; an `EngineNotWiredAdapter`
+  that fails honestly (`engineNotWired`) until M2 wires the native service —
+  nothing ever pretends to be connected; a `--dart-define=PREVIEW_MODE` adapter
+  for UI development only (never in release). The transport-mode endpoint table
+  (ports 1819/1820/1821 per mode, TCP-only flags — report table 11) ships as
+  data behind the future ActiveTransportSession.
+- **Home screen** (`lib/features/home/`): both looks x machine states; the
+  4-layer GlowPill (status pill / speed-test button / look-2 center button);
+  hero logo rotation-tint animation; flag carousel with the disconnected blur;
+  edge patterns red<->green crossfade; look-1 connect button rising 72px when
+  connected; DOWN/UP stat cards. Reference-faithful: no screen with a reference
+  design was redesigned.
+- **flutter-ui CI job**: `flutter pub get` + `flutter analyze` + `flutter test`
+  on the pinned stable 3.47.9 (subosito/flutter-action v2.19.0 pinned by tag
+  SHA, fail-closed version proof). Status file `flutter-test-status` joins the
+  honest exit gate (now 9/9). UI evidence class (N2): HOST flutter_tester
+  only — golden-pixel comparison and device/emulator renders are NOT TESTED
+  (next UI steps).
+- **Pending design decisions** (D1–D12 of the phase-1 report) remain open;
+  stopgaps are documented in `docs/UI_IMPLEMENTATION.md` (fa).
 
 ## v4.7 — zig-test job: the zeptun test gate at the frozen pin (2026-11-02)
 

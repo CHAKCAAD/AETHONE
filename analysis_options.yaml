@@ -1,0 +1,7 @@
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    # The UI layer mirrors a fixed visual reference; prefer explicit styles.
+    prefer_const_constructors: true
+    prefer_const_declarations: true
