@@ -8,7 +8,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
-import '../../../l10n/app_strings.dart';
 import 'custom_icons.dart';
 
 class BottomPanel extends StatelessWidget {

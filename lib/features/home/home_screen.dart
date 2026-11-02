@@ -26,7 +26,7 @@ import 'widgets/status_pill.dart';
 import 'widgets/top_bar.dart';
 
 class HomeScreen extends StatelessWidget {
-  HomeScreen({super.key, required this.store});
+  const HomeScreen({super.key, required this.store});
 
   final ConnectionStore store;
 

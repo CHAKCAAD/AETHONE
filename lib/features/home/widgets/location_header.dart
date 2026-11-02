@@ -221,7 +221,7 @@ class _FlagCarousel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final codes = kCarouselFlagCodes;
+    const codes = kCarouselFlagCodes;
     return SizedBox(
       height: flagSize * 1.35,
       child: ListView(
