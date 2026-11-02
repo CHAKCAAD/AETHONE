@@ -213,30 +213,39 @@ class StatCard extends StatelessWidget {
             ),
           ),
           SizedBox(width: 10 * s),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'IRANYekanX',
-                  fontWeight: FontWeight.w400,
-                  fontSize: 11 * s,
-                  letterSpacing: 0.5,
-                  color: AethColors.textSecondary,
-                ),
+          // Scale-down fitted: sub-pixel font-metric differences (e.g. the
+          // Ahem test font) can never overflow the card.
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: AlignmentDirectional.centerStart,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontFamily: 'IRANYekanX',
+                      fontWeight: FontWeight.w400,
+                      fontSize: 11 * s,
+                      letterSpacing: 0.5,
+                      color: AethColors.textSecondary,
+                    ),
+                  ),
+                  Text(
+                    valueText,
+                    style: TextStyle(
+                      fontFamily: 'IRANYekanX',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15 * s,
+                      color: AethColors.textPrimary,
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                valueText,
-                style: TextStyle(
-                  fontFamily: 'IRANYekanX',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15 * s,
-                  color: AethColors.textPrimary,
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
