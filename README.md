@@ -1,10 +1,52 @@
-# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.5**, runtime smoke added)
+# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.6**, unit-test jobs added)
 
 Deliverable of directive 6 of report v3: *"start the next phase with GitHub Actions
 setup and the initial native build."* — revised after the employer's reviews of
 bundle v1, v2, v3, v4, the v4.1 addendum, v4.2 and v4.3 (2026-10-31 / 2026-11-01). No frozen
 pin (source commits, Rust/Go/Zig versions, NDK r26d, API 29, three-ABI matrix, N1–N8)
-was changed in v4.2, v4.3, v4.4 or v4.5.
+was changed in v4.2, v4.3, v4.4, v4.5 or v4.6.
+
+## v4.6 — cargo-test + go-test jobs: the first unit-test evidence (2026-11-02)
+
+**Scope change only — NO frozen pin changed (N1/N8 untouched).** Two new CI
+jobs run the pinned sources' own test suites on the HOST for the first time:
+
+- **cargo-test** — the aether crate's suite at the frozen pin `d58f9d5`:
+  `cargo test --locked --features tor` on `x86_64-unknown-linux-gnu` — the
+  SAME feature set as the production builds (`build_native.sh` parity).
+  Inventory at the pin: **471 test functions** (391 `#[test]` + 80
+  `#[tokio::test]`) across 32 source files (53 `#[cfg(test)]` blocks);
+  offline by design
+  (loopback binds + in-process shims; no external URLs in `src/`). The
+  boring-sys 5.3.0 enum-alias patch is applied by a **byte-identical copy**
+  of the `build_native.sh` step — the patch lives in
+  `CARGO_HOME/registry/src`, which is target-independent, so the host build
+  needs the exact same fix; `build_native.sh` itself is NOT touched.
+  Fail-closed: pin assert (rev-parse), Cargo.lock boring-sys 5.3.0 guard,
+  cargo exit code, and the log must contain `test result:` lines (a hollow
+  pass cannot pass silently).
+- **go-test** — `go vet` + `go test` on the psiphon fork @ `2956a96`
+  (linux/amd64, `-mod=vendor`, `GOTOOLCHAIN=local`) over a **24-package
+  allowlist** that mirrors the fork's own CI (`tests.yml` @ the pin,
+  detector leg) minus every package that cannot run faithfully here:
+  `./psiphon`, `./ClientLibrary/clientlib`, `./psiphon/memory_test` (their
+  tests `ReadFile("controller_test.config")`, paved upstream from the
+  `CONTROLLER_TEST_CONFIG` secret this repository does not have — an empty
+  file is a guaranteed failure, so they stay NOT RUN rather than faked);
+  `./psiphon/server` + `packetman` (upstream runs them under sudo with
+  libnetfilter-queue-dev + conntrack + build tags); `tun` (disabled by
+  upstream's own CI). Fail-closed: pin assert, vet/test exit codes, and the
+  log must contain exactly 24 `^ok ` package lines and zero `^FAIL` lines.
+- **status-summary** — the honest exit gate and the covered/NOT-TESTED
+  tables now include both jobs; evidence artifacts
+  `cargo-test-evidence` / `go-test-evidence` + status artifacts.
+- Full scope analysis with every exclusion and its reason:
+  `evidence/unit_test_scope_v46.txt`.
+
+N2 boundary unchanged: host unit tests are **HOST-target CI evidence** —
+NOT Android execution, NOT device evidence, NOT tunnel tests. Android-target
+execution of the unit tests, the `-race` detector, and zeptun's Zig unit
+tests (`zig build test` exists upstream) stay NOT TESTED and are recorded.
 
 ## v4.5 — runtime smoke job: the first runtime evidence (2026-11-01)
 

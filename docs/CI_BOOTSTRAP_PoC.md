@@ -100,7 +100,7 @@ Flutter UI.
 
 | File | Purpose |
 |---|---|
-| `.github/workflows/native-ci.yml` | GitHub Actions workflow: 3 jobs (native-build per ABI → elf-inspect → status-summary); every Action pinned to a full commit SHA with raw evidence |
+| `.github/workflows/native-ci.yml` | GitHub Actions workflow: 6 jobs (native-build per ABI → elf-inspect; runtime-smoke; cargo-test; go-test; status-summary with honest exit gate); every Action pinned to a full commit SHA with raw evidence |
 | `rust-toolchain.toml` | Exact Rust pin (1.99.1) so local builds match CI |
 | `scripts/build_native.sh` | Builds zeptun + aether + lyrebird + psiphon for ONE ABI at the frozen pins; verifies every expected output with `[ -f ]` before copying; intermediates outside the artifact path + whitelist guard; zero `|| true` (v3) |
 | `scripts/pt-build-pin.patch` | Hardens Aether's frozen `pt-build.sh`: checkout failure aborts, HEAD must equal `fc105a03c0e0`, proxy pseudo-version must embed the pin (N8); **v4.2: proxy path additionally verifies the SIGNED sumdb record with the official Go client (GOSUMDB) and requires byte-identity of the build zip with the go-client-verified zip** |

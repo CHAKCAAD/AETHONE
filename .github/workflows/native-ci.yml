@@ -1,12 +1,38 @@
 # AETHONE Native CI — Phase 2 bootstrap (report v4, bundle v4)
 # ---------------------------------------------------------------------------
-# Status: DELIVERED — first executed 2026-11-01 (run 41338079878); fully
-#         green since run 41341450121 (see v4.5 below).
+# Status: DELIVERED — v4.4 fully green since run 41341450121; v4.5
+#         (runtime-smoke) fully green since run 41352644421 (all 5 jobs).
+#         v4.6 (cargo-test + go-test) first executes on the push that
+#         carries this change; the result is recorded below once known.
 # Evidence for every pin is recorded in docs/CI_BOOTSTRAP_PoC.md and
 # evidence/verification_log*.txt (commit existence proven by `git checkout`
 # of the exact SHA — stronger than an API lookup). Raw tag->SHA proof for
 # every Actions pin: evidence/actions_pins_raw_evidence.txt (v3).
 # actionlint 1.7.7 exit 0 on THIS exact file: evidence/validation_log.txt (v4).
+#
+# v4.6 changes (2026-11-02) — first UNIT-TEST evidence, NO frozen pin changed:
+#   * Job 4 cargo-test: the aether crate's own test suite (471 test
+#     functions at the pin d58f9d5 — 391 #[test] + 80 #[tokio::test];
+#     inventory + offline analysis in evidence/unit_test_scope_v46.txt)
+#     runs on the HOST (x86_64-unknown-linux-gnu) with the PRODUCTION
+#     feature set (--features tor — identical to build_native.sh) and
+#     --locked. The boring-sys 5.3.0 enum-alias patch is applied by a
+#     byte-identical copy of the build_native.sh step (the patch lives in
+#     CARGO_HOME/registry/src — target-INDEPENDENT; build_native.sh itself
+#     is NOT touched).
+#   * Job 5 go-test: go vet + go test on the psiphon fork @ 2956a96 over a
+#     24-package allowlist that mirrors the fork's own CI (tests.yml @ the
+#     pin, detector leg) minus every package that cannot run faithfully
+#     here: controller/memory/clientlib (ReadFile controller_test.config —
+#     paved upstream from the CONTROLLER_TEST_CONFIG secret this repository
+#     does not have), server/packetman (upstream runs them under sudo with
+#     libnetfilter-queue-dev + conntrack + build tags), tun (disabled by
+#     upstream's own CI). Every exclusion is recorded with its reason.
+#   * status-summary: honest exit gate + coverage tables extended to both
+#     new jobs; evidence artifacts cargo-test-evidence / go-test-evidence
+#     plus status artifacts cargo-test-status / go-test-status.
+#   * Boundary (N2): host unit tests are HOST-target CI evidence — NOT
+#     Android execution, NOT device evidence, NOT tunnel tests.
 #
 # v4.5 changes (2026-11-01) — first RUNTIME evidence, NO frozen pin changed:
 #   * Job 3 runtime-smoke (x86_64 leg): boots the official Google 16 KB
@@ -737,14 +763,335 @@ jobs:
           echo "emulator shutdown requested"
 
   # =========================================================================
-  # Job 4 — status summary with the REAL results of this run (employer
+  # Job 4 — cargo-test (v4.6): FIRST unit-test evidence for the Rust core.
+  # The aether crate's own test suite (471 test functions at the frozen pin
+  # d58f9d5 — 391 #[test] + 80 #[tokio::test]; inventory + offline analysis
+  # in evidence/unit_test_scope_v46.txt) runs on the HOST target
+  # (x86_64-unknown-linux-gnu) with the SAME feature set as the production
+  # build (--features tor — build_native.sh parity) and --locked. NO frozen
+  # pin changed:
+  #   * Rust 1.99.1 — the same RUST_VERSION pin and the same dtolnay action
+  #     SHA as the build legs (host target only; no Android target installed).
+  #   * aether d58f9d5 — clone_pin semantics identical to build_native.sh
+  #     (blobless clone, checkout, rev-parse == pin assert); the same
+  #     srccache key is restored/saved so later runs reuse the checkout.
+  #   * boring-sys 5.3.0 enum-alias patch — a byte-identical copy of the
+  #     build_native.sh step: the patch lives in CARGO_HOME/registry/src,
+  #     which is TARGET-INDEPENDENT, so the host build needs the exact same
+  #     fix; build_native.sh itself is NOT touched.
+  # Fail-closed assertions:
+  #   * rev-parse == AETHER_SHA after checkout (pin proof, as every build leg)
+  #   * Cargo.lock still pins boring-sys exactly 5.3.0 (the python guard
+  #     refuses any other state — no unpinned patch can ever be applied)
+  #   * cargo test exit code (any test failure fails the job)
+  #   * the log must contain at least one "test result:" line — a hollow
+  #     pass (suite did not execute) cannot pass silently
+  # Boundary (N2): host unit tests are HOST-target CI evidence — NOT
+  # Android execution, NOT device evidence, NOT a tunnel test.
+  # =========================================================================
+  cargo-test:
+    name: Unit tests (aether crate — host x86_64-unknown-linux-gnu, --features tor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SRC_CACHE: ${{ github.workspace }}/.srccache
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Restore source caches (frozen SHAs)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ env.SRC_CACHE }}
+          key: srccache-${{ env.AETHER_SHA }}-${{ env.ZEPTUN_SHA }}-${{ env.PSIPHON_FORK_SHA }}
+
+      - name: Install Rust toolchain (exact pin — host target only)
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # branch stable @ 2026-10-31
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Materialize the pinned aether tree (clone_pin semantics)
+        run: |
+          set -euo pipefail
+          src="$SRC_CACHE/aether"
+          if [ ! -d "$src/.git" ]; then
+            git clone --filter=blob:none "$AETHER_REPO" "$src"
+          fi
+          git -C "$src" checkout "$AETHER_SHA"
+          [ "$(git -C "$src" rev-parse HEAD)" = "$AETHER_SHA" ] \
+            || { echo "::error::aether pin mismatch: expected $AETHER_SHA, got $(git -C "$src" rev-parse HEAD)"; exit 1; }
+          echo "aether pin verified: $(git -C "$src" rev-parse HEAD)"
+          [ -d "$src/quiche/quiche" ] \
+            || { echo "::error::quiche path dependency missing from the pinned tree (aether/Cargo.toml: ../quiche/quiche)"; exit 1; }
+
+      - name: Fetch locked sources and apply the boring-sys 5.3.0 patch (byte-identical to build_native.sh)
+        run: |
+          set -euo pipefail
+          cd "$SRC_CACHE/aether/aether"
+          echo "== [boring-sys] fetch locked sources (host) and apply the 5.3.0 enum-name fix =="
+          cargo fetch --locked
+          python3 - "${CARGO_HOME:-$HOME/.cargo}" <<'PY_BORING_SYS'
+          import hashlib
+          import sys
+          from pathlib import Path
+          
+          cargo_home = Path(sys.argv[1]).expanduser()
+          lock_path = Path("Cargo.lock")
+          if not lock_path.is_file():
+              raise SystemExit("FATAL: Cargo.lock is missing; refusing an unpinned boring-sys patch.")
+          
+          lock_text = lock_path.read_text(encoding="utf-8")
+          if 'name = "boring-sys"\nversion = "5.3.0"\n' not in lock_text:
+              raise SystemExit("FATAL: Cargo.lock does not pin boring-sys 5.3.0 exactly.")
+          
+          registry_src = cargo_home / "registry" / "src"
+          matches = sorted(registry_src.glob("*/boring-sys-5.3.0/build/main.rs"))
+          if len(matches) != 1:
+              raise SystemExit(
+                  "FATAL: expected exactly one boring-sys 5.3.0 build/main.rs under "
+                  f"{registry_src}, found {len(matches)}."
+              )
+          
+          path = matches[0]
+          source = path.read_text(encoding="utf-8")
+          old = """    let enum_type = src
+                  .split_once("ERR_LIB_SSL:")
+                  .and_then(|(_, def)| Some(def.split_once('=')?.0))
+                  .unwrap_or("_bindgen_ty_1");"""
+          new = """    let enum_type = src
+                  .split_once("pub const ERR_LIB_SSL")
+                  .and_then(|(_, def)| {
+                      let declaration = def.split_once('=')?.0;
+                      declaration.rsplit_once(':').map(|(_, ty)| ty.trim())
+                  })
+                  .filter(|ty| {
+                      !ty.is_empty() && ty.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                  })
+                  .unwrap_or("_bindgen_ty_1");"""
+          
+          before = hashlib.sha256(source.encode("utf-8")).hexdigest()
+          if source.count(old) == 1:
+              source = source.replace(old, new, 1)
+              path.write_text(source, encoding="utf-8")
+              state = "APPLIED"
+          elif source.count(new) == 1:
+              state = "ALREADY_APPLIED"
+          else:
+              raise SystemExit(
+                  "FATAL: boring-sys 5.3.0 helper did not match the one expected upstream "
+                  "implementation; no source was changed."
+              )
+          
+          after = hashlib.sha256(source.encode("utf-8")).hexdigest()
+          print(f"boring-sys source: {path}")
+          print(f"Patch state: {state}")
+          print(f"SHA256 before: {before}")
+          print(f"SHA256 after:  {after}")
+          PY_BORING_SYS
+
+      - name: Run cargo test (--locked --features tor — the production feature set)
+        run: |
+          set -euo pipefail
+          cd "$SRC_CACHE/aether/aether"
+          mkdir -p "$GITHUB_WORKSPACE/test-evidence"
+          {
+            echo "run_id=${{ github.run_id }}"
+            echo "head_sha=${{ github.sha }}"
+            echo "rustc=$(rustc --version)"
+            echo "cargo=$(cargo --version)"
+            echo "features=tor (identical to build_native.sh production builds)"
+            echo "lockfile=Cargo.lock (--locked; frozen in the pinned tree)"
+            echo "target=x86_64-unknown-linux-gnu (host)"
+          } | tee "$GITHUB_WORKSPACE/test-evidence/env.txt"
+          cargo test --locked --features tor \
+            2>&1 | tee "$GITHUB_WORKSPACE/test-evidence/cargo-test.log"
+
+      - name: Assert the test suite actually executed (fail-closed)
+        if: success()
+        run: |
+          set -euo pipefail
+          log="$GITHUB_WORKSPACE/test-evidence/cargo-test.log"
+          n=$(grep -c 'test result:' "$log" || true)
+          echo "test-result summary lines: $n"
+          [ "$n" -gt 0 ] || { echo "::error::no 'test result:' lines in the log — the suite did not execute (a hollow pass is not a pass)"; exit 1; }
+
+      - name: Record test status (real result, uploaded even on failure)
+        if: always()
+        run: |
+          mkdir -p status
+          {
+            echo "job=${{ github.job }}"
+            echo "status=${{ job.status }}"
+            echo "run_id=${{ github.run_id }}"
+            echo "test=cargo-test (aether crate @ $AETHER_SHA, host x86_64-unknown-linux-gnu, --features tor, --locked)"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > status/cargo-test-status.txt
+          cat status/cargo-test-status.txt
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cargo-test-evidence
+          path: test-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload test status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cargo-test-status
+          path: status/cargo-test-status.txt
+          if-no-files-found: error
+
+  # =========================================================================
+  # Job 5 — go-test (v4.6): FIRST unit-test evidence for the Go side.
+  # go vet + go test on the psiphon fork @ 2956a96 (N1 pin) on the HOST
+  # (linux/amd64), -mod=vendor, GOTOOLCHAIN=local. The 24-package allowlist
+  # MIRRORS the fork's own CI (tests.yml @ the pin, "detector" leg) minus
+  # every package that cannot run faithfully here — each exclusion recorded
+  # with its reason (full analysis in evidence/unit_test_scope_v46.txt):
+  #   * ./psiphon, ./ClientLibrary/clientlib, ./psiphon/memory_test — their
+  #     tests ReadFile("controller_test.config"), which upstream paves from
+  #     the CONTROLLER_TEST_CONFIG secret; this repository has no such
+  #     secret and an empty file is a guaranteed failure — NOT RUN, never
+  #     faked.
+  #   * ./psiphon/server, ./psiphon/common/packetman — upstream runs them
+  #     under sudo with libnetfilter-queue-dev + conntrack + build tags.
+  #   * ./psiphon/common/tun — disabled by upstream's own CI (TODO there).
+  #   * -race / gofmt / go-licenses — upstream CI extras, NOT RUN this phase.
+  # Fail-closed assertions:
+  #   * rev-parse == PSIPHON_FORK_SHA after checkout (pin proof)
+  #   * go vet exit code; go test exit code
+  #   * the test log must contain EXACTLY 24 "^ok " package lines and ZERO
+  #     "^FAIL" lines — proves the full allowlist executed; no silent skips
+  # Boundary (N2): host unit tests are HOST-target CI evidence — NOT
+  # Android execution, NOT device evidence, NOT a tunnel test.
+  # =========================================================================
+  go-test:
+    name: Unit tests (psiphon fork — host linux/amd64, vet + 24-package allowlist)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SRC_CACHE: ${{ github.workspace }}/.srccache
+      GOFLAGS: "-mod=vendor"
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Restore source caches (frozen SHAs)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ env.SRC_CACHE }}
+          key: srccache-${{ env.AETHER_SHA }}-${{ env.ZEPTUN_SHA }}-${{ env.PSIPHON_FORK_SHA }}
+
+      - name: Install Go toolchain (exact pin, no silent toolchain switching)
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go env -w GOTOOLCHAIN=local
+
+      - name: Materialize the pinned psiphon tree (clone_pin semantics)
+        run: |
+          set -euo pipefail
+          src="$SRC_CACHE/psiphon-fork"
+          if [ ! -d "$src/.git" ]; then
+            git clone --filter=blob:none "$PSIPHON_FORK_REPO" "$src"
+          fi
+          git -C "$src" checkout "$PSIPHON_FORK_SHA"
+          [ "$(git -C "$src" rev-parse HEAD)" = "$PSIPHON_FORK_SHA" ] \
+            || { echo "::error::psiphon fork pin mismatch: expected $PSIPHON_FORK_SHA, got $(git -C "$src" rev-parse HEAD)"; exit 1; }
+          echo "psiphon fork pin verified: $(git -C "$src" rev-parse HEAD)"
+          [ -f "$src/go.mod" ] || { echo "::error::go.mod missing in the pinned tree"; exit 1; }
+          [ -d "$src/vendor" ] || { echo "::error::vendor/ missing in the pinned tree (-mod=vendor requires it)"; exit 1; }
+
+      - name: Run go vet + go test (24-package allowlist, mirrors the fork's own CI)
+        run: |
+          set -euo pipefail
+          cd "$SRC_CACHE/psiphon-fork"
+          mkdir -p "$GITHUB_WORKSPACE/test-evidence"
+          {
+            echo "run_id=${{ github.run_id }}"
+            echo "head_sha=${{ github.sha }}"
+            echo "go=$(go version)"
+            echo "goenv=GOVERSION=$(go env GOVERSION) GOTOOLCHAIN=$(go env GOTOOLCHAIN) GOFLAGS=$(go env GOFLAGS)"
+          } | tee "$GITHUB_WORKSPACE/test-evidence/env.txt"
+          go vet \
+            ./psiphon/common ./psiphon/common/accesscontrol ./psiphon/common/crypto/ssh \
+            ./psiphon/common/dsl ./psiphon/common/fragmentor ./psiphon/common/inproxy \
+            ./psiphon/common/light ./psiphon/common/monotime ./psiphon/common/networkid \
+            ./psiphon/common/obfuscator ./psiphon/common/osl ./psiphon/common/parameters \
+            ./psiphon/common/protocol ./psiphon/common/push ./psiphon/common/quic \
+            ./psiphon/common/regen ./psiphon/common/resolver ./psiphon/common/tactics \
+            ./psiphon/common/transforms ./psiphon/common/values ./psiphon/common/wildcard \
+            ./psiphon/transferstats ./psiphon/server/psinet ./Server/logging/analysis \
+            2>&1 | tee "$GITHUB_WORKSPACE/test-evidence/go-vet.log"
+          go test -count=1 -timeout 15m \
+            ./psiphon/common ./psiphon/common/accesscontrol ./psiphon/common/crypto/ssh \
+            ./psiphon/common/dsl ./psiphon/common/fragmentor ./psiphon/common/inproxy \
+            ./psiphon/common/light ./psiphon/common/monotime ./psiphon/common/networkid \
+            ./psiphon/common/obfuscator ./psiphon/common/osl ./psiphon/common/parameters \
+            ./psiphon/common/protocol ./psiphon/common/push ./psiphon/common/quic \
+            ./psiphon/common/regen ./psiphon/common/resolver ./psiphon/common/tactics \
+            ./psiphon/common/transforms ./psiphon/common/values ./psiphon/common/wildcard \
+            ./psiphon/transferstats ./psiphon/server/psinet ./Server/logging/analysis \
+            2>&1 | tee "$GITHUB_WORKSPACE/test-evidence/go-test.log"
+
+      - name: Assert the full allowlist executed (fail-closed)
+        if: success()
+        run: |
+          set -euo pipefail
+          log="$GITHUB_WORKSPACE/test-evidence/go-test.log"
+          ok_n=$(grep -c '^ok ' "$log" || true)
+          fail_n=$(grep -c '^FAIL' "$log" || true)
+          echo "package result lines: ok=$ok_n FAIL=$fail_n (expected ok=24 FAIL=0)"
+          [ "$ok_n" -eq 24 ] || { echo "::error::expected 24 'ok' package lines, got $ok_n — the allowlist did not fully execute/pass"; exit 1; }
+          [ "$fail_n" -eq 0 ] || { echo "::error::$fail_n FAIL line(s) in the go test log"; exit 1; }
+
+      - name: Record test status (real result, uploaded even on failure)
+        if: always()
+        run: |
+          mkdir -p status
+          {
+            echo "job=${{ github.job }}"
+            echo "status=${{ job.status }}"
+            echo "run_id=${{ github.run_id }}"
+            echo "test=go-test (psiphon fork @ $PSIPHON_FORK_SHA, host linux/amd64, vet + 24-package allowlist)"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > status/go-test-status.txt
+          cat status/go-test-status.txt
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: go-test-evidence
+          path: test-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload test status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: go-test-status
+          path: status/go-test-status.txt
+          if-no-files-found: error
+
+  # =========================================================================
+  # Job 6 — status summary with the REAL results of this run (employer
   # directive 6): per-ABI build outcomes from the uploaded status files and
   # the actual needs.*.result values. FAILED and NOT RUN are explicit.
   # CI results and real-device results stay SEPARATE (decision N2).
   # =========================================================================
   status-summary:
     name: Status summary (real CI results vs NOT TESTED)
-    needs: [native-build, elf-inspect, runtime-smoke]
+    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -764,6 +1111,14 @@ jobs:
           merge-multiple: true   # safe: filename is unique
         continue-on-error: true  # a lost status artifact must not hide the failure
 
+      - name: Download unit-test status files
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: leg-status
+          pattern: "*-test-status"   # cargo-test-status, go-test-status (build/runtime names cannot match)
+          merge-multiple: true       # safe: filenames are unique per job
+        continue-on-error: true  # a lost status artifact must not hide the failure
+
       - name: Emit REAL status of this run
         run: |
           set -uo pipefail
@@ -773,9 +1128,13 @@ jobs:
           nb="${{ needs.native-build.result }}"
           ei="${{ needs.elf-inspect.result }}"
           rs="${{ needs.runtime-smoke.result }}"
+          ct="${{ needs.cargo-test.result }}"
+          gt="${{ needs.go-test.result }}"
           echo "native-build : $nb"
           echo "elf-inspect  : $ei"
           echo "runtime-smoke: $rs"
+          echo "cargo-test   : $ct"
+          echo "go-test      : $gt"
           case "$nb" in
             success) echo "  -> native build: PASS (all three legs; see per-ABI below)" ;;
             failure|cancelled) echo "  -> native build: FAILED" ;;
@@ -793,6 +1152,18 @@ jobs:
             failure|cancelled) echo "  -> runtime smoke: FAILED (see runtime-smoke-x86_64 artifact)" ;;
             skipped) echo "  -> runtime smoke: NOT RUN (NOT TESTED)" ;;
             *) echo "  -> runtime smoke: $rs (NOT TESTED)" ;;
+          esac
+          case "$ct" in
+            success) echo "  -> cargo test: PASS (aether crate unit tests, host x86_64-unknown-linux-gnu, --features tor)" ;;
+            failure|cancelled) echo "  -> cargo test: FAILED (see cargo-test-evidence artifact)" ;;
+            skipped) echo "  -> cargo test: NOT RUN (NOT TESTED)" ;;
+            *) echo "  -> cargo test: $ct (NOT TESTED)" ;;
+          esac
+          case "$gt" in
+            success) echo "  -> go test: PASS (psiphon fork unit tests, host linux/amd64, vet + 24-package allowlist)" ;;
+            failure|cancelled) echo "  -> go test: FAILED (see go-test-evidence artifact)" ;;
+            skipped) echo "  -> go test: NOT RUN (NOT TESTED)" ;;
+            *) echo "  -> go test: $gt (NOT TESTED)" ;;
           esac
           echo ""
           echo "--- REAL per-ABI build results (uploaded by the legs themselves) ---"
@@ -822,8 +1193,21 @@ jobs:
               echo ""
             done
           fi
+          for t in cargo-test go-test; do
+            if [ ! -f "leg-status/${t}-status.txt" ]; then
+              echo "MISSING status for ${t} -> FAILED / NOT TESTED"
+            fi
+          done
+          if [ -d leg-status ]; then
+            for f in leg-status/cargo-test-status.txt leg-status/go-test-status.txt; do
+              [ -f "$f" ] || continue
+              echo "[$f]"
+              cat "$f"
+              echo ""
+            done
+          fi
 
-      - name: What this run did and did NOT test (v4.5, N2)
+      - name: What this run did and did NOT test (v4.6, N2)
         run: |
           cat <<'EOF'
           --- COVERED BY THIS CI RUN (when the jobs above succeeded) ---
@@ -839,6 +1223,15 @@ jobs:
               attested at runtime, on-device exec of psiphon-tunnel-core and
               lyrebird, sha256 transfer integrity for all 5 binaries.
               CI/emulator evidence — NOT device evidence.
+            - unit tests v1 (HOST target only, N2): aether crate —
+              cargo test --locked --features tor on x86_64-unknown-linux-gnu
+              (471 test functions at the pin; offline: loopback binds and
+              in-process shims; boring-sys 5.3.0 patch identical to the
+              build legs); psiphon fork — go vet + go test over the
+              24-package allowlist mirroring the fork's own CI detector leg
+              (config-secret, root/netfilter and upstream-disabled packages
+              excluded and recorded). HOST CI evidence — NOT Android
+              execution, NOT device evidence, NOT tunnel tests.
           --- NOT TESTED BY THIS RUN (stays BLOCKED / NOT TESTED — decision N2) ---
             - real-device tests: connection, lifecycle, UDP, memory, battery
               (emulator cannot substitute — runtime smoke is CI evidence only)
@@ -852,6 +1245,21 @@ jobs:
             - minSdk=24 proof (symbol-level vs bionic API 24 + runtime at API 24)
             - Speed Test native implementation + latency method on a live session (N3)
             - Psiphon official credentials for public release (N6) — BLOCKED
+            - psiphon controller/memory/clientlib test packages (they
+              ReadFile controller_test.config, paved upstream from the
+              CONTROLLER_TEST_CONFIG secret; this repository has none — an
+              empty config is a guaranteed failure, so they stay NOT RUN
+              rather than faked)
+            - psiphon ./psiphon/server + ./psiphon/common/packetman tests
+              (upstream runs them under sudo with libnetfilter-queue-dev +
+              conntrack + build tags — excluded this phase)
+            - ./psiphon/common/tun (disabled by upstream's own CI)
+            - -race data-race detector, gofmt -s, go-licenses checks
+              (upstream CI extras — NOT RUN this phase)
+            - zeptun Zig unit tests (upstream ships a `zig build test` step
+              at the pin — candidate for a follow-up job, NOT RUN here)
+            - Android-target execution of any unit test (host-only this
+              phase; no on-device test harness exists yet)
           EOF
 
       - name: Fail the summary if the pipeline failed (honest exit code)
@@ -859,8 +1267,10 @@ jobs:
           nb="${{ needs.native-build.result }}"
           ei="${{ needs.elf-inspect.result }}"
           rs="${{ needs.runtime-smoke.result }}"
-          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ]; then
-            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs"
+          ct="${{ needs.cargo-test.result }}"
+          gt="${{ needs.go-test.result }}"
+          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ]; then
+            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt"
             exit 1
           fi
-          echo "PIPELINE GREEN"
+          echo "PIPELINE GREEN (7/7: 3 build legs + elf-inspect + runtime-smoke + cargo-test + go-test)"
