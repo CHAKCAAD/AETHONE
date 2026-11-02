@@ -223,12 +223,15 @@ class _FadingLayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Content is fitted (scale-down) so unusual font metrics or narrow
+    // viewports can never overflow the core layer (widget tests use the Ahem
+    // test font, which is wider than IRANYekanX).
     final box = child != null
         ? Container(
             width: size?.width,
             height: size?.height,
             alignment: Alignment.center,
-            child: child,
+            child: FittedBox(fit: BoxFit.scaleDown, child: child!),
           )
         : SizedBox(
             width: size?.width,
