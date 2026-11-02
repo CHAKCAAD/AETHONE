@@ -1,12 +1,17 @@
-/// Edge background patterns — the four committed SVGs (red when
-/// disconnected, green when connected). The color change is animated as a
-/// crossfade between the two artwork variants (owner: "با انیمیشن به رنگ سبز
-/// تغییر پیدا می‌کنند"). Patterns anchor to the screen edges at their natural
-/// aspect (viewBox 232×589 / 228×616, artwork hugging the outer edge).
+/// Edge background patterns — the four committed artworks (red when
+/// disconnected, green when connected), shipped as pre-rendered PNGs
+/// (v4.10: the SVG sources carry feGaussianBlur, which flutter_svg cannot
+/// rasterize — on device the blurred edge circles rendered as SOLID blobs,
+/// the single worst visual defect of the first preview build).
+///
+/// The color change is animated as a crossfade between the two artwork
+/// variants (owner: «با انیمیشن به رنگ سبز تغییر پیدا می‌کنند»). Patterns
+/// anchor to the screen edges at their natural aspect (viewBox 228×589 /
+/// 232×616, artwork hugging the outer edge) — rendered at 2× for sharpness.
+
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/app_assets.dart';
 import '../../../core/motion.dart';
@@ -31,26 +36,28 @@ class PatternSides extends StatelessWidget {
           Positioned.fill(
             child: AnimatedSwitcher(
               duration: duration,
-              child: SvgPicture.asset(
+              child: Image.asset(
                 key: ValueKey('pattern-left-${connected ? 'on' : 'off'}'),
                 connected
                     ? AppAssets.patternConnectedLeft
                     : AppAssets.patternDisconnectedLeft,
                 fit: BoxFit.fitHeight,
                 alignment: Alignment.centerLeft,
+                filterQuality: FilterQuality.medium,
               ),
             ),
           ),
           Positioned.fill(
             child: AnimatedSwitcher(
               duration: duration,
-              child: SvgPicture.asset(
+              child: Image.asset(
                 key: ValueKey('pattern-right-${connected ? 'on' : 'off'}'),
                 connected
                     ? AppAssets.patternConnectedRight
                     : AppAssets.patternDisconnectedRight,
                 fit: BoxFit.fitHeight,
                 alignment: Alignment.centerRight,
+                filterQuality: FilterQuality.medium,
               ),
             ),
           ),

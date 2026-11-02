@@ -40,7 +40,9 @@ void main() {
       expect(AethGeometry.centerButtonSize, 112);
       expect(AethGeometry.pillWidth, 162);
       expect(AethGeometry.pillHeight, 60);
-      expect(AethGeometry.pillBlur, 57);
+      // v4.10: tuned to the exported FRAMES (tight halo) — the Figma CSS
+      // blur(57px) value disagrees with every reference screenshot.
+      expect(AethGeometry.pillBlur, 10);
     });
 
     test('pill radii are the Figma Rectangle 26/22/21/20 values', () {

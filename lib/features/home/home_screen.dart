@@ -96,26 +96,29 @@ class HomeScreen extends StatelessWidget {
                         strings.settingsComingNext,
                       ),
                     ),
-                    SizedBox(height: 18 * s),
+                    SizedBox(height: AethGeometry.gapTopbarToLocation * s),
                     LocationHeader(
                       connected: connected,
                       protocolIsTorOrPsiphon:
                           store.selectedProtocol.isTor ||
-                              store.selectedProtocol.isPsiphon,
+                          store.selectedProtocol.isPsiphon,
                       pingMs: store.pingMs,
                       exitCountryCode: store.exitCountryCode,
                       onFlagSelected: (_) {}, // exit location = engine-owned
                     ),
                     // Hero band: logo (look 1) or center connect button (2).
+                    // The flex region is the reference's hero band
+                    // (y 212–534) — the logo centers exactly like the frame.
                     Expanded(
                       child: Center(
                         child: isLookOne
                             ? HeroLogo(connected: connected, style: style)
-                            : _CenterConnectButton(
-                                store: store, style: style),
+                            : _CenterConnectButton(store: store, style: style),
                       ),
                     ),
-                    // Speed Test entry — connected only, animated.
+                    // Speed Test entry — connected only, animated. Its slot
+                    // stays reserved when hidden so the hero never moves
+                    // (both reference frames pin the logo at y≈293).
                     SpeedTestButton(
                       visible: connected,
                       style: style,
@@ -124,28 +127,36 @@ class HomeScreen extends StatelessWidget {
                         strings.speedTestComingNext,
                       ),
                     ),
-                    SizedBox(height: 14 * s),
+                    SizedBox(height: AethGeometry.gapSpeedToPill * s),
                     StatusPill(state: store.state, style: style),
-                    SizedBox(height: 26 * s),
-                    BottomPanel(
-                      connected: connected,
-                      style: style,
-                      selectedProtocolIcon: AppAssets.protocolIcon(
-                        store.selectedProtocol,
+                    SizedBox(height: AethGeometry.gapPillToPanel * s),
+                    Padding(
+                      // Reference: the panel spans x 33–370 on the 402-wide
+                      // frame (pageHPadding both sides) — NOT edge to edge.
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AethGeometry.pageHPadding * s,
                       ),
-                      protocolLabel: strings.protocol,
-                      downBytes: store.downBytes,
-                      upBytes: store.upBytes,
-                      showConnectButton: isLookOne,
-                      onProtocolCardTap: () => _openPlaceholderSheet(
-                        context,
-                        strings.protocolSheetComingNext,
+                      child: BottomPanel(
+                        connected: connected,
+                        style: style,
+                        selectedProtocolIcon: AppAssets.protocolIcon(
+                          store.selectedProtocol,
+                        ),
+                        protocolLabel: strings.protocolName(
+                          store.selectedProtocol,
+                        ),
+                        downBytes: store.downBytes,
+                        upBytes: store.upBytes,
+                        showConnectButton: isLookOne,
+                        onProtocolCardTap: () => _openPlaceholderSheet(
+                          context,
+                          strings.protocolSheetComingNext,
+                        ),
+                        onConnectTap: () =>
+                            connected ? store.disconnect() : store.connect(),
                       ),
-                      onConnectTap: () => connected
-                          ? store.disconnect()
-                          : store.connect(),
                     ),
-                    SizedBox(height: 20 * s),
+                    SizedBox(height: AethGeometry.gapPanelToBottom * s),
                   ],
                 ),
               ),

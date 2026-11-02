@@ -8,6 +8,7 @@ import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
 import 'package:aethone/features/home/home_screen.dart';
+import 'package:aethone/features/home/widgets/location_header.dart';
 
 /// A scripted engine for deterministic UI tests — the same seam the preview
 /// adapter uses, but fully controlled by the test.
@@ -123,5 +124,58 @@ void main() {
     // Still in a legal, non-corrupted state — no StateError thrown, machine
     // holds `starting` (engine here never reports further).
     expect(store.state, VpnState.starting);
+  });
+
+  // v4.10 pixel-fidelity locks: the first device build mirrored the panel
+  // under the Persian RTL locale and bidi-flipped the Latin fragments.
+  testWidgets(
+      'bottom panel geometry: DOWN left of UP, FAB column on the right, '
+      'LTR-locked labels never bidi-flip', (tester) async {
+    await useReferenceSurface(tester);
+    final engine = ScriptedEngine();
+    final store = ConnectionStore(engine: engine);
+    await tester.pumpWidget(_booth(HomeScreen(store: store)));
+    await tester.pumpAndSettle();
+
+    final down = tester.getTopLeft(find.text('DOWN:'));
+    final up = tester.getTopLeft(find.text('UP:'));
+    // DOWN card is the visual LEFT card, UP the visual RIGHT one — the
+    // reference arrangement, directionality-locked against RTL mirroring.
+    expect(down.dx, lessThan(up.dx));
+    expect(down.dy, greaterThan(0));
+
+    // The Latin value renders digits-first ("0 MB"), never "MB 0".
+    expect(find.text('0 MB'), findsNWidgets(2));
+
+    // The protocol card shows the SELECTED protocol's name, not the generic
+    // word (owner prompt: the chosen protocol's logo/name shows on the card).
+    expect(find.text('ماسک'), findsOneWidget);
+    expect(find.text('پروتکل'), findsNothing);
+  });
+
+  testWidgets('connected ping renders digits-first ("146 ms") in the '
+      'compact location row', (tester) async {
+    await useReferenceSurface(tester);
+    final engine = ScriptedEngine();
+    final store = ConnectionStore(engine: engine);
+    await tester.pumpWidget(_booth(HomeScreen(store: store)));
+    await tester.pumpAndSettle();
+
+    await store.connect();
+    engine.emit(const EngineStateChanged(VpnState.connecting));
+    await tester.pumpAndSettle();
+    engine.emit(const EngineStateChanged(VpnState.connected));
+    engine.emit(const EngineStatsUpdated(
+      pingMs: 146,
+      downBytes: 0,
+      upBytes: 0,
+      exitCountryCode: 'ir',
+    ));
+    await tester.pumpAndSettle();
+
+    final ping = tester.getTopLeft(find.text('146 ms'));
+    final mapIcon = tester.getCenter(find.byType(LocationHeader));
+    // Ping sits RIGHT of the map icon column (visual layout, LTR-locked).
+    expect(ping.dx, greaterThan(mapIcon.dx));
   });
 }

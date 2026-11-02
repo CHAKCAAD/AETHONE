@@ -6,6 +6,8 @@
 /// appears with animation ONLY after a real connection exists.
 library;
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -84,7 +86,9 @@ class StatusPill extends StatelessWidget {
 }
 
 /// Speed Test entry — visible ONLY when connected (pixel-verified: absent in
-/// every disconnected reference frame). 48×40, same 4-layer structure.
+/// every disconnected reference frame). The reference frame shows a SOLID
+/// 43×43 green squircle (x 179–222, y 534–577) with a subtle neon halo —
+/// not the 4-layer pill structure — with the hex-wave icon in dark green.
 class SpeedTestButton extends StatelessWidget {
   const SpeedTestButton({
     super.key,
@@ -101,6 +105,8 @@ class SpeedTestButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final duration = motionDuration(style, MotionDurations.state);
+    final size = AethGeometry.speedButtonWidth * s;
+    final glow = AethColors.accentConnected.withValues(alpha: 0.45);
 
     // Animated appearance (scale + fade). OFF style ⇒ instant.
     return AnimatedScale(
@@ -112,16 +118,48 @@ class SpeedTestButton extends StatelessWidget {
         duration: duration,
         child: IgnorePointer(
           ignoring: !visible,
-          child: GlowPill(
-            active: true, // only exists in the connected (green) state
+          child: GestureDetector(
             onTap: onTap,
-            width: AethGeometry.speedButtonWidth * s * 1.35,
-            height: AethGeometry.speedButtonHeight * s * 1.35,
-            duration: duration,
-            curve: style.curve,
-            child: HexWaveIcon(
-              size: 18 * s,
-              color: AethColors.onPillConnected,
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  // Subtle neon halo behind the squircle.
+                  Positioned.fill(
+                    child: ImageFiltered(
+                      imageFilter: ui.ImageFilter.blur(
+                        sigmaX: AethGeometry.pillBlur * s,
+                        sigmaY: AethGeometry.pillBlur * s,
+                      ),
+                      child: Container(
+                        width: size * 1.35,
+                        height: size * 1.35,
+                        decoration: BoxDecoration(
+                          color: glow,
+                          borderRadius: BorderRadius.circular(size * 0.7),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: size,
+                    height: size,
+                    decoration: BoxDecoration(
+                      color: AethColors.accentConnected,
+                      borderRadius: BorderRadius.circular(size * 0.3),
+                    ),
+                    child: Center(
+                      child: HexWaveIcon(
+                        size: 18 * s,
+                        color: AethColors.onPillConnected,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -45,17 +45,11 @@ class HomeTopBar extends StatelessWidget {
               onTap: onSettings,
             ),
             const Spacer(),
-            // Wordmark — reference: Bold ~20–22px white.
-            Text(
-              'AETHONE',
-              style: TextStyle(
-                fontFamily: 'IRANYekanX',
-                fontWeight: FontWeight.w700,
-                fontSize: 21 * s,
-                letterSpacing: 2.5 * s,
-                color: AethColors.textPrimary,
-              ),
-            ),
+            // Wordmark — white Bold ~21px with letterSpacing; a small green
+            // 3D diamond (the app mark rotated 45°) sits BEHIND the T–H
+            // letters, exactly like the reference top bar (green pixels
+            // x 183–218 of the 402-wide frame).
+            _Wordmark(scale: s),
             const Spacer(),
             _TopBarIcon(
               asset: AppAssets.iconInformationCircle,
@@ -99,4 +93,74 @@ class _TopBarIcon extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The AETHONE wordmark: white text with the green extruded diamond mark
+/// behind the T–H (drawn in the set's linear style — custom drawing in the
+/// icon set's style is allowed per design decision D7).
+class _Wordmark extends StatelessWidget {
+  const _Wordmark({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    final fontSize = 21 * scale;
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Green diamond ≈ behind the T–H (≈47% across the wordmark).
+        Transform.translate(
+          offset: Offset(-fontSize * 1.05, 0),
+          child: CustomPaint(
+            size: Size.square(fontSize * 1.35),
+            painter: _GreenDiamondPainter(),
+          ),
+        ),
+        Text(
+          'AETHONE',
+          style: TextStyle(
+            fontFamily: 'IRANYekanX',
+            fontWeight: FontWeight.w700,
+            fontSize: fontSize,
+            letterSpacing: 2.5 * scale,
+            color: AethColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Extruded diamond: bright green top face fading to deep green — the same
+/// mark geometry as the hero logo (3.svg) rotated 45°.
+class _GreenDiamondPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = size.width * 0.42;
+    final top = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFF1AD995), Color(0xFF0A4F33)],
+      ).createShader(Rect.fromCircle(center: c, radius: r));
+    final path = Path()
+      ..moveTo(c.dx, c.dy - r)
+      ..lineTo(c.dx + r, c.dy)
+      ..lineTo(c.dx, c.dy + r)
+      ..lineTo(c.dx - r, c.dy)
+      ..close();
+    canvas.drawPath(path, top);
+    // Subtle depth edge (bottom-right half a touch darker).
+    final edge = Paint()
+      ..color = const Color(0xFF0A4F33).withValues(alpha: 0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.05
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, edge);
+  }
+
+  @override
+  bool shouldRepaint(_GreenDiamondPainter oldDelegate) => false;
 }

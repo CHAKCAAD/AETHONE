@@ -39,14 +39,22 @@ abstract final class AethColors {
   static const Color statUpBg = Color(0xFF3A1C1C);
   static const Color statUpBorder = Color(0xFF652325);
 
-  /// Dark cards (protocol / stats) — report `≈#1C1F22`, locked by golden test.
-  static const Color cardDark = Color(0xFF1C1F22);
+  /// Dark cards (protocol / stats / FAB column) — pixel-measured on the four
+  /// reference frames at y 706–845 (samples #0F1511/#0e1410/#101511; JPEG
+  /// drift ±2): the cards are DARKER than the screen bg #141C16, not lighter.
+  /// Re-measured 2026-11-02 against the device screenshots (v4.10 fix):
+  /// the previous #1C1F22 read was wrong (it matched the JPEG noise floor).
+  static const Color cardDark = Color(0xFF0F1511);
 
   /// Protocol-logo box inside the protocol card (crop read `#2D323D`).
   static const Color cardIconBg = Color(0xFF2D323D);
 
   /// Chevron on the protocol card (crop read coral-red `#E74C5B`).
   static const Color chevronRed = Color(0xFFE74C5B);
+
+  /// Three tiny chevrons under the FAB column slot (crop read #C1303C-ish
+  /// red, measured on حالت متصل-ضاهر1 at x 334–346, y 800–820).
+  static const Color fabChevrons = Color(0xFFC1303C);
 
   static const Color textPrimary = Color(0xFFFFFFFF);
 
@@ -62,8 +70,15 @@ abstract final class AethRadius {
   static const double pillMid = 11;
   static const double pillCore = 9;
 
-  /// Dark cards — report: 16–25px, Flutter default 20.
-  static const double card = 20;
+  /// Dark cards — corner radius pixel-measured on the reference frames:
+  /// protocol card (62 tall) and stat cards (65 tall) both ≈16.
+  static const double card = 16;
+
+  /// FAB column container radius (65×138 squircle column, ≈20).
+  static const double fabColumn = 20;
+
+  /// FAB squircle radius (48×48, ≈14).
+  static const double fab = 14;
 }
 
 /// Geometry tokens. The reference frame is iPhone 17 Pro **402×874**; all
@@ -81,9 +96,10 @@ abstract final class AethGeometry {
   static const double connectButtonSize = 48;
   static const double connectButtonRise = 72;
 
-  /// Speed-test button: 48×40 @ (176,536) — only visible when connected.
-  static const double speedButtonWidth = 48;
-  static const double speedButtonHeight = 40;
+  /// Speed-test button: 43×43 @ (179,534)–(222,577) — only visible when
+  /// connected (pixel-measured v4.10; the 48×40 read was the glow bbox).
+  static const double speedButtonWidth = 44;
+  static const double speedButtonHeight = 44;
 
   /// Look-2 center connect button core: 112px circle (144,328)–(256,432).
   static const double centerButtonSize = 112;
@@ -92,8 +108,13 @@ abstract final class AethGeometry {
   static const double pillWidth = 162;
   static const double pillHeight = 60;
 
-  /// Figma CSS: `filter: blur(57px)` on the glow layer (a.k.a. "layer blur 114").
-  static const double pillBlur = 57;
+  /// Figma CSS: `filter: blur(57px)` on the glow layer — but the reference
+  /// FRAMES show a tight neon halo (~15–25px beyond the group box). Figma's
+  /// blur value and a CSS blur(57px) disagree with the exported frames; the
+  /// frames are the ground truth the user compares against, so the effective
+  /// sigma is tuned to them (v4.10; measured glow profile on
+  /// حالت متصل-ضاهر1: α 0.45→0.19 within 15px of the core).
+  static const double pillBlur = 10;
 
   /// Figma CSS box-shadow of the pill group.
   static final List<BoxShadow> pillShadow = [
@@ -109,9 +130,36 @@ abstract final class AethGeometry {
     ),
   ];
 
-  /// Page horizontal padding (report: ≈20px, range 16–24).
-  static const double pageHPadding = 20;
+  /// Page horizontal padding — pixel-measured v4.10: bottom-panel cards span
+  /// x 33–370 and the top-bar icons start at x 45 (= 33 + 12 IconButton
+  /// padding) on the 402-wide reference frame.
+  static const double pageHPadding = 33;
 
-  /// Flags: squircle 100×100 assets; center carousel item is larger.
-  static const double flagSize = 100;
+  /// Flags: 42×42 tiles, selected 52 (pixel-measured on the reference flags
+  /// row y 161–212); carousel pitch 72. Assets are 256×256 PNGs.
+  static const double flagSize = 42;
+  static const double flagSizeSelected = 52;
+  static const double flagPitch = 72;
+
+  /// Bottom panel rows (pixel-measured v4.10, ref frame 402×874):
+  /// protocol card y 706–768 (62), stat cards y 776–841 (65),
+  /// FAB column x 305–370 (65×138), gap protocol→stats 8, cards→column 7.
+  static const double protocolCardHeight = 62;
+  static const double statCardHeight = 65;
+  static const double statIconBoxSize = 48;
+  static const double fabColumnWidth = 65;
+  static const double fabColumnHeight = 138;
+  static const double protocolLogoSize = 30;
+
+  /// Vertical rhythm gaps (ref frame): topbar→location 21, location→flags 13,
+  /// speed→pill 17, pill→panel 52, panel→bottom 30.
+  static const double gapTopbarToLocation = 21;
+  static const double gapLocationToFlags = 13;
+  static const double gapSpeedToPill = 17;
+  static const double gapPillToPanel = 52;
+  static const double gapPanelToBottom = 30;
+
+  /// Location row insets (ref: name x 95–130, ping ends x 324).
+  static const double locationInsetStart = 95;
+  static const double locationInsetEnd = 78;
 }

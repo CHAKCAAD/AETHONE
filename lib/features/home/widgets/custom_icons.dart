@@ -7,8 +7,9 @@ library;
 
 import 'package:flutter/material.dart';
 
-/// Downward chevron (protocol card; map-pin expander). Reference crop color:
-/// coral-red `#E74C5B` on the protocol card.
+/// Downward chevron (map-pin expander). Reference crop color:
+/// coral-red `#E74C5B` — ONLY used where the reference shows red; the
+/// protocol card uses the white forward chevron below.
 class ChevronDownIcon extends StatelessWidget {
   const ChevronDownIcon({super.key, this.size = 10, this.color});
 
@@ -22,6 +23,93 @@ class ChevronDownIcon extends StatelessWidget {
       painter: _ChevronPainter(color ?? const Color(0xFFE74C5B)),
     );
   }
+}
+
+/// Forward chevron (>) — the protocol card's "open selector" affordance
+/// (reference: white > at the card's right edge, x 276–290).
+class ChevronForwardIcon extends StatelessWidget {
+  const ChevronForwardIcon({super.key, this.size = 10, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size.square(size),
+      painter: _ChevronForwardPainter(color),
+    );
+  }
+}
+
+class _ChevronForwardPainter extends CustomPainter {
+  _ChevronForwardPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round;
+    final w = size.width;
+    final h = size.height;
+    final path = Path()
+      ..moveTo(w * 0.30, h * 0.12)
+      ..lineTo(w * 0.78, h * 0.5)
+      ..lineTo(w * 0.30, h * 0.88);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_ChevronForwardPainter old) => old.color != color;
+}
+
+/// Three tiny downward chevrons stacked inside the FAB column
+/// (reference: red, x 334–346 / y 800–820 on حالت متصل-ضاهر1).
+class TripleChevronsIcon extends StatelessWidget {
+  const TripleChevronsIcon({super.key, this.size = 14, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size.square(size),
+      painter: _TripleChevronsPainter(color),
+    );
+  }
+}
+
+class _TripleChevronsPainter extends CustomPainter {
+  _TripleChevronsPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.12
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final w = size.width;
+    final h = size.height;
+    for (final t in [0.22, 0.5, 0.78]) {
+      final path = Path()
+        ..moveTo(w * 0.18, h * t - h * 0.13)
+        ..lineTo(w * 0.5, h * t)
+        ..lineTo(w * 0.82, h * t - h * 0.13);
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TripleChevronsPainter old) => old.color != color;
 }
 
 class _ChevronPainter extends CustomPainter {

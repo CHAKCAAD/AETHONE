@@ -1,32 +1,40 @@
 /// Location header + flag carousel.
 ///
-/// Connected (normal protocols): country name (visual LEFT) · map icon with a
-/// small chevron (center) · ping in green (visual RIGHT) — pixel-verified in
-/// the phase-1 report. Ping renders ONLY when really connected and measured.
+/// v4.10 pixel-faithful layout (measured on the reference frames):
+///  * Connected (normal protocols): a COMPACT row — exit-country name at
+///    x≈95 (visual LEFT), map icon + small chevron at the CENTER (x≈201),
+///    ping in green ending at x≈324 (visual RIGHT). The row is NOT flush
+///    with the screen edges. Ping renders ONLY when really connected and
+///    measured, and is forced LTR so «146 ms» can never flip to «ms 146»
+///    under the Persian RTL locale (the bidi bug seen on the first device
+///    build). The flag artworks ship as pre-rendered PNGs (v4.10) because
+///    265 of the 266 committed SVGs embed the artwork as a raster image
+///    inside an SVG `pattern`, which flutter_svg cannot render.
+///  * Disconnected (normal protocols): the same compact row reads «آفلاین»
+///    and the whole flags area is blurred (owner rule + reference images).
+///  * Tor/Psiphon modes: the top area becomes the sub-mode selector
+///    (deferred to the protocol-sheet step; documented in
+///    docs/UI_IMPLEMENTATION.md).
 ///
-/// Disconnected (normal protocols): the whole flags area is blurred and the
-/// header reads «آفلاین» (owner rule + reference images).
-///
-/// Tor/Psiphon modes: the top area becomes the sub-mode selector (deferred to
-/// the protocol-sheet step; documented in docs/UI_IMPLEMENTATION.md).
+/// Flags: horizontally swipeable carousel (owner: «پرچم کشورها به صورت
+/// اسلایدی با انیمشن جابه جا میشوند») — the selected country sits at the
+/// CENTER, slightly larger (52 vs 42), with a brightness falloff towards the
+/// edges, exactly like the reference row (pitch 72). All 266 committed flag
+/// artworks ship as PNGs extracted from the owner's own SVGs (v4.10 — the
+/// SVGs embed the artwork as a raster `image` element which flutter_svg
+/// cannot show).
 library;
 
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 import 'custom_icons.dart';
-
-/// Country flags shown in the carousel. Real exit locations arrive from the
-/// engine (M2); until then the carousel renders this static set — the same
-/// set the reference mock shows (mock flags are decorative, report 3.3-12).
-const List<String> kCarouselFlagCodes = [
-  'fr', 'es', 'gr', 'ge', 'ir', 'mx', 'de', 'us',
-];
 
 class LocationHeader extends StatelessWidget {
   const LocationHeader({
@@ -49,81 +57,67 @@ class LocationHeader extends StatelessWidget {
     final strings = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
 
-    final Widget headerRow;
-    if (connected) {
-      headerRow = Row(
-        children: [
-          // START side (visual right in RTL): ping — green, measured only.
-          Text(
-            pingMs != null ? strings.pingMs(pingMs!) : '',
-            style: TextStyle(
-              fontFamily: 'IRANYekanX',
-              fontWeight: FontWeight.w500,
-              fontSize: 14 * s,
-              color: AethColors.accentConnected,
-            ),
-          ),
-          const Spacer(),
-          // Center: map icon + small chevron below.
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SvgPicture.asset(
-                AppAssets.iconMap,
-                width: 22 * s,
-                height: 22 * s,
-                colorFilter: const ColorFilter.mode(
-                  AethColors.textPrimary,
-                  BlendMode.srcIn,
-                ),
+    final Widget headerRow = Directionality(
+      // Fixed visual layout (reference): name LEFT · icon CENTER · ping RIGHT.
+      textDirection: TextDirection.ltr,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: AethGeometry.locationInsetStart * s,
+          right: AethGeometry.locationInsetEnd * s,
+        ),
+        child: Row(
+          children: [
+            Text(
+              connected ? _countryName(exitCountryCode) : strings.offline,
+              style: TextStyle(
+                fontFamily: 'IRANYekanX',
+                fontWeight: FontWeight.w500,
+                fontSize: 15 * s,
+                color:
+                    connected ? AethColors.textPrimary : AethColors.textSecondary,
               ),
-              SizedBox(height: 2 * s),
-              ChevronDownIcon(size: 8 * s, color: AethColors.textSecondary),
-            ],
-          ),
-          const Spacer(),
-          // END side (visual left in RTL): exit country name.
-          Text(
-            _countryName(exitCountryCode),
-            style: TextStyle(
-              fontFamily: 'IRANYekanX',
-              fontWeight: FontWeight.w500,
-              fontSize: 16 * s,
-              color: AethColors.textPrimary,
             ),
-          ),
-        ],
-      );
-    } else {
-      headerRow = Column(
-        children: [
-          Text(
-            strings.offline,
-            style: TextStyle(
-              fontFamily: 'IRANYekanX',
-              fontWeight: FontWeight.w500,
-              fontSize: 15 * s,
-              color: AethColors.textSecondary,
+            const Spacer(),
+            // Center: map icon + small chevron below (reference y 116–148).
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SvgPicture.asset(
+                  AppAssets.iconMap,
+                  width: 22 * s,
+                  height: 22 * s,
+                  colorFilter: ColorFilter.mode(
+                    connected
+                        ? AethColors.textPrimary
+                        : AethColors.textSecondary,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                SizedBox(height: 2 * s),
+                ChevronDownIcon(size: 8 * s, color: AethColors.textSecondary),
+              ],
             ),
-          ),
-          SizedBox(height: 2 * s),
-          SvgPicture.asset(
-            AppAssets.iconMap,
-            width: 22 * s,
-            height: 22 * s,
-            colorFilter: const ColorFilter.mode(
-              AethColors.textSecondary,
-              BlendMode.srcIn,
+            const Spacer(),
+            // Ping — LTR-locked so the digits always lead («146 ms»).
+            Text(
+              pingMs != null ? strings.pingMs(pingMs!) : '',
+              textDirection: TextDirection.ltr,
+              style: TextStyle(
+                fontFamily: 'IRANYekanX',
+                fontWeight: FontWeight.w500,
+                fontSize: 14 * s,
+                color: AethColors.accentConnected,
+              ),
             ),
-          ),
-        ],
-      );
-    }
+          ],
+        ),
+      ),
+    );
 
     return Column(
       children: [
         headerRow,
-        SizedBox(height: 10 * s),
+        SizedBox(height: AethGeometry.gapLocationToFlags * s),
         _FlagsArea(
           connected: connected,
           protocolIsTorOrPsiphon: protocolIsTorOrPsiphon,
@@ -147,7 +141,7 @@ class LocationHeader extends StatelessWidget {
   }
 }
 
-class _FlagsArea extends StatelessWidget {
+class _FlagsArea extends StatefulWidget {
   const _FlagsArea({
     required this.connected,
     required this.protocolIsTorOrPsiphon,
@@ -161,47 +155,139 @@ class _FlagsArea extends StatelessWidget {
   final void Function(String code) onFlagSelected;
 
   @override
+  State<_FlagsArea> createState() => _FlagsAreaState();
+}
+
+class _FlagsAreaState extends State<_FlagsArea> {
+  List<String> _codes = const [];
+  String? _picked;
+  ScrollController? _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _picked = widget.exitCountryCode;
+    _loadCodes();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FlagsArea old) {
+    super.didUpdateWidget(old);
+    if (widget.exitCountryCode != old.exitCountryCode &&
+        widget.exitCountryCode != null) {
+      _picked = widget.exitCountryCode;
+      _centerOn(_indexOf(_picked), animate: true);
+    }
+  }
+
+  /// All committed country codes, resolved from the asset manifest (the
+  /// flags ship as a directory asset, so the bundle lists every file).
+  Future<void> _loadCodes() async {
+    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    const prefix = 'design/flags_png/';
+    final codes = manifest
+        .listAssets()
+        .where((p) => p.startsWith(prefix) && p.endsWith('.png'))
+        .map((p) => p.substring(prefix.length, p.length - 4))
+        .toList()
+      ..sort();
+    if (!mounted) return;
+    setState(() => _codes = codes);
+    // Codes arrived after the first frame — center the picked country now
+    // that the items exist (post-frame so the ListView has attached).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _centerOn(_indexOf(_picked));
+    });
+  }
+
+  int _indexOf(String? code) {
+    if (code == null) return 0;
+    final i = _codes.indexOf(code);
+    return i < 0 ? 0 : i;
+  }
+
+  void _ensureController(double extent, double viewport) {
+        _controller ??= ScrollController(
+      initialScrollOffset:
+          (_indexOf(_picked) * extent - (viewport - extent) / 2)
+              .clamp(0.0, double.infinity),
+    );
+  }
+
+  void _centerOn(int index, {bool animate = false}) {
+    final controller = _controller;
+    if (controller == null || !controller.hasClients) return;
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final extent = AethGeometry.flagPitch * s;
+    final viewport = controller.position.viewportDimension;
+    final target = (index * extent - (viewport - extent) / 2)
+        .clamp(0.0, controller.position.maxScrollExtent);
+    if (animate) {
+      controller.animateTo(
+        target,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      controller.jumpTo(target);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final strings = AppStrings.of(context);
-    final blurThis = !connected && !protocolIsTorOrPsiphon;
+    final blurThis = !widget.connected && !widget.protocolIsTorOrPsiphon;
+    final extent = AethGeometry.flagPitch * s;
+    final width = MediaQuery.sizeOf(context).width;
+    _ensureController(extent, width);
 
     final carousel = _FlagCarousel(
-      flagSize: 42 * s,
-      exitCountryCode: exitCountryCode,
-      onFlagSelected: onFlagSelected,
+      codes: _codes,
+      controller: _controller,
+      selected: _picked,
+      onFlagSelected: (code) {
+        setState(() => _picked = code);
+        widget.onFlagSelected(code);
+        _centerOn(_indexOf(code), animate: true);
+      },
     );
 
-    if (!blurThis) {
-      return carousel;
-    }
-
-    // Disconnected + normal protocol ⇒ the whole area is blurred (owner rule,
-    // confirmed by the reference images) and shows the offline label.
+    // Stable tree: the carousel ALWAYS occupies the same slot so the
+    // ListView (and its scroll position) survives the blur overlay coming
+    // and going — replacing it reset the scroll to 0 (v4.10 device bug).
     return Stack(
       alignment: Alignment.center,
       children: [
         carousel,
-        Positioned.fill(
-          child: ClipRect(
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 6 * s, sigmaY: 6 * s),
-              child: Container(
-                color: AethColors.bgScreen.withValues(alpha: 0.30),
-                alignment: Alignment.center,
-                child: Text(
-                  strings.offline,
-                  style: TextStyle(
-                    fontFamily: 'IRANYekanX',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16 * s,
-                    color: AethColors.textPrimary,
+        if (blurThis)
+          Positioned.fill(
+            child: ClipRect(
+              child: BackdropFilter(
+                filter:
+                    ui.ImageFilter.blur(sigmaX: 6 * s, sigmaY: 6 * s),
+                child: Container(
+                  color: AethColors.bgScreen.withValues(alpha: 0.30),
+                  alignment: Alignment.center,
+                  child: Text(
+                    strings.offline,
+                    style: TextStyle(
+                      fontFamily: 'IRANYekanX',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16 * s,
+                      color: AethColors.textPrimary,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -209,37 +295,54 @@ class _FlagsArea extends StatelessWidget {
 
 class _FlagCarousel extends StatelessWidget {
   const _FlagCarousel({
-    required this.flagSize,
-    required this.exitCountryCode,
+    required this.codes,
+    required this.controller,
+    required this.selected,
     required this.onFlagSelected,
   });
 
-  final double flagSize;
-  final String? exitCountryCode;
+  final List<String> codes;
+  final ScrollController? controller;
+  final String? selected;
   final void Function(String code) onFlagSelected;
 
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    const codes = kCarouselFlagCodes;
+    final extent = AethGeometry.flagPitch * s;
+    final selectedIdx = selected == null ? -1 : codes.indexOf(selected!);
+
     return SizedBox(
-      height: flagSize * 1.35,
-      child: ListView(
+      height: AethGeometry.flagSizeSelected * s,
+      child: ListView.builder(
+        controller: controller,
         scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: 24 * s),
-        itemExtent: flagSize * 1.25,
-        children: [
-          for (final code in codes)
-            Padding(
-              padding: EdgeInsets.symmetric(vertical: flagSize * 0.14),
-              child: _FlagItem(
-                asset: AppAssets.flag(code),
-                size: flagSize,
-                selected: exitCountryCode == code,
-                onTap: () => onFlagSelected(code),
-              ),
+        itemExtent: extent,
+        padding: EdgeInsets.zero,
+        itemCount: codes.length,
+        itemBuilder: (context, i) {
+          final code = codes[i];
+          final distance = selectedIdx < 0 ? 0 : (i - selectedIdx).abs();
+          // Brightness falloff away from the selected flag (reference row:
+          // the selected Iran tile is bright, neighbours fade out).
+          final opacity = switch (distance) {
+            0 => 1.0,
+            1 => 0.85,
+            2 => 0.62,
+            _ => 0.45,
+          };
+          return Center(
+            child: _FlagItem(
+              asset: AppAssets.flag(code),
+              size: (distance == 0
+                      ? AethGeometry.flagSizeSelected
+                      : AethGeometry.flagSize) *
+                  s,
+              opacity: opacity,
+              onTap: () => onFlagSelected(code),
             ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -249,34 +352,30 @@ class _FlagItem extends StatelessWidget {
   const _FlagItem({
     required this.asset,
     required this.size,
-    required this.selected,
+    required this.opacity,
     required this.onTap,
   });
 
   final String asset;
   final double size;
-  final bool selected;
+  final double opacity;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedScale(
-        scale: selected ? 1.2 : 1.0,
-        duration: const Duration(milliseconds: 200),
+      child: Opacity(
+        opacity: opacity,
         child: Container(
           width: size,
           height: size,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(size * 0.24),
-            border: selected
-                ? Border.all(color: AethColors.textPrimary, width: 2)
-                : null,
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(size * 0.24),
-            child: SvgPicture.asset(asset, fit: BoxFit.cover),
+            child: Image.asset(asset, fit: BoxFit.cover),
           ),
         ),
       ),

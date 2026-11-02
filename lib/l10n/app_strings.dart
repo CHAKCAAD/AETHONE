@@ -11,6 +11,8 @@ library;
 
 import 'package:flutter/widgets.dart';
 
+import '../core/app_assets.dart';
+
 class AppStrings {
   const AppStrings._(this._v);
 
@@ -30,6 +32,30 @@ class AppStrings {
   /// "146 ms" style. DOWN/UP/MB stay Latin (part of the visual design).
   String pingMs(int ms) => '$ms ms';
 
+  /// The SELECTED protocol's display name for the protocol card — the
+  /// reference frames show the protocol's own name (e.g. «وارپ»), not the
+  /// generic word «پروتکل» (owner prompt §«دکمه انتخاب پروتکل»: هر پروتکلی
+  /// که انتخاب شد لوگو آن در دکمه انتخاب پروتکل نمایش داده میشود).
+  String protocolName(ProtocolId id) {
+    final key = switch (id) {
+      ProtocolId.auto => 'protoAuto',
+      ProtocolId.masque => 'protoMasque',
+      ProtocolId.wireguard => 'protoWireguard',
+      ProtocolId.gool => 'protoGool',
+      ProtocolId.goolClassic => 'protoGoolClassic',
+      ProtocolId.mim => 'protoMim',
+      ProtocolId.torChain ||
+      ProtocolId.torReverse ||
+      ProtocolId.torOnly =>
+        'protoTor',
+      ProtocolId.psiphonChain ||
+      ProtocolId.psiphonReverse ||
+      ProtocolId.psiphonOnly =>
+        'protoPsiphon',
+    };
+    return _v[key] ?? _v['protoMasque']!;
+  }
+
   static const Map<String, Map<String, String>> _table = {
     'fa': {
       'offline': 'آفلاین',
@@ -43,6 +69,14 @@ class AppStrings {
       'speedTestComingNext': 'تست سرعت — در گام بعدی پیاده‌سازی می‌شود',
       'protocolSheetComingNext':
           'انتخاب پروتکل — در گام بعدی پیاده‌سازی می‌شود',
+      'protoAuto': 'اتو / اسمارت',
+      'protoMasque': 'ماسک',
+      'protoWireguard': 'وایرگارد',
+      'protoGool': 'گول',
+      'protoGoolClassic': 'گول کلاسیک',
+      'protoMim': 'میم',
+      'protoTor': 'تور',
+      'protoPsiphon': 'سایفون',
     },
     'en': {
       'offline': 'Offline',
@@ -56,6 +90,14 @@ class AppStrings {
       'speedTestComingNext': 'Speed Test — coming in the next step',
       'protocolSheetComingNext':
           'Protocol selection — coming in the next step',
+      'protoAuto': 'AUTO / SMART',
+      'protoMasque': 'MASQUE',
+      'protoWireguard': 'WIREGUARD',
+      'protoGool': 'GOOL',
+      'protoGoolClassic': 'GOOL CLASSIC',
+      'protoMim': 'MIM',
+      'protoTor': 'TOR',
+      'protoPsiphon': 'PSIPHON',
     },
     'ru': {
       'offline': 'Офлайн',
@@ -68,6 +110,14 @@ class AppStrings {
       'settingsComingNext': 'Настройки — на следующем шаге',
       'speedTestComingNext': 'Тест скорости — на следующем шаге',
       'protocolSheetComingNext': 'Выбор протокола — на следующем шаге',
+      'protoAuto': 'АВТО / УМНЫЙ',
+      'protoMasque': 'MASQUE',
+      'protoWireguard': 'WIREGUARD',
+      'protoGool': 'GOOL',
+      'protoGoolClassic': 'GOOL CLASSIC',
+      'protoMim': 'MIM',
+      'protoTor': 'TOR',
+      'protoPsiphon': 'PSIPHON',
     },
     'zh': {
       'offline': '离线',
@@ -80,6 +130,14 @@ class AppStrings {
       'settingsComingNext': '设置 — 将在下一步实现',
       'speedTestComingNext': '速度测试 — 将在下一步实现',
       'protocolSheetComingNext': '协议选择 — 将在下一步实现',
+      'protoAuto': '自动 / 智能',
+      'protoMasque': 'MASQUE',
+      'protoWireguard': 'WIREGUARD',
+      'protoGool': 'GOOL',
+      'protoGoolClassic': 'GOOL CLASSIC',
+      'protoMim': 'MIM',
+      'protoTor': 'TOR',
+      'protoPsiphon': 'PSIPHON',
     },
     // tk: pending native review — falls back to English (documented gap).
   };

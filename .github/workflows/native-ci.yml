@@ -21,6 +21,41 @@
 # every Actions pin: evidence/actions_pins_raw_evidence.txt (v3).
 # actionlint 1.7.7 exit 0 on THIS exact file: evidence/validation_log.txt (v4).
 #
+# v4.10 changes (2026-11-02) — PIXEL-FIDELITY FIXES after the first real
+#   device test of the v4.9 preview APK (all measured on the 402x874
+#   reference frames; render-verified via test/ui_screenshot_test.dart):
+#   * Flags: 265/266 flag SVGs embed their artwork as raster <image> inside
+#     <pattern> — unsupported by flutter_svg (only ir.svg rendered; the
+#     device showed ONE lonely flag). All flags now ship as pre-rendered
+#     256x256 PNGs extracted from the owner's own embedded artwork
+#     (design/flags_png/; SVG sources stay committed as design truth).
+#   * Tor/Psiphon protocol logos (same embedded-raster issue) -> PNGs
+#     (design/proto_icons_png/).
+#   * Background patterns: the 4 SVGs carry feGaussianBlur which
+#     flutter_svg cannot rasterize — on device the blurred edge circles
+#     rendered as SOLID blobs. Pre-rendered via headless Chromium with
+#     filters intact (design/patterns_png/).
+#   * bidi fixes: under the fa locale '146 ms' flipped to 'ms 146',
+#     '145 MB' to 'MB 145', 'DOWN:' to ':DOWN' — all Latin fragments are
+#     now textDirection-locked LTR.
+#   * Bottom panel directionality-locked LTR (DOWN left / UP right; logo
+#     left + protocol NAME center + white chevron > right) — the RTL locale
+#     mirrored the whole panel on device. Protocol card now shows the
+#     selected protocol's own name (ماسک/وایرگارد/…) per the owner text.
+#   * cardDark corrected #1C1F22 -> #0F1511 (pixel-measured; the old value
+#     was a JPEG-noise misread and rendered LIGHTER than the background).
+#   * FAB: dark 65x138 column container + 48x48 squircle (NO glow — the
+#     reference frames show none) sliding top slot (connected) / bottom
+#     slot (disconnected) + three tiny red chevrons, 33px page inset.
+#   * Vertical rhythm re-measured (pill @71.4% height, protocol card
+#     y 706-768, stats y 776-841, compact location row, solid 44x44
+#     speed-test button, pill glow blur tuned 57 -> 10 to match the
+#     exported frames' tight halo).
+#   * New: test/ui_screenshot_test.dart renders both home states at the
+#     reference 402x874 with REAL fonts and saves PNGs (visual harness;
+#     element geometry numerically verified against the reference frames).
+#   * No frozen native pin changed; no engine change; UI-only.
+#
 # v4.9 changes (2026-11-02) — Android APK packaging (UI step 1 scope), NO
 #   frozen native pin changed:
 #   * android/ scaffolding committed (Flutter 3.47.9 template, Kotlin DSL):

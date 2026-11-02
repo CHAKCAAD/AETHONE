@@ -39,9 +39,10 @@ extension ProtocolIdX on ProtocolId {
 abstract final class AppAssets {
   static const String _icons = 'design/آیکون های اپ';
   static const String _protocols = 'design/آیکون پروتکل ها';
-  static const String _patterns = 'design/پترن پس زمینه صفحه اصلی';
+  static const String _patterns = 'design/patterns_png';
   static const String _logo = 'design/آیکون اپ';
-  static const String _flags = 'design/آیکون پرچم کشورها با کد کشور به همراه راهنما';
+  static const String _flags = 'design/flags_png';
+  static const String _protoPng = 'design/proto_icons_png';
 
   // --- app logo: 1 = green (connected artwork, rotated), 3 = clean white
   // (tintable — used for BOTH states with the owner's rotation animation).
@@ -49,10 +50,13 @@ abstract final class AppAssets {
   static const String appLogoNeutralWhite = '$_logo/3.svg';
 
   // --- background patterns (red when disconnected, green when connected).
-  static const String patternDisconnectedLeft = '$_patterns/پترن حالت غیر متصل-سمت چپ.svg';
-  static const String patternDisconnectedRight = '$_patterns/پترن حالت غیر متصل-سمت راست.svg';
-  static const String patternConnectedLeft = '$_patterns/پترن حالت متصل-سمت چپ.svg';
-  static const String patternConnectedRight = '$_patterns/پترن حالت متصل-سمت راست.svg';
+  // v4.10: pre-rendered PNGs (headless Chromium, filters intact) — the raw
+  // SVGs carry feGaussianBlur which flutter_svg cannot rasterize (the
+  // blurred edge circles rendered SOLID on device — the "giant blobs").
+  static const String patternDisconnectedLeft = '$_patterns/pattern_disconnected_left.png';
+  static const String patternDisconnectedRight = '$_patterns/pattern_disconnected_right.png';
+  static const String patternConnectedLeft = '$_patterns/pattern_connected_left.png';
+  static const String patternConnectedRight = '$_patterns/pattern_connected_right.png';
 
   // --- linear icon set (subset actually used; owner forbids other icon
   // sources — no Material icons, no emoji, no online images).
@@ -67,14 +71,16 @@ abstract final class AppAssets {
   static const String iconMap = '$_icons/Map.svg';
   static const String iconSend = '$_icons/Send 1.svg';
 
-  // --- protocol logos.
+  // --- protocol logos. Tor/Psiphon ship as pre-rendered PNGs (their SVGs
+  // embed the artwork in hidden tracing layers + the real vector art,
+  // which flutter_svg renders partially) — v4.10.
   static const String _protoMasque = '$_protocols/ماسک.svg';
   static const String _protoWireguard = '$_protocols/وایرگارد.svg';
   static const String _protoGool = '$_protocols/گول.svg';
   static const String _protoGoolClassic = '$_protocols/گول کلاسیک.svg';
   static const String _protoMim = '$_protocols/میم.svg';
-  static const String _protoTor = '$_protocols/تور.svg';
-  static const String _protoPsiphon = '$_protocols/سایفون.svg';
+  static const String _protoTor = '$_protoPng/تور.png';
+  static const String _protoPsiphon = '$_protoPng/سایفون.png';
 
   /// Logo for a transport mode. AUTO/SMART has NO dedicated SVG in the ZIP —
   /// pending design decision D-pending (report §6.9 suggests Shield Tick with
@@ -94,9 +100,17 @@ abstract final class AppAssets {
         ProtocolId.psiphonOnly => _protoPsiphon,
       };
 
-  /// Country flag by ISO code (lowercase), e.g. `ir` → ir.svg.
-  /// All 266 codes verified present in the committed set.
-  static String flag(String code) => '$_flags/$code.svg';
+  /// Country flag by ISO code (lowercase), e.g. `ir` → ir.png.
+  /// v4.10: 265 of the 266 flag SVGs embed the artwork as a raster
+  /// `<image>` inside a `<pattern>` — unsupported by flutter_svg (renders
+  /// BLANK on device; only vector ir.svg worked). All flags are therefore
+  /// shipped as pre-rendered 256×256 PNGs extracted from the owner's own
+  /// embedded artwork (no redesign, byte-faithful to the SVG).
+  static String flag(String code) => '$_flags/$code.png';
+
+  /// True when the asset is a pre-rendered PNG (rendered via Image.asset);
+  /// false for vector SVGs (rendered via flutter_svg).
+  static bool isRasterAsset(String path) => path.endsWith('.png');
 
   /// All asset paths referenced above (used by the existence test).
   static List<String> get allReferenced => [

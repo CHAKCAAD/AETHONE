@@ -54,21 +54,25 @@ flutter:
     - design/آیکون اپ/1.svg
     - design/آیکون اپ/2.svg
     - design/آیکون اپ/3.svg
-    # --- protocol logos (design/آیکون پروتکل ها) ---
-    - design/آیکون پروتکل ها/تور.svg
-    - design/آیکون پروتکل ها/سایفون.svg
+    # --- protocol logos (design/آیکون پروتکل ها) — Tor/Psiphon are
+    # pre-rendered PNGs (v4.10: their SVGs embed hidden tracing rasters that
+    # flutter_svg renders partially); the original SVGs stay committed as the
+    # design source of truth ---
     - design/آیکون پروتکل ها/ماسک.svg
     - design/آیکون پروتکل ها/میم.svg
     - design/آیکون پروتکل ها/وایرگارد.svg
     - design/آیکون پروتکل ها/گول.svg
     - design/آیکون پروتکل ها/گول کلاسیک.svg
-    # --- background patterns (design/پترن پس زمینه صفحه اصلی) ---
-    - design/پترن پس زمینه صفحه اصلی/پترن حالت غیر متصل-سمت راست.svg
-    - design/پترن پس زمینه صفحه اصلی/پترن حالت غیر متصل-سمت چپ.svg
-    - design/پترن پس زمینه صفحه اصلی/پترن حالت متصل-سمت راست.svg
-    - design/پترن پس زمینه صفحه اصلی/پترن حالت متصل-سمت چپ.svg
-    # --- country flags: full directory (266 squircle SVGs + mapping guide) ---
-    - design/آیکون پرچم کشورها با کد کشور به همراه راهنما/
+    - design/proto_icons_png/
+    # --- background patterns: pre-rendered PNGs (v4.10 — the SVGs carry
+    # feGaussianBlur which flutter_svg cannot rasterize; rendered via
+    # headless Chromium with filters intact; SVG sources stay committed) ---
+    - design/patterns_png/
+    # --- country flags: pre-rendered 256×256 PNGs (v4.10 — 265 of 266 SVGs
+    # embed the artwork as raster <image> inside <pattern>, unsupported by
+    # flutter_svg; PNGs are extracted from the owner's own embedded artwork.
+    # The original SVG directory stays committed as the design source.) ---
+    - design/flags_png/
     # --- linear icon set: only the icons the UI actually uses ---
     - design/آیکون های اپ/Shield Tick.svg
     - design/آیکون های اپ/Shield Cross.svg
