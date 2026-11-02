@@ -46,6 +46,14 @@ abstract final class AethColors {
   /// the previous #1C1F22 read was wrong (it matched the JPEG noise floor).
   static const Color cardDark = Color(0xFF0F1511);
 
+  /// Top-bar icon tiles — owner Figma CSS «Rectangle 9»: 50x50, #0F1510,
+  /// radius 16, shadow 0 4 4 rgba(0,0,0,0.25) (v4.11).
+  static const Color topTile = Color(0xFF0F1510);
+
+  /// Dark stroke of the on-core icons per the owner Figma CSS
+  /// (Activity 4 vector: border 1.5px #0D4D36).
+  static const Color onCoreDark = Color(0xFF0D4D36);
+
   /// Protocol-logo box inside the protocol card (crop read `#2D323D`).
   static const Color cardIconBg = Color(0xFF2D323D);
 
@@ -62,13 +70,22 @@ abstract final class AethColors {
   static const Color textSecondary = Color(0xFF8E8E93);
 }
 
-/// Shape & effect tokens (report table 8, Figma CSS).
+/// Shape & effect tokens (report table 8, Figma CSS + owner CSS v4.11).
 abstract final class AethRadius {
-  /// 4-layer pill radii: Rectangle 26 / 22 / 21 / 20.
-  static const double pillGlow = 32;
+  /// Status pill radii — owner CSS (Group 8): layers 140x38 r13 /
+  /// 132.88x32 r11 / 125.76x26 r9. The 4th blurred blob layer (162x60) is
+  /// REMOVED per the owner: the pill has exactly 3 background layers + a soft
+  /// blurred accent shadow underneath (like the background-pattern glow).
   static const double pillHalo = 13;
   static const double pillMid = 11;
   static const double pillCore = 9;
+
+  /// Speed Test button radii — owner CSS (Group 11): 96 r32 / 74 r32 /
+  /// 62 r27 / 44 r17.
+  static const double speedGlow = 32;
+  static const double speedHalo = 32;
+  static const double speedMid = 27;
+  static const double speedCore = 17;
 
   /// Dark cards — corner radius pixel-measured on the reference frames:
   /// protocol card (62 tall) and stat cards (65 tall) both ≈16.
@@ -96,17 +113,55 @@ abstract final class AethGeometry {
   static const double connectButtonSize = 48;
   static const double connectButtonRise = 72;
 
-  /// Speed-test button: 43×43 @ (179,534)–(222,577) — only visible when
-  /// connected (pixel-measured v4.10; the 48×40 read was the glow bbox).
-  static const double speedButtonWidth = 44;
-  static const double speedButtonHeight = 44;
+  /// Edge patterns (v4.11): each PNG canvas spans the FULL screen width so
+  /// the wash + line art cover the width like the reference frames. Vertical
+  /// anchoring from the artwork's alpha bbox (left art y263..969 of 1232;
+  /// right art y205..918 of 1178): the LEFT art bottom sits on the screen
+  /// bottom (art center ≈ y563 — «کمی پایین‌تر از وسط»), the RIGHT art top on
+  /// the screen top (art center ≈ y311 — «کمی بالاتر از وسط»), matching the
+  /// measured frame extents (left art y261..870, right y0..760).
+  static const double patternLeftAspect = 1232 / 456; // h/w of the canvas
+  static const double patternRightAspect = 1178 / 464;
+  static const double patternLeftAnchorBottom = 969 / 1232;
+  static const double patternRightAnchorTop = 205 / 1178;
 
   /// Look-2 center connect button core: 112px circle (144,328)–(256,432).
   static const double centerButtonSize = 112;
 
-  /// Status pill group: 162×60 (Figma CSS `Group 12`).
-  static const double pillWidth = 162;
-  static const double pillHeight = 60;
+  /// Status pill group — owner CSS (Group 8): outer layer 140×38 at
+  /// (131,605); all layers concentric (center x201 = frame center).
+  static const double pillWidth = 140;
+  static const double pillHeight = 38;
+  static const double pillMidWidth = 132.88;
+  static const double pillMidHeight = 32;
+  static const double pillCoreWidth = 125.76;
+  static const double pillCoreHeight = 26;
+
+  /// Soft blurred accent shadow under the pill (owner: «یک سایه محو سبز رنگ
+  /// زیرش مثل سایه سبز پترن های پس زمینه») — sigma/offset tuned to the
+  /// exported frames' under-glow.
+  static const double pillShadowBlur = 12;
+  static const double pillShadowOffsetY = 8;
+  static const double pillShadowAlpha = 0.45;
+
+  /// Speed Test button group — owner CSS (Group 11): 96×96 glow at (153,508),
+  /// layers concentric, core 44×44 at (179,534); icon box 28×28 (Activity 4).
+  static const double speedGroupSize = 96;
+  static const double speedHaloSize = 74;
+  static const double speedMidSize = 62;
+  static const double speedCoreSize = 44;
+  static const double speedIconSize = 28;
+
+  /// Top-bar icon tile (owner CSS Rectangle 9): 50×50, icon glyph ≈26.
+  static const double topTileSize = 50;
+  static const double topTileIcon = 26;
+  static const double topTileRadius = 16;
+
+  /// Brand mark behind the wordmark (آیکون اپ/2.svg) — measured on the
+  /// reference frames: 37×39 px centered on the wordmark center.
+  static const double brandMarkSize = 38;
+  static const double wordmarkFontSize = 15;
+  static const double wordmarkLetterSpacing = 1.1;
 
   /// Figma CSS: `filter: blur(57px)` on the glow layer — but the reference
   /// FRAMES show a tight neon halo (~15–25px beyond the group box). Figma's
@@ -152,11 +207,12 @@ abstract final class AethGeometry {
   static const double protocolLogoSize = 30;
 
   /// Vertical rhythm gaps (ref frame): topbar→location 21, location→flags 13,
-  /// speed→pill 17, pill→panel 52, panel→bottom 30.
+  /// speed-group(96)→pill 1 (design y604→605), pill(38)→panel 63
+  /// (design y643→706), panel→bottom 30. (v4.11 — owner CSS Group 8/11.)
   static const double gapTopbarToLocation = 21;
   static const double gapLocationToFlags = 13;
-  static const double gapSpeedToPill = 17;
-  static const double gapPillToPanel = 52;
+  static const double gapSpeedToPill = 1;
+  static const double gapPillToPanel = 63;
   static const double gapPanelToBottom = 30;
 
   /// Location row insets (ref: name x 95–130, ping ends x 324).

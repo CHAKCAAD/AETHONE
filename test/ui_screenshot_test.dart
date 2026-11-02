@@ -117,6 +117,8 @@ void main() {
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
+    // v4.11: the scanning halo behind the central icon (defect #10).
+    await _save(tester, 'home_connecting');
     print('EMIT CONNECTED');
     engine.emit(const EngineStateChanged(VpnState.connected));
     engine.emit(const EngineStatsUpdated(

@@ -36,7 +36,8 @@ class BottomPanel extends StatelessWidget {
     required this.upBytes,
     required this.showConnectButton,
     required this.onProtocolCardTap,
-    required this.onConnectTap,
+    required this.onSwipeUp,
+    required this.onSwipeDown,
   });
 
   final bool connected;
@@ -49,7 +50,11 @@ class BottomPanel extends StatelessWidget {
   /// Look 1 renders the bottom connect button; look 2 does not.
   final bool showConnectButton;
   final VoidCallback onProtocolCardTap;
-  final VoidCallback onConnectTap;
+
+  /// Swipe-only connect gestures (owner defect #11): up connects, down
+  /// disconnects — the FAB has NO tap action.
+  final VoidCallback onSwipeUp;
+  final VoidCallback onSwipeDown;
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +94,8 @@ class BottomPanel extends StatelessWidget {
           FabColumn(
             connected: connected,
             style: style,
-            onTap: onConnectTap,
+            onSwipeUp: onSwipeUp,
+            onSwipeDown: onSwipeDown,
           ),
         ],
       ),
@@ -225,9 +231,17 @@ class ProtocolCard extends StatelessWidget {
                   ),
                 ),
               ),
-              ChevronForwardIcon(
-                size: 10 * s,
-                color: AethColors.textPrimary,
+              // Owner defect #12: the forward chevron is the set's own
+              // «Right 2.svg» artwork, white-tinted like the reference card.
+              SvgPicture.asset(
+                AppAssets.iconRight2,
+                width: 26 * s,
+                height: 26 * s,
+                fit: BoxFit.contain,
+                colorFilter: const ColorFilter.mode(
+                  AethColors.textPrimary,
+                  BlendMode.srcIn,
+                ),
               ),
             ],
           ),
@@ -333,17 +347,35 @@ class StatCard extends StatelessWidget {
 /// slides between the top slot (connected) and the bottom slot
 /// (disconnected) + three tiny red chevrons pinned near the bottom (covered
 /// by the button in its lower position, exactly like the reference frames).
+///
+/// Owner defect #11: the button is SWIPE-ONLY — dragging UP connects,
+/// dragging DOWN disconnects; a plain tap never toggles. The slot slide +
+/// color crossfade + icon swap are all animated (defect #5).
 class FabColumn extends StatelessWidget {
   const FabColumn({
     super.key,
     required this.connected,
     required this.style,
-    required this.onTap,
+    required this.onSwipeUp,
+    required this.onSwipeDown,
   });
 
   final bool connected;
   final MotionStyle style;
-  final VoidCallback onTap;
+  final VoidCallback onSwipeUp;
+  final VoidCallback onSwipeDown;
+
+  /// Vertical speed (px/s) the finger must carry for the gesture to count.
+  static const double _swipeVelocityThreshold = 250;
+
+  void _onDragEnd(DragEndDetails details) {
+    final dy = details.velocity.pixelsPerSecond.dy;
+    if (dy < -_swipeVelocityThreshold) {
+      onSwipeUp();
+    } else if (dy > _swipeVelocityThreshold) {
+      onSwipeDown();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -353,37 +385,39 @@ class FabColumn extends StatelessWidget {
     final color =
         connected ? AethColors.accentConnected : AethColors.statusDisconnected;
 
-    return Container(
-      width: AethGeometry.fabColumnWidth * s,
-      height: AethGeometry.fabColumnHeight * s,
-      decoration: BoxDecoration(
-        color: AethColors.cardDark,
-        borderRadius: BorderRadius.circular(AethRadius.fabColumn * s),
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // Chevrons first (under the button).
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 25 * s,
-            child: Center(
-              child: TripleChevronsIcon(
-                size: 14 * s,
-                color: AethColors.fabChevrons,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragEnd: _onDragEnd,
+      child: Container(
+        width: AethGeometry.fabColumnWidth * s,
+        height: AethGeometry.fabColumnHeight * s,
+        decoration: BoxDecoration(
+          color: AethColors.cardDark,
+          borderRadius: BorderRadius.circular(AethRadius.fabColumn * s),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Chevrons first (under the button).
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 25 * s,
+              child: Center(
+                child: TripleChevronsIcon(
+                  size: 14 * s,
+                  color: AethColors.fabChevrons,
+                ),
               ),
             ),
-          ),
-          // Power button — NO glow (the reference frames show none).
-          AnimatedPositioned(
-            left: (AethGeometry.fabColumnWidth * s - size) / 2,
-            top: connected ? 5 * s : null,
-            bottom: connected ? null : 12 * s,
-            duration: duration,
-            curve: style.curve,
-            child: GestureDetector(
-              onTap: onTap,
+            // Power button — NO glow (the reference frames show none).
+            // Icon = the set's own «Off.svg» (owner defect #2).
+            AnimatedPositioned(
+              left: (AethGeometry.fabColumnWidth * s - size) / 2,
+              top: connected ? 5 * s : null,
+              bottom: connected ? null : 12 * s,
+              duration: duration,
+              curve: style.curve,
               child: AnimatedContainer(
                 duration: duration,
                 curve: style.curve,
@@ -396,43 +430,35 @@ class FabColumn extends StatelessWidget {
                 child: Center(
                   child: AnimatedSwitcher(
                     duration: duration,
-                    child: _PowerTinted(
-                      key: ValueKey(connected ? 'on' : 'off'),
-                      connected: connected,
-                      size: size * 0.5,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(
+                          begin: 0.7,
+                          end: 1.0,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: SvgPicture.asset(
+                      AppAssets.iconOff,
+                      key: ValueKey(connected ? 'fab-on' : 'fab-off'),
+                      width: 24 * s,
+                      height: 24 * s,
+                      fit: BoxFit.contain,
+                      colorFilter: ColorFilter.mode(
+                        connected
+                            ? AethColors.onPillConnected
+                            : AethColors.onPillDisconnected,
+                        BlendMode.srcIn,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PowerTinted extends StatelessWidget {
-  const _PowerTinted({super.key, required this.connected, required this.size});
-
-  final bool connected;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<Color?>(
-      tween: ColorTween(
-        begin: connected
-            ? AethColors.onPillDisconnected
-            : AethColors.onPillConnected,
-        end: connected
-            ? AethColors.onPillConnected
-            : AethColors.onPillDisconnected,
-      ),
-      duration: const Duration(milliseconds: 300),
-      builder: (context, color, _) => PowerIcon(
-        size: size,
-        color: color ?? AethColors.onPillDisconnected,
+          ],
+        ),
       ),
     );
   }

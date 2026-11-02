@@ -53,6 +53,20 @@ class ConnectionStore extends ChangeNotifier {
   int upBytes = 0;
   String? exitCountryCode; // null ⇒ unknown; no flag shown
 
+  /// The location the USER picked on the flag wheel (v4.11, defect #8).
+  /// The engine-reported [exitCountryCode] stays the only "connected to X"
+  /// truth; this is the selector state the core will receive in M2.
+  String? selectedCountryCode;
+
+  /// Wheel selection commit (flag snap / tap). Ignored while an operation
+  /// is in flight so the selector can never fight a running transition.
+  void selectCountry(String code) {
+    if (_operationInFlight) return;
+    if (selectedCountryCode == code) return;
+    selectedCountryCode = code;
+    notifyListeners();
+  }
+
   ProtocolId selectedProtocol = ProtocolId.masque; // Aether's real default
 
   HomeLook homeLook = HomeLook.one;

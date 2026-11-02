@@ -1,10 +1,16 @@
-/// Home top bar: settings icon (START side — visual right in RTL), the
-/// AETHONE wordmark centered, info icon (END side — visual left in RTL).
+/// Home top bar: settings icon tile (START side — visual right in RTL), the
+/// AETHONE wordmark centered with the real brand mark (آیکون اپ/2.svg)
+/// BEHIND it, info icon tile (END side — visual left in RTL).
 ///
-/// Behavior (owner text): settings icon → Settings; info icon → Telegram
-/// channel t.me/AETHONE. The reference image shows an "i" (Information
-/// Circle) icon — pending decision D1 we keep the reference icon and wire it
-/// to the Telegram link (option A: honors both the image and the text).
+/// v4.11 (owner defect reports #7 + #14):
+///   * #7 — both top icons sit on the owner Figma «Rectangle 9» tile:
+///     50×50, #0F1510, radius 16, shadow 0 4 4 rgba(0,0,0,0.25).
+///   * #14 — the mark behind the wordmark is the REAL 2.svg artwork rendered
+///     with its own gradients (the previous flat bright-green painter is
+///     gone; the owner rejected the flat green color).
+///
+/// Behavior: settings icon → Settings; info icon → Telegram channel
+/// t.me/AETHONE.
 library;
 
 import 'package:flutter/material.dart';
@@ -33,26 +39,27 @@ class HomeTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final tile = AethGeometry.topTileSize * s;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AethGeometry.pageHPadding * s),
       child: SizedBox(
-        height: 44 * s,
+        height: tile,
         child: Row(
           children: [
-            _TopBarIcon(
+            _IconTile(
               asset: AppAssets.iconSetting,
+              size: tile,
+              iconSize: AethGeometry.topTileIcon * s,
               semanticLabel: 'Settings',
               onTap: onSettings,
             ),
             const Spacer(),
-            // Wordmark — white Bold ~21px with letterSpacing; a small green
-            // 3D diamond (the app mark rotated 45°) sits BEHIND the T–H
-            // letters, exactly like the reference top bar (green pixels
-            // x 183–218 of the 402-wide frame).
-            _Wordmark(scale: s),
+            const _Wordmark(),
             const Spacer(),
-            _TopBarIcon(
+            _IconTile(
               asset: AppAssets.iconInformationCircle,
+              size: tile,
+              iconSize: AethGeometry.topTileIcon * s,
               semanticLabel: 'Telegram channel',
               onTap: _openTelegram,
             ),
@@ -63,31 +70,56 @@ class HomeTopBar extends StatelessWidget {
   }
 }
 
-class _TopBarIcon extends StatelessWidget {
-  const _TopBarIcon({
+/// The owner «Rectangle 9» tile: dark rounded square + soft drop shadow +
+/// the white linear icon centered.
+class _IconTile extends StatelessWidget {
+  const _IconTile({
     required this.asset,
+    required this.size,
+    required this.iconSize,
     required this.semanticLabel,
     this.onTap,
   });
 
   final String asset;
+  final double size;
+  final double iconSize;
   final String semanticLabel;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     return Semantics(
       label: semanticLabel,
       button: true,
-      child: IconButton(
-        onPressed: onTap,
-        icon: SvgPicture.asset(
-          asset,
-          width: 24,
-          height: 24,
-          colorFilter: const ColorFilter.mode(
-            AethColors.textPrimary,
-            BlendMode.srcIn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: AethColors.topTile,
+            borderRadius: BorderRadius.circular(AethGeometry.topTileRadius * s),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x40000000), // rgba(0,0,0,0.25) 0 4 4
+                offset: Offset(0, 4),
+                blurRadius: 4,
+              ),
+            ],
+          ),
+          child: Center(
+            child: SvgPicture.asset(
+              asset,
+              width: iconSize,
+              height: iconSize,
+              colorFilter: const ColorFilter.mode(
+                AethColors.textPrimary,
+                BlendMode.srcIn,
+              ),
+            ),
           ),
         ),
       ),
@@ -95,27 +127,26 @@ class _TopBarIcon extends StatelessWidget {
   }
 }
 
-/// The AETHONE wordmark: white text with the green extruded diamond mark
-/// behind the T–H (drawn in the set's linear style — custom drawing in the
-/// icon set's style is allowed per design decision D7).
+/// The AETHONE wordmark: white bold text with the REAL brand mark (2.svg,
+/// its own gradient facets) centered BEHIND the letters — measured on the
+/// reference frames: mark ≈38px centered on the wordmark center.
 class _Wordmark extends StatelessWidget {
-  const _Wordmark({required this.scale});
-
-  final double scale;
+  const _Wordmark();
 
   @override
   Widget build(BuildContext context) {
-    final fontSize = 21 * scale;
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final fontSize = AethGeometry.wordmarkFontSize * s;
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Green diamond ≈ behind the T–H (≈47% across the wordmark).
-        Transform.translate(
-          offset: Offset(-fontSize * 1.05, 0),
-          child: CustomPaint(
-            size: Size.square(fontSize * 1.35),
-            painter: _GreenDiamondPainter(),
-          ),
+        SvgPicture.asset(
+          AppAssets.brandMark,
+          width: AethGeometry.brandMarkSize * s,
+          height: AethGeometry.brandMarkSize * s,
+          fit: BoxFit.contain,
+          // The artwork renders with its OWN gradient colors (v4.11, owner
+          // defect #14: the flat green tint was wrong).
         ),
         Text(
           'AETHONE',
@@ -123,44 +154,11 @@ class _Wordmark extends StatelessWidget {
             fontFamily: 'IRANYekanX',
             fontWeight: FontWeight.w700,
             fontSize: fontSize,
-            letterSpacing: 2.5 * scale,
+            letterSpacing: AethGeometry.wordmarkLetterSpacing * s,
             color: AethColors.textPrimary,
           ),
         ),
       ],
     );
   }
-}
-
-/// Extruded diamond: bright green top face fading to deep green — the same
-/// mark geometry as the hero logo (3.svg) rotated 45°.
-class _GreenDiamondPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height / 2);
-    final r = size.width * 0.42;
-    final top = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFF1AD995), Color(0xFF0A4F33)],
-      ).createShader(Rect.fromCircle(center: c, radius: r));
-    final path = Path()
-      ..moveTo(c.dx, c.dy - r)
-      ..lineTo(c.dx + r, c.dy)
-      ..lineTo(c.dx, c.dy + r)
-      ..lineTo(c.dx - r, c.dy)
-      ..close();
-    canvas.drawPath(path, top);
-    // Subtle depth edge (bottom-right half a touch darker).
-    final edge = Paint()
-      ..color = const Color(0xFF0A4F33).withValues(alpha: 0.55)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * 0.05
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(path, edge);
-  }
-
-  @override
-  bool shouldRepaint(_GreenDiamondPainter oldDelegate) => false;
 }

@@ -10,19 +10,19 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../connection/connection_state.dart';
 import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../../l10n/app_strings.dart';
 import 'widgets/bottom_panel.dart';
-import 'widgets/custom_icons.dart';
 import 'widgets/glow_pill.dart';
 import 'widgets/hero_logo.dart';
 import 'widgets/location_header.dart';
 import 'widgets/pattern_sides.dart';
-import 'widgets/status_pill.dart';
 import 'widgets/top_bar.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -78,6 +78,11 @@ class HomeScreen extends StatelessWidget {
         final style = store.effectiveMotionStyle(context);
         final connected = store.isConnected;
         final isLookOne = store.homeLook == HomeLook.one;
+        // The scanning walk: starting → connecting (→ reconnecting).
+        final showScan = !connected &&
+            (store.state == VpnState.starting ||
+                store.state == VpnState.connecting ||
+                store.state == VpnState.reconnecting);
 
         return Scaffold(
           backgroundColor: AethColors.bgScreen,
@@ -104,16 +109,40 @@ class HomeScreen extends StatelessWidget {
                           store.selectedProtocol.isPsiphon,
                       pingMs: store.pingMs,
                       exitCountryCode: store.exitCountryCode,
-                      onFlagSelected: (_) {}, // exit location = engine-owned
+                      // Wheel selection commit — the store keeps it for the
+                      // future core handoff (defects #8/#13).
+                      onCountrySelected: store.selectCountry,
                     ),
                     // Hero band: logo (look 1) or center connect button (2).
-                    // The flex region is the reference's hero band
-                    // (y 212–534) — the logo centers exactly like the frame.
+                    // The flex region is the reference's hero band — the
+                    // logo centers exactly like the frame. While the engine
+                    // walks (starting/connecting/reconnecting) the scanning
+                    // halo plays BEHIND the central icon (defect #10).
                     Expanded(
                       child: Center(
-                        child: isLookOne
-                            ? HeroLogo(connected: connected, style: style)
-                            : _CenterConnectButton(store: store, style: style),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 250),
+                              child: showScan
+                                  ? ScanRings(
+                                      key: const ValueKey('scan-rings'),
+                                      color: connected
+                                          ? AethColors.accentConnected
+                                          : AethColors.statusDisconnected,
+                                      size: 270 * s,
+                                    )
+                                  : const SizedBox.shrink(
+                                      key: ValueKey('scan-off'),
+                                    ),
+                            ),
+                            if (isLookOne)
+                              HeroLogo(connected: connected, style: style)
+                            else
+                              _CenterConnectButton(store: store, style: style),
+                          ],
+                        ),
                       ),
                     ),
                     // Speed Test entry — connected only, animated. Its slot
@@ -152,8 +181,10 @@ class HomeScreen extends StatelessWidget {
                           context,
                           strings.protocolSheetComingNext,
                         ),
-                        onConnectTap: () =>
-                            connected ? store.disconnect() : store.connect(),
+                        // Swipe-only connect (defect #11): up = connect,
+                        // down = disconnect. No tap surface at all.
+                        onSwipeUp: store.connect,
+                        onSwipeDown: store.disconnect,
                       ),
                     ),
                     SizedBox(height: AethGeometry.gapPanelToBottom * s),
@@ -168,13 +199,16 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Look 2: the hero IS the connect button (112px core, 4-layer glow, power
-/// icon) — owner: "دکمه وسط صفحه این کار را انجام میدهد".
+/// Look 2: the hero IS the connect button (112px core, 4-layer glow) with
+/// the set's real Off.svg icon. Owner defect #11: SWIPE-ONLY — up connects,
+/// down disconnects; no tap surface.
 class _CenterConnectButton extends StatelessWidget {
   const _CenterConnectButton({required this.store, required this.style});
 
   final ConnectionStore store;
   final MotionStyle style;
+
+  static const double _swipeVelocityThreshold = 250;
 
   @override
   Widget build(BuildContext context) {
@@ -182,25 +216,42 @@ class _CenterConnectButton extends StatelessWidget {
     final connected = store.isConnected;
     final duration = motionDuration(style, MotionDurations.state);
 
-    return GlowCircle(
-      active: connected,
-      duration: duration,
-      curve: style.curve,
-      onTap: () => connected ? store.disconnect() : store.connect(),
-      child: TweenAnimationBuilder<Color?>(
-        tween: ColorTween(
-          begin: connected
-              ? AethColors.onPillDisconnected
-              : AethColors.onPillConnected,
-          end: connected
-              ? AethColors.onPillConnected
-              : AethColors.onPillDisconnected,
-        ),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragEnd: (details) {
+        final dy = details.velocity.pixelsPerSecond.dy;
+        if (dy < -_swipeVelocityThreshold) {
+          store.connect();
+        } else if (dy > _swipeVelocityThreshold) {
+          store.disconnect();
+        }
+      },
+      child: GlowCircle(
+        active: connected,
         duration: duration,
         curve: style.curve,
-        builder: (context, color, _) => PowerIcon(
-          size: 48 * s,
-          color: color ?? AethColors.onPillDisconnected,
+        onTap: null, // swipe-only (defect #11)
+        child: TweenAnimationBuilder<Color?>(
+          tween: ColorTween(
+            begin: connected
+                ? AethColors.onPillDisconnected
+                : AethColors.onPillConnected,
+            end: connected
+                ? AethColors.onPillConnected
+                : AethColors.onPillDisconnected,
+          ),
+          duration: duration,
+          curve: style.curve,
+          builder: (context, color, _) => SvgPicture.asset(
+            AppAssets.iconOff,
+            width: 48 * s,
+            height: 48 * s,
+            fit: BoxFit.contain,
+            colorFilter: ColorFilter.mode(
+              color ?? AethColors.onPillDisconnected,
+              BlendMode.srcIn,
+            ),
+          ),
         ),
       ),
     );

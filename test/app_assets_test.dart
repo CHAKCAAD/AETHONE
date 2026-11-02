@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aethone/core/app_assets.dart';
 import 'package:aethone/l10n/app_strings.dart';
@@ -18,6 +19,24 @@ void main() {
       isEmpty,
       reason: 'missing assets: $missing',
     );
+  });
+
+  test('every referenced asset is BUNDLED (declared in pubspec)', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    // The filesystem check above passes even when an asset is missing from
+    // pubspec.yaml — the file exists but never ships, and the app silently
+    // renders nothing (the v4.11 Off.svg/Activity 4.svg/Right 2.svg bug).
+    // rootBundle fails loudly for anything not declared.
+    final notBundled = <String>[];
+    for (final path in AppAssets.allReferenced) {
+      try {
+        await rootBundle.load(path);
+      } catch (_) {
+        notBundled.add(path);
+      }
+    }
+    expect(notBundled, isEmpty,
+        reason: 'assets missing from the bundle (pubspec): $notBundled');
   });
 
   test('flag helper resolves existing files', () {

@@ -38,18 +38,32 @@ void main() {
       expect(AethGeometry.connectButtonSize, 48);
       expect(AethGeometry.connectButtonRise, 72);
       expect(AethGeometry.centerButtonSize, 112);
-      expect(AethGeometry.pillWidth, 162);
-      expect(AethGeometry.pillHeight, 60);
+      // v4.11 — owner CSS Group 8: pill group is the 140x38 halo (the old
+      // 162x60 blurred 4th layer was REMOVED per the owner's defect report).
+      expect(AethGeometry.pillWidth, 140);
+      expect(AethGeometry.pillHeight, 38);
+      expect(AethGeometry.pillMidWidth, 132.88);
+      expect(AethGeometry.pillMidHeight, 32);
+      expect(AethGeometry.pillCoreWidth, 125.76);
+      expect(AethGeometry.pillCoreHeight, 26);
+      // v4.11 — owner CSS Group 11: speed-test layered group.
+      expect(AethGeometry.speedGroupSize, 96);
+      expect(AethGeometry.speedHaloSize, 74);
+      expect(AethGeometry.speedMidSize, 62);
+      expect(AethGeometry.speedCoreSize, 44);
       // v4.10: tuned to the exported FRAMES (tight halo) — the Figma CSS
       // blur(57px) value disagrees with every reference screenshot.
       expect(AethGeometry.pillBlur, 10);
     });
 
-    test('pill radii are the Figma Rectangle 26/22/21/20 values', () {
-      expect(AethRadius.pillGlow, 32);
+    test('pill + speed radii are the owner CSS values (v4.11)', () {
       expect(AethRadius.pillHalo, 13);
       expect(AethRadius.pillMid, 11);
       expect(AethRadius.pillCore, 9);
+      expect(AethRadius.speedGlow, 32);
+      expect(AethRadius.speedHalo, 32);
+      expect(AethRadius.speedMid, 27);
+      expect(AethRadius.speedCore, 17);
     });
   });
 

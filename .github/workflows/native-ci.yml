@@ -21,7 +21,41 @@
 # every Actions pin: evidence/actions_pins_raw_evidence.txt (v3).
 # actionlint 1.7.7 exit 0 on THIS exact file: evidence/validation_log.txt (v4).
 #
-# v4.10 changes (2026-11-02) — PIXEL-FIDELITY FIXES after the first real
+# # v4.11 changes (2026-11-02) — SECOND DEVICE-TEST FIX ROUND (14 owner
+#   defect reports on the main screen; owner CSS is the authority):
+#   * #1 patterns: full-width canvases; left art pinned bottom (below center),
+#     right art pinned top (above center) — measured against the frames.
+#   * #2/#4/#12: real set assets wired: Off.svg (connect FAB + look-2 center),
+#     Activity 4.svg (speed test, #0D4D36 stroke), Right 2.svg (protocol
+#     card chevron). ROOT CAUSE of the invisible icons: the three SVGs were
+#     never declared in pubspec assets — new test locks the BUNDLE, not just
+#     the filesystem.
+#   * #3 status pill rebuilt from the owner Group-8 CSS: EXACTLY 3 layers
+#     (140x38 a.19 r13 / 132.88x32 a.45 r11 / 125.76x26 solid r9) + one soft
+#     blurred accent shadow UNDER the pill (the old 162x60 blurred 4th layer
+#     that broke the shape is gone).
+#   * #4 speed test rebuilt from the owner Group-11 CSS: 96 glow / 74 a.19 /
+#     62 a.45 / 44 solid r17 concentric.
+#   * #5 connect-state change animates (slot slide + color crossfade + icon
+#     scale/fade switcher).
+#   * #6 hero rotation measured by correlation on the reference frames:
+#     connected = 60deg CCW (tip EXACTLY up, corr 0.933), disconnected = 0.
+#   * #7 top icons on the owner Rectangle-9 tiles (50x50 #0F1510 r16 +
+#     shadow); #14 wordmark mark = real 2.svg (own gradients, no flat green).
+#   * #8 flag WHEEL: scroll snaps per flag, the centre flag grows + becomes
+#     the selection live; name text updates live (was frozen on Iran).
+#   * #9 «آفلاین» moved to the SAME slot as the connected ping (was overlaying
+#     the wheel and pushing the map icon sideways).
+#   * #10 scan animation (expanding rings) behind the central icon during
+#     starting/connecting/reconnecting; preview handshake 30ms -> 2.6s.
+#   * #11 FAB is SWIPE-ONLY: up = connect, down = disconnect, tap never
+#     toggles (widget-tested both directions + tap no-op).
+#   * #14 flags area: NO blur — saturation-0 greyscale + locked scroll for
+#     protocols without location selection when disconnected; Tor/Psiphon
+#     stay normal.
+#   * 39/39 flutter tests green, 0 analyzer findings; APKs built per-ABI.
+#
+v4.10 changes (2026-11-02) — PIXEL-FIDELITY FIXES after the first real
 #   device test of the v4.9 preview APK (all measured on the 402x874
 #   reference frames; render-verified via test/ui_screenshot_test.dart):
 #   * Flags: 265/266 flag SVGs embed their artwork as raster <image> inside

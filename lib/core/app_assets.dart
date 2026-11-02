@@ -44,9 +44,12 @@ abstract final class AppAssets {
   static const String _flags = 'design/flags_png';
   static const String _protoPng = 'design/proto_icons_png';
 
-  // --- app logo: 1 = green (connected artwork, rotated), 3 = clean white
-  // (tintable — used for BOTH states with the owner's rotation animation).
+  // --- app logo: 1 = green (connected artwork, rotated), 2 = gradient
+  // facets (the brand mark behind the wordmark — v4.11, defect #14),
+  // 3 = clean white (tintable — used for BOTH hero states with the
+  // owner's rotation animation).
   static const String appLogoConnected = '$_logo/1.svg';
+  static const String brandMark = '$_logo/2.svg';
   static const String appLogoNeutralWhite = '$_logo/3.svg';
 
   // --- background patterns (red when disconnected, green when connected).
@@ -70,6 +73,12 @@ abstract final class AppAssets {
   static const String iconInformationCircle = '$_icons/Information Circle.svg';
   static const String iconMap = '$_icons/Map.svg';
   static const String iconSend = '$_icons/Send 1.svg';
+
+  // --- owner-mandated assets for the connect/speed/chevron surfaces
+  // (v4.11 defect reports #2/#4/#12):
+  static const String iconOff = '$_icons/Off.svg';
+  static const String iconActivity4 = '$_icons/Activity 4.svg';
+  static const String iconRight2 = '$_icons/Right 2.svg';
 
   // --- protocol logos. Tor/Psiphon ship as pre-rendered PNGs (their SVGs
   // embed the artwork in hidden tracing layers + the real vector art,
@@ -130,6 +139,10 @@ abstract final class AppAssets {
         iconInformationCircle,
         iconMap,
         iconSend,
+        iconOff,
+        iconActivity4,
+        iconRight2,
+        brandMark,
         _protoMasque,
         _protoWireguard,
         _protoGool,

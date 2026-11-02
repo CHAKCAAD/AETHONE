@@ -1,31 +1,24 @@
-/// Location header + flag carousel.
+/// Location header + flag WHEEL (v4.11 — owner defect reports #8/#9/#14):
 ///
-/// v4.10 pixel-faithful layout (measured on the reference frames):
-///  * Connected (normal protocols): a COMPACT row — exit-country name at
-///    x≈95 (visual LEFT), map icon + small chevron at the CENTER (x≈201),
-///    ping in green ending at x≈324 (visual RIGHT). The row is NOT flush
-///    with the screen edges. Ping renders ONLY when really connected and
-///    measured, and is forced LTR so «146 ms» can never flip to «ms 146»
-///    under the Persian RTL locale (the bidi bug seen on the first device
-///    build). The flag artworks ship as pre-rendered PNGs (v4.10) because
-///    265 of the 266 committed SVGs embed the artwork as a raster image
-///    inside an SVG `pattern`, which flutter_svg cannot render.
-///  * Disconnected (normal protocols): the same compact row reads «آفلاین»
-///    and the whole flags area is blurred (owner rule + reference images).
-///  * Tor/Psiphon modes: the top area becomes the sub-mode selector
-///    (deferred to the protocol-sheet step; documented in
-///    docs/UI_IMPLEMENTATION.md).
+/// Header row (fixed visual layout, LTR-locked): country name LEFT ·
+/// map icon CENTER (Spacers keep it centered) · ping/offline RIGHT.
+///   * connected  : name = wheel/exit country (white) · «146 ms» green.
+///   * disconnected: name = wheel selection (grey) · «آفلاین» grey in the
+///     SAME slot the ping occupies when connected (defect #9 — the offline
+///     text no longer sits on the location selector nor pushes the map icon
+///     sideways).
+///   * connecting : the ping slot stays empty (honest — nothing measured).
 ///
-/// Flags: horizontally swipeable carousel (owner: «پرچم کشورها به صورت
-/// اسلایدی با انیمشن جابه جا میشوند») — the selected country sits at the
-/// CENTER, slightly larger (52 vs 42), with a brightness falloff towards the
-/// edges, exactly like the reference row (pitch 72). All 266 committed flag
-/// artworks ship as PNGs extracted from the owner's own SVGs (v4.10 — the
-/// SVGs embed the artwork as a raster `image` element which flutter_svg
-/// cannot show).
+/// Flag wheel («پله‌ای» — defect #8): a horizontal ListView with 72px pitch;
+/// the flag nearest the viewport centre is continuously enlarged (52 vs 42)
+/// AND becomes the selection while you scroll; on release the wheel snaps to
+/// the nearest flag; tapping a flag centres + selects it. The country name
+/// above updates live with the wheel selection (defect #8 second half).
+///
+/// Disconnected state (defect #14): NO blur anywhere — protocols WITHOUT a
+/// location selector get a locked wheel + a black-and-white (saturation-0)
+/// color effect; Tor/Psiphon (which DO select a location) stay fully normal.
 library;
-
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,29 +29,151 @@ import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 import 'custom_icons.dart';
 
-class LocationHeader extends StatelessWidget {
+class LocationHeader extends StatefulWidget {
   const LocationHeader({
     super.key,
     required this.connected,
     required this.protocolIsTorOrPsiphon,
     required this.pingMs,
     required this.exitCountryCode,
-    required this.onFlagSelected,
+    required this.onCountrySelected,
   });
 
   final bool connected;
   final bool protocolIsTorOrPsiphon;
   final int? pingMs;
   final String? exitCountryCode;
-  final void Function(String code) onFlagSelected;
+
+  /// Wheel selection committed (snap settle or tap). The store keeps it for
+  /// the future core handoff (defect #13 note: per-protocol location rules
+  /// are re-checked when the engine lands).
+  final void Function(String code) onCountrySelected;
+
+  @override
+  State<LocationHeader> createState() => _LocationHeaderState();
+}
+
+class _LocationHeaderState extends State<LocationHeader> {
+  static const String defaultCode = 'ir';
+
+  List<String> _codes = const [defaultCode];
+  String _selected = defaultCode;
+  ScrollController? _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.exitCountryCode ?? defaultCode;
+    _loadCodes();
+  }
+
+  @override
+  void didUpdateWidget(covariant LocationHeader old) {
+    super.didUpdateWidget(old);
+    // Follow the ENGINE-reported exit country when it arrives/changes.
+    if (widget.exitCountryCode != null &&
+        widget.exitCountryCode != old.exitCountryCode) {
+      _select(widget.exitCountryCode!, notify: false);
+      _centerOn(_indexOf(_selected), animate: true);
+    }
+  }
+
+  Future<void> _loadCodes() async {
+    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    const prefix = 'design/flags_png/';
+    final codes = manifest
+        .listAssets()
+        .where((p) => p.startsWith(prefix) && p.endsWith('.png'))
+        .map((p) => p.substring(prefix.length, p.length - 4))
+        .toList()
+      ..sort();
+    if (!mounted) return;
+    setState(() => _codes = codes);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _centerOn(_indexOf(_selected));
+    });
+  }
+
+  int _indexOf(String code) {
+    final i = _codes.indexOf(code);
+    return i < 0 ? _codes.indexOf(defaultCode).clamp(0, _codes.length - 1) : i;
+  }
+
+  void _select(String code, {bool notify = true}) {
+    if (_selected == code) return;
+    setState(() => _selected = code);
+    if (notify) widget.onCountrySelected(code);
+  }
+
+  void _ensureController(double extent, double viewport) {
+    _controller ??= ScrollController(
+      initialScrollOffset:
+          (_indexOf(_selected) * extent).clamp(0.0, double.infinity),
+    );
+  }
+
+  void _centerOn(int index, {bool animate = false}) {
+    final controller = _controller;
+    if (controller == null || !controller.hasClients) return;
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final extent = AethGeometry.flagPitch * s;
+    final target = (index * extent)
+        .clamp(0.0, controller.position.maxScrollExtent);
+    if (animate) {
+      controller.animateTo(
+        target,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      controller.jumpTo(target);
+    }
+  }
+
+  int get _focusIndex {
+    final controller = _controller;
+    if (controller == null || !controller.hasClients) return _indexOf(_selected);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final extent = AethGeometry.flagPitch * s;
+    return (controller.offset / extent).round().clamp(0, _codes.length - 1);
+  }
+
+  void _onScrollEnd() {
+    final controller = _controller;
+    if (controller == null || !controller.hasClients) return;
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final extent = AethGeometry.flagPitch * s;
+    final focus = _focusIndex;
+    _select(_codes[focus]);
+    final target = (focus * extent)
+        .clamp(0.0, controller.position.maxScrollExtent);
+    if ((controller.offset - target).abs() > 0.5) {
+      controller.animateTo(
+        target,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final connected = widget.connected;
+
+    // Defect #14: locked + greyscale ONLY for protocols without a location
+    // selector while disconnected. Tor/Psiphon (and any connected state)
+    // stay normal. NO blur anywhere.
+    final locked = !connected && !widget.protocolIsTorOrPsiphon;
 
     final Widget headerRow = Directionality(
-      // Fixed visual layout (reference): name LEFT · icon CENTER · ping RIGHT.
       textDirection: TextDirection.ltr,
       child: Padding(
         padding: EdgeInsets.only(
@@ -67,18 +182,24 @@ class LocationHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Text(
-              connected ? _countryName(exitCountryCode) : strings.offline,
-              style: TextStyle(
-                fontFamily: 'IRANYekanX',
-                fontWeight: FontWeight.w500,
-                fontSize: 15 * s,
-                color:
-                    connected ? AethColors.textPrimary : AethColors.textSecondary,
+            // LEFT — the wheel-selected country (white when connected,
+            // grey when offline). Updates live with the wheel (defect #8).
+            Flexible(
+              child: Text(
+                countryName(_selected) ?? '',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'IRANYekanX',
+                  fontWeight: FontWeight.w500,
+                  fontSize: 15 * s,
+                  color: connected
+                      ? AethColors.textPrimary
+                      : AethColors.textSecondary,
+                ),
               ),
             ),
             const Spacer(),
-            // Center: map icon + small chevron below (reference y 116–148).
+            // CENTER — map icon + small chevron below.
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -98,15 +219,26 @@ class LocationHeader extends StatelessWidget {
               ],
             ),
             const Spacer(),
-            // Ping — LTR-locked so the digits always lead («146 ms»).
-            Text(
-              pingMs != null ? strings.pingMs(pingMs!) : '',
-              textDirection: TextDirection.ltr,
-              style: TextStyle(
-                fontFamily: 'IRANYekanX',
-                fontWeight: FontWeight.w500,
-                fontSize: 14 * s,
-                color: AethColors.accentConnected,
+            // RIGHT — exactly ONE status text slot: the ping when connected
+            // and measured, «آفلاین» when disconnected (defect #9), nothing
+            // while the engine is still walking (honest).
+            Flexible(
+              child: Text(
+                connected
+                    ? (widget.pingMs != null
+                        ? strings.pingMs(widget.pingMs!)
+                        : '')
+                    : strings.offline,
+                textDirection: TextDirection.ltr,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'IRANYekanX',
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14 * s,
+                  color: connected
+                      ? AethColors.accentConnected
+                      : AethColors.textSecondary,
+                ),
               ),
             ),
           ],
@@ -114,237 +246,132 @@ class LocationHeader extends StatelessWidget {
       ),
     );
 
+    _ensureController(
+      AethGeometry.flagPitch * s,
+      MediaQuery.sizeOf(context).width,
+    );
+
     return Column(
       children: [
         headerRow,
         SizedBox(height: AethGeometry.gapLocationToFlags * s),
-        _FlagsArea(
-          connected: connected,
-          protocolIsTorOrPsiphon: protocolIsTorOrPsiphon,
-          exitCountryCode: exitCountryCode,
-          onFlagSelected: onFlagSelected,
+        _FlagsWheel(
+          codes: _codes,
+          controller: _controller,
+          selected: _selected,
+          locked: locked,
+          extent: AethGeometry.flagPitch * s,
+          onFocusChanged: (code) => _select(code),
+          onTapFlag: (code) {
+            if (locked) return;
+            _select(code);
+            _centerOn(_indexOf(code), animate: true);
+          },
+          onScrollEnd: locked ? null : _onScrollEnd,
         ),
       ],
     );
   }
-
-  String _countryName(String? code) {
-    // Minimal mapping for the carousel countries; full ISO table arrives with
-    // the routing/onboarding step (the ZIP guide has all 266 codes).
-    const names = <String, String>{
-      'ir': 'ایران', 'fr': 'فرانسه', 'es': 'اسپانیا', 'gr': 'یونان',
-      'ge': 'گرجستان', 'mx': 'مکزیک', 'de': 'آلمان', 'us': 'آمریکا',
-      'tm': 'ترکمنستان', 'ru': 'روسیه', 'cn': 'چین',
-    };
-    if (code == null) return '';
-    return names[code] ?? code.toUpperCase();
-  }
 }
 
-class _FlagsArea extends StatefulWidget {
-  const _FlagsArea({
-    required this.connected,
-    required this.protocolIsTorOrPsiphon,
-    required this.exitCountryCode,
-    required this.onFlagSelected,
-  });
-
-  final bool connected;
-  final bool protocolIsTorOrPsiphon;
-  final String? exitCountryCode;
-  final void Function(String code) onFlagSelected;
-
-  @override
-  State<_FlagsArea> createState() => _FlagsAreaState();
-}
-
-class _FlagsAreaState extends State<_FlagsArea> {
-  List<String> _codes = const [];
-  String? _picked;
-  ScrollController? _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _picked = widget.exitCountryCode;
-    _loadCodes();
-  }
-
-  @override
-  void didUpdateWidget(covariant _FlagsArea old) {
-    super.didUpdateWidget(old);
-    if (widget.exitCountryCode != old.exitCountryCode &&
-        widget.exitCountryCode != null) {
-      _picked = widget.exitCountryCode;
-      _centerOn(_indexOf(_picked), animate: true);
-    }
-  }
-
-  /// All committed country codes, resolved from the asset manifest (the
-  /// flags ship as a directory asset, so the bundle lists every file).
-  Future<void> _loadCodes() async {
-    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-    const prefix = 'design/flags_png/';
-    final codes = manifest
-        .listAssets()
-        .where((p) => p.startsWith(prefix) && p.endsWith('.png'))
-        .map((p) => p.substring(prefix.length, p.length - 4))
-        .toList()
-      ..sort();
-    if (!mounted) return;
-    setState(() => _codes = codes);
-    // Codes arrived after the first frame — center the picked country now
-    // that the items exist (post-frame so the ListView has attached).
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _centerOn(_indexOf(_picked));
-    });
-  }
-
-  int _indexOf(String? code) {
-    if (code == null) return 0;
-    final i = _codes.indexOf(code);
-    return i < 0 ? 0 : i;
-  }
-
-  void _ensureController(double extent, double viewport) {
-        _controller ??= ScrollController(
-      initialScrollOffset:
-          (_indexOf(_picked) * extent - (viewport - extent) / 2)
-              .clamp(0.0, double.infinity),
-    );
-  }
-
-  void _centerOn(int index, {bool animate = false}) {
-    final controller = _controller;
-    if (controller == null || !controller.hasClients) return;
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final extent = AethGeometry.flagPitch * s;
-    final viewport = controller.position.viewportDimension;
-    final target = (index * extent - (viewport - extent) / 2)
-        .clamp(0.0, controller.position.maxScrollExtent);
-    if (animate) {
-      controller.animateTo(
-        target,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOutCubic,
-      );
-    } else {
-      controller.jumpTo(target);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final strings = AppStrings.of(context);
-    final blurThis = !widget.connected && !widget.protocolIsTorOrPsiphon;
-    final extent = AethGeometry.flagPitch * s;
-    final width = MediaQuery.sizeOf(context).width;
-    _ensureController(extent, width);
-
-    final carousel = _FlagCarousel(
-      codes: _codes,
-      controller: _controller,
-      selected: _picked,
-      onFlagSelected: (code) {
-        setState(() => _picked = code);
-        widget.onFlagSelected(code);
-        _centerOn(_indexOf(code), animate: true);
-      },
-    );
-
-    // Stable tree: the carousel ALWAYS occupies the same slot so the
-    // ListView (and its scroll position) survives the blur overlay coming
-    // and going — replacing it reset the scroll to 0 (v4.10 device bug).
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        carousel,
-        if (blurThis)
-          Positioned.fill(
-            child: ClipRect(
-              child: BackdropFilter(
-                filter:
-                    ui.ImageFilter.blur(sigmaX: 6 * s, sigmaY: 6 * s),
-                child: Container(
-                  color: AethColors.bgScreen.withValues(alpha: 0.30),
-                  alignment: Alignment.center,
-                  child: Text(
-                    strings.offline,
-                    style: TextStyle(
-                      fontFamily: 'IRANYekanX',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16 * s,
-                      color: AethColors.textPrimary,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _FlagCarousel extends StatelessWidget {
-  const _FlagCarousel({
+/// The horizontal flag wheel. Always occupies the SAME slot (stable tree) —
+/// the v4.10 lesson: swapping the carousel for an overlay reset the scroll.
+class _FlagsWheel extends StatelessWidget {
+  const _FlagsWheel({
     required this.codes,
     required this.controller,
     required this.selected,
-    required this.onFlagSelected,
+    required this.locked,
+    required this.extent,
+    required this.onFocusChanged,
+    required this.onTapFlag,
+    required this.onScrollEnd,
   });
 
   final List<String> codes;
   final ScrollController? controller;
-  final String? selected;
-  final void Function(String code) onFlagSelected;
+  final String selected;
+  final bool locked;
+  final double extent;
+  final void Function(String code) onFocusChanged;
+  final void Function(String code) onTapFlag;
+  final VoidCallback? onScrollEnd;
+
+  static const List<double> _grayscaleMatrix = [
+    // 5x4 saturation-0 matrix (rec709 luma weights).
+    0.2126, 0.7152, 0.0722, 0, 0, //
+    0.2126, 0.7152, 0.0722, 0, 0, //
+    0.2126, 0.7152, 0.0722, 0, 0, //
+    0, 0, 0, 1, 0,
+  ];
 
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final extent = AethGeometry.flagPitch * s;
-    final selectedIdx = selected == null ? -1 : codes.indexOf(selected!);
-
-    return SizedBox(
-      height: AethGeometry.flagSizeSelected * s,
-      child: ListView.builder(
-        controller: controller,
-        scrollDirection: Axis.horizontal,
-        itemExtent: extent,
-        padding: EdgeInsets.zero,
-        itemCount: codes.length,
-        itemBuilder: (context, i) {
-          final code = codes[i];
-          final distance = selectedIdx < 0 ? 0 : (i - selectedIdx).abs();
-          // Brightness falloff away from the selected flag (reference row:
-          // the selected Iran tile is bright, neighbours fade out).
-          final opacity = switch (distance) {
-            0 => 1.0,
-            1 => 0.85,
-            2 => 0.62,
-            _ => 0.45,
-          };
-          return Center(
-            child: _FlagItem(
-              asset: AppAssets.flag(code),
-              size: (distance == 0
-                      ? AethGeometry.flagSizeSelected
-                      : AethGeometry.flagSize) *
-                  s,
-              opacity: opacity,
-              onTap: () => onFlagSelected(code),
-            ),
-          );
-        },
+    final viewport = MediaQuery.sizeOf(context).width;
+    final wheel = NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollUpdateNotification) {
+          // Live stepper: the flag nearest the centre grows and becomes the
+          // selection while scrolling (defect #8).
+          final controller = this.controller;
+          if (controller != null && controller.hasClients) {
+            final focus =
+                (controller.offset / extent).round().clamp(0, codes.length - 1);
+            if (codes[focus] != selected) onFocusChanged(codes[focus]);
+          }
+        } else if (notification is ScrollEndNotification) {
+          onScrollEnd?.call();
+        }
+        return false;
+      },
+      child: SizedBox(
+        height: AethGeometry.flagSizeSelected * s,
+        child: ListView.builder(
+          controller: controller,
+          scrollDirection: Axis.horizontal,
+          itemExtent: extent,
+          // Centreing padding so ANY item can rest exactly on the centre.
+          padding: EdgeInsets.symmetric(horizontal: (viewport - extent) / 2),
+          physics: locked ? const NeverScrollableScrollPhysics() : null,
+          itemCount: codes.length,
+          itemBuilder: (context, i) {
+            final code = codes[i];
+            final isSelected = code == selected;
+            // Brightness falloff away from the selected flag.
+            final distance = (i - codes.indexOf(selected)).abs();
+            final opacity = isSelected
+                ? 1.0
+                : switch (distance) {
+                    1 => 0.85,
+                    2 => 0.62,
+                    _ => 0.45,
+                  };
+            return Center(
+              child: _FlagItem(
+                asset: AppAssets.flag(code),
+                size: (isSelected
+                        ? AethGeometry.flagSizeSelected
+                        : AethGeometry.flagSize) *
+                    s,
+                opacity: opacity,
+                onTap: () => onTapFlag(code),
+              ),
+            );
+          },
+        ),
       ),
     );
+
+    // Defect #14: greyscale (saturation 0) instead of blur — and nothing
+    // else: no overlay, no text on top of the wheel.
+    if (locked) {
+      return ColorFiltered(
+        colorFilter: const ColorFilter.matrix(_grayscaleMatrix),
+        child: wheel,
+      );
+    }
+    return wheel;
   }
 }
 
@@ -367,7 +394,9 @@ class _FlagItem extends StatelessWidget {
       onTap: onTap,
       child: Opacity(
         opacity: opacity,
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
           width: size,
           height: size,
           decoration: BoxDecoration(
@@ -381,4 +410,19 @@ class _FlagItem extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Country display names for the wheel (full ISO table arrives with the
+/// routing/onboarding step — the ZIP guide has all 266 codes).
+String? countryName(String? code) {
+  const names = <String, String>{
+    'ir': 'ایران', 'fr': 'فرانسه', 'es': 'اسپانیا', 'gr': 'یونان',
+    'ge': 'گرجستان', 'mx': 'مکزیک', 'de': 'آلمان', 'us': 'آمریکا',
+    'tm': 'ترکمنستان', 'ru': 'روسیه', 'cn': 'چین', 'gb': 'انگلستان',
+    'nl': 'هلند', 'tr': 'ترکیه', 'it': 'ایتالیا', 'no': 'نروژ',
+    'eg': 'مصر', 'kr': 'کره جنوبی', 'kp': 'کره شمالی', 'kw': 'کویت',
+    'km': 'کومور', 'kn': 'سنت کیتس', 'at': 'اتریش', 'au': 'استرالیا',
+  };
+  if (code == null) return null;
+  return names[code] ?? code.toUpperCase();
 }

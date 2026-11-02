@@ -8,6 +8,7 @@ import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
 import 'package:aethone/features/home/home_screen.dart';
+import 'package:aethone/features/home/widgets/bottom_panel.dart';
 import 'package:aethone/features/home/widgets/location_header.dart';
 
 /// A scripted engine for deterministic UI tests — the same seam the preview
@@ -49,8 +50,8 @@ void main() {
   }
 
   testWidgets(
-      'disconnected home shows غیرفعال pill, offline blur, no ping',
-      (tester) async {
+      'disconnected home shows غیرفعال pill, offline in the ping slot, '
+      'greyscale locked wheel (NO blur)', (tester) async {
     await useReferenceSurface(tester);
     final engine = ScriptedEngine();
     final store = ConnectionStore(engine: engine);
@@ -58,8 +59,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('غیرفعال'), findsOneWidget);
-    expect(find.text('آفلاین'), findsWidgets); // header + blur overlay
+    // v4.11 defect #9: «آفلاین» lives in the SAME slot as the connected
+    // ping (exactly one instance) — it no longer overlays the flag wheel.
+    expect(find.text('آفلاین'), findsOneWidget);
     expect(find.text('146 ms'), findsNothing); // ping only when connected
+    // v4.11 defect #14: the wheel is greyscale-locked for normal protocols
+    // while disconnected — a ColorFiltered (saturation-0) layer, no blur.
+    expect(find.byType(ColorFiltered), findsOneWidget);
+    expect(find.byType(BackdropFilter), findsNothing);
   });
 
   testWidgets(
@@ -74,7 +81,10 @@ void main() {
     // Walk the machine legally, exactly like the real engine would.
     await store.connect(); // store applies `starting`
     engine.emit(const EngineStateChanged(VpnState.connecting));
-    await tester.pumpAndSettle();
+    // The connecting walk plays the REPEATING scan halo (v4.11 defect #10),
+    // so settle with bounded pumps instead of pumpAndSettle.
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 100));
     engine.emit(const EngineStateChanged(VpnState.connected));
     engine.emit(const EngineStatsUpdated(
       pingMs: 146,
@@ -119,11 +129,72 @@ void main() {
     await store.connect();
     await store.connect();
     await store.connect();
-    await tester.pumpAndSettle();
+    // `starting` plays the repeating scan halo — bounded pumps, not settle.
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 100));
 
     // Still in a legal, non-corrupted state — no StateError thrown, machine
     // holds `starting` (engine here never reports further).
     expect(store.state, VpnState.starting);
+  });
+
+  // v4.11 defect #11: the FAB is SWIPE-ONLY — up connects, down disconnects,
+  // a plain tap never toggles.
+  testWidgets('FAB ignores taps and connects on swipe UP', (tester) async {
+    await useReferenceSurface(tester);
+    final engine = ScriptedEngine();
+    final store = ConnectionStore(engine: engine);
+    await tester.pumpWidget(_booth(HomeScreen(store: store)));
+    await tester.pumpAndSettle();
+
+    final fabCenter = tester.getCenter(find.byType(FabColumn));
+
+    // A tap must do NOTHING.
+    await tester.tap(find.byType(FabColumn), warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(store.state, VpnState.disconnected);
+
+    // Swipe UP (finger moves from the FAB towards the top) with explicit
+    // event timestamps so the velocity tracker sees a real fling.
+    var t = 200;
+    final gesture = await tester.startGesture(fabCenter);
+    for (var i = 0; i < 6; i++) {
+      t += 16;
+      await gesture.moveBy(const Offset(0, -40), timeStamp: Duration(milliseconds: t));
+    }
+    t += 16;
+    await gesture.up(timeStamp: Duration(milliseconds: t));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(store.state, VpnState.starting);
+  });
+
+  testWidgets('FAB swipe DOWN while connected disconnects', (tester) async {
+    await useReferenceSurface(tester);
+    final engine = ScriptedEngine();
+    final store = ConnectionStore(engine: engine);
+    await tester.pumpWidget(_booth(HomeScreen(store: store)));
+    await tester.pumpAndSettle();
+
+    // Walk to connected legally (disconnected→connected directly is refused
+    // by the state machine by design).
+    await store.connect();
+    engine.emit(const EngineStateChanged(VpnState.connecting));
+    await tester.pump(const Duration(milliseconds: 100));
+    engine.emit(const EngineStateChanged(VpnState.connected));
+    await tester.pumpAndSettle();
+    expect(store.state, VpnState.connected);
+
+    var t = 200;
+    final fabCenter = tester.getCenter(find.byType(FabColumn));
+    final gesture = await tester.startGesture(fabCenter);
+    for (var i = 0; i < 6; i++) {
+      t += 16;
+      await gesture.moveBy(const Offset(0, 40), timeStamp: Duration(milliseconds: t));
+    }
+    t += 16;
+    await gesture.up(timeStamp: Duration(milliseconds: t));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(store.state, VpnState.disconnecting);
   });
 
   // v4.10 pixel-fidelity locks: the first device build mirrored the panel
@@ -163,7 +234,8 @@ void main() {
 
     await store.connect();
     engine.emit(const EngineStateChanged(VpnState.connecting));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 100));
     engine.emit(const EngineStateChanged(VpnState.connected));
     engine.emit(const EngineStatsUpdated(
       pingMs: 146,

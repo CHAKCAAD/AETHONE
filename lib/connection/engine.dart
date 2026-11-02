@@ -128,7 +128,10 @@ class EngineNotWiredAdapter implements EngineAdapter {
 /// it must NEVER ship enabled — see `PreviewEngineAdapter.allowed`.
 class PreviewEngineAdapter implements EngineAdapter {
   PreviewEngineAdapter({
-    this.stepDelay = const Duration(milliseconds: 30),
+    // v4.11 (owner defect #10): the connecting walk must last long enough
+    // for the scanning halo behind the central icon to be SEEN and for the
+    // swipe gesture to feel like a real handshake (~2.6 s). Preview-only.
+    this.stepDelay = const Duration(milliseconds: 2600),
     this.samplePingMs = 146,
     this.sampleExitCountry = 'ir',
   });

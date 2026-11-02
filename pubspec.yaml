@@ -84,3 +84,9 @@ flutter:
     - design/آیکون های اپ/Information Circle.svg
     - design/آیکون های اپ/Map.svg
     - design/آیکون های اپ/Send 1.svg
+    # --- v4.11 (owner defect reports #2/#4/#12): the connect button icon,
+    # the speed-test icon and the protocol-card chevron are the set's own
+    # Off.svg / Activity 4.svg / Right 2.svg ---
+    - design/آیکون های اپ/Off.svg
+    - design/آیکون های اپ/Activity 4.svg
+    - design/آیکون های اپ/Right 2.svg
