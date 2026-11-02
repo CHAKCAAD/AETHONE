@@ -6,7 +6,15 @@
 #         v4.7 (zig-test, zeptun upstream linux CI gate) fully green
 #         since run 41410063261; v4.8 (flutter-ui, UI step 1) fully green
 #         since run 41431288828; v4.9 (android-apk packaging, UI step 1
-#         scope) DELIVERED — first-green evidence recorded after its run.
+#         scope) fully green since run 41440022733 — all 11 jobs; first
+#         artifact aethone-apk-r29 (release APK 58.2 MB + preview-debug,
+#         zipalign -P 16 + apksigner PASS, build-tools 36.0.0).
+#         Recorded infra flake (NOT a code issue): run 41435361930 — a
+#         docs-only commit on unchanged code — failed the zeptun netns
+#         integration case ('Device "zepns0" does not exist', 4 checks);
+#         the SAME code passed fully green on run 41440022733. Upstream
+#         script stays untouched at the pin (N1/N8); pattern recorded
+#         like the go-test quic timing flake.
 # Evidence for every pin is recorded in docs/CI_BOOTSTRAP_PoC.md and
 # evidence/verification_log*.txt (commit existence proven by `git checkout`
 # of the exact SHA — stronger than an API lookup). Raw tag->SHA proof for
