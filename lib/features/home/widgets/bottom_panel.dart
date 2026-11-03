@@ -172,6 +172,14 @@ class _CardsColumn extends StatelessWidget {
 /// Protocol selector card — [white logo] [name centered in the remaining
 /// space] [white forward chevron]. The logo renders straight on the card
 /// (the reference has NO backing box).
+///
+/// v4.17 — owner: «وقتی پروتکل تور رو انتخاب میکنی توی صفحه اصلی آیکونش به
+/// رنگ مشکی نمایش داده میشه که باید به رنگ سفید نمایش داده بشه». The
+/// Tor/Psiphon RASTER logos carry BLACK ink (the تور.png art is pure
+/// #000000), which vanishes into the dark card; their SVG siblings already
+/// ship white/native artwork. The raster icons therefore tint WHITE
+/// (BlendMode.srcIn) — the same treatment the sheet's glyphs get — while
+/// the SVGs keep their native colors.
 class ProtocolCard extends StatelessWidget {
   const ProtocolCard({
     super.key,
@@ -206,11 +214,15 @@ class ProtocolCard extends StatelessWidget {
                 width: AethGeometry.protocolLogoSize * s,
                 height: AethGeometry.protocolLogoSize * s,
                 child: Center(
+                  // v4.17: raster logos (tor/psiphon) tint WHITE — their
+                  // native ink is black and drowned on the dark card.
                   child: AppAssets.isRasterAsset(iconAsset)
                       ? Image.asset(
                           iconAsset,
                           height: 24 * s,
                           fit: BoxFit.contain,
+                          color: AethColors.textPrimary,
+                          colorBlendMode: BlendMode.srcIn,
                         )
                       : SvgPicture.asset(
                           iconAsset,

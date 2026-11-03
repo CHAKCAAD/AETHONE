@@ -115,7 +115,7 @@ void main() {
 
     // close it and open a single-protocol desc (میم tile)
     await tester.tapAt(
-      const Offset(201, AethGeometry.protoDescCloseTop + 11),
+      const Offset(201, AethGeometry.protoDescCloseTop + 15),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -124,6 +124,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     await _capture(tester, 'proto_desc_single');
-    expect(find.byType(ProtocolSheetPage), findsOneWidget);
+    expect(find.byType(ProtocolPage), findsOneWidget);
   });
 }

@@ -36,6 +36,11 @@ class AppStrings {
   String get modeTunnel => _v['modeTunnel']!;
   String get modeProxy => _v['modeProxy']!;
   String get sheetHeadingScanSpeed => _v['sheetHeadingScanSpeed']!;
+
+  /// v4.17 — the full protocol-selection PAGE's top-bar title (the page
+  /// replaces the v4.16 floating sheet; the title mirrors the settings
+  /// page's «تنظیمات» slot).
+  String get protocolPageTitle => _v['protocolPageTitle']!;
   /// «اتوماتیک» — the sheet's tile label for AUTO (the home card keeps
   /// «اتو / اسمارت»; this is the design frame's own wording).
   String get protoAutoSheet => _v['protoAutoSheet']!;
@@ -133,6 +138,7 @@ class AppStrings {
       'modeTunnel': 'تونل',
       'modeProxy': 'پروکسی',
       'sheetHeadingScanSpeed': 'سرعت اسکن',
+      'protocolPageTitle': 'انتخاب پروتکل',
       'protoAutoSheet': 'اتوماتیک',
       'descAuto':
           'برنامه به‌صورت خودکار روش‌های اتصال پشتیبانی‌شده را بررسی می‌کند و بر اساس موفقیت اتصال، سرعت و پایداری شبکه، مناسب‌ترین گزینه را انتخاب می‌کند. در صورت بروز اختلال، برای برقراری مجدد اتصال تلاش می‌کند؛ بدون نیاز به انتخاب دستی پروتکل توسط شما.',
@@ -211,6 +217,7 @@ class AppStrings {
       'modeTunnel': 'Tunnel',
       'modeProxy': 'Proxy',
       'sheetHeadingScanSpeed': 'Scan speed',
+      'protocolPageTitle': 'Select protocol',
       'protoAutoSheet': 'Auto',
       'descAuto':
           'The app automatically probes the supported transport modes and picks the best one by connection success, speed and network stability. On disruption it keeps trying to re-establish the connection — no manual protocol choice needed.',
@@ -281,6 +288,7 @@ class AppStrings {
       'modeTunnel': 'Туннель',
       'modeProxy': 'Прокси',
       'sheetHeadingScanSpeed': 'Скорость сканирования',
+      'protocolPageTitle': 'Выбор протокола',
       'protoAutoSheet': 'Авто',
       'descAuto':
           'Приложение автоматически проверяет поддерживаемые режимы подключения и выбирает лучший по успешности подключения, скорости и стабильности сети. При сбое оно само пытается восстановить связь — без ручного выбора протокола.',
@@ -351,6 +359,7 @@ class AppStrings {
       'modeTunnel': '隧道',
       'modeProxy': '代理',
       'sheetHeadingScanSpeed': '扫描速度',
+      'protocolPageTitle': '选择协议',
       'protoAutoSheet': '自动',
       'descAuto':
           '应用自动探测受支持的传输模式，并根据连接成功率、速度与网络稳定性选择最优方案。出现中断时会自动尝试恢复连接，无需手动选择协议。',

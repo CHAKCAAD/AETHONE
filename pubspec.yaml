@@ -111,6 +111,9 @@ flutter:
     - design/آیکون های اپ/Situation 1.svg
     # v4.16 protocol sheet: the «حالت اتصال»/«سرعت اسکن» heading badge
     # (Password 1.svg — the key-in-frame glyph measured on the sheet frame).
+    # v4.17 — the «پروتکل» badge + the settings protocol status card carry
+    # Swap 1.svg (owner: «آیکون پروتکل باید Swap 1.svg»).
     - design/آیکون های اپ/Password 1.svg
+    - design/آیکون های اپ/Swap 1.svg
     # v4.16 descriptions popup: the × close glyph.
     - design/آیکون های اپ/Close.svg

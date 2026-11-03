@@ -1,13 +1,14 @@
 /// Look-1 hero: the central app logo. Disconnected: the artwork as committed
-/// (correlation 0.997 against the reference frame). Connected: rotated 57°
-/// (v4.12 — owner: «میزان چرخش آیکون وسط صفحه به اندازه ۶۰ درجه زیاده،
-/// کمترش کن به ۵۷ درجه»).
+/// (correlation 0.997 against the reference frame). Connected: rotated 58°
+/// COUNTER-CLOCKWISE (v4.17 — owner: «آیکون وسط صفحه باید بعد از اتصال ۵۸
+/// درجه به سمت چپ بچرخد در حال حاظر برعکس به سمت راست میچرخد» — the
+/// v4.15 clockwise 57° pose was the wrong DIRECTION; the magnitude now
+/// lands on the owner's 58°).
 ///
-/// v4.15 — owner home round #1: «چرخش آیکون وسط صفحه به سمت راست بعد از
-/// اتصال باید با انیمیشن انجام شود و کاملا نرم باید» — the pose now turns
-/// CLOCKWISE (to the RIGHT) on a dedicated 600 ms ease curve so the motion
-/// reads as one butter-smooth turn (the v4.12–v4.14 pose was CCW). Tint
-/// animates red ↔ green with the state as before.
+/// v4.15 — owner home round #1 gave the turn its dedicated 600 ms ease curve
+/// («کاملا نرم») — kept. The v4.15 CLOCKWISE direction is superseded by
+/// v4.17 (counter-clockwise 58°, see above). Tint animates red ↔ green with
+/// the state as before.
 ///
 /// While the engine is walking toward a connection (starting / connecting /
 /// reconnecting) an animated scanning halo (expanding rings, defect #10)
@@ -36,9 +37,9 @@ class HeroLogo extends StatelessWidget {
   final bool connected;
   final MotionStyle style;
 
-  /// v4.12 pose: 57°. v4.15 — owner: the turn is CLOCKWISE («به سمت راست»)
-  /// on connection; Flutter `turns` are clockwise-positive.
-  static const double _connectedTurns = 57 / 360;
+  /// v4.17 pose: 58° to the LEFT (counter-clockwise) on connection —
+  /// Flutter `turns` are clockwise-positive, so LEFT is negative.
+  static const double _connectedTurns = -58 / 360;
 
   @override
   Widget build(BuildContext context) {

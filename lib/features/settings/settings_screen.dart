@@ -49,6 +49,39 @@ class SettingsScreen extends StatelessWidget {
 
   static const String telegramChannelUrl = 'https://t.me/AETHONE';
 
+  /// v4.17 — owner settings round #4: «به صفحه و کارت ها انیمیشن ورود و
+  /// خروج اضافه کن». Every page block slides up 22 px + fades on its own
+  /// slice of the ROUTE timeline (the protocol page's [._enter] recipe):
+  /// the entrance cascades block-by-block and the SAME slices retrace on
+  /// pop, so the exit folds the page away gently. Blocks: top bar 0, grid
+  /// rows 1–2, pills 3, headings 4/6, status cards 5, server pills 7.
+  /// With no route (bare-harness pumps) the child renders untouched.
+  static Widget _enter(BuildContext context, int block, Widget child) {
+    // ModalRoute.of is nullable-returning in the current SDK — no route
+    // (bare-harness pumps) ⇒ render the child untouched.
+    final anim = ModalRoute.of(context)?.animation;
+    if (anim == null) return child;
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, _) {
+        final t = anim.value;
+        final start = (block * 0.075).clamp(0.0, 0.45);
+        final bt = Curves.easeOutCubic
+            .transform(Interval(start, start + 0.55).transform(t));
+        if (bt >= 0.999) return child;
+        final s =
+            MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+        return Opacity(
+          opacity: bt,
+          child: Transform.translate(
+            offset: Offset(0, (1 - bt) * 22 * s),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _openTelegram() async {
     final uri = Uri.parse(telegramChannelUrl);
     // External browser/app — never an in-app webview (same as home).
@@ -115,6 +148,7 @@ class SettingsScreen extends StatelessWidget {
               child: PatternSides(
                 connected: store.isConnected,
                 style: store.animationStyle,
+                stage: PatternStage.settings,
               ),
             ),
             // v4.10 lesson (main-screen defect): under the fa/RTL locale a
@@ -133,19 +167,19 @@ class SettingsScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         SizedBox(height: AethGeometry.topSafeExtraGap * s),
-                        _SettingsTopBar(
+                        _enter(context, 0, _SettingsTopBar(
                           onInfo: _openTelegram,
                           onBack: () => Navigator.of(context).maybePop(),
-                        ),
+                        )),
                         SizedBox(height: 22 * s),
-                        _SixCardGrid(
+                        _enter(context, 1, _SixCardGrid(
                           onCardTap: (title) => _openPlaceholderSheet(
                             context,
                             '$title — ${strings.settingsSubpageComingNext}',
                           ),
-                        ),
+                        )),
                         SizedBox(height: AethGeometry.settingsPillGap * s),
-                        _ProtocolPills(
+                        _enter(context, 3, _ProtocolPills(
                           textDir: appDir,
                           onPsiphon: () => _openPlaceholderSheet(
                             context,
@@ -157,29 +191,29 @@ class SettingsScreen extends StatelessWidget {
                             '${strings.settingsTor} — '
                             '${strings.settingsSubpageComingNext}',
                           ),
-                        ),
+                        )),
                         SizedBox(
                           height: AethGeometry.settingsHeadingGapFromPills * s,
                         ),
-                        _SectionHeading(
+                        _enter(context, 4, _SectionHeading(
                           icon: AppAssets.iconMenuFries,
                           title: strings.settingsAdvancedStatus,
-                        ),
+                        )),
                         SizedBox(
                           height: AethGeometry.settingsHeadingGapToCards * s,
                         ),
-                        _StatusCards(store: store),
+                        _enter(context, 5, _StatusCards(store: store)),
                         SizedBox(
                           height: AethGeometry.settingsHeading2GapToServer * s,
                         ),
-                        _SectionHeading(
+                        _enter(context, 6, _SectionHeading(
                           icon: AppAssets.iconSituation1,
                           title: strings.settingsMainServer,
-                        ),
+                        )),
                         SizedBox(
                           height: AethGeometry.settingsHeadingGapToCards * s,
                         ),
-                        const _ServerPills(),
+                        _enter(context, 7, const _ServerPills()),
                         SizedBox(height: 30 * s),
                       ],
                     ),
@@ -700,7 +734,10 @@ class _StatusCards extends StatelessWidget {
         // (the subpage flips it).
         Expanded(
           child: _SettingsCard(
-            asset: AppAssets.iconRedo,
+            // v4.17 — owner round #1: the Kill Switch card takes the set's
+            // power glyph (Off.svg — the owner's message cut the icon name
+            // off; one-line swap when the exact name arrives).
+            asset: AppAssets.iconOff,
             title: 'Kill Switch',
             subtitle: store.killSwitch ? 'ON' : 'OFF',
             subtitleColor: store.killSwitch
@@ -720,7 +757,8 @@ class _StatusCards extends StatelessWidget {
         SizedBox(width: AethGeometry.settingsCardGap * s),
         Expanded(
           child: _SettingsCard(
-            asset: AppAssets.iconScan1,
+            // v4.17 — owner round #2: the protocol card takes Swap 1.svg.
+            asset: AppAssets.iconSwap1,
             title: strings.protocol,
             subtitle: store.protocolModeSmart ? 'SMART' : 'AUTO / SMART',
             subtitleColor: AethColors.accentConnected,

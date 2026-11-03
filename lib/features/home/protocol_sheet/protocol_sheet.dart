@@ -1,42 +1,42 @@
-/// v4.16 — THE PROTOCOL SELECTION SHEET, pixel-faithful to the design frame
-/// «صفحه شناور انتخاب پروتکل صفحه اصلی.jpg» (402×874) + its companion ⓘ
-/// popup «صفحه شناور توضیحات پروتکل ها.jpg».
+/// v4.17 — THE PROTOCOL SELECTION PAGE, promoted from the v4.16 floating
+/// sheet to a full page «مثل صفحه اصلی تنظیمات» (owner round #6): the same
+/// settings-page chrome — dark stage + the settings edge patterns, an
+/// LTR-locked top bar with the INFO tile (Telegram, visual LEFT) and the
+/// BACK tile (visual RIGHT) around the «انتخاب پروتکل» title.
 ///
-/// Every geometry value is MEASURED on that frame and lives in
-/// [AethGeometry] as `proto*` tokens (measurement scripts:
-/// scripts/measure_proto_*.py — pixel clusters, corner radii from
-/// fill-width profiles, colors sampled at ink centers):
+/// The v4.16 pixel work survives verbatim (design frames «صفحه شناور انتخاب
+/// پروتکل صفحه اصلی.jpg» 402×874 + «صفحه شناور توضیحات پروتکل ها.jpg»); the
+/// section geometry is re-anchored to the page (AethGeometry `proto*`
+/// tokens) and every v4.17 owner defect report is folded in:
 ///
-///   * Layer cake: the home page stays mounted behind the route; a scrim
-///     (#141C16 @ 92%) starts at y≈101 — the home TOP BAR above it (info
-///     tile, AETHONE wordmark, settings tile) stays fully visible, exactly
-///     like the frame (diff vs the plain home frame: first dimmed row
-///     y≈101). The sheet content sits directly on the scrim — the frame has
-///     NO distinct panel edge, just the grab handle at y125.
-///   * «حالت اتصال» (Password 1 badge) + the تونل/پروکسی segments — the
-///     frame ships پروکسی selected (green #1AD995, WHITE text on both
-///     states); binds to [ConnectionStore.connectionMode].
-///   * «پروتکل» (Scan 1 badge) + 3+3 tiles (RTL: اتوماتیک|ماسک|وایرگارد
-///     then گول|گول کلاسیک|میم) + two family cards (سایفون/تور) whose three
-///     subtiles encode the variants in the frame's own language: plain
-///     glyph = ONLY, Aether-logo + ∨ + glyph = CHAIN, Aether-logo + ∧ +
-///     glyph = REVERSE (the app logo 3.svg IS the Aether mark here —
-///     pixel-matched on the frame).
-///   * «سرعت اسکن» (Password 1 badge) + 5 pills of increasing width
-///     (28/47/64/77/87), the widest (rightmost) selected in the frame;
-///     binds to [ConnectionStore.scanSpeed] 1..5.
-///
-/// Behaviour (owner v4.16): selecting a protocol (tile or subtile) commits
-/// it to the store, plays a short selection pulse, then AUTO-POPS back to
-/// the home page. The mode segments and the scan pills update the store
-/// without closing. The ⓘ badges open the descriptions popup (the family
-/// gets its 3 variant descriptions verbatim from the phase-1 report §11;
-/// singles get one block). Dismiss: scrim tap, handle tap/drag-down, or
-/// system back (the popup consumes back first).
+///  * YELLOW UNDERLINES FIXED: the v4.16 sheet route built a raw Stack with
+///    NO Material ancestor — Flutter deliberately paints a double yellow
+///    underline under every text without one (the v4.16 capture QA
+///    mis-read it as a raster artifact; the owner then reported it from the
+///    device). The page sits on a Scaffold/Material — gone.
+///  * LIVE BINDING: the page listens to [ConnectionStore] — «حالت اتصال»
+///    segments and «سرعت اسکن» pills now apply visually the moment they are
+///    tapped, INDEPENDENT of protocol selection (the v4.16 sheet only
+///    rebuilt when a protocol tap's setState ran).
+///  * Headings: «پروتکل» badge = Swap 1.svg, «سرعت اسکن» badge = Scan 1.svg,
+///    «حالت اتصال» keeps Password 1.svg; badges 20 → 26 and the text moved
+///    next to its icon (gap 26 → 12).
+///  * Tiles/family cards: radius 16 → 21 (the settings cards' corners);
+///    family cards breathe (h 116, subtile gaps 20, vertically centred);
+///    ماسک/وایرگارد glyph boxes match the other tiles (28).
+///  * ⓘ badges: 15 px visual + a 32 px invisible hit box (easy tap, same
+///    structure).
+///  * Descriptions popup: deep 94% scrim so the text reads on the dark
+///    card, and the × close grows Ø22 → Ø30.
+///  * ENTRANCE/EXIT kept: the route fade + the internal block cascade
+///    (staggered slide-up) ride the same route timeline; the exit retraces
+///    the cascade on pop. Selecting a protocol still pulses and AUTO-POPS
+///    back to the home page (owner v4.16 decree).
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../connection/connection_state.dart';
 import '../../../connection/connection_store.dart';
@@ -44,20 +44,21 @@ import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 import '../../../l10n/app_strings.dart';
+import '../widgets/pattern_sides.dart';
+import '../widgets/top_bar.dart';
 
-/// Pushes the sheet over the home. `opaque: false` keeps the home (and its
-/// live top bar) painting behind; the fade + internal cascade both ride the
-/// route animation so entry, pop and drag-dismiss share one timeline.
-PageRouteBuilder<void> protocolSheetRoute({
+/// Pushes the protocol-selection page. The fade + internal cascade both
+/// ride the route animation so entry, pop and system-back share one
+/// timeline (the sheet's recipe, kept per the owner's «انیمیشن های فعلی رو
+/// حذف نکن»).
+PageRouteBuilder<void> protocolPageRoute({
   required ConnectionStore store,
   required MotionStyle style,
 }) {
   return PageRouteBuilder<void>(
-    opaque: false,
     transitionDuration: motionDuration(style, 380),
     reverseTransitionDuration: motionDuration(style, 320),
-    pageBuilder: (_, _, _) =>
-        ProtocolSheetPage(store: store, style: style),
+    pageBuilder: (_, _, _) => ProtocolPage(store: store, style: style),
     transitionsBuilder: (context, animation, _, child) => FadeTransition(
       opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
       child: child,
@@ -65,8 +66,8 @@ PageRouteBuilder<void> protocolSheetRoute({
   );
 }
 
-class ProtocolSheetPage extends StatefulWidget {
-  const ProtocolSheetPage({
+class ProtocolPage extends StatefulWidget {
+  const ProtocolPage({
     super.key,
     required this.store,
     required this.style,
@@ -76,10 +77,10 @@ class ProtocolSheetPage extends StatefulWidget {
   final MotionStyle style;
 
   @override
-  State<ProtocolSheetPage> createState() => _ProtocolSheetPageState();
+  State<ProtocolPage> createState() => _ProtocolPageState();
 }
 
-class _ProtocolSheetPageState extends State<ProtocolSheetPage> {
+class _ProtocolPageState extends State<ProtocolPage> {
   /// The protocol whose ⓘ descriptions popup is open (a family id for the
   /// cards, the protocol itself for a tile).
   ProtocolId? _descFor;
@@ -104,9 +105,14 @@ class _ProtocolSheetPageState extends State<ProtocolSheetPage> {
 
   void _closeDesc() => setState(() => _descFor = null);
 
+  Future<void> _openTelegram() async {
+    final uri = Uri.parse(HomeTopBar.telegramChannelUrl);
+    // External browser/app — never an in-app webview (same as settings).
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final strings = AppStrings.of(context);
     final routeAnim = ModalRoute.of(context)!.animation!;
 
@@ -116,246 +122,238 @@ class _ProtocolSheetPageState extends State<ProtocolSheetPage> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _descFor != null) _closeDesc();
       },
-      child: AnimatedBuilder(
-        animation: routeAnim,
-        builder: (context, _) {
-          final t = routeAnim.value;
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // ---- L1: the scrim (below the home top bar) + its tap target
-              Positioned(
-                top: AethGeometry.protoScrimTop * s,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () =>
-                      _descFor != null ? _closeDesc() : Navigator.of(context).pop(),
-                  child: IgnorePointer(
-                    // The desc layer owns taps while open.
-                    ignoring: _descFor != null,
-                    child: Opacity(
-                      // The frame's dimmed zone: the home content ghosts
-                      // through at ~8% (measured ink falloff on the frame).
-                      opacity: const Interval(0, 0.5).transform(t).clamp(0, 1),
-                      child: const ColoredBox(
-                        color: Color(0xEA141C16), // #141C16 @ 92%
+      child: Scaffold(
+        backgroundColor: AethColors.bgScreen,
+        body: AnimatedBuilder(
+          // v4.17: LIVE store binding — mode segments and scan pills apply
+          // instantly, independent of protocol selection.
+          animation: Listenable.merge([widget.store, routeAnim]),
+          builder: (context, _) {
+            final t = routeAnim.value;
+            final s =
+                MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+            return Stack(
+              children: [
+                // The settings page's own background (owner: «پس زمینش هم
+                // پترن های صفحه تنظیمات رو باید داشته باشه»).
+                Positioned.fill(
+                  child: PatternSides(
+                    connected: widget.store.isConnected,
+                    style: widget.store.animationStyle,
+                    stage: PatternStage.settings,
+                  ),
+                ),
+                SafeArea(
+                  child: SingleChildScrollView(
+                    child: SizedBox(
+                      height: AethGeometry.refHeight * s,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          // ---- top bar: info (Telegram) · title · back
+                          _enter(
+                            t,
+                            0,
+                            Positioned(
+                              top: AethGeometry.topSafeExtraGap * s,
+                              left: AethGeometry.pageHPadding * s,
+                              right: AethGeometry.pageHPadding * s,
+                              child: _PageTopBar(
+                                onInfo: _openTelegram,
+                                onBack: () => Navigator.of(context).pop(),
+                              ),
+                            ),
+                          ),
+                          // ---- «حالت اتصال» + the تونل/پروکسی segments
+                          _enter(
+                            t,
+                            1,
+                            Positioned(
+                              top: AethGeometry.protoPageHeadingModeTop * s,
+                              left: 0,
+                              right: 0,
+                              child: _SheetHeadingRow(
+                                text: strings.sheetHeadingMode,
+                                badge: AppAssets.iconPassword1,
+                              ),
+                            ),
+                          ),
+                          _enter(
+                            t,
+                            1,
+                            Positioned(
+                              top: AethGeometry.protoSegmentTop * s,
+                              left: AethGeometry.protoRightInset * s,
+                              right: AethGeometry.protoRightInset * s,
+                              child: _ModeSegments(
+                                selected: widget.store.connectionMode,
+                                onSelect: widget.store.setConnectionMode,
+                              ),
+                            ),
+                          ),
+                          // ---- «پروتکل» + the 3+3 tiles + family cards
+                          _enter(
+                            t,
+                            2,
+                            Positioned(
+                              top:
+                                  AethGeometry.protoPageHeadingProtocolTop * s,
+                              left: 0,
+                              right: 0,
+                              child: _SheetHeadingRow(
+                                text: strings.protocol, // «پروتکل» verbatim
+                                badge: AppAssets.iconSwap1,
+                              ),
+                            ),
+                          ),
+                          _enter(
+                            t,
+                            3,
+                            Positioned(
+                              top: AethGeometry.protoTileRow1Top * s,
+                              left: AethGeometry.protoRightInset * s,
+                              right: AethGeometry.protoRightInset * s,
+                              child: _TileRow(
+                                ids: const [
+                                  ProtocolId.auto,
+                                  ProtocolId.masque,
+                                  ProtocolId.wireguard,
+                                ],
+                                labels: [
+                                  strings.protoAutoSheet,
+                                  strings.protocolName(ProtocolId.masque),
+                                  strings.protocolName(ProtocolId.wireguard),
+                                ],
+                                selected: widget.store.selectedProtocol,
+                                pulse: _pulseId,
+                                onSelect: _select,
+                                onInfo: _openDesc,
+                              ),
+                            ),
+                          ),
+                          _enter(
+                            t,
+                            4,
+                            Positioned(
+                              top: AethGeometry.protoTileRow2Top * s,
+                              left: AethGeometry.protoRightInset * s,
+                              right: AethGeometry.protoRightInset * s,
+                              child: _TileRow(
+                                ids: const [
+                                  ProtocolId.gool,
+                                  ProtocolId.goolClassic,
+                                  ProtocolId.mim,
+                                ],
+                                labels: [
+                                  strings.protocolName(ProtocolId.gool),
+                                  strings.protocolName(ProtocolId.goolClassic),
+                                  strings.protocolName(ProtocolId.mim),
+                                ],
+                                selected: widget.store.selectedProtocol,
+                                pulse: _pulseId,
+                                onSelect: _select,
+                                onInfo: _openDesc,
+                              ),
+                            ),
+                          ),
+                          _enter(
+                            t,
+                            5,
+                            Positioned(
+                              top: AethGeometry.protoCardTopPsiphon * s,
+                              left: AethGeometry.protoRightInset * s,
+                              right: AethGeometry.protoRightInset * s,
+                              child: _FamilyCard(
+                                family: const [
+                                  ProtocolId.psiphonOnly,
+                                  ProtocolId.psiphonChain,
+                                  ProtocolId.psiphonReverse,
+                                ],
+                                label:
+                                    strings.protocolName(ProtocolId.psiphonChain),
+                                logoAsset: AppAssets.protocolPsiphonLogo,
+                                selected: widget.store.selectedProtocol,
+                                pulse: _pulseId,
+                                onSelect: _select,
+                                onInfo: _openDesc,
+                                infoId: ProtocolId.psiphonChain,
+                              ),
+                            ),
+                          ),
+                          _enter(
+                            t,
+                            6,
+                            Positioned(
+                              top: AethGeometry.protoCardTopTor * s,
+                              left: AethGeometry.protoRightInset * s,
+                              right: AethGeometry.protoRightInset * s,
+                              child: _FamilyCard(
+                                family: const [
+                                  ProtocolId.torOnly,
+                                  ProtocolId.torChain,
+                                  ProtocolId.torReverse,
+                                ],
+                                label:
+                                    strings.protocolName(ProtocolId.torChain),
+                                logoAsset: AppAssets.protocolTorLogo,
+                                selected: widget.store.selectedProtocol,
+                                pulse: _pulseId,
+                                onSelect: _select,
+                                onInfo: _openDesc,
+                                infoId: ProtocolId.torChain,
+                              ),
+                            ),
+                          ),
+                          // ---- «سرعت اسکن» + the 5 pills
+                          _enter(
+                            t,
+                            7,
+                            Positioned(
+                              top: AethGeometry.protoPageHeadingScanTop * s,
+                              left: 0,
+                              right: 0,
+                              child: _SheetHeadingRow(
+                                text: strings.sheetHeadingScanSpeed,
+                                badge: AppAssets.iconScan1,
+                              ),
+                            ),
+                          ),
+                          _enter(
+                            t,
+                            7,
+                            Positioned(
+                              top: AethGeometry.protoPillTop * s,
+                              left: 0,
+                              right: 0,
+                              child: _ScanPills(
+                                selected: widget.store.scanSpeed,
+                                onSelect: widget.store.setScanSpeed,
+                              ),
+                            ),
+                          ),
+                          // ---- the ⓘ descriptions popup
+                          if (_descFor != null)
+                            _DescLayer(
+                              forId: _descFor!,
+                              onClose: _closeDesc,
+                            ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ),
-              // ---- L2: the sheet content, staggered on the same timeline
-              _enter(
-                t,
-                0,
-                Positioned(
-                  top: (AethGeometry.protoHandleTop - 15) * s,
-                  left: 0,
-                  right: 0,
-                  height: 36 * s,
-                  child: GestureDetector(
-                    key: const ValueKey('proto-handle'),
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () => Navigator.of(context).pop(),
-                    onVerticalDragEnd: (d) {
-                      if ((d.primaryVelocity ?? 0) > 180) {
-                        Navigator.of(context).pop();
-                      }
-                    },
-                    child: Center(
-                      child: Container(
-                        key: const ValueKey('proto-handle-bar'),
-                        width: AethGeometry.protoHandleW * s,
-                        height: AethGeometry.protoHandleH * s,
-                        decoration: BoxDecoration(
-                          color: AethColors.sheetHandle,
-                          borderRadius: BorderRadius.circular(3 * s),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              _enter(
-                t,
-                1,
-                Positioned(
-                  top: 164 * s,
-                  left: 0,
-                  right: 0,
-                  child: _SheetHeadingRow(
-                    text: strings.sheetHeadingMode,
-                    badge: AppAssets.iconPassword1,
-                  ),
-                ),
-              ),
-              _enter(
-                t,
-                1,
-                Positioned(
-                  top: AethGeometry.protoSegmentTop * s,
-                  left: AethGeometry.protoRightInset * s,
-                  right: AethGeometry.protoRightInset * s,
-                  child: _ModeSegments(
-                    selected: widget.store.connectionMode,
-                    onSelect: widget.store.setConnectionMode,
-                  ),
-                ),
-              ),
-              _enter(
-                t,
-                2,
-                Positioned(
-                  top: 262 * s,
-                  left: 0,
-                  right: 0,
-                  child: _SheetHeadingRow(
-                    text: strings.protocol, // «پروتکل» — verbatim frame text
-                    badge: AppAssets.iconScan1,
-                  ),
-                ),
-              ),
-              _enter(
-                t,
-                3,
-                Positioned(
-                  top: AethGeometry.protoTileRow1Top * s,
-                  left: AethGeometry.protoRightInset * s,
-                  right: AethGeometry.protoRightInset * s,
-                  child: _TileRow(
-                    ids: const [
-                      ProtocolId.auto,
-                      ProtocolId.masque,
-                      ProtocolId.wireguard,
-                    ],
-                    labels: [
-                      strings.protoAutoSheet,
-                      strings.protocolName(ProtocolId.masque),
-                      strings.protocolName(ProtocolId.wireguard),
-                    ],
-                    selected: widget.store.selectedProtocol,
-                    pulse: _pulseId,
-                    onSelect: _select,
-                    onInfo: _openDesc,
-                  ),
-                ),
-              ),
-              _enter(
-                t,
-                4,
-                Positioned(
-                  top: AethGeometry.protoTileRow2Top * s,
-                  left: AethGeometry.protoRightInset * s,
-                  right: AethGeometry.protoRightInset * s,
-                  child: _TileRow(
-                    ids: const [
-                      ProtocolId.gool,
-                      ProtocolId.goolClassic,
-                      ProtocolId.mim,
-                    ],
-                    labels: [
-                      strings.protocolName(ProtocolId.gool),
-                      strings.protocolName(ProtocolId.goolClassic),
-                      strings.protocolName(ProtocolId.mim),
-                    ],
-                    selected: widget.store.selectedProtocol,
-                    pulse: _pulseId,
-                    onSelect: _select,
-                    onInfo: _openDesc,
-                  ),
-                ),
-              ),
-              _enter(
-                t,
-                5,
-                Positioned(
-                  top: AethGeometry.protoCardTopPsiphon * s,
-                  left: AethGeometry.protoRightInset * s,
-                  right: AethGeometry.protoRightInset * s,
-                  child: _FamilyCard(
-                    family: const [
-                      ProtocolId.psiphonOnly,
-                      ProtocolId.psiphonChain,
-                      ProtocolId.psiphonReverse,
-                    ],
-                    label: strings.protocolName(ProtocolId.psiphonChain),
-                    logoAsset: AppAssets.protocolPsiphonLogo,
-                    selected: widget.store.selectedProtocol,
-                    pulse: _pulseId,
-                    onSelect: _select,
-                    onInfo: _openDesc,
-                    infoId: ProtocolId.psiphonChain,
-                  ),
-                ),
-              ),
-              _enter(
-                t,
-                6,
-                Positioned(
-                  top: AethGeometry.protoCardTopTor * s,
-                  left: AethGeometry.protoRightInset * s,
-                  right: AethGeometry.protoRightInset * s,
-                  child: _FamilyCard(
-                    family: const [
-                      ProtocolId.torOnly,
-                      ProtocolId.torChain,
-                      ProtocolId.torReverse,
-                    ],
-                    label: strings.protocolName(ProtocolId.torChain),
-                    logoAsset: AppAssets.protocolTorLogo,
-                    selected: widget.store.selectedProtocol,
-                    pulse: _pulseId,
-                    onSelect: _select,
-                    onInfo: _openDesc,
-                    infoId: ProtocolId.torChain,
-                  ),
-                ),
-              ),
-              _enter(
-                t,
-                7,
-                Positioned(
-                  top: 765 * s,
-                  left: 0,
-                  right: 0,
-                  child: _SheetHeadingRow(
-                    text: strings.sheetHeadingScanSpeed,
-                    badge: AppAssets.iconPassword1,
-                  ),
-                ),
-              ),
-              _enter(
-                t,
-                7,
-                Positioned(
-                  top: AethGeometry.protoPillTop * s,
-                  left: 0,
-                  right: 0,
-                  child: _ScanPills(
-                    selected: widget.store.scanSpeed,
-                    onSelect: widget.store.setScanSpeed,
-                  ),
-                ),
-              ),
-              // ---- L3: the ⓘ descriptions popup
-              if (_descFor != null)
-                _DescLayer(
-                  forId: _descFor!,
-                  onClose: _closeDesc,
-                ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
-  /// The stagger wrapper: block [i] slides up 22px + fades on its own slice
-  /// of the route timeline (starts i*0.075, 0.55 wide, easeOutCubic). On
-  /// reverse the same slices retrace — the sheet folds away gently.
+  /// The stagger wrapper (kept from the sheet — owner: «انیمیشن های فعلی رو
+  /// حذف نکن»): block [i] slides up 22px + fades on its own slice of the
+  /// route timeline (starts i*0.075, 0.55 wide, easeOutCubic). On reverse
+  /// the same slices retrace — the page folds away gently.
   Widget _enter(double t, int block, Widget child) {
     final start = (block * 0.075).clamp(0.0, 0.45);
     final bt =
@@ -389,9 +387,122 @@ class _ProtocolSheetPageState extends State<ProtocolSheetPage> {
 }
 
 // ---------------------------------------------------------------------------
-// Section heading row: «TEXT … [badge]» — text 16 w700 white, its right
-// edge 74 from the screen right (measured x≈328 on all three headings),
-// 26 gap, then the 20×20 badge at the content inset (right edge x374).
+// Top bar — the settings page's own chrome: info tile (Telegram) · title ·
+// back tile, LTR-locked, «Rectangle 9» 50×50 tiles.
+// ---------------------------------------------------------------------------
+
+class _PageTopBar extends StatelessWidget {
+  const _PageTopBar({required this.onInfo, required this.onBack});
+
+  final VoidCallback onInfo;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final tile = AethGeometry.topTileSize * s;
+    return SizedBox(
+      height: tile,
+      child: Row(
+        children: [
+          // LTR-locked — visual LEFT: the info tile (i → Telegram).
+          _TileButton(
+            key: const ValueKey('proto-page-info'),
+            asset: AppAssets.iconInformationCircle,
+            size: tile,
+            iconSize: AethGeometry.topTileIcon * s,
+            semanticLabel: 'Telegram channel',
+            onTap: onInfo,
+          ),
+          const Spacer(),
+          Text(
+            strings.protocolPageTitle,
+            style: TextStyle(
+              fontFamily: 'IRANYekanX',
+              fontWeight: FontWeight.w700,
+              fontSize: 17 * s,
+              color: AethColors.textPrimary,
+            ),
+          ),
+          const Spacer(),
+          // Visual RIGHT: the back chevron tile (Right 2 like the settings).
+          _TileButton(
+            key: const ValueKey('proto-page-back'),
+            asset: AppAssets.iconRight2,
+            size: tile,
+            iconSize: AethGeometry.topTileIcon * s,
+            semanticLabel: 'Back',
+            onTap: onBack,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The owner «Rectangle 9» tile (50×50, #0F1510, r16, soft shadow) — the
+/// exact same tile as the settings/home top bars.
+class _TileButton extends StatelessWidget {
+  const _TileButton({
+    super.key,
+    required this.asset,
+    required this.size,
+    required this.iconSize,
+    required this.semanticLabel,
+    this.onTap,
+  });
+
+  final String asset;
+  final double size;
+  final double iconSize;
+  final String semanticLabel;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    return Semantics(
+      label: semanticLabel,
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: AethColors.topTile,
+            borderRadius:
+                BorderRadius.circular(AethGeometry.topTileRadius * s),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x40000000), // rgba(0,0,0,0.25) 0 4 4
+                offset: Offset(0, 4),
+                blurRadius: 4,
+              ),
+            ],
+          ),
+          child: Center(
+            child: SvgPicture.asset(
+              asset,
+              width: iconSize,
+              height: iconSize,
+              colorFilter: const ColorFilter.mode(
+                AethColors.textPrimary,
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Section heading row: «TEXT … [badge]» — text 16 w700 white.
+// v4.17 — the badge grows 20 → 26 and the text sits 12 (was 26) from it.
 // ---------------------------------------------------------------------------
 
 class _SheetHeadingRow extends StatelessWidget {
@@ -411,8 +522,8 @@ class _SheetHeadingRow extends StatelessWidget {
         children: [
           const Spacer(),
           Padding(
-            // Text right edge = 74 from the screen right (measured) — the
-            // badge (20) + gap (26) + inset (28) sit to its right.
+            // Text right edge = [protoHeadingTextRightInset] from the screen
+            // right (66 = badge 26 + gap 12 + inset 28).
             padding: EdgeInsets.only(
               right: AethGeometry.protoHeadingBadgeGap * s,
             ),
@@ -508,10 +619,10 @@ class _ModeSegments extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Protocol tiles: r16; ⓘ 13×13 at (11,9); icon center at top+41; label
-// 12 w500 at top+66. Unselected: #0F1511 + native icon colors (white /
-// gold) + white label. Selected: #1AD995 + all-white glyph (measured on
-// the frame's وایرگارد tile).
+// Protocol tiles: r21 (v4.17 — the settings cards' corners); ⓘ 15×15 visual
+// inside a 32×32 invisible hit box at the same corner; icon center at
+// top+41; label 12 w500 at top+66. Unselected: #0F1511 + native icon colors
+// (white / gold) + white label. Selected: #1AD995 + all-white glyph.
 // ---------------------------------------------------------------------------
 
 class _TileRow extends StatelessWidget {
@@ -570,6 +681,19 @@ class _ProtoTile extends StatefulWidget {
   final void Function(ProtocolId) onSelect;
   final void Function(ProtocolId) onInfo;
 
+  /// The 32×32 hit box is centred on the 15×15 visual badge so the visual
+  /// position never moves: visual centre (11+7.5, 9+7.5) = (18.5, 16.5)
+  /// ⇒ hit-box top-left (18.5−16, 16.5−16) = (2.5, 0.5).
+  static double get _infoHitLeft =>
+      AethGeometry.protoInfoBadgeInset +
+      AethGeometry.protoInfoBadgeSize / 2 -
+      AethGeometry.protoInfoHit / 2;
+  static double get _infoHitTop =>
+      AethGeometry.protoInfoBadgeInset -
+      2 +
+      AethGeometry.protoInfoBadgeSize / 2 -
+      AethGeometry.protoInfoHit / 2;
+
   @override
   State<_ProtoTile> createState() => _ProtoTileState();
 }
@@ -618,29 +742,21 @@ class _ProtoTileState extends State<_ProtoTile>
               color: widget.isSelected
                   ? AethColors.accentConnected
                   : AethColors.cardDark,
-              borderRadius: BorderRadius.circular(AethGeometry.protoTileRadius * s),
+              borderRadius:
+                  BorderRadius.circular(AethGeometry.protoTileRadius * s),
             ),
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // ⓘ info badge — 13×13 at (11,9), white circle + i
-                // (Information Circle.svg, the set's own glyph).
+                // ⓘ info badge — 15×15 visual at (11,9) inside a 32×32
+                // invisible hit box (v4.17: the badge was hard to tap; the
+                // visual position is unchanged, only the tap target grew).
                 Positioned(
-                  left: AethGeometry.protoInfoBadgeInset * s,
-                  top: AethGeometry.protoInfoBadgeInset * s,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => widget.onInfo(widget.id),
-                    child: SvgPicture.asset(
-                      AppAssets.iconInformationCircle,
-                      width: AethGeometry.protoInfoBadgeSize * s,
-                      height: AethGeometry.protoInfoBadgeSize * s,
-                      colorFilter: const ColorFilter.mode(
-                        AethColors.textPrimary,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                  ),
+                  left: _ProtoTile._infoHitLeft * s,
+                  top: _ProtoTile._infoHitTop * s,
+                  width: AethGeometry.protoInfoHit * s,
+                  height: AethGeometry.protoInfoHit * s,
+                  child: _InfoBadge(onTap: () => widget.onInfo(widget.id)),
                 ),
                 // Icon — center at top+41 (measured cy 342 on row 1).
                 Positioned(
@@ -679,16 +795,45 @@ class _ProtoTileState extends State<_ProtoTile>
       ),
     );
   }
+
+}
+
+/// The ⓘ badge: 15×15 white Information Circle glyph + a generous opaque
+/// tap area (the parent Positioned sizes the hit box).
+class _InfoBadge extends StatelessWidget {
+  const _InfoBadge({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Center(
+        child: SvgPicture.asset(
+          AppAssets.iconInformationCircle,
+          width: AethGeometry.protoInfoBadgeSize * s,
+          height: AethGeometry.protoInfoBadgeSize * s,
+          colorFilter: const ColorFilter.mode(
+            AethColors.textPrimary,
+            BlendMode.srcIn,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Per-protocol tile icon boxes, calibrated so the final GLYPH matches the
-/// frame (each SVG carries its own ink ratio — the settings-page recipe):
-/// ماسک 38×21, وایرگارد 36×21, اتوماتیک 21×23 (Shield Tick, gold),
-/// گول/گول کلاسیک ~21×28, میم ~31×26.
+/// frame (each SVG carries its own ink ratio — the settings-page recipe).
+/// v4.17 — owner: ماسک و وایرگارد «هم بزرگه هم اندازه سایر آیکون ها باید
+/// باشن» — 38/37 → 28, the gool/gool-classic box.
 double _tileIconBox(ProtocolId id) => switch (id) {
       ProtocolId.auto => 26,
-      ProtocolId.masque => 38,
-      ProtocolId.wireguard => 37,
+      ProtocolId.masque => 28,
+      ProtocolId.wireguard => 28,
       ProtocolId.gool => 28,
       ProtocolId.goolClassic => 28,
       ProtocolId.mim => 32,
@@ -759,9 +904,10 @@ class _ProtocolGlyph extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Family cards (سایفون/تور): h100 r16 #0F1511. Visual LEFT→RIGHT (the
-// frame's own reading): [main logo+label] gap16 [plain=only] gap16
-// [Aether+∨=chain] gap16 [Aether+∧=reverse]. Subtiles 66×66 r14 #1A261C.
+// Family cards (سایفون/تور): v4.17 breathing — h116 r21 #0F1511, subtiles
+// 66×66 r14 #1A261C vertically centred (inset 25), gaps 20. Visual LEFT→
+// RIGHT (the frame's own reading): [main logo+label] gap [plain=only] gap
+// [Aether+∨=chain] gap [Aether+∧=reverse].
 // ---------------------------------------------------------------------------
 
 class _FamilyCard extends StatelessWidget {
@@ -799,35 +945,26 @@ class _FamilyCard extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: AethColors.cardDark,
-          borderRadius: BorderRadius.circular(AethGeometry.protoCardRadius * s),
+          borderRadius:
+              BorderRadius.circular(AethGeometry.protoCardRadius * s),
         ),
         child: Directionality(
           // LTR by design: the main block sits at the visual LEFT, the
-          // three subtiles to its right (frame-measured x28..131 zone).
+          // three subtiles to its right (frame-measured zone).
           textDirection: TextDirection.ltr,
           child: Row(
             children: [
-              // ---- main block (logo center top+37, label 12 at top+69)
+              // ---- main block (logo center top+43, label 12 at top+80)
               SizedBox(
-                width: AethGeometry.protoTileW * s,
+                width: AethGeometry.protoMainBlockW * s,
                 child: Stack(
                   children: [
                     Positioned(
-                      left: AethGeometry.protoInfoBadgeInset * s,
-                      top: AethGeometry.protoInfoBadgeInset * s,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => onInfo(infoId),
-                        child: SvgPicture.asset(
-                          AppAssets.iconInformationCircle,
-                          width: AethGeometry.protoInfoBadgeSize * s,
-                          height: AethGeometry.protoInfoBadgeSize * s,
-                          colorFilter: const ColorFilter.mode(
-                            AethColors.textPrimary,
-                            BlendMode.srcIn,
-                          ),
-                        ),
-                      ),
+                      left: _ProtoTile._infoHitLeft * s,
+                      top: _ProtoTile._infoHitTop * s,
+                      width: AethGeometry.protoInfoHit * s,
+                      height: AethGeometry.protoInfoHit * s,
+                      child: _InfoBadge(onTap: () => onInfo(infoId)),
                     ),
                     Positioned(
                       left: 0,
@@ -862,14 +999,13 @@ class _FamilyCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // NO separator here: the frame's main zone is a full 103-wide
-              // slot (x28..131) and sub1 starts exactly at its right edge;
-              // the remaining 13px after sub3 is the card's right inset
-              // (28+103+82+82+66 = 361, +13 = 374 = the content edge).
+              // NO separator: the main zone + 3 subtiles + gaps exactly
+              // fill the 346 card (95 + 3×66 + 2×20 + 13 inset).
               for (final id in family)
                 Padding(
                   padding: EdgeInsets.only(
-                    right: id == family.last ? 0 : AethGeometry.protoSubtileGap * s,
+                    right:
+                        id == family.last ? 0 : AethGeometry.protoSubtileGap * s,
                   ),
                   child: _SubTile(
                     id: id,
@@ -951,7 +1087,8 @@ class _SubTileState extends State<_SubTile>
             color: widget.isSelected
                 ? AethColors.accentConnected
                 : AethColors.sheetSubtile,
-            borderRadius: BorderRadius.circular(AethGeometry.protoSubtileRadius * s),
+            borderRadius:
+                BorderRadius.circular(AethGeometry.protoSubtileRadius * s),
           ),
           child: Center(
             child: _StackGlyph(
@@ -1096,8 +1233,8 @@ class _StackChevronPainter extends CustomPainter {
 
 // ---------------------------------------------------------------------------
 // «سرعت اسکن» pills: 5 increasing widths 28/47/64/77/87, h36 r8 gap8,
-// CENTERED (the row spans x33..367 — center 200 like the handle, not the
-// content inset). The widest (rightmost) is selected in the frame.
+// CENTERED (the row spans x33..367). The widest (rightmost) is selected in
+// the frame.
 // ---------------------------------------------------------------------------
 
 class _ScanPills extends StatelessWidget {
@@ -1159,9 +1296,11 @@ class _ScanPills extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// The ⓘ descriptions popup: × Ø22 at y206 (13 above the card top 242),
-// card r24 #0C120F, blocks 14px/lh18 white + dividers #1A261C, icon column
-// on the right (plain / Aether+∨ / Aether+∧ — the subtile language ×1.45).
+// The ⓘ descriptions popup: × Ø30 at y206 (v4.17 — bigger, easy hit), the
+// card r24 #0C120F over a 94% #0C120F scrim (v4.17 — «باید تیره باشه تا
+// متنش قابل خوندن باشه»), blocks 14px/lh18 white + dividers #1A261C, icon
+// column on the right (plain / Aether+∨ / Aether+∧ — the subtile language
+// ×1.45).
 // ---------------------------------------------------------------------------
 
 class _DescLayer extends StatelessWidget {
@@ -1222,25 +1361,21 @@ class _DescLayer extends StatelessWidget {
           if (t < 0.01) return const SizedBox.shrink();
           return Stack(
             children: [
-              // Second scrim over the dimmed sheet (the frame's desc page
-              // reads ~1.5-2× darker than the sheet around it).
-              Positioned(
-                top: AethGeometry.protoScrimTop * s,
-                left: 0,
-                right: 0,
-                bottom: 0,
+              // Second scrim over the page (v4.17 — deepened to 94% so the
+              // description text reads on the dark card).
+              Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: onClose,
                   child: Opacity(
                     opacity: t,
                     child: const ColoredBox(
-                      color: Color(0xC20C120F), // #0C120F @ 76%
+                      color: Color(0xF20C120F), // #0C120F @ 95%
                     ),
                   ),
                 ),
               ),
-              // × close — Ø22 thin white ring + the set's Close.svg
+              // × close — Ø30 thin white ring + the set's Close.svg
               Positioned(
                 top: AethGeometry.protoDescCloseTop * s,
                 left: 0,
@@ -1263,8 +1398,8 @@ class _DescLayer extends StatelessWidget {
                       alignment: Alignment.center,
                       child: SvgPicture.asset(
                         AppAssets.iconClose,
-                        width: 10 * s,
-                        height: 10 * s,
+                        width: 13 * s,
+                        height: 13 * s,
                         colorFilter: const ColorFilter.mode(
                           AethColors.textPrimary,
                           BlendMode.srcIn,
@@ -1294,7 +1429,8 @@ class _DescLayer extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: AethColors.sheetDescCard,
-            borderRadius: BorderRadius.circular(AethGeometry.protoDescCardRadius * s),
+            borderRadius:
+                BorderRadius.circular(AethGeometry.protoDescCardRadius * s),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1328,8 +1464,8 @@ class _DescLayer extends StatelessWidget {
                             fontFamily: 'IRANYekanX',
                             fontWeight: FontWeight.w400,
                             fontSize: AethGeometry.protoDescTextSize * s,
-                            height:
-                                AethGeometry.protoDescTextHeight / AethGeometry.protoDescTextSize,
+                            height: AethGeometry.protoDescTextHeight /
+                                AethGeometry.protoDescTextSize,
                             color: AethColors.textPrimary,
                           ),
                         ),

@@ -70,22 +70,41 @@ class HomeScreen extends StatelessWidget {
   }
 
   /// Step 2: the REAL settings main page (pixel-faithful to the design
-  /// frame) — the placeholder sheet is gone.
+  /// frame). v4.17 — owner settings round #4: «به صفحه و کارت ها انیمیشن
+  /// ورود و خروج اضافه کن» — the route is a fade+slide PageRouteBuilder and
+  /// the screen staggers its blocks on the route timeline (see
+  /// [SettingsScreen._enter]); pop retraces the cascade.
   void _openSettings(BuildContext context) {
+    final style = store.effectiveMotionStyle(context);
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => SettingsScreen(store: store),
+      PageRouteBuilder<void>(
+        transitionDuration: motionDuration(style, 380),
+        reverseTransitionDuration: motionDuration(style, 320),
+        pageBuilder: (_, _, _) => SettingsScreen(store: store),
+        transitionsBuilder: (context, animation, _, child) => FadeTransition(
+          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+          child: SlideTransition(
+            position: Tween(
+              begin: const Offset(0, 0.03),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            )),
+            child: child,
+          ),
+        ),
       ),
     );
   }
 
-  /// v4.16 — the REAL protocol-selection sheet (pixel-faithful to the frame
-  /// «صفحه شناور انتخاب پروتکل صفحه اصلی.jpg"); the placeholder sheet is
-  /// gone. Selecting a protocol auto-returns here (owner: «بعد از انتخاب
-  /// پروتکل به صورت خودکار کاربر باید به صفحه اول بازگردد»).
-  void _openProtocolSheet(BuildContext context) {
+  /// v4.17 — the REAL protocol-selection PAGE (promoted from the v4.16
+  /// floating sheet per the owner: «در یک صفحه جدا مثل صفحه اصلی تنظیمات
+  /// قرار بدیم»). Selecting a protocol auto-returns here (owner: «بعد از
+  /// انتخاب پروتکل به صورت خودکار کاربر باید به صفحه اول بازگردد»).
+  void _openProtocolPage(BuildContext context) {
     Navigator.of(context).push(
-      protocolSheetRoute(store: store, style: store.effectiveMotionStyle(context)),
+      protocolPageRoute(store: store, style: store.effectiveMotionStyle(context)),
     );
   }
 
@@ -197,7 +216,25 @@ class HomeScreen extends StatelessWidget {
                                     ),
                             ),
                             if (isLookOne)
-                              HeroLogo(connected: connected, style: style)
+                              GestureDetector(
+                                // v4.17 — owner home round #5: «آیکون وسط
+                                // صفحه هم به عنوان دکمه اتصال عمل کنه البته
+                                // دکمه اتصال هم همچنان عملکردش رو داشته
+                                // باشه» — the logo toggles the connection
+                                // exactly like the bottom FAB (the store's
+                                // single-flight guard makes multi-taps
+                                // harmless; the state machine refuses
+                                // nothing here: connected→disconnecting and
+                                // any-idle→starting are legal edges).
+                                behavior: HitTestBehavior.opaque,
+                                onTap: connected
+                                    ? store.disconnect
+                                    : store.connect,
+                                child: HeroLogo(
+                                  connected: connected,
+                                  style: style,
+                                ),
+                              )
                             else
                               _CenterConnectButton(store: store, style: style),
                           ],
@@ -236,7 +273,7 @@ class HomeScreen extends StatelessWidget {
                         downBytes: store.downBytes,
                         upBytes: store.upBytes,
                         showConnectButton: isLookOne,
-                        onProtocolCardTap: () => _openProtocolSheet(context),
+                        onProtocolCardTap: () => _openProtocolPage(context),
                         // Tap connect (owner v4.12: «دکمه اتصال رو به حالت
                         // کلیک قبلش برگردون، نمیخوام حالت سوییپ داشته باشه»)
                         // — the FAB toggles: tap connects, tap again

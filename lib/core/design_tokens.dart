@@ -152,6 +152,15 @@ abstract final class AethGeometry {
   /// the content never crowds the status bar / notch on any device.
   static const double topSafeExtraGap = 12;
 
+  /// Edge-pattern ART BOUNDS inside the committed canvases (PIL alpha>40
+  /// profile, v4.17): the LEFT art occupies canvas rows 375..834 of 1232
+  /// (hugs its LEFT edge), the RIGHT art rows 357..719 of 1178 (hugs its
+  /// RIGHT edge). The v4.17 per-screen placement formulas need these to put
+  /// the art itself — not the canvas — on the owner's requested bands.
+  static const double patternLeftArtTopRow = 375;
+  static const double patternLeftArtRows = 459; // 375..834
+  static const double patternRightArtBottomRow = 719; // art rows 357..719
+
   /// Look-2 center connect button core: 112px circle (144,328)–(256,432).
   static const double centerButtonSize = 112;
 
@@ -337,78 +346,92 @@ abstract final class AethGeometry {
   static const double settingsStatusValueSize = 11;
 
   // -----------------------------------------------------------------
-  // v4.16 — PROTOCOL SHEET. Every value below is MEASURED on the design
-  // frame «صفحه شناور انتخاب پروتکل صفحه اصلی.jpg» (402×874, 1:1 ref) and
-  // the companion «صفحه شناور توضیحات پروتکل ها.jpg» (the ⓘ popup).
-  // Measurement scripts: scripts/measure_proto_*.py (pixel clusters, corner
-  // radii from fill-width profiles, colors sampled at ink centers).
+  // v4.16 — PROTOCOL SELECTION, measured on the design frame «صفحه شناور
+  // انتخاب پروتکل صفحه اصلی.jpg» (402×874, 1:1 ref) and the companion
+  // «صفحه شناور توضیحات پروتکل ها.jpg» (the ⓘ popup).
+  // v4.17 — owner: the floating sheet is PROMOTED to a full PAGE «مثل صفحه
+  // اصلی تنظیمات» (top bar + patterns + back/info tiles). All v4.16
+  // measurement values are preserved and re-anchored to the page: the
+  // sheet's y-coordinates shifted up by the reclaimed sheet-chrome zone and
+  // the family cards grew (owner round: «نمایش زیرمجموعه‌ها فشرده‌ست»).
   // -----------------------------------------------------------------
 
-  /// The scrim starts here (the home TOP BAR above stays visible — diff vs
-  /// the plain home frame shows the first dimmed row at y≈101).
-  static const double protoScrimTop = 101;
+  /// The home TOP BAR band height the page content sits under — the page
+  /// content starts below [topSafeExtraGap] + top tile (50) + 34 gap.
+  static const double protoPageContentTop = 96;
 
-  /// Grab handle: 85×6 r3 centered (y125..131), #D9D9D9.
-  static const double protoHandleTop = 125;
-  static const double protoHandleW = 85;
-  static const double protoHandleH = 6;
-
-  /// Section headings: text 16 w700 white; the text's right edge sits 74 from
-  /// the screen right edge (measured on all three: x≈328), then a 26 gap,
-  /// then the 20×20 badge at the content inset (right edge x374 → 28 inset).
-  /// Heading rows top: 164 / 262 / 765.
-  static const double protoHeadingTextRightInset = 74;
-  static const double protoHeadingBadgeGap = 26;
-  static const double protoBadgeSize = 20;
+  /// Section headings: text 16 w700 white; the text's right edge sits
+  /// [protoHeadingTextRightInset] from the screen right, then the
+  /// [protoHeadingBadgeGap] gap, then the badge at the content inset
+  /// (right edge x374 → 28 inset).
+  /// v4.17 — owner: the badges were «کمی کوچیکه» → 20 → 26, and the text
+  /// sat «خیلی زیاد از آیکونشون فاصله داره» → gap 26 → 12 (inset follows:
+  /// 28 + 26 + 12 = 66).
+  static const double protoHeadingTextRightInset = 66;
+  static const double protoHeadingBadgeGap = 12;
+  static const double protoBadgeSize = 26;
   static const double protoRightInset = 28;
   static const double protoHeadingTextSize = 16;
 
-  /// Segments (تونل | پروکسی): y201..236 h35 r14, x28..374, gap 21 — RTL
-  /// order: تونل (right, first) then پروکسی; the frame ships پروکسی SELECTED
-  /// (green #1AD995 fill, WHITE text on both states; dark = #0F1511).
-  static const double protoSegmentTop = 201;
+  /// Heading row tops on the page: حالت اتصال 96, پروتکل 194, سرعت اسکن 736.
+  static const double protoPageHeadingModeTop = 96;
+  static const double protoPageHeadingProtocolTop = 194;
+  static const double protoPageHeadingScanTop = 736;
+
+  /// Segments (تونل | پروکسی): h35 r14, x28..374, gap 21 — RTL order: تونل
+  /// (right, first) then پروکسی; the frame ships پروکسی SELECTED (green
+  /// #1AD995 fill, WHITE text on both states; dark = #0F1511).
+  /// Page top: 37 below its heading top (the sheet's 164→201 rhythm).
+  static const double protoSegmentTop = 133;
   static const double protoSegmentH = 35;
   static const double protoSegmentRadius = 14;
   static const double protoSegmentGap = 21;
   static const double protoSegmentTextSize = 16;
 
-  /// Tile grid: 3 per row, w103 gap 21 (x27..374), r16; row1 y301 h100,
-  /// row2 y417 h94. Tile internals: ⓘ 13×13 at (11,9); icon center at
-  /// top+41; label 12 w500 center at top+66 (measured cy 342/368 row1).
+  /// Tile grid: 3 per row, w103 gap 21 (x27..374), row1 y233 h100, row2 y349
+  /// h94 (the sheet's internal gaps kept: heading→row1 39, row1→row2 16).
+  /// Tile internals: ⓘ 15×15 at (11,9) + an invisible [protoInfoHit] hit box
+  /// (v4.17 — owner: the ⓘ was too small/hard to tap; the VISUAL stays in
+  /// place, only the tap target grows around it); icon center at top+41;
+  /// label 12 w500 center at top+66.
+  /// v4.17 — owner: the tile corners were «کمی تیز» → radius 16 → 21, the
+  /// settings cards' own radius.
   static const double protoTileW = 103;
   static const double protoTileGap = 21;
-  static const double protoTileRadius = 16;
-  static const double protoTileRow1Top = 301;
+  static const double protoTileRadius = 21;
+  static const double protoTileRow1Top = 233;
   static const double protoTileRow1H = 100;
-  static const double protoTileRow2Top = 417;
+  static const double protoTileRow2Top = 349;
   static const double protoTileRow2H = 94;
-  static const double protoInfoBadgeSize = 13;
+  static const double protoInfoBadgeSize = 15;
   static const double protoInfoBadgeInset = 11;
+  static const double protoInfoHit = 32;
   static const double protoTileIconCenter = 41;
   static const double protoTileLabelCenter = 66;
   static const double protoTileLabelSize = 12;
 
-  /// Family cards (سایفون y531 / تور y646): h100 gap 15, x27..374, r16.
-  /// Main block zone x27..131: logo center at top+37, label 12 at top+69.
-  /// Subtiles 66×66 r14 (#1A261C) at top+16: x131..197 / 213..279 / 295..361
-  /// — visual LEFT→RIGHT: plain(only), ∨(chain), ∧(reverse).
-  /// Stack glyph: Aether logo ~18×19 + 7 gap + chevron 14×6 + 6 gap +
-  /// protocol glyph ~16×20; plain = the protocol glyph alone ~16×20.
-  static const double protoCardTopPsiphon = 531;
-  static const double protoCardTopTor = 646;
-  static const double protoCardH = 100;
-  static const double protoCardRadius = 16;
+  /// Family cards (سایفون / تور): v4.17 breathing — the owner called the
+  /// sub-protocol display «جالب نیست و یکم فشردهست»: card h 100 → 116, the
+  /// subtiles stay 66 (the stack-glyph calibration is evidence-locked) but
+  /// gain air (gap 16 → 20) and vertical centering (inset 25), and the main
+  /// block narrows 103 → 95 so everything fits the 346 card: 95 + 3×66 +
+  /// 2×20 + 13 inset = 346. Main block: logo center top+43, label top+80.
+  static const double protoCardTopPsiphon = 463;
+  static const double protoCardTopTor = 594;
+  static const double protoCardH = 116;
+  static const double protoCardRadius = 21;
   static const double protoSubtile = 66;
   static const double protoSubtileRadius = 14;
-  static const double protoSubtileGap = 16;
-  static const double protoSubtileInsetTop = 16;
-  static const double protoMainLogoCenterY = 37;
-  static const double protoMainLabelCenterY = 69;
+  static const double protoSubtileGap = 20;
+  static const double protoSubtileInsetTop = 25;
+  static const double protoMainBlockW = 95;
+  static const double protoMainLogoCenterY = 43;
+  static const double protoMainLabelCenterY = 80;
 
-  /// Scan pills: y805..841 h36 r8 gap8, CENTERED (row spans x33..367 —
-  /// center 200 like the handle, NOT the content inset). Widths increase
+  /// Scan pills: h36 r8 gap8, CENTERED (row spans x33..367). Widths increase
   /// toward the right; the frame ships the widest (rightmost, 87) SELECTED.
-  static const double protoPillTop = 805;
+  /// Page top: 40 below its heading top (the sheet's 765→805 rhythm).
+  static const double protoPillTop = 776;
   static const double protoPillH = 36;
   static const double protoPillRadius = 8;
   static const double protoPillGap = 8;
@@ -418,12 +441,14 @@ abstract final class AethGeometry {
   static const double protoPillW4 = 77;
   static const double protoPillW5 = 87;
 
-  /// Descriptions popup (the ⓘ sheet): × button Ø22 at y206 (13 above the
-  /// card top 242), card x28..374 r24 #0C120F, blocks 14px/lh18 white,
-  /// dividers 1px #1A261C, icon column right (plain / Aether+∨+proto /
-  /// Aether+∧+proto — same language as the subtiles).
+  /// Descriptions popup (the ⓘ sheet): × button at y206 — v4.17 owner: the
+  /// close was hard to hit → Ø22 → Ø30 (glyph 10 → 13) — and the popup
+  /// background «باید تیره باشه تا متنش قابل خوندن باشه» → the second scrim
+  /// deepens to 94% (#0C120F) so the r24 #0C120F card reads as a solid dark
+  /// layer over the page. Blocks 14px/lh18 white + dividers #1A261C, icon
+  /// column on the right (plain / Aether+∨ / Aether+∧ — subtile ×1.45).
   static const double protoDescCloseTop = 206;
-  static const double protoDescCloseSize = 22;
+  static const double protoDescCloseSize = 30;
   static const double protoDescCardTop = 242;
   static const double protoDescCardRadius = 24;
   static const double protoDescTextSize = 14;
