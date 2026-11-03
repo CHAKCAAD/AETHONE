@@ -1549,7 +1549,10 @@ jobs:
       - name: Build preview-debug APK (UI demo — PREVIEW_MODE is debug-only BY CODE)
         run: |
           set -euo pipefail
-          flutter build apk --debug --dart-define=PREVIEW_MODE=true
+          # Owner: the DEBUG preview must be arm64-v8a ONLY, never universal
+          # («بیلد دیباگ باید فقط arm64-v8a باشد، نه یونیورسال»). The release
+          # APK above stays universal.
+          flutter build apk --debug --dart-define=PREVIEW_MODE=true --target-platform android-arm64
           ls -la build/app/outputs/flutter-apk/
 
       - name: Packaging gates on the release APK (zipalign -P 16 + apksigner)

@@ -1,32 +1,50 @@
-/// Location header + flag WHEEL (v4.12 — owner defect reports, round 3):
+/// Location header + flag WHEEL (v4.13 — owner defect reports, round 4):
 ///
-/// Header row (v4.12, LTR-locked): the owner moved the whole location readout
-/// to the LEFT-OF-CENTER of the screen as ONE compact cluster —
-///   [country name] · [map icon + chevron] · [ping / offline]
-/// starting at the reference x95 inset («قسمت آیکون بالا و متن پینگ و نام
-/// کشور در سمت چپ وسط صفحه قرار نگرفتن»). The rest of the row stays empty.
+/// Header row (v4.13, LTR-locked) — owner re-clarification, EXACT reference
+/// geometry («آیکون پرچم در وسط صفحه باید باشه، متن پینگ ... در سمت راستش
+/// باید باشه و متن نمایش اسم کشور باید در سمت چپش باشه»):
+///   [country name] —— [map icon + chevron at the EXACT screen centre] —— [ping / آفلاین]
+/// The map icon is laid out independently of both texts (two EQUAL Expanded
+/// slots + a fixed-width centre box), so NO text change can ever move it off
+/// centre («وقتی متن قسمت پینگ کاراکتر هاش تغیر میکنه ... آیکون از وسط بودن
+/// خارج نشه»). Long names/pings ellipsis INSIDE their own half.
 ///   * connected  : name = wheel/exit country (white) · «146 ms» green.
 ///   * disconnected: name = wheel selection (grey) · «آفلاین» grey.
 ///   * connecting : the ping slot stays empty (honest — nothing measured).
 ///
-/// Flag wheel — INFINITE (v4.12): the 266 flags repeat 201× in a huge virtual
-/// list started at its center, so the wheel can spin forever in BOTH
-/// directions and there is ALWAYS a flag on the left AND the right edge
-/// («پرچم ها باید به حالت اسکرول بی نهایت بچرخن ... در حال حاضر سمت راست
-/// هیچ پرچمی وجود نداره»). The flag nearest the viewport centre is enlarged
-/// (52 vs 42) and becomes the selection live while scrolling; on release the
-/// wheel snaps to it; tapping a flag centres + selects it. Near the virtual
-/// edges the wheel silently re-centers itself one code-cycle over (jump is
-/// invisible: the strip repeats exactly every cycle).
+/// Flag wheel — REBUILT on PageView (v4.13): the v4.12 virtual-strip ListView
+/// started near its own left edge after the async flag-manifest load (the
+/// controller was created against the 1-code placeholder list), so scrolling
+/// left ran into EMPTY space («نباید پرچم ها از یک طرف خالی باشه»). The
+/// wheel is now an UNBOUNDED PageView started ~1,000,000 pages in, silently
+/// re-centered after every settle — there are ALWAYS flags on BOTH edges and
+/// the cycle wraps («اگه روی پرچم ایران هستی ... در نهایت مجددا به پرچم ایران
+/// برسی»). The nearest-centre flag is the LARGEST with the HIGHEST opacity
+/// (52 > 42 > 36 > 30, 1.0 > .85 > .62 > .45 — measured on the reference
+/// frames) and it updates CONTINUOUSLY while scrolling.
 ///
-/// Selection lock (v4.12): ONLY Tor and Psiphon actually select a country.
-/// Every other protocol renders the wheel purely as a LOCATION DISPLAY —
-/// scrolling/tapping disabled («انتخاب کردن کشور فقط باید در پروتکل های
-/// سایفون و تور فعال باشه، این قسمت در سایر پروتکل ها فقط نقش نمایش لوکیشن
-/// رو داره»). While disconnected those display-only protocols still get the
-/// saturation-0 treatment (defect #14 rule, NO blur); when connected they
-/// show the real exit country in full color.
+/// CONNECT ROULETTE (v4.13, owner: «وقتی اتصال صورت گرفت اسکرول پرچم ها باید
+/// بین کشور ها مقداری اسکرول کند و بعد لوکیشن اصلی رو نشون بده»): the moment
+/// the machine enters `connected` the wheel spins forward through the
+/// countries (two full laps) and lands on the engine-reported exit country.
+/// Works on the real-core path too: the trigger is the STATE edge, and a
+/// late exit-country report RE-SPINS the roulette (a fresh two-lap spin from
+/// the current position — the owner's «مقداری اسکرول کند» feel is preserved
+/// even when the exit code arrives mid-spin). A monotonic EPOCH protocol
+/// makes every programmatic spin the sole owner of the wheel: a superseded
+/// animation's completion is a no-op — it never clears the programmatic
+/// flag, never re-centers and never writes to the store. The roulette
+/// never writes to the store at all — the engine owns the connected
+/// location.
+///
+/// State-change animation (v4.13): the disconnected greyscale is TWEENED
+/// (saturation 0 ↔ 1) instead of switching instantly.
+///
+/// Selection lock: ONLY Tor and Psiphon select a country; every other
+/// protocol renders the wheel as a locked LOCATION DISPLAY (defect #13).
 library;
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -53,7 +71,7 @@ class LocationHeader extends StatefulWidget {
   final int? pingMs;
   final String? exitCountryCode;
 
-  /// Wheel selection committed (snap settle or tap). The store keeps it for
+  /// Wheel selection committed (page settle / tap). The store keeps it for
   /// the future core handoff (per-protocol location rules are re-checked
   /// when the engine lands).
   final void Function(String code) onCountrySelected;
@@ -65,23 +83,35 @@ class LocationHeader extends StatefulWidget {
 class _LocationHeaderState extends State<LocationHeader> {
   static const String defaultCode = 'ir';
 
-  /// Virtual copies of the flag cycle. Odd multiple so the list has a true
-  /// center start; 201 cycles ≈ 53k flags — unreachable by hand.
-  static const int _copies = 201;
+  /// The wheel starts this many FULL CYCLES into the unbounded strip. The
+  /// base is a MULTIPLE of the cycle length, so `page % cycle` IS the code
+  /// index — the v4.13 first cut used 1,000,000 (106 pages past a cycle
+  /// boundary), which silently shifted the whole mapping by 106 codes.
+  static const int _startLap = 100000;
 
   List<String> _codes = const [defaultCode];
   String _selected = defaultCode;
-  ScrollController? _controller;
+  PageController? _pageController;
 
-  int get _virtualCount => _codes.length * _copies;
+  /// The unbounded strip's rest position for the current cycle.
+  int get _lapBase => _cycle * _startLap;
 
-  /// Initial virtual index: dead center of the virtual strip, aligned to the
-  /// selected code. Flags exist for thousands of items on BOTH sides.
-  int get _centerStart => _codes.length * (_copies ~/ 2) + _indexOf(_selected);
+  /// True while a PROGRAMMATIC animation drives the wheel (roulette /
+  /// engine-follow / manifest jump): page changes update the header visually
+  /// but are never committed to the store — the engine owns that channel.
+  bool _programmatic = false;
 
-  double _extentOf(BuildContext context) =>
-      AethGeometry.flagPitch *
-      (MediaQuery.sizeOf(context).width / AethGeometry.refWidth);
+  /// Roulette bookkeeping (see library doc).
+  bool _rouletteRunning = false;
+  bool _rouletteQueued = false;
+  String? _rouletteTarget;
+
+  /// Monotonic owner stamp for programmatic spins. Every [_spinToPage] call
+  /// captures `++_epoch`; a completion that does not match the CURRENT epoch
+  /// was superseded by a newer spin and must be a full no-op.
+  int _epoch = 0;
+
+  int get _cycle => _codes.length;
 
   @override
   void initState() {
@@ -93,12 +123,43 @@ class _LocationHeaderState extends State<LocationHeader> {
   @override
   void didUpdateWidget(covariant LocationHeader old) {
     super.didUpdateWidget(old);
-    // Follow the ENGINE-reported exit country when it arrives/changes —
-    // spin the wheel to the nearest instance of that code.
-    if (widget.exitCountryCode != null &&
+
+    // CONNECT EDGE → roulette: spin through the countries, land on the
+    // engine-reported (or currently selected) location. Fires on EVERY path
+    // into `connected` — preview adapter AND the real core. Scheduled
+    // POST-FRAME: scroll commands are never issued mid-build (a rebuild
+    // window can transiently hold two scroll positions).
+    if (!old.connected && widget.connected) {
+      _rouletteTarget = widget.exitCountryCode ?? _selected;
+      _rouletteQueued = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _runRoulette();
+      });
+      return;
+    }
+
+    // Engine-reported exit country arrives/changes while connected:
+    //  * if the roulette is queued/running, RE-SPIN it toward the real exit
+    //    country (from the current wheel position — the two-lap feel stays;
+    //    the superseded spin's completion is an epoch no-op);
+    //  * otherwise follow it with the nearest-instance spin (never a long
+    //    jump across the wheel).
+    if (widget.connected &&
+        widget.exitCountryCode != null &&
         widget.exitCountryCode != old.exitCountryCode) {
-      _select(widget.exitCountryCode!, notify: false);
-      _centerOnCode(widget.exitCountryCode!, animate: true);
+      final code = widget.exitCountryCode!;
+      if (_rouletteRunning && _rouletteTarget == code) return;
+      _select(code, notify: false);
+      _rouletteTarget = code;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          if (_rouletteRunning || _rouletteQueued) {
+            _runRoulette();
+          } else {
+            _spinToCode(code);
+          }
+        }
+      });
     }
   }
 
@@ -114,9 +175,16 @@ class _LocationHeaderState extends State<LocationHeader> {
           ..sort();
     if (!mounted) return;
     setState(() => _codes = codes);
+    // The controller (if already created against the placeholder list) must
+    // hop to the same code in the REAL cycle — same visual, correct index.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && widget.exitCountryCode != null) {
-        _select(widget.exitCountryCode!, notify: false);
+      if (!mounted) return;
+      final c = _pageController;
+      if (c != null && c.hasClients) {
+        _epoch++; // invalidate any in-flight programmatic spin
+        _programmatic = true;
+        c.jumpToPage(_lapBase + _indexOf(_selected));
+        _programmatic = false;
       }
     });
   }
@@ -126,7 +194,7 @@ class _LocationHeaderState extends State<LocationHeader> {
     return i < 0 ? _codes.indexOf(defaultCode).clamp(0, _codes.length - 1) : i;
   }
 
-  String _codeAt(int virtualIndex) => _codes[virtualIndex % _codes.length];
+  String _codeAt(int page) => _codes[page % _cycle];
 
   void _select(String code, {bool notify = true}) {
     if (_selected == code) return;
@@ -134,56 +202,12 @@ class _LocationHeaderState extends State<LocationHeader> {
     if (notify) widget.onCountrySelected(code);
   }
 
-  void _ensureController(double extent) {
-    _controller ??= ScrollController(
-      initialScrollOffset: (_centerStart * extent).clamp(0.0, double.infinity),
+  void _ensureController() {
+    _pageController ??= PageController(
+      // 72 pitch on the 402 reference frame — scale-free ratio.
+      viewportFraction: AethGeometry.flagPitch / AethGeometry.refWidth,
+      initialPage: _lapBase + _indexOf(_selected),
     );
-  }
-
-  /// The virtual index currently nearest the viewport centre.
-  int _focusVirtual() {
-    final controller = _controller;
-    if (controller == null || !controller.hasClients) return _centerStart;
-    final extent = _extentOf(context);
-    return (controller.offset / extent).round();
-  }
-
-  /// Circular distance between two CODE indices around the flag cycle —
-  /// drives the brightness falloff with virtual duplicates around.
-  int _circularDistance(int a, int b) {
-    final n = _codes.length;
-    if (n <= 1) return 0;
-    final d = (a - b).abs() % n;
-    return d > n ~/ 2 ? n - d : d;
-  }
-
-  /// Centers the wheel on [virtualIndex] (tap target).
-  void _centerOnVirtual(int virtualIndex, {bool animate = true}) {
-    final controller = _controller;
-    if (controller == null || !controller.hasClients) return;
-    final extent = _extentOf(context);
-    final target = (virtualIndex * extent).clamp(
-      0.0,
-      controller.position.maxScrollExtent,
-    );
-    _scrollTo(target, animate: animate);
-  }
-
-  /// Centers the wheel on the instance of [code] NEAREST the current focus
-  /// (engine exit-country change) — never a long jump across the strip.
-  void _centerOnCode(String code, {bool animate = true}) {
-    final controller = _controller;
-    if (controller == null || !controller.hasClients) return;
-    final n = _codes.length;
-    if (n == 0) return;
-    final extent = _extentOf(context);
-    final focus = _focusVirtual();
-    final delta = _circularDelta(_codes.indexOf(code), focus % n, n);
-    final target = ((focus + delta) * extent).clamp(
-      0.0,
-      controller.position.maxScrollExtent,
-    );
-    _scrollTo(target, animate: animate);
   }
 
   /// Shortest signed step from code index [from] to [to] around the cycle.
@@ -194,106 +218,185 @@ class _LocationHeaderState extends State<LocationHeader> {
     return d;
   }
 
-  void _scrollTo(double target, {required bool animate}) {
-    final controller = _controller!;
-    if (animate) {
-      controller.animateTo(
-        target,
-        duration: const Duration(milliseconds: 320),
-        curve: Curves.easeOutCubic,
-      );
-    } else {
-      controller.jumpTo(target);
+  /// The wheel's single scroll position when it is the ONLY client and
+  /// layout is done — null during any rebuild/reattach window (a transient
+  /// second position must never crash a paint). Every scroll command and
+  /// every page read goes through this guard.
+  PageController? _safeController() {
+    final c = _pageController;
+    if (c == null || !c.hasClients || c.positions.length != 1) return null;
+    if (!c.positions.first.haveDimensions) return null;
+    return c;
+  }
+
+  /// The single programmatic-scroll seam. A newer call SUPERSEDES an older
+  /// in-flight one (epoch protocol): the superseded animation's completion
+  /// is a full no-op — it never clears the programmatic flag, never
+  /// re-centers, and never lets a mid-spin settle write to the store.
+  /// Returns true only when THIS spin ran to completion as the current
+  /// owner.
+  Future<bool> _spinToPage(
+    int page, {
+    required Duration duration,
+    required bool roulette,
+  }) async {
+    final c = _safeController();
+    if (c == null || _cycle < 2) return false;
+    final myEpoch = ++_epoch;
+    _programmatic = true;
+    _rouletteRunning = roulette;
+    await c.animateToPage(
+      page,
+      duration: duration,
+      curve: Curves.easeInOutCubic,
+    );
+    if (!mounted || myEpoch != _epoch) return false; // superseded
+    _programmatic = false;
+    _rouletteRunning = false;
+    _recenterIfFar();
+    return true;
+  }
+
+  /// Engine exit-country follow: spin to the NEAREST instance of [code].
+  Future<void> _spinToCode(String code) async {
+    final c = _safeController();
+    if (c == null || _cycle < 2) return;
+    final from = c.page!.round();
+    final delta = _circularDelta(_indexOf(code), from % _cycle, _cycle);
+    if (delta == 0) {
+      _syncSelectedToPage();
+      return;
+    }
+    await _spinToPage(
+      from + delta,
+      duration: const Duration(milliseconds: 480),
+      roulette: false,
+    );
+  }
+
+  /// CONNECT ROULETTE: two full laps forward through the countries, landing
+  /// on the CURRENT [_rouletteTarget] (read at start — a late exit-country
+  /// report updates it BEFORE this spin begins). Purely visual — no store
+  /// writes (header updates ride the programmatic page changes; the engine
+  /// owns the connected location).
+  Future<void> _runRoulette() async {
+    _rouletteQueued = false;
+    final code = _rouletteTarget ?? _selected;
+    final c = _safeController();
+    if (c == null || _cycle < 2) return;
+    final from = c.page!.round();
+    final n = _cycle;
+    var forward = (_indexOf(code) - from % n) % n;
+    if (forward < n ~/ 3) forward += n; // always a visible spin
+    final landed = await _spinToPage(
+      from + 2 * n + forward,
+      duration: const Duration(milliseconds: 2600),
+      roulette: true,
+    );
+    if (landed && mounted) _syncSelectedToPage();
+  }
+
+  /// Header truth sync at rest: the header shows the country under the
+  /// wheel's current rest position (never a stale captured code).
+  void _syncSelectedToPage() {
+    final c = _safeController();
+    if (c == null) return;
+    final p = c.page?.round();
+    if (p == null) return;
+    final code = _codeAt(p);
+    if (_selected != code) setState(() => _selected = code);
+  }
+
+  /// Silent re-center: the strip repeats every cycle, so a jump of whole
+  /// cycles is pixel-identical. Keeps the page index forever near [_baseOffset].
+  void _recenterIfFar() {
+    final c = _safeController();
+    if (c == null || _cycle < 2) return;
+    final p = c.page;
+    if (p == null) return;
+    final round = p.round();
+    if ((p - round).abs() > 0.01) return; // only at rest
+    final drift = round - _lapBase;
+    final lap = (_cycle * 1000);
+    if (drift > lap ~/ 2) {
+      _programmatic = true;
+      c.jumpToPage(round - lap);
+      _programmatic = false;
+    } else if (-drift > lap ~/ 2) {
+      _programmatic = true;
+      c.jumpToPage(round + lap);
+      _programmatic = false;
     }
   }
 
-  void _onScrollEnd() {
-    final controller = _controller;
-    if (controller == null || !controller.hasClients) return;
-    final extent = _extentOf(context);
-    final focus = (controller.offset / extent).round();
-    _select(_codeAt(focus));
-    final target = focus * extent;
-    if ((controller.offset - target).abs() > 0.5) {
-      controller
-          .animateTo(
-            target.clamp(0.0, controller.position.maxScrollExtent),
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-          )
-          .whenComplete(_recenterIfNearEdge);
-    } else {
-      _recenterIfNearEdge();
-    }
-  }
-
-  /// INFINITE WHEEL KEEP-ALIVE: when the focus drifts within 2 cycles of a
-  /// virtual edge, silently jump one half-strip over. The strip repeats
-  /// exactly every cycle, so the jump is pixel-identical and invisible.
-  void _recenterIfNearEdge() {
-    final controller = _controller;
-    if (controller == null || !controller.hasClients) return;
-    // Never fight an active drag — the next scroll-end re-checks.
-    if (controller.position.isScrollingNotifier.value) return;
-    final extent = _extentOf(context);
-    final n = _codes.length;
-    final i = (controller.offset / extent).round();
-    final half = n * (_copies ~/ 2);
-    if (i < n * 2 && controller.offset > 0) {
-      controller.jumpTo(controller.offset + half * extent);
-    } else if (i > _virtualCount - n * 2) {
-      controller.jumpTo(controller.offset - half * extent);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = AppStrings.of(context);
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+  // ------------------------------------------------------------------
+  // Header row — the centre icon is INDEPENDENT of both texts.
+  // ------------------------------------------------------------------
+  Widget _buildHeaderRow(BuildContext context, AppStrings strings, double s) {
     final connected = widget.connected;
+    final nameText = countryName(_selected) ?? '';
 
-    // v4.12: the lock follows the PROTOCOL TYPE only — Tor/Psiphon select a
-    // country, everything else is a location display (scroll/tap disabled).
-    final selectable = widget.protocolIsTorOrPsiphon;
-    // Display-only protocols keep the greyscale treatment while disconnected
-    // (defect #14 rule — saturation-0, NO blur); connected shows real color.
-    final locked = !selectable;
-    final greyscale = locked && !connected;
+    // Ping slot: green «146 ms» when measured, «آفلاین» grey when
+    // disconnected, empty while the engine walks (nothing measured yet).
+    final pingText = connected
+        ? (widget.pingMs != null ? strings.pingMs(widget.pingMs!) : '')
+        : strings.offline;
 
-    final Widget headerRow = Directionality(
-      textDirection: TextDirection.ltr,
-      child: Padding(
-        padding: EdgeInsets.only(left: AethGeometry.locationInsetStart * s),
+    Widget slot({required Alignment alignment, required EdgeInsets pad, required String text, required TextStyle style, TextDirection? dir}) {
+      return Expanded(
+        child: Align(
+          alignment: alignment,
+          child: Padding(
+            padding: pad,
+            child: Text(
+              text,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              textDirection: dir,
+              style: style,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final nameStyle = TextStyle(
+      fontFamily: 'IRANYekanX',
+      fontWeight: FontWeight.w500,
+      fontSize: 15 * s,
+      color: connected ? AethColors.textPrimary : AethColors.textSecondary,
+    );
+    final pingStyle = TextStyle(
+      fontFamily: 'IRANYekanX',
+      fontWeight: FontWeight.w500,
+      fontSize: 14 * s,
+      color: connected && widget.pingMs != null
+          ? AethColors.accentConnected
+          : AethColors.textSecondary,
+    );
+
+    // Two EQUAL Expanded slots + the fixed icon box ⇒ the icon is at the
+    // exact horizontal centre of the screen at all times, whatever the
+    // texts read (owner defect round 4 #1).
+    return SizedBox(
+      height: 22 * s,
+      child: Directionality(
+        textDirection: TextDirection.ltr,
         child: Row(
           children: [
-            // v4.12 COMPACT CLUSTER at the left-of-center: name · icon · ping.
-            Flexible(
-              child: Text(
-                countryName(_selected) ?? '',
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: 'IRANYekanX',
-                  fontWeight: FontWeight.w500,
-                  fontSize: 15 * s,
-                  color: connected
-                      ? AethColors.textPrimary
-                      : AethColors.textSecondary,
-                ),
-              ),
+            slot(
+              alignment: Alignment.centerRight,
+              pad: EdgeInsets.only(right: AethGeometry.locationSideGap * s),
+              text: nameText,
+              style: nameStyle,
             ),
-            SizedBox(width: AethGeometry.locationGroupGap * s),
-            // Map icon + small chevron below (part of the cluster).
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SvgPicture.asset(
+            SizedBox(
+              width: 22 * s,
+              child: Center(
+                child: SvgPicture.asset(
                   AppAssets.iconMap,
+                  key: const ValueKey('location-map-icon'),
                   width: 22 * s,
                   height: 22 * s,
                   colorFilter: ColorFilter.mode(
@@ -303,172 +406,191 @@ class _LocationHeaderState extends State<LocationHeader> {
                     BlendMode.srcIn,
                   ),
                 ),
-                SizedBox(height: 2 * s),
-                ChevronDownIcon(size: 8 * s, color: AethColors.textSecondary),
-              ],
-            ),
-            SizedBox(width: AethGeometry.locationGroupGap * s),
-            // Ping when connected and measured, «آفلاین» when disconnected,
-            // nothing while the engine is still walking (honest).
-            Flexible(
-              child: Text(
-                connected
-                    ? (widget.pingMs != null
-                          ? strings.pingMs(widget.pingMs!)
-                          : '')
-                    : strings.offline,
-                textDirection: TextDirection.ltr,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: 'IRANYekanX',
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14 * s,
-                  color: connected
-                      ? AethColors.accentConnected
-                      : AethColors.textSecondary,
-                ),
               ),
+            ),
+            slot(
+              alignment: Alignment.centerLeft,
+              pad: EdgeInsets.only(left: AethGeometry.locationSideGap * s),
+              text: pingText,
+              style: pingStyle,
+              dir: TextDirection.ltr,
             ),
           ],
         ),
       ),
     );
+  }
 
-    _ensureController(_extentOf(context));
+  @override
+  void dispose() {
+    _pageController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final connected = widget.connected;
+
+    // v4.12 rule kept: the lock follows the PROTOCOL TYPE only.
+    final selectable = widget.protocolIsTorOrPsiphon;
+    final locked = !selectable;
+    final greyscale = locked && !connected;
+
+    _ensureController();
+
+    final wheel = _FlagsWheel(
+      codes: _codes,
+      controller: _pageController!,
+      locked: locked,
+      greyscale: greyscale,
+      onTapFlag: locked
+          ? null
+          : (page) {
+              // Epoch seam: a tap supersedes any in-flight roulette — the
+              // roulette's completion becomes a no-op and the tapped page's
+              // settle commits the selection to the store.
+              unawaited(
+                _spinToPage(
+                  page,
+                  duration: const Duration(milliseconds: 320),
+                  roulette: false,
+                ),
+              );
+            },
+      onPageSettled: (page) {
+        // User-driven settle: commit the selection; programmatic settles
+        // (roulette / engine follow) never touch the store.
+        if (!_programmatic) _select(_codeAt(page));
+        _recenterIfFar();
+      },
+      onPageChanged: (page) {
+        final code = _codeAt(page);
+        if (_programmatic) {
+          if (_selected != code) setState(() => _selected = code);
+        } else {
+          _select(code);
+        }
+      },
+    );
 
     return Column(
       children: [
-        headerRow,
-        SizedBox(height: AethGeometry.gapLocationToFlags * s),
-        _FlagsWheel(
-          codes: _codes,
-          controller: _controller,
-          selected: _selected,
-          locked: locked,
-          greyscale: greyscale,
-          extent: _extentOf(context),
-          focusVirtual: _focusVirtual(),
-          circularDistance: _circularDistance,
-          onFocusChanged: (code) => _select(code),
-          onTapFlag: (code, virtualIndex) {
-            if (locked) return;
-            _select(code);
-            _centerOnVirtual(virtualIndex, animate: true);
-          },
-          onScrollEnd: locked ? null : _onScrollEnd,
+        _buildHeaderRow(context, strings, s),
+        SizedBox(height: 3 * s),
+        // Chevron under the map icon — centred on the screen like the icon.
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: ChevronDownIcon(size: 8 * s, color: AethColors.textSecondary),
+          ),
         ),
+        SizedBox(height: AethGeometry.gapLocationToFlags * s),
+        wheel,
       ],
     );
   }
 }
 
-/// The horizontal flag wheel — INFINITE (v4.12). Always occupies the SAME
-/// slot (stable tree); the virtual strip is the 266-flag cycle repeated
-/// [_LocationHeaderState._copies]× with symmetric centering padding.
+/// The horizontal flag wheel — UNBOUNDED PageView (v4.13).
 class _FlagsWheel extends StatelessWidget {
   const _FlagsWheel({
     required this.codes,
     required this.controller,
-    required this.selected,
     required this.locked,
     required this.greyscale,
-    required this.extent,
-    required this.focusVirtual,
-    required this.circularDistance,
-    required this.onFocusChanged,
     required this.onTapFlag,
-    required this.onScrollEnd,
+    required this.onPageSettled,
+    required this.onPageChanged,
   });
 
   final List<String> codes;
-  final ScrollController? controller;
-  final String selected;
+  final PageController controller;
   final bool locked;
   final bool greyscale;
-  final double extent;
+  final void Function(int page)? onTapFlag;
+  final void Function(int page) onPageSettled;
+  final void Function(int page) onPageChanged;
 
-  /// Frozen focus (virtual index) for this build — used by the falloff.
-  final int focusVirtual;
-  final int Function(int a, int b) circularDistance;
-  final void Function(String code) onFocusChanged;
-  final void Function(String code, int virtualIndex) onTapFlag;
-  final VoidCallback? onScrollEnd;
+  /// Design falloff: 52/42/36/30 px and 1.0/.85/.62/.45 opacity (reference
+  /// frames: the centre flag is the largest and the most opaque).
+  static const List<double> _sizes = [52, 42, 36, 30];
+  static const List<double> _opacities = [1.0, 0.85, 0.62, 0.45];
 
-  /// Virtual copies — must mirror the state value (kept in one place via the
-  /// token below).
-  static const int _copies = 201;
+  /// Saturation-lerped color matrix (1 = full colour, 0 = grey; rec709 luma).
+  static List<double> _saturationMatrix(double sat) {
+    const r = 0.2126, g = 0.7152, b = 0.0722;
+    final ir = (1 - sat) * r, ig = (1 - sat) * g, ib = (1 - sat) * b;
+    return [
+      ir + sat, ig, ib, 0, 0, //
+      ir, ig + sat, ib, 0, 0, //
+      ir, ig, ib + sat, 0, 0, //
+      0, 0, 0, 1, 0,
+    ];
+  }
 
-  static const List<double> _grayscaleMatrix = [
-    // 5x4 saturation-0 matrix (rec709 luma weights).
-    0.2126, 0.7152, 0.0722, 0, 0, //
-    0.2126, 0.7152, 0.0722, 0, 0, //
-    0.2126, 0.7152, 0.0722, 0, 0, //
-    0, 0, 0, 1, 0,
-  ];
+  (double, double) _lookFor(double distance) {
+    final d = distance.abs();
+    if (d >= _sizes.length - 1) return (_sizes.last, _opacities.last);
+    final i = d.floor();
+    final t = d - i;
+    return (
+      _sizes[i] + (_sizes[i + 1] - _sizes[i]) * t,
+      _opacities[i] + (_opacities[i + 1] - _opacities[i]) * t,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final viewport = MediaQuery.sizeOf(context).width;
-    final virtualCount = codes.length * _copies;
-    final focusCodeIdx = focusVirtual % codes.length;
+    final n = codes.length;
 
-    // The wheel is LTR-LOCKED (fixed visual layout like the header row):
-    // under the Persian RTL locale the horizontal axis would mirror and the
-    // drag direction / neighbor ordering would flip per device language.
     final wheel = Directionality(
       textDirection: TextDirection.ltr,
       child: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
-          if (notification is ScrollUpdateNotification) {
-            // Live stepper: the flag nearest the centre grows and becomes the
-            // selection while scrolling.
-            final c = controller;
-            if (!locked && c != null && c.hasClients) {
-              final focus = (c.offset / extent).round() % codes.length;
-              if (codes[focus] != selected) onFocusChanged(codes[focus]);
-            }
-          } else if (notification is ScrollEndNotification) {
-            onScrollEnd?.call();
+          if (notification is ScrollEndNotification) {
+            final p = controller.position.haveDimensions
+                ? controller.page
+                : null;
+            if (p != null) onPageSettled(p.round());
           }
           return false;
         },
         child: SizedBox(
           height: AethGeometry.flagSizeSelected * s,
-          child: ListView.builder(
+          child: PageView.builder(
             controller: controller,
-            scrollDirection: Axis.horizontal,
-            itemExtent: extent,
-            // Centering padding so ANY item can rest exactly on the centre.
-            padding: EdgeInsets.symmetric(horizontal: (viewport - extent) / 2),
             physics: locked ? const NeverScrollableScrollPhysics() : null,
-            itemCount: virtualCount,
-            itemBuilder: (context, i) {
-              final code = codes[i % codes.length];
-              final isSelected = code == selected;
-              // Brightness falloff by CIRCULAR code distance — correct with
-              // virtual duplicates on both sides of every flag.
-              final distance = circularDistance(i % codes.length, focusCodeIdx);
-              final nearSelection = isSelected || distance == 0;
-              final opacity = nearSelection
-                  ? 1.0
-                  : switch (distance) {
-                      1 => 0.85,
-                      2 => 0.62,
-                      _ => 0.45,
-                    };
-              return Center(
-                child: _FlagItem(
-                  key: ValueKey<int>(i),
-                  asset: AppAssets.flag(code),
-                  size:
-                      (isSelected
-                          ? AethGeometry.flagSizeSelected
-                          : AethGeometry.flagSize) *
-                      s,
-                  opacity: opacity,
-                  onTap: () => onTapFlag(code, i),
-                ),
+            onPageChanged: onPageChanged,
+            itemCount: null, // unbounded both directions
+            itemBuilder: (context, page) {
+              final code = codes[page % n];
+              return AnimatedBuilder(
+                animation: controller,
+                builder: (context, _) {
+                  // Safe read: never touch controller.page during a
+                  // multi-position rebuild window.
+                  final safe = controller.hasClients &&
+                      controller.positions.length == 1 &&
+                      controller.positions.first.haveDimensions;
+                  final pos = safe ? (controller.page ?? page.toDouble()) : page.toDouble();
+                  final (size, opacity) = _lookFor((pos - page).abs());
+                  return Center(
+                    child: Opacity(
+                      opacity: opacity,
+                      child: _FlagItem(
+                        key: ValueKey<int>(page),
+                        asset: AppAssets.flag(code),
+                        size: size * s,
+                        onTap: onTapFlag == null
+                            ? null
+                            : () => onTapFlag!(page),
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -476,15 +598,22 @@ class _FlagsWheel extends StatelessWidget {
       ),
     );
 
-    // Defect #14 rule: greyscale (saturation 0) instead of blur — and
-    // nothing else: no overlay, no text on top of the wheel.
-    if (greyscale) {
-      return ColorFiltered(
-        colorFilter: const ColorFilter.matrix(_grayscaleMatrix),
-        child: wheel,
-      );
-    }
-    return wheel;
+    // Defect #14 rule kept: saturation-0 (NOT blur) for locked protocols
+    // while disconnected — but now TWEENED on state change (owner round 4
+    // #6: «تغیر وضعیت پرچم کشور ها ... باید با انیمیشن انجام شود»).
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: greyscale ? 0.0 : 1.0),
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeInOutCubic,
+      builder: (context, sat, child) {
+        if (sat > 0.995) return child!;
+        return ColorFiltered(
+          colorFilter: ColorFilter.matrix(_saturationMatrix(sat)),
+          child: child,
+        );
+      },
+      child: wheel,
+    );
   }
 }
 
@@ -493,35 +622,20 @@ class _FlagItem extends StatelessWidget {
     super.key,
     required this.asset,
     required this.size,
-    required this.opacity,
     required this.onTap,
   });
 
   final String asset;
   final double size;
-  final double opacity;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Opacity(
-        opacity: opacity,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(size * 0.24),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(size * 0.24),
-            child: Image.asset(asset, fit: BoxFit.cover),
-          ),
-        ),
-      ),
+    final flag = ClipRRect(
+      borderRadius: BorderRadius.circular(size * 0.24),
+      child: Image.asset(asset, fit: BoxFit.cover, width: size, height: size),
     );
+    if (onTap == null) return flag;
+    return GestureDetector(onTap: onTap, child: flag);
   }
 }

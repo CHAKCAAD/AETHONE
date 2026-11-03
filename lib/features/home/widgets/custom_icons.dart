@@ -54,30 +54,46 @@ class _ChevronPainter extends CustomPainter {
   bool shouldRepaint(_ChevronPainter old) => old.color != color;
 }
 
-/// Three tiny downward chevrons stacked inside the FAB column
-/// (reference: red, x 334–346 / y 800–820 on حالت متصل-ضاهر1).
+/// Three tiny chevrons stacked inside the FAB column.
+/// * connected (v4.12 reference): red, DOWN-pointing, below the button —
+///   REMOVED in v4.13 by owner decree («آیکون های فلش رو به پایین که در حالت
+///   متصل درون این بخش وجود داره رو هم کلا بردار»).
+/// * disconnected (reference حالت غیر متصل-ضاهر1): muted green, UP-pointing,
+///   above the button — kept via [up] (v4.13 restores the reference pose).
 class TripleChevronsIcon extends StatelessWidget {
-  const TripleChevronsIcon({super.key, this.size = 14, required this.color});
+  const TripleChevronsIcon({
+    super.key,
+    this.size = 14,
+    required this.color,
+    this.up = false,
+  });
 
   final double size;
   final Color color;
 
+  /// true → the chevrons point UP (disconnected reference pose).
+  final bool up;
+
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      size: Size.square(size),
-      painter: _TripleChevronsPainter(color),
-    );
+    final painter = _TripleChevronsPainter(color, up: up);
+    return CustomPaint(size: Size.square(size), painter: painter);
   }
 }
 
 class _TripleChevronsPainter extends CustomPainter {
-  _TripleChevronsPainter(this.color);
+  _TripleChevronsPainter(this.color, {this.up = false});
 
   final Color color;
+  final bool up;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (up) {
+      // Vertical mirror: the same down-path becomes the up-pose.
+      canvas.translate(0, size.height);
+      canvas.scale(1, -1);
+    }
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
@@ -96,5 +112,6 @@ class _TripleChevronsPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_TripleChevronsPainter old) => old.color != color;
+  bool shouldRepaint(_TripleChevronsPainter old) =>
+      old.color != color || old.up != up;
 }

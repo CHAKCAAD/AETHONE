@@ -16,6 +16,8 @@
 /// (accessibility rule) — the state change animations stay.
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -143,10 +145,12 @@ class _BreathingWhileConnectedState extends State<_BreathingWhileConnected>
   }
 }
 
-/// The connected aura (v4.12): a soft radial halo BEHIND the central icon
-/// that breathes in the same 2.6 s phase as the logo pulse — the connected
-/// screen stays alive without stealing attention. Mounted for BOTH looks by
-/// home_screen (hero logo / look-2 connect button).
+/// The connected aura (v4.13 — owner round-4 #3: «انیمیشن این آیکون در حالت
+/// متصل زیاد پیدا نیست، میخوام توی پس زمینه‌ش یه انیمیشن جالب اجرا شه»): a
+/// slow ROTATING SWEEP (two soft comet lobes, 7 s/turn — a quiet aurora)
+/// UNDER the breathing radial halo from v4.12. Both live BEHIND the central
+/// icon in BOTH looks; MotionStyle.off renders them static/hidden (the
+/// home_screen mounts the aura only while connected).
 class ConnectedAura extends StatefulWidget {
   const ConnectedAura({super.key, required this.color, required this.size});
 
@@ -158,8 +162,17 @@ class ConnectedAura extends StatefulWidget {
 }
 
 class _ConnectedAuraState extends State<ConnectedAura>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
+    with TickerProviderStateMixin {
+  /// 7 s/turn rotation — slow enough to read as ambience, fast enough to
+  /// be clearly alive.
+  late final AnimationController _spin = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 7000),
+  );
+
+  /// The 2.6 s breathing phase (unchanged from v4.12 — the logo pulse and
+  /// the halo breathe together).
+  late final AnimationController _breath = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 2600),
   );
@@ -167,39 +180,71 @@ class _ConnectedAuraState extends State<ConnectedAura>
   @override
   void initState() {
     super.initState();
-    _controller.repeat(reverse: true);
+    _spin.repeat();
+    _breath.repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _spin.dispose();
+    _breath.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final c = widget.color;
     return AnimatedBuilder(
-      animation: _controller,
+      animation: Listenable.merge([_spin, _breath]),
       builder: (context, _) {
-        final t = Curves.easeInOut.transform(_controller.value);
-        final d = widget.size * (0.92 + 0.14 * t);
+        final spin = _spin.value;
+        final t = Curves.easeInOut.transform(_breath.value);
+        final halo = widget.size * (0.92 + 0.14 * t);
         return SizedBox(
           width: widget.size,
           height: widget.size,
-          child: Center(
-            child: Container(
-              width: d,
-              height: d,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    widget.color.withValues(alpha: 0.05 + 0.09 * t),
-                    widget.color.withValues(alpha: 0.0),
-                  ],
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // 1) The rotating aurora sweep (two comet lobes, soft edges).
+              Transform.rotate(
+                angle: spin * 2 * math.pi,
+                child: SizedBox.expand(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: SweepGradient(
+                        transform: const GradientRotation(-math.pi / 2),
+                        colors: [
+                          c.withValues(alpha: 0.0),
+                          c.withValues(alpha: 0.15 + 0.03 * t),
+                          c.withValues(alpha: 0.0),
+                          c.withValues(alpha: 0.0),
+                          c.withValues(alpha: 0.09),
+                          c.withValues(alpha: 0.0),
+                          c.withValues(alpha: 0.0),
+                        ],
+                        stops: const [0.0, 0.10, 0.24, 0.52, 0.62, 0.76, 1.0],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              // 2) The breathing radial halo (v4.12, kept).
+              Container(
+                width: halo,
+                height: halo,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      c.withValues(alpha: 0.06 + 0.10 * t),
+                      c.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },

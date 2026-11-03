@@ -224,8 +224,8 @@ void main() {
     },
   );
 
-  testWidgets('connected ping renders inside the LEFT-OF-CENTER cluster '
-      '(name · map icon · ping, v4.12)', (tester) async {
+  testWidgets('connected ping renders around the CENTRED map icon '
+      '(name left · icon at exact centre · ping right, v4.13)', (tester) async {
     await useReferenceSurface(tester);
     final engine = ScriptedEngine();
     final store = ConnectionStore(engine: engine);
@@ -245,17 +245,68 @@ void main() {
         exitCountryCode: 'ir',
       ),
     );
-    // v4.12: bounded pumps (the connected idle aura never settles).
-    await tester.pump(const Duration(milliseconds: 500));
+    // v4.13: the connect ROULETTE spins the wheel for ~2.6 s before it lands
+    // on the exit country; the aura keeps repeating forever — bounded pumps
+    // past BOTH.
+    await tester.pump(const Duration(milliseconds: 2700));
     await tester.pump(const Duration(milliseconds: 100));
 
     final name = tester.getTopLeft(find.text('ایران'));
     final ping = tester.getTopLeft(find.text('146 ms'));
     // Cluster order: country name · map icon · ping (ping right of name).
     expect(ping.dx, greaterThan(name.dx));
-    // The whole cluster lives at the LEFT-OF-CENTER of the 402-wide screen
-    // (v4.12 owner request) — the ping ends well before the right half.
-    expect(ping.dx, lessThan(402 * 0.70));
+    // v4.13 (owner round-4 #1): the map icon sits at the EXACT screen centre
+    // and the ping starts to its RIGHT — never left of the centre line.
+    final mapIcon = tester.getCenter(
+      find.byKey(const ValueKey('location-map-icon')),
+    );
+    expect((mapIcon.dx - 201).abs(), lessThan(2.0),
+        reason: 'the map icon must be at the exact screen centre');
+    expect(ping.dx, greaterThan(mapIcon.dx));
+    expect(name.dx, lessThan(mapIcon.dx));
+  });
+
+  // v4.13.1 regression (owner round-4 #6, real-core demand: «بعد از اتصال
+  // هسته ها این مورد باید به درستی کار کند»): a late exit-country report
+  // DURING the connect roulette must RE-SPIN it to the REAL location — it
+  // never lands on the stale target and never writes mid-spin countries
+  // into the store selector (the engine owns the connected location).
+  testWidgets('late exit-country report mid-roulette re-spins to the real '
+      'location; store selector untouched', (tester) async {
+    await useReferenceSurface(tester);
+    final engine = ScriptedEngine();
+    final store = ConnectionStore(engine: engine);
+    store.selectCountry('ir');
+    store.selectedProtocol = ProtocolId.psiphonChain;
+    await tester.pumpWidget(_booth(HomeScreen(store: store)));
+    await tester.pumpAndSettle();
+
+    await store.connect();
+    engine.emit(const EngineStateChanged(VpnState.connecting));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 100));
+    engine.emit(const EngineStateChanged(VpnState.connected));
+    // The roulette is queued (stale target 'ir'). MID-SPIN the real core
+    // reports its exit country — a DIFFERENT one.
+    await tester.pump(const Duration(milliseconds: 800));
+    engine.emit(
+      const EngineStatsUpdated(
+        pingMs: 90,
+        downBytes: 0,
+        upBytes: 0,
+        exitCountryCode: 'nl',
+      ),
+    );
+    // Ride out the re-spun roulette (2.6 s from the retarget) + the aura
+    // (repeats forever) — bounded pumps.
+    await tester.pump(const Duration(milliseconds: 2700));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Landed on the REAL exit country, not the stale target.
+    expect(find.text('هلند'), findsOneWidget);
+    // The user's selector was NEVER overwritten by mid-spin countries —
+    // the epoch protocol's no-op guarantee on superseded spins.
+    expect(store.selectedCountryCode, 'ir');
   });
 
   // v4.12: the flag wheel is INFINITE — at any resting position flags exist
@@ -297,13 +348,17 @@ void main() {
     // Psiphon = selectable: drag one pitch left → the next country centers
     // and its NAME (not the code) shows in the header. Small stepped moves
     // with pumps keep the release velocity ≈ 0 (no fling past the neighbor).
-    final wheelCenter = tester.getCenter(find.byType(ListView).first);
+    final wheelCenter = tester.getCenter(find.byType(PageView).first);
     final drag = await tester.startGesture(wheelCenter);
     for (var i = 0; i < 3; i++) {
       await drag.moveBy(const Offset(-24, 0));
       await tester.pump(const Duration(milliseconds: 20));
     }
     await drag.moveBy(const Offset(-6, 0));
+    // v4.13: let the pointer velocity decay so the release does not fling —
+    // PageView snaps to the NEAREST page (one pitch), exactly like a slow
+    // human drag.
+    await tester.pump(const Duration(milliseconds: 300));
     await drag.up();
     await tester.pumpAndSettle();
     expect(find.text('ایسلند'), findsOneWidget); // 'ir' + 1 = 'is'
@@ -319,7 +374,7 @@ void main() {
       store: masqueStore,
     )));
     await tester.pumpAndSettle();
-    final lockedWheelCenter = tester.getCenter(find.byType(ListView).first);
+    final lockedWheelCenter = tester.getCenter(find.byType(PageView).first);
     final drag2 = await tester.startGesture(lockedWheelCenter);
     for (var i = 0; i < 5; i++) {
       await drag2.moveBy(const Offset(-24, 0));

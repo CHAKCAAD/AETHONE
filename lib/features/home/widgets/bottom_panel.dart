@@ -347,13 +347,20 @@ class StatCard extends StatelessWidget {
 
 /// The look-1 right column: dark squircle container + the power button that
 /// slides between the top slot (connected) and the bottom slot
-/// (disconnected) + three tiny red chevrons pinned near the bottom (covered
-/// by the button in its lower position, exactly like the reference frames).
+/// (disconnected).
 ///
-/// Owner v4.12: back to CLICK — a plain tap toggles (connect when
-/// disconnected, disconnect when connected); the v4.11 swipe-only rule is
-/// reverted. The slot slide + color crossfade + icon swap stay animated
-/// (defect #5).
+/// v4.13 (owner round-4 #4):
+///  * the CONNECTED red down-chevrons are GONE («آیکون های فلش رو به پایین
+///    که در حالت متصل درون این بخش وجود داره رو هم کلا بردار»);
+///  * the DISCONNECTED reference pose is restored: three muted-green
+///    UP-chevrons ABOVE the button (measured y≈738–758, ≈26 px above the
+///    button top, accent α≈0.35 over the card);
+///  * the tap target is the WHOLE section: the opaque GestureDetector now
+///    wraps a slightly enlarged invisible hit area around the column, so a
+///    tap on the background/edges still toggles.
+///
+/// Owner v4.12 (kept): plain tap toggles; the slot slide + color crossfade
+/// + icon swap stay animated (defect #5).
 class FabColumn extends StatelessWidget {
   const FabColumn({
     super.key,
@@ -376,77 +383,110 @@ class FabColumn extends StatelessWidget {
     final color = connected
         ? AethColors.accentConnected
         : AethColors.statusDisconnected;
+    final toggle = connected ? onDisconnect : onConnect;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: connected ? onDisconnect : onConnect,
-      child: Container(
+      onTap: toggle,
+      child: SizedBox(
         width: AethGeometry.fabColumnWidth * s,
         height: AethGeometry.fabColumnHeight * s,
-        decoration: BoxDecoration(
-          color: AethColors.cardDark,
-          borderRadius: BorderRadius.circular(AethRadius.fabColumn * s),
-        ),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // Chevrons first (under the button).
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 25 * s,
-              child: Center(
-                child: TripleChevronsIcon(
-                  size: 14 * s,
-                  color: AethColors.fabChevrons,
-                ),
+            // The visible column (v4.10 geometry, unchanged).
+            Container(
+              width: AethGeometry.fabColumnWidth * s,
+              height: AethGeometry.fabColumnHeight * s,
+              decoration: BoxDecoration(
+                color: AethColors.cardDark,
+                borderRadius: BorderRadius.circular(AethRadius.fabColumn * s),
               ),
             ),
-            // Power button — NO glow (the reference frames show none).
-            // Icon = the set's own «Off.svg» (owner defect #2).
-            AnimatedPositioned(
-              left: (AethGeometry.fabColumnWidth * s - size) / 2,
-              top: connected ? 5 * s : null,
-              bottom: connected ? null : 12 * s,
-              duration: duration,
-              curve: style.curve,
-              child: AnimatedContainer(
-                duration: duration,
-                curve: style.curve,
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(AethRadius.fab * s),
-                ),
-                child: Center(
-                  child: AnimatedSwitcher(
-                    duration: duration,
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: ScaleTransition(
-                        scale: Tween<double>(
-                          begin: 0.7,
-                          end: 1.0,
-                        ).animate(animation),
-                        child: child,
+            // Column content.
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Disconnected only: muted-green UP-chevrons ABOVE the button
+                // (reference pose). Connected: NO chevrons at all (v4.13).
+                if (!connected)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 86 * s,
+                    child: Center(
+                      child: TripleChevronsIcon(
+                        size: 14 * s,
+                        up: true,
+                        color: AethColors.accentConnected.withValues(
+                          alpha: 0.35,
+                        ),
                       ),
                     ),
-                    child: SvgPicture.asset(
-                      AppAssets.iconOff,
-                      key: ValueKey(connected ? 'fab-on' : 'fab-off'),
-                      width: 24 * s,
-                      height: 24 * s,
-                      fit: BoxFit.contain,
-                      colorFilter: ColorFilter.mode(
-                        connected
-                            ? AethColors.onPillConnected
-                            : AethColors.onPillDisconnected,
-                        BlendMode.srcIn,
+                  ),
+                // Power button — NO glow (the reference frames show none).
+                // Icon = the set's own «Off.svg» (owner defect #2).
+                AnimatedPositioned(
+                  left: (AethGeometry.fabColumnWidth * s - size) / 2,
+                  top: connected ? 5 * s : null,
+                  bottom: connected ? null : 12 * s,
+                  duration: duration,
+                  curve: style.curve,
+                  child: AnimatedContainer(
+                    duration: duration,
+                    curve: style.curve,
+                    width: size,
+                    height: size,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(AethRadius.fab * s),
+                    ),
+                    child: Center(
+                      child: AnimatedSwitcher(
+                        duration: duration,
+                        transitionBuilder: (child, animation) =>
+                            FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(
+                              begin: 0.7,
+                              end: 1.0,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        ),
+                        child: SvgPicture.asset(
+                          AppAssets.iconOff,
+                          key: ValueKey(connected ? 'fab-on' : 'fab-off'),
+                          width: 24 * s,
+                          height: 24 * s,
+                          fit: BoxFit.contain,
+                          colorFilter: ColorFilter.mode(
+                            connected
+                                ? AethColors.onPillConnected
+                                : AethColors.onPillDisconnected,
+                            BlendMode.srcIn,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
+              ],
+            ),
+            // Invisible EXTENDED hit area around the whole section (8 px
+            // sides / 6 px top-bottom): taps on the column's background and
+            // its immediate surroundings toggle too — owner round-4 #4. The
+            // out-of-bounds sibling keeps the layout box pixel-exact.
+            Positioned(
+              left: -8 * s,
+              right: -8 * s,
+              top: -6 * s,
+              bottom: -6 * s,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: toggle,
+                child: const SizedBox.expand(),
               ),
             ),
           ],

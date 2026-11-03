@@ -165,16 +165,17 @@ class StatusPill extends StatelessWidget {
         alignment: Alignment.center,
         clipBehavior: Clip.none,
         children: [
-          // Soft blurred accent shadow UNDER the group (owner defect #3),
-          // painted beneath the three crisp layers.
+          // Soft blurred accent shadow UNDER the group (owner defect #3;
+          // v4.13 round-4 #5: lighter + blurrier, covering a wider area but
+          // never a huge blob), painted beneath the three crisp layers.
           LayerStack(
             scale: s,
             color: accent,
             layers: const [
               LayerSpec(
-                width: AethGeometry.pillWidth,
-                height: AethGeometry.pillHeight,
-                radius: AethRadius.pillHalo,
+                width: AethGeometry.pillShadowW,
+                height: AethGeometry.pillShadowH,
+                radius: AethGeometry.pillShadowRadius,
                 opacity: AethGeometry.pillShadowAlpha,
                 blurSigma: AethGeometry.pillShadowBlur,
                 dy: AethGeometry.pillShadowOffsetY,
@@ -297,8 +298,9 @@ class SpeedTestButton extends StatelessWidget {
                 alignment: Alignment.center,
                 clipBehavior: Clip.none,
                 children: [
-                  // Owner CSS layers, bottom→top: glow 96 (blurred halo),
-                  // 74 α0.19, 62 α0.45, 44 solid — all concentric.
+                  // Owner CSS layers, bottom→top: glow 96 (blurred halo —
+                  // v4.13: lighter α.34 + σ24 so the halo spreads wider and
+                  // softer, owner round-4 #5), 74 α0.19, 62 α0.45, 44 solid.
                   LayerStack(
                     scale: s,
                     color: AethColors.accentConnected,
@@ -307,8 +309,8 @@ class SpeedTestButton extends StatelessWidget {
                         width: AethGeometry.speedGroupSize,
                         height: AethGeometry.speedGroupSize,
                         radius: AethRadius.speedGlow,
-                        opacity: AethColors.pillGlowOpacity,
-                        blurSigma: AethGeometry.pillBlur,
+                        opacity: AethGeometry.speedGlowOpacity,
+                        blurSigma: AethGeometry.speedGlowBlur,
                       ),
                       LayerSpec(
                         width: AethGeometry.speedHaloSize,
@@ -379,11 +381,14 @@ class GlowCircle extends StatelessWidget {
     final d = diameter ?? AethGeometry.centerButtonSize * s;
     final color = active ? colorOn : colorOff;
 
+    // v4.13 (owner round-4 #4): the tap target covers the WHOLE section —
+    // the core AND its glow background (1.42×d) — so a tap on the halo
+    // toggles too. The stack is centered so the paint is pixel-identical.
     return _TouchFeedback(
       onTap: onTap,
       child: SizedBox(
-        width: d,
-        height: d,
+        width: d * 1.45,
+        height: d * 1.45,
         child: Stack(
           alignment: Alignment.center,
           clipBehavior: Clip.none,

@@ -143,11 +143,22 @@ abstract final class AethGeometry {
   static const double pillCoreHeight = 26;
 
   /// Soft blurred accent shadow under the pill (owner: «یک سایه محو سبز رنگ
-  /// زیرش مثل سایه سبز پترن های پس زمینه») — sigma/offset tuned to the
-  /// exported frames' under-glow.
-  static const double pillShadowBlur = 12;
+  /// زیرش مثل سایه سبز پترن های پس زمینه»). v4.13 — owner round-4 #5:
+  /// «حالۀ سبز زیر دکمهٔ نمایش وضعیت اتصال و دکمهٔ اسپید تست زیادی کوچیک و
+  /// پر رنگه؛ کمی کم‌رنگ‌ترش کن و بلرش رو بیشتر کن تا منطقه بیشتری رو پوشش
+  /// بده، اما زیاد هم بزرگش نکن» — the halo rect is a touch wider than the
+  /// pill, the sigma doubled, the alpha reduced.
+  static const double pillShadowW = 152;
+  static const double pillShadowH = 48;
+  static const double pillShadowRadius = 16;
+  static const double pillShadowBlur = 24;
   static const double pillShadowOffsetY = 8;
-  static const double pillShadowAlpha = 0.45;
+  static const double pillShadowAlpha = 0.30;
+
+  /// Speed-Test glow layer (Group 11 halo) — same owner tuning: softer and
+  /// wider, never a tight saturated ring.
+  static const double speedGlowOpacity = 0.34;
+  static const double speedGlowBlur = 24;
 
   /// Speed Test button group — owner CSS (Group 11): 96×96 glow at (153,508),
   /// layers concentric, core 44×44 at (179,534); icon box 28×28 (Activity 4).
@@ -220,12 +231,11 @@ abstract final class AethGeometry {
   static const double gapPillToPanel = 63;
   static const double gapPanelToBottom = 30;
 
-  /// Location header (v4.12): the name · map icon · ping render as ONE
-  /// compact cluster at the LEFT-OF-CENTER — [locationInsetStart] is the
-  /// cluster's start inset (ref name start x95) and [locationGroupGap] the
-  /// gap between the three cluster elements. (v4.11 spread them name-left /
-  /// icon-center / ping-right; the owner asked for the left-of-center
-  /// cluster instead.)
-  static const double locationInsetStart = 95;
-  static const double locationGroupGap = 12;
+  /// Location header (v4.13 — owner round-4 re-clarification): the map icon
+  /// sits at the EXACT screen centre, the country name renders in the LEFT
+  /// slot and the ping/آفلاین in the RIGHT slot. [locationSideGap] is the
+  /// gap between each text and the icon box (measured 65/60 on
+  /// حالت متصل-ضاهر1 — symmetrized to 62 so both texts breathe alike and
+  /// the centre can never drift).
+  static const double locationSideGap = 62;
 }
