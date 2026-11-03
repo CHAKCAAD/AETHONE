@@ -32,22 +32,29 @@ import 'tunnel_probe.dart';
 import 'transport_modes.dart';
 
 /// Builds the Aether CLI arguments (evidence-locked; pure and unit-tested).
+///
+/// v4.20 — the selection is TWO independent knobs (owner device test:
+/// «منظورم این بود اول وایرگارد وصل شه و بعد سایفون نه اینکه کلا وایرگارد
+/// به جاش وصل شه»):
+///  * [protocol] — the WARP-leg tile (AUTO..MIM; WireGuard is the cold
+///    default per the v4.19 decree). In a CHAIN mode this is the protocol
+///    of the WARP tunnel the inner exit rides on — the core combines
+///    `--protocol wg --psiphon` into "WireGuard WARP first, Psiphon over
+///    it" (lib.rs L222-227: run_chain dials the held --bind listener).
+///  * [chain] — the overlay family member (torChain…psiphonOnly) or null
+///    for a plain connection.
 class AetherArguments {
-  /// [filesDir] is the app's writable files dir; [nativeLibraryDir] holds the
-  /// packaged native libraries (lyrebird lives there).
   static List<String> build({
     required ProtocolId protocol,
+    ProtocolId? chain,
     String? countryCode,
     int scanSpeed = 5,
     required String filesDir,
     required String nativeLibraryDir,
   }) {
-    // AUTO (the sheet's default mode) means the core's own default protocol
-    // — MASQUE; TransportModes carries no row for the synthetic `auto` enum
-    // member (the switch below emits the matching --protocol masque args).
-    final mode = protocol == ProtocolId.auto
-        ? TransportModes.masque
-        : TransportModes.byId(protocol);
+    final overlay = chain;
+    final modeId = effectiveMode(protocol, overlay);
+    final mode = TransportModes.byId(modeId);
     final args = <String>[
       // Listener + identity storage (writable app dir — the core creates
       // parents itself, config.rs write_private).
@@ -58,48 +65,68 @@ class AetherArguments {
       '--scan', scanProfile(scanSpeed),
     ];
 
-    // Protocol family (cli.rs parser arms; transport_modes.dart cliValue).
-    switch (protocol) {
-      case ProtocolId.masque:
-        args.addAll(['--protocol', 'masque']);
-      case ProtocolId.wireguard:
-        args.addAll(['--protocol', 'wg']);
-      case ProtocolId.gool:
-        args.addAll(['--protocol', 'gool']);
-      case ProtocolId.goolClassic:
-        // GOOL classic is NOT a protocol value: parser sets
-        // AETHER_PROTOCOL=gool AND AETHER_GOOL_MODE=classic (cli.rs L644-647).
-        args.addAll(['--protocol', 'gool', '--gool-classic']);
-      case ProtocolId.mim:
-        args.addAll(['--protocol', 'mim']);
-      case ProtocolId.torChain:
-        args.add('--tor');
-      case ProtocolId.torReverse:
-        args.add('--tor-reverse');
-      case ProtocolId.torOnly:
-        args.add('--tor-only');
-      case ProtocolId.psiphonChain:
-        args.add('--psiphon');
-      case ProtocolId.psiphonReverse:
-        args.add('--psiphon-reverse');
-      case ProtocolId.psiphonOnly:
-        args.add('--psiphon-only');
-      case ProtocolId.auto:
-        // AUTO defaults to the core's own default protocol (MASQUE).
-        args.addAll(['--protocol', 'masque']);
+    // --- the WARP-leg protocol FIRST, then the overlay on top of it —
+    // the args read exactly like the owner's decree («اول وایرگارد وصل شه
+    // و بعد سایفون»): --protocol wg --psiphon = WireGuard WARP first,
+    // Psiphon over it.
+    args.addAll(protocolArgs(protocol, overlay));
+
+    // --- the overlay family's own flag (cli.rs L584-600) ---
+    if (overlay != null) {
+      switch (overlay) {
+        case ProtocolId.torChain:
+          args.add('--tor');
+        case ProtocolId.torReverse:
+          args.add('--tor-reverse');
+        case ProtocolId.torOnly:
+          args.add('--tor-only');
+        case ProtocolId.psiphonChain:
+          args.add('--psiphon');
+        case ProtocolId.psiphonReverse:
+          args.add('--psiphon-reverse');
+        case ProtocolId.psiphonOnly:
+          args.add('--psiphon-only');
+        default:
+          break; // a plain tile — no overlay flag
+      }
     }
 
-    // Psiphon modes need the psiphon-tunnel-core binary + a writable state
-    // dir. The Go binary is packaged renamed to libpsiphon.so so the
-    // installer extracts it with the exec bit (extractNativeLibs) —
-    // evidence: psiphon.rs BINARY_NAMES = psiphon-tunnel-core/psiphon and
-    // `--psiphon-bin` is "the psiphon-tunnel-core binary to run" (cli.rs).
-    // v4.18 shipped liblyrebird.so here — lyrebird is Tor's obfs4 PT, NOT
-    // the psiphon client; the core exec'd the wrong program and psiphon
-    // modes could never come up on a device. Fixed in v4.19 (owner device
-    // test: «از کارکرد تور و سایفون مطمن نیستم»).
-    if (mode.exitKind == ExitKind.psiphonExit ||
-        protocol == ProtocolId.psiphonReverse) {
+    // --- tor family: the pluggable transport + a writable state dir.
+    // The packaged PT is lyrebird (aether's own pt-build.sh builds
+    // gitlab.torproject.org/.../lyrebird). bridges.rs search_dirs() only
+    // scans DESKTOP paths (/usr/lib/tor/…, $HOME/.local/share/…) and the
+    // binary is renamed liblyrebird.so for jniLibs extraction — without an
+    // explicit --tor-pt the auto-bridge plan finds NO transport on Android
+    // and Tor can never bootstrap (owner: «تور وصل نمیشه»). The protocol
+    // claims mirror aether's own PT_BINARIES row for lyrebird
+    // (bridges.rs L32-52); arti uses only the methods the binary itself
+    // reports over the PT protocol, so an over-claim costs one failed
+    // bridge, never a fake exit.
+    if (overlay != null && overlay.isTor) {
+      for (final pt in const [
+        'obfs4',
+        'snowflake',
+        'webtunnel',
+        'meek_lite',
+        'obfs3',
+        'scramblesuit',
+      ]) {
+        args.addAll(['--tor-pt', '$pt=$nativeLibraryDir/liblyrebird.so']);
+      }
+      // Explicit (not the warp.toml-sibling default) so tests + logs read
+      // the same path the core uses.
+      args.addAll(['--tor-dir', '$filesDir/aether/tor-state']);
+    }
+
+    // --- psiphon family: binary + writable state dir. The Go binary is
+    // packaged renamed to libpsiphon.so so the installer extracts it with
+    // the exec bit (extractNativeLibs) — evidence: psiphon.rs BINARY_NAMES
+    // = psiphon-tunnel-core/psiphon and `--psiphon-bin` is "the
+    // psiphon-tunnel-core binary to run" (cli.rs). v4.18 shipped
+    // liblyrebird.so here — lyrebird is Tor's obfs4 PT, NOT the psiphon
+    // client; fixed in v4.19 (owner device test: «از کارکرد تور و سایفون
+    // مطمن نیستم»).
+    if (overlay != null && overlay.isPsiphon) {
       args.addAll([
         '--psiphon-bin', '$nativeLibraryDir/libpsiphon.so',
         '--psiphon-dir', '$filesDir/aether/psiphon',
@@ -119,6 +146,51 @@ class AetherArguments {
       }
     }
     return args;
+  }
+
+  /// The mode the ENGINE actually runs: the overlay when one is selected,
+  /// else the leg tile (AUTO resolves to the core's own default, MASQUE).
+  static ProtocolId effectiveMode(ProtocolId leg, ProtocolId? overlay) {
+    if (overlay != null) return overlay;
+    return leg == ProtocolId.auto ? ProtocolId.masque : leg;
+  }
+
+  /// The `--protocol` argument pair(s) for the WARP leg, mapped per overlay
+  /// family (evidence: lib.rs L131-139, L203-218, L229-244; cli.rs L637-653):
+  ///  * ONLY modes return before the protocol session ever runs — pass the
+  ///    core default so `select_protocol()`'s INTERACTIVE menu (lib.rs
+  ///    L3281-3337) can never hang the headless job;
+  ///  * REVERSE modes carry TCP only: the core REFUSES the UDP-to-WARP legs
+  ///    (WireGuard, GOOL Classic) with its own error and forces the HTTP/2
+  ///    carrier regardless — map those legs to MASQUE honestly (the
+  ///    core's own error text blesses "--masque or --gool");
+  ///  * CHAIN modes take the leg VERBATIM: `--protocol wg --psiphon` is
+  ///    exactly "WireGuard WARP first, Psiphon over it".
+  static List<String> protocolArgs(ProtocolId leg, ProtocolId? overlay) {
+    if (overlay == ProtocolId.torOnly || overlay == ProtocolId.psiphonOnly) {
+      return const ['--protocol', 'masque'];
+    }
+    var l = leg;
+    if (overlay == ProtocolId.torReverse ||
+        overlay == ProtocolId.psiphonReverse) {
+      if (l == ProtocolId.auto ||
+          l == ProtocolId.wireguard ||
+          l == ProtocolId.goolClassic) {
+        l = ProtocolId.masque;
+      }
+    }
+    return switch (l) {
+      ProtocolId.wireguard => const ['--protocol', 'wg'],
+      ProtocolId.gool => const ['--protocol', 'gool'],
+      // GOOL classic is NOT a protocol value: parser sets
+      // AETHER_PROTOCOL=gool AND AETHER_GOOL_MODE=classic (cli.rs L644-647).
+      ProtocolId.goolClassic => const ['--protocol', 'gool', '--gool-classic'],
+      ProtocolId.mim => const ['--protocol', 'mim'],
+      // masque + auto (auto = the core's own default) + unreachable family
+      // members (the overlay, not the leg, carries those) all land on the
+      // core default.
+      _ => const ['--protocol', 'masque'],
+    };
   }
 
   /// «سرعت اسکن» 1..5 → the five pinned scan profiles (CLI_REFERENCE #28-33).
@@ -160,17 +232,40 @@ class PlatformEngineAdapter implements EngineAdapter {
 
   static const MethodChannel _channel = MethodChannel('aethone/engine');
 
-  /// Listener-ready budget: first-run WARP registration + endpoint scanning
-  /// legitimately take tens of seconds on a real device.
+  /// Listener-bind budget: the core binds its listeners at START for every
+  /// mode (lib.rs L128) — this wait is a cheap sanity bound; the real
+  /// end-to-end wait lives in the probe-retry loop below.
   static const Duration _listenerBudget = Duration(seconds: 120);
   static const Duration _tunnelUpBudget = Duration(seconds: 30);
   static const Duration _probeTimeout = Duration(seconds: 20);
   static const Duration _permissionBudget = Duration(seconds: 180);
   /// v4.19 — how often the connect walk re-checks the core's health while
-  /// waiting for the listener (owner device test #2: the app must FOLLOW the
-  /// core — a core that dies during registration must fail the walk with
-  /// the CORE's own error, not a generic listener timeout).
+  /// waiting (owner device test #2: the app must FOLLOW the core — a core
+  /// that dies during registration must fail the walk with the CORE's own
+  /// error, not a generic listener timeout).
   static const Duration _coreHealthInterval = Duration(seconds: 1);
+
+  /// v4.20 — pause between end-to-end probe attempts. The chain/only
+  /// listeners are held-bound BEFORE their inner protocol is ready (a
+  /// SOCKS greeting on them simply hangs — socks.rs L1931 test) — the walk
+  /// RETRIES the probe until the mode's own ready budget runs out instead
+  /// of failing on the first 20 s attempt (owner: «تور وصل نمیشه»,
+  /// «سایفون وصل نمیشه» — both were this walk bug, not core failures).
+  static const Duration _probeRetryInterval = Duration(seconds: 2);
+
+  /// The end-to-end ready budget per effective mode, mirroring the core's
+  /// own timeouts (psiphon.rs READY_TIMEOUT 180 s; tor.rs DIRECT_PROBE 75 s
+  /// + BRIDGE_PROBE 360 s; plain WARP = registration + scan ≈ listener
+  /// budget).
+  static Duration readyBudget(ProtocolId mode) => switch (mode) {
+    ProtocolId.torChain ||
+    ProtocolId.torReverse ||
+    ProtocolId.torOnly => const Duration(seconds: 360),
+    ProtocolId.psiphonChain ||
+    ProtocolId.psiphonReverse ||
+    ProtocolId.psiphonOnly => const Duration(seconds: 210),
+    _ => const Duration(seconds: 120),
+  };
 
   final Duration _statsInterval;
   final AetherCoreApi Function()? _coreFactory;
@@ -185,6 +280,17 @@ class PlatformEngineAdapter implements EngineAdapter {
   bool _connecting = false;
   bool _disconnecting = false;
   Completer<bool>? _tunnelUp;
+
+  /// v4.20 — the platform's own reason a tunnel came down during the walk
+  /// ("establish-failed", "start-threw:…", zeptun rc…) — carried into the
+  /// tunnelStartFailed message so the failed screen can NAME the stage
+  /// (owner: the tunnel failure was previously an anonymous miss).
+  String? _tunnelDownReason;
+
+  /// v4.20 — liveness of the tunnel leg while the walk is in flight: a
+  /// service that dies between 'up' and Connected must NOT be papered over
+  /// by a probe that only ever tests the LOCAL SOCKS listener.
+  bool _tunnelAlive = false;
   Completer<bool>? _permissionAnswer;
   int _activePort = 1819;
   ConnectionMode _activeMode = ConnectionMode.proxy;
@@ -227,13 +333,13 @@ class PlatformEngineAdapter implements EngineAdapter {
     // Stale-state hygiene: never start a second core over a live one.
     await _hardCleanup();
 
+    // v4.20 — the two selection knobs combine into the mode the engine
+    // runs: the overlay (tor/psiphon family) rides on top of the WARP-leg
+    // protocol tile (owner: «اول وایرگارد وصل شه و بعد سایفون»).
     final protocol = config.selectedProtocol;
-    // AUTO (the sheet's default mode) connects on the core's own default
-    // protocol — MASQUE; TransportModes has no row for the synthetic
-    // `auto` enum member.
-    final mode = protocol == ProtocolId.auto
-        ? TransportModes.masque
-        : TransportModes.byId(protocol);
+    final overlay = config.selectedChain;
+    final modeId = AetherArguments.effectiveMode(protocol, overlay);
+    final mode = TransportModes.byId(modeId);
     final tunnel = config.connectionMode == ConnectionMode.tunnel;
     _activeMode = config.connectionMode;
     _activePort = mode.socksEndpoint.port;
@@ -249,6 +355,49 @@ class PlatformEngineAdapter implements EngineAdapter {
       return;
     }
 
+    // --- 1b. v4.20 (tunnel mode): the VpnService comes up FIRST, before the
+    // core work. A foreground-service start is only legal while the app is
+    // visible — the old order (core → up-to-120 s listener wait → startVpn)
+    // raced the user backgrounding/locking the screen mid-walk and died
+    // with ForegroundServiceStartNotAllowedException (owner: «اپ هنوز هم در
+    // حالت تونل مشکل داره و وصل نمیشه»). zeptun tolerates a not-yet-serving
+    // SOCKS target exactly like the core tolerates early clients (the
+    // greeting is held), so bringing the TUN up early is safe — it is the
+    // standard "connecting…" state every VPN app shows.
+    if (tunnel) {
+      _tunnelUp = Completer<bool>();
+      _tunnelDownReason = null;
+      _tunnelAlive = false;
+      try {
+        await _channel.invokeMethod<void>('startVpn', {'port': _activePort});
+      } on PlatformException catch (e) {
+        await _hardCleanup();
+        _emitFail('vpnStartFailed', '${e.code}: ${e.message}');
+        return;
+      } on MissingPluginException {
+        await _hardCleanup();
+        _emitFail(
+          'platformBridgeMissing',
+          'the aethone/engine platform channel is not available in this build',
+        );
+        return;
+      }
+      final up = await _tunnelUp!.future.timeout(_tunnelUpBudget, onTimeout: () {
+        return false;
+      });
+      _tunnelUp = null;
+      _tunnelAlive = up;
+      if (!up) {
+        if (_disconnecting) return; // cancelled mid-tunnel (#3)
+        await _hardCleanup();
+        _emitFail(
+          'tunnelStartFailed',
+          _tunnelDownReason ?? 'zeptun did not come up',
+        );
+        return;
+      }
+    }
+
     // --- 2. Aether in-process (embedded core, architecture B+).
     _emitState(VpnState.connecting);
     final core = _core =
@@ -257,6 +406,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     _jobId = core.coreStart(
       AetherArguments.build(
         protocol: protocol,
+        chain: overlay,
         countryCode: config.selectedCountryCode,
         scanSpeed: config.scanSpeed,
         filesDir: paths.filesDir,
@@ -310,63 +460,79 @@ class PlatformEngineAdapter implements EngineAdapter {
     _coreFailureDuringStart = null;
     if (_disconnecting) return; // cancel owns the terminal state (#3)
 
-    // --- 4. Tunnel mode: VpnService → TUN fd → zeptun (JNI bridge).
-    if (tunnel) {
-      _tunnelUp = Completer<bool>();
-      try {
-        await _channel.invokeMethod<void>('startVpn', {'port': _activePort});
-      } on PlatformException catch (e) {
-        await _hardCleanup();
-        _emitFail('vpnStartFailed', '${e.code}: ${e.message}');
-        return;
-      } on MissingPluginException {
-        await _hardCleanup();
-        _emitFail(
-          'platformBridgeMissing',
-          'the aethone/engine platform channel is not available in this build',
-        );
-        return;
-      }
-      final up = await _tunnelUp!.future.timeout(_tunnelUpBudget, onTimeout: () {
-        return false;
-      });
-      _tunnelUp = null;
-      if (!up) {
-        if (_disconnecting) return; // cancelled mid-tunnel (#3)
-        await _hardCleanup();
-        _emitFail('tunnelStartFailed', 'zeptun did not come up');
-        return;
-      }
-    }
-
-    // --- 5. End-to-end probe — the ONLY path to Connected (§6.6).
-    try {
-      final result = await TunnelProbe().trace(
-        port: _activePort,
-        timeout: _probeTimeout,
-      );
-      if (_disconnecting) return; // cancelled during the probe (#3)
-      _emit(
-        EngineStatsUpdated(
-          pingMs: result.pingMs,
-          exitCountryCode: result.exitCountryCode,
-        ),
-      );
-      _emitState(VpnState.connected);
-    } catch (e) {
-      if (_disconnecting) return;
+    // --- 4. End-to-end probe with RETRIES — the ONLY path to Connected
+    // (§6.6). v4.20: a single 20 s attempt failed every mode whose inner
+    // protocol legitimately bootstraps slower than that (Psiphon up to 180 s,
+    // Tor 75 s direct + up to 360 s over bridges) because aether binds the
+    // listeners BEFORE the data path exists. The loop retries the probe
+    // within the mode's own budget while still FOLLOWING the core — a core
+    // that dies fails the walk immediately with its own error.
+    final stats = await _probeUntilReadyFollowingCore(
+      _activePort,
+      budget: readyBudget(modeId),
+    );
+    if (_disconnecting) return; // cancelled during the probe (#3)
+    if (stats == null) {
       await _hardCleanup();
-      _emitFail('endToEndProbeFailed', e.toString());
+      if (_coreFailureDuringStart != null) {
+        _emitFail('coreExited', _coreFailureDuringStart);
+      } else {
+        _emitFail(
+          'endToEndProbeFailed',
+          'the ${mode.label} data path did not answer through '
+          '127.0.0.1:$_activePort within ${readyBudget(modeId).inSeconds} s '
+          '(the chained protocol can legitimately take tens of seconds to '
+          'bootstrap)',
+        );
+      }
       return;
     }
+    // v4.20 — the probe only ever tests the LOCAL SOCKS listener; a tunnel
+    // leg that died between 'up' and here must never be papered over with
+    // a fake Connected.
+    if (tunnel && !_tunnelAlive) {
+      await _hardCleanup();
+      _emitFail(
+        'tunnelDiedDuringWalk',
+        _tunnelDownReason ?? 'the VPN service went down mid-connection',
+      );
+      return;
+    }
+    _emit(stats);
+    _emitState(VpnState.connected);
 
-    // --- 6. Steady state: stats + health (§6 health probe ⇒ reconnecting).
+    // --- 5. Steady state: stats + health (§6 health probe ⇒ reconnecting).
     _startTicker();
   }
 
   /// v4.19 (#2) — the core's last words when it died during the listener
   /// wait ("connection failure comes FROM the core").
   String? _coreFailureDuringStart;
+
+  /// v4.20 — one core-liveness poll. Returns the core's own error when the
+  /// job has ended (done/failed/poll-threw), null while it runs. Shared by
+  /// the listener wait and the probe-retry loop.
+  String? _pollCoreOnce() {
+    final jobId = _jobId;
+    final core = _core;
+    if (core == null || jobId == null) return null;
+    try {
+      final poll = core.jobPoll(jobId);
+      if (poll.body['state'] == 'done') {
+        final result = poll.body['result'];
+        final inner = result is Map ? result['state'] : null;
+        return inner == null
+            ? (poll.error ?? 'the core exited on its own')
+            : 'the core exited on its own (state: $inner)';
+      }
+      if (!poll.ok) {
+        return poll.error;
+      }
+    } on AetherFfiException catch (e) {
+      return e.message ?? e.code;
+    }
+    return null;
+  }
 
   /// The listener wait of the v4.19 walk: polls the listener AND the core's
   /// job liveness. Returns true when the listener is up; when the core
@@ -381,31 +547,53 @@ class PlatformEngineAdapter implements EngineAdapter {
       if (_disconnecting) return false;
       if (await TunnelProbe.isListenerReady(port)) return true;
       // Core liveness — the core owns the truth about its own failure.
-      final jobId = _jobId;
-      final core = _core;
-      if (core != null && jobId != null) {
-        try {
-          final poll = core.jobPoll(jobId);
-          if (poll.body['state'] == 'done') {
-            final result = poll.body['result'];
-            final inner = result is Map ? result['state'] : null;
-            _coreFailureDuringStart = inner == null
-                ? (poll.error ?? 'the core exited on its own')
-                : 'the core exited on its own (state: $inner)';
-            return false;
-          }
-          if (!poll.ok) {
-            _coreFailureDuringStart = poll.error;
-            return false;
-          }
-        } on AetherFfiException catch (e) {
-          _coreFailureDuringStart = e.message ?? e.code;
-          return false;
-        }
+      final failure = _pollCoreOnce();
+      if (failure != null) {
+        _coreFailureDuringStart = failure;
+        return false;
       }
       await Future<void>.delayed(_coreHealthInterval);
     }
     return false;
+  }
+
+  /// v4.20 — the end-to-end probe RETRY loop (the single-shot probe failed
+  /// every slow-bootstrapping mode: chain listeners are bound before their
+  /// inner protocol exists, so the first SOCKS greeting simply hangs until
+  /// the 20 s probe timeout). Retries within [budget] while following the
+  /// core: a job that dies fails the walk immediately with the core's own
+  /// error; a cancel aborts at the next checkpoint. Returns the successful
+  /// probe's stats, or null (budget exhausted / core died / cancelled).
+  Future<EngineStatsUpdated?> _probeUntilReadyFollowingCore(
+    int port, {
+    required Duration budget,
+  }) async {
+    final deadline = DateTime.now().add(budget);
+    while (true) {
+      if (_disconnecting) return null;
+      try {
+        final result = await TunnelProbe().trace(
+          port: port,
+          timeout: _probeTimeout,
+        );
+        return EngineStatsUpdated(
+          pingMs: result.pingMs,
+          exitCountryCode: result.exitCountryCode,
+        );
+      } catch (_) {
+        // Probe failed — the core may have died; it owns the failure truth.
+        final failure = _pollCoreOnce();
+        if (failure != null) {
+          _coreFailureDuringStart = failure;
+          return null;
+        }
+        if (DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(_probeRetryInterval);
+          continue;
+        }
+        return null; // budget exhausted — honest timeout, not a fake exit
+      }
+    }
   }
 
   @override
@@ -634,9 +822,15 @@ class PlatformEngineAdapter implements EngineAdapter {
         final event = args?['event'] as String?;
         switch (event) {
           case 'up':
+            _tunnelAlive = true;
             _tunnelUp?.complete(true);
           case 'down':
           case 'revoked':
+            // v4.20 — keep the platform's own reason (establish-failed,
+            // start-threw:<Ex>, destroy…) for the failed screen, and track
+            // the leg's liveness for the walk's post-probe honesty check.
+            _tunnelAlive = false;
+            _tunnelDownReason = (args?['reason'] as String?) ?? event;
             _tunnelUp?.complete(false);
             // Revocation while connected is a user-side kill: surface it
             // immediately instead of waiting for the next health probe.

@@ -194,6 +194,72 @@ jniLibs/<abi>/libzeptun-jni.so  ← zeptun/libzeptun-jni.so (statically links
     reading. Verify with a psiphon/tor protocol (their exits are
     e.g. NL/DE/SE) — the roulette lands on the reported exit.
 
+## Device-test round 2 fixes (v4.20 — owner reports, 2026-11-04)
+
+The owner's round-2 reports, root-caused against the pinned sources:
+
+1. **«سایفون روی وارپ… فقط پورت ۱۸۱۹ و وارپ کار میکرد» / «منظورم این بود اول
+   وایرگارد وصل شه و بعد سایفون نه اینکه کلا وایرگارد به جاش وصل شه» —
+   the selection was ONE flat knob, so the family cards and the protocol
+   tiles REPLACED each other; a chain mode ran the core's default MASQUE leg
+   and the leg tile could never ride along.**
+   * FIX: the selection is now TWO independent knobs — `selectedProtocol`
+     (the WARP leg, AUTO..MIM, cold default WireGuard) + `selectedChain`
+     (the overlay: torChain…psiphonOnly, or null = plain). The engine
+     combines them verbatim: `--protocol wg --psiphon` = WireGuard WARP
+     first, Psiphon over it (lib.rs L222-227 — run_chain dials the held
+     `--bind` listener). Reverse modes map the UDP-to-WARP legs
+     (wireguard/goolClassic) to masque — the core REFUSES them on reverse
+     (lib.rs L203-218/L229-244) and forces the H2 carrier regardless. Only
+     modes pass `--protocol masque` so `select_protocol()`'s interactive
+     menu can never hang a headless job.
+   * Persistence round-trips BOTH knobs; a v4.19 install's persisted family
+     member migrates into the overlay (the leg keeps its default).
+
+2. **«تور وصل نمیشه، سایفون وصل نمیشه» — TWO device-blockers:**
+   * **The walk's single 20 s end-to-end probe.** Aether binds its SOCKS
+     listeners at START (lib.rs L128) — before the WARP tunnel or the inner
+     protocol exists; a SOCKS greeting on an unserved listener simply HANGS
+     (socks.rs L1931 test). The single probe therefore failed every mode
+     whose data path legitimately bootstraps slower than 20 s (Psiphon
+     ready timeout 180 s — psiphon.rs L15; Tor 75 s direct + up to 360 s per
+     bridge — tor.rs L239-241). FIX: the walk now RETRIES the probe within a
+     per-mode budget (`readyBudget`: psiphon 210 s, tor 360 s, plain 120 s)
+     while still FOLLOWING the core — a job that dies fails the walk
+     immediately with the core's own error.
+   * **Tor had NO pluggable transport on Android.** bridges.rs
+     `search_dirs()` scans desktop paths only (/usr/lib/tor/…, $HOME/…) and
+     the packaged PT is renamed `liblyrebird.so` — the auto-bridge plan
+     found no transport, so Tor could never bootstrap where direct
+     connections are blocked. FIX: the tor family args now carry
+     `--tor-pt <proto>=<nativeLibraryDir>/liblyrebird.so` for every protocol
+     aether's own PT_BINARIES table attributes to lyrebird (obfs4, snowflake,
+     webtunnel, meek_lite, obfs3, scramblesuit — bridges.rs L32-52) plus an
+     explicit writable `--tor-dir`.
+
+3. **«اپ هنوز هم در حالت تونل مشکل داره و وصل نمیشه» — the tunnel leg came
+   up AFTER the core, i.e. after an up-to-120 s listener wait during which
+   the user could background the app; a foreground-service start is only
+   legal while the app is visible (ForegroundServiceStartNotAllowedException
+   on 12+).** FIX: the walk starts the VpnService FIRST (right after the
+   consent), then the core — zeptun tolerates a not-yet-serving SOCKS target
+   exactly like the core tolerates early clients. The Kotlin service also
+   restarts zeptun when the SOCKS target CHANGES between connects (the old
+   service kept relaying into a dead port), and the platform's own down
+   reason (establish-failed / start-threw:<Ex>) is carried into the failed
+   event message.
+
+4. **Failure visibility (new):** the failed state now NAMES its stage — the
+   engine's own error code rides under the status pill («کد خطا: …»), and
+   tapping it opens a details sheet (code + full message + copy) so the next
+   device round can be diagnosed without adb. The protocol descriptions
+   popup gained each mode's LOCAL SOCKS PORT (1819/1820/1821 — the owner
+   tested 1820 while the psiphon chain serves 1821).
+
+Note (owner port question): the ports are per-MODE — main WARP bind 1819,
+`--tor-bind` 1820, `--psiphon-bind` 1821 (cli.rs L23/L239/L282). The
+psiphon-over-warp exit lives on **1821**, not 1820.
+
 ## Device-test checklist (owner)
 
 1. Install the **release** APK (`aethone-ui-r<run>-release.apk`).

@@ -137,6 +137,40 @@ void main() {
     expect(find.text('متصل'), findsNothing);
   });
 
+  testWidgets(
+      'v4.20 — the FAILED state names its stage: the error code rides under '
+      'the pill and the details sheet (tap) shows code + message', (
+    tester,
+  ) async {
+    await useReferenceSurface(tester);
+    final engine = ScriptedEngine();
+    final store = ConnectionStore(engine: engine);
+    await tester.pumpWidget(_booth(HomeScreen(store: store)));
+    await tester.pumpAndSettle();
+
+    // Drive the walk to failed with a REAL device-style failure.
+    await store.connect();
+    engine.emit(
+      const EngineStateChanged(
+        VpnState.failed,
+        errorCode: 'tunnelStartFailed',
+        message: 'start-threw:UnsatisfiedLinkError',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(store.state, VpnState.failed);
+    // The caption under the pill names the engine's own error code.
+    expect(find.text('کد خطا: tunnelStartFailed'), findsOneWidget);
+
+    // Tapping it opens the details sheet with the code + full message.
+    await tester.tap(find.text('کد خطا: tunnelStartFailed'));
+    await tester.pumpAndSettle();
+    expect(find.text('جزئیات خطا'), findsOneWidget);
+    expect(find.text('tunnelStartFailed'), findsOneWidget);
+    expect(find.text('start-threw:UnsatisfiedLinkError'), findsOneWidget);
+  });
+
   testWidgets('multi-tap on connect is safe (single-flight)', (tester) async {
     await useReferenceSurface(tester);
     final engine = ScriptedEngine();

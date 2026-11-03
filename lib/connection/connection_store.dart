@@ -130,14 +130,15 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   @override
   String? selectedCountryCode;
 
-  /// v4.19 (#5) — the per-protocol wheel policy (see
-  /// [LocationWheelPolicy]): whether the wheel is a real SELECTOR for the
-  /// current protocol, and which country subset it may offer.
-  bool get wheelSelectable => LocationWheelPolicy.selectable(selectedProtocol);
+  /// v4.20 — the wheel policy follows the EFFECTIVE mode (the overlay when
+  /// one is selected, else the leg tile): the psiphon family filters the
+  /// flags to its egress regions, everything else shows the full manifest.
+  bool get wheelSelectable =>
+      LocationWheelPolicy.selectable(effectiveProtocol);
 
   /// null = the whole flag manifest (design/flags_png).
   List<String>? get wheelAllowedCodes =>
-      LocationWheelPolicy.allowedCodes(selectedProtocol);
+      LocationWheelPolicy.allowedCodes(effectiveProtocol);
 
   /// Wheel selection commit (flag snap / tap). Ignored while an operation
   /// is in flight so the selector can never fight a running transition.
@@ -148,19 +149,46 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
-  /// v4.19 — the app's DEFAULT protocol is WireGuard (owner device-test
-  /// decree #4: «حالا که هنوز بخش تنظیمات رو طراحی نکردیم حالت دیفالت تور
-  /// اور وارپ رو بزار روی پروتکل وایرگارد»). The sheet's AUTO tile still
-  /// selects the core's own default (MASQUE) explicitly — only the cold
-  /// default changed.
+  /// v4.19 — the app's DEFAULT WARP-leg protocol is WireGuard (owner
+  /// device-test decree #4: «حالا که هنوز بخش تنظیمات رو طراحی نکردیم حالت
+  /// دیفالت تور اور وارپ رو بزار روی پروتکل وایرگارد»). The sheet's AUTO
+  /// tile still selects the core's own default (MASQUE) explicitly — only
+  /// the cold default changed.
+  ///
+  /// v4.20 — this is now the WARP-LEG knob ONLY (owner: «اول وایرگارد وصل
+  /// شه و بعد سایفون»): a chain selection ([selectedChain]) rides on top
+  /// of this leg instead of replacing it. The engine combines both
+  /// (`--protocol wg --psiphon` = WireGuard WARP first, Psiphon over it).
   @override
   ProtocolId selectedProtocol = ProtocolId.wireguard;
 
-  /// v4.16 — protocol selection with notify (the sheet binds here; tapping a
-  /// tile/sub-tile commits the protocol and auto-pops back to the home).
+  /// v4.20 — the overlay family member (torChain…psiphonOnly) committed on
+  /// a protocol-sheet family card, or null = plain connection. Independent
+  /// of [selectedProtocol]: picking «سایفون روی وارپ» keeps the WireGuard
+  /// leg selected underneath it.
+  @override
+  ProtocolId? selectedChain;
+
+  /// The mode the ENGINE runs and the UI shows: the overlay when one is
+  /// selected, else the leg tile.
+  @override
+  ProtocolId get effectiveProtocol => selectedChain ?? selectedProtocol;
+
+  /// v4.16 — protocol (leg) selection with notify (the sheet binds here;
+  /// tapping a tile commits the leg and auto-pops back to the home — the
+  /// chain selection is deliberately untouched).
   void selectProtocol(ProtocolId id) {
     if (selectedProtocol == id) return;
     selectedProtocol = id;
+    notifyListeners();
+  }
+
+  /// v4.20 — overlay (chain) selection with notify. Tapping the ACTIVE
+  /// sub-tile again clears the overlay (back to the plain leg) — that is
+  /// the sheet's only "off" affordance until the deferred page redesign.
+  void selectChain(ProtocolId? id) {
+    if (selectedChain == id) return;
+    selectedChain = id;
     notifyListeners();
   }
 

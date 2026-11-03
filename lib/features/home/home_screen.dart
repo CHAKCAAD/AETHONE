@@ -10,6 +10,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../connection/connection_state.dart';
@@ -178,9 +179,11 @@ class HomeScreen extends StatelessWidget {
                     SizedBox(height: AethGeometry.gapTopbarToLocation * s),
                     LocationHeader(
                       connected: connected,
+                      // v4.20 — the band rule follows the EFFECTIVE mode
+                      // (the chain overlay when one is selected).
                       protocolIsTorOrPsiphon:
-                          store.selectedProtocol.isTor ||
-                          store.selectedProtocol.isPsiphon,
+                          store.effectiveProtocol.isTor ||
+                          store.effectiveProtocol.isPsiphon,
                       // v4.19 #5 — the wheel is a real SELECTOR only where
                       // the core honors the pick, and the psiphon-exit
                       // protocols FILTER the flags to their egress regions.
@@ -282,6 +285,33 @@ class HomeScreen extends StatelessWidget {
                     ),
                     SizedBox(height: AethGeometry.gapSpeedToPill * s),
                     StatusPill(state: store.state, style: style),
+                    // v4.20 — the failed state names its stage: the engine's
+                    // own error code rides under the pill (tap = full details
+                    // + copy). A device failure can now be REPORTED without
+                    // adb (owner: the tunnel failure was an anonymous miss).
+                    AnimatedSize(
+                      duration: motionDuration(
+                        style,
+                        MotionDurations.quick,
+                      ),
+                      curve: Curves.easeOut,
+                      alignment: Alignment.topCenter,
+                      child: store.state == VpnState.failed &&
+                              store.lastErrorCode != null
+                          ? Padding(
+                              padding: EdgeInsets.only(top: 8 * s),
+                              child: _FailureCaption(
+                                code: store.lastErrorCode!,
+                                message: store.lastErrorMessage,
+                                onTap: () => _openFailureDetails(
+                                  context,
+                                  store.lastErrorCode!,
+                                  store.lastErrorMessage,
+                                ),
+                              ),
+                            )
+                          : const SizedBox(width: double.infinity),
+                    ),
                     SizedBox(height: AethGeometry.gapPillToPanel * s),
                     Padding(
                       // Reference: the panel spans x 33–370 on the 402-wide
@@ -293,10 +323,10 @@ class HomeScreen extends StatelessWidget {
                         connected: connected,
                         style: style,
                         selectedProtocolIcon: AppAssets.protocolIcon(
-                          store.selectedProtocol,
+                          store.effectiveProtocol,
                         ),
                         protocolLabel: strings.protocolName(
-                          store.selectedProtocol,
+                          store.effectiveProtocol,
                         ),
                         downBytes: store.downBytes,
                         upBytes: store.upBytes,
@@ -321,6 +351,136 @@ class HomeScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  /// v4.20 — the failure details sheet: the engine's own error code + full
+  /// message, with a copy button so the owner can hand the exact stage over
+  /// (the tunnel failure was previously an anonymous miss: «اپ هنوز هم در
+  /// حالت تونل مشکل داره و وصل نمیشه»).
+  void _openFailureDetails(
+    BuildContext context,
+    String code,
+    String? message,
+  ) {
+    final strings = AppStrings.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AethColors.cardDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AethColors.textSecondary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              strings.failureDetailsTitle,
+              style: const TextStyle(
+                fontFamily: 'IRANYekanX',
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+                color: AethColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              code,
+              style: const TextStyle(
+                fontFamily: 'IRANYekanX',
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: AethColors.statusDisconnected,
+              ),
+            ),
+            if (message != null && message.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'IRANYekanX',
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                  height: 1.6,
+                  color: AethColors.textSecondary,
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
+            TextButton.icon(
+              onPressed: () {
+                Clipboard.setData(
+                  ClipboardData(text: '$code\n${message ?? ''}'),
+                );
+                Navigator.of(sheetContext).pop();
+              },
+              icon: const Icon(
+                Icons.copy_rounded,
+                size: 18,
+                color: AethColors.accentConnected,
+              ),
+              label: Text(
+                strings.failureDetailsCopy,
+                style: const TextStyle(
+                  fontFamily: 'IRANYekanX',
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                  color: AethColors.accentConnected,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// v4.20 — the failed state's honest caption under the status pill: the
+/// engine's own error code («کد خطا: tunnelStartFailed»), tappable for the
+/// full details sheet. Rendered ONLY in the failed state; AnimatedSize in
+/// [HomeScreen] keeps the layout shift soft.
+class _FailureCaption extends StatelessWidget {
+  const _FailureCaption({
+    required this.code,
+    this.message,
+    this.onTap,
+  });
+
+  final String code;
+  final String? message;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Text(
+        '${strings.failureCodeLabel}: $code',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontFamily: 'IRANYekanX',
+          fontWeight: FontWeight.w500,
+          fontSize: 11 * s,
+          height: 1.4,
+          color: AethColors.statusDisconnected.withValues(alpha: 0.85),
+        ),
+      ),
     );
   }
 }

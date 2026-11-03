@@ -70,9 +70,13 @@ class _FakeCore implements AetherCoreApi {
   String? pollError;
   final List<int> cancelled = [];
   final List<int> freed = [];
+  final List<List<String>> startedArgs = [];
 
   @override
-  int coreStart(List<String> args) => 42;
+  int coreStart(List<String> args) {
+    startedArgs.add(args);
+    return 42;
+  }
 
   @override
   AetherReply jobPoll(int id) {
@@ -260,7 +264,9 @@ void main() {
       final adapter = PlatformEngineAdapter(coreFactory: () => core);
       final events = <EngineEvent>[];
       adapter.events.listen(events.add);
-      adapter.bind(_Cfg());
+      // v4.20: the overlay rides on the WireGuard leg — the core-exit path
+      // is identical, but the args must carry BOTH knobs.
+      adapter.bind(_Cfg(selectedChain: ProtocolId.torChain));
 
       await adapter.connect();
       await pumpEventQueue();
@@ -269,6 +275,16 @@ void main() {
       expect(failure.state, VpnState.failed);
       expect(failure.errorCode, 'coreExited');
       expect(failure.message, contains('warp registration failed'));
+      // torChain walks on the 1820 listener, and the core still received
+      // the full v4.20 argument set (leg + overlay + PT + state dir).
+      expect(
+        core.startedArgs.single,
+        containsAllInOrder(['--protocol', 'wg', '--tor']),
+      );
+      expect(
+        core.startedArgs.single,
+        contains('--tor-pt'),
+      );
     });
 
     test('a user cancel mid-walk ends disconnected with NO late failure',
@@ -397,7 +413,12 @@ void main() {
       final store = ConnectionStore(engine: _ParkedEngine());
       await persistence.restore(store);
 
-      expect(store.selectedProtocol, ProtocolId.psiphonChain);
+      // v4.20 migration: a v4.19 install persisted the family member as THE
+      // protocol — it now lands in the chain overlay and the leg keeps its
+      // WireGuard default (owner: «اول وایرگارد وصل شه و بعد سایفون»).
+      expect(store.selectedChain, ProtocolId.psiphonChain);
+      expect(store.effectiveProtocol, ProtocolId.psiphonChain);
+      expect(store.selectedProtocol, ProtocolId.wireguard);
       expect(store.connectionMode, ConnectionMode.tunnel);
       expect(store.scanSpeed, 2);
       expect(store.selectedCountryCode, 'de');
@@ -434,7 +455,9 @@ void main() {
       final persistence = SettingsPersistence();
       await persistence.restore(store);
 
-      store.selectProtocol(ProtocolId.torOnly);
+      // v4.20 — the two knobs round-trip independently.
+      store.selectChain(ProtocolId.torOnly);
+      store.selectProtocol(ProtocolId.gool);
       store.setConnectionMode(ConnectionMode.tunnel);
       store.setScanSpeed(3);
       store.selectCountry('nl');
@@ -443,7 +466,9 @@ void main() {
 
       final fresh = ConnectionStore(engine: _ParkedEngine());
       await persistence.restore(fresh);
-      expect(fresh.selectedProtocol, ProtocolId.torOnly);
+      expect(fresh.selectedChain, ProtocolId.torOnly);
+      expect(fresh.selectedProtocol, ProtocolId.gool);
+      expect(fresh.effectiveProtocol, ProtocolId.torOnly);
       expect(fresh.connectionMode, ConnectionMode.tunnel);
       expect(fresh.scanSpeed, 3);
       expect(fresh.selectedCountryCode, 'nl');
@@ -452,8 +477,16 @@ void main() {
 }
 
 class _Cfg implements EngineConfigSource {
+  _Cfg({this.selectedChain});
   @override
   ProtocolId get selectedProtocol => ProtocolId.wireguard;
+
+  /// v4.20 — the overlay family member (null = plain).
+  @override
+  final ProtocolId? selectedChain;
+
+  @override
+  ProtocolId get effectiveProtocol => selectedChain ?? selectedProtocol;
   @override
   ConnectionMode get connectionMode => ConnectionMode.proxy;
   @override

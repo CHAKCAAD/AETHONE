@@ -1641,7 +1641,7 @@ jobs:
             echo "commit=${{ github.sha }}"
             echo "flutter=${FLUTTER_VERSION} agp=${AGP_VERSION} gradle_wrapper=${GRADLE_VERSION} build_tools=${BUILD_TOOLS_VERSION} jdk=${JDK_VERSION}"
             echo "application_id=com.chakcaad.aethone minSdk=24 (CANDIDATE, not proven) targetSdk=36"
-            echo "scope=M2 ENGINE WIRING (v4.19): release APK embeds the native cores (libaether.so + liblyrebird.so + libpsiphon.so [psiphon-tunnel-core — v4.19 fixed the v4.18 wrong-binary packaging] + libzeptun-jni.so; universal, 3 ABIs; extractNativeLibs=true). Real connect path: Aether in-process via C API + zeptun via VpnService JNI + end-to-end probe gate. The preview-debug APK (arm64-only) runs the PREVIEW_MODE simulator (debug builds only, by code)."
+            echo "scope=M2 ENGINE WIRING (v4.20): release APK embeds the native cores (libaether.so + liblyrebird.so + libpsiphon.so [psiphon-tunnel-core — v4.19 fixed the v4.18 wrong-binary packaging] + libzeptun-jni.so; universal, 3 ABIs; extractNativeLibs=true). Real connect path: Aether in-process via C API + zeptun via VpnService JNI (FGS-first walk order) + end-to-end probe-RETRY gate with per-mode ready budgets (psiphon 210 s, tor 360 s — v4.20) + tor --tor-pt on the packaged lyrebird. The preview-debug APK (arm64-only) runs the PREVIEW_MODE simulator (debug builds only, by code)."
             echo "native_pins=aether@$(grep -o '"aether": "[0-9a-f]*"' native-out/native-arm64-v8a/manifest.json | cut -d'"' -f4) zeptun@$(grep -o '"zeptun": "[0-9a-f]*"' native-out/native-arm64-v8a/manifest.json | cut -d'"' -f4)"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > dist/BUILD_INFO.txt

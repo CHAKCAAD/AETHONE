@@ -43,6 +43,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../connection/connection_state.dart';
 import '../../../connection/connection_store.dart';
+import '../../../connection/transport_modes.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
@@ -93,9 +94,22 @@ class _ProtocolPageState extends State<ProtocolPage> {
 
   void _select(ProtocolId id) {
     if (!mounted) return;
-    final already = widget.store.selectedProtocol == id;
+    // v4.20 — TWO independent knobs (owner: «اول وایرگارد وصل شه و بعد
+    // سایفون نه اینکه کلا وایرگارد به جاش وصل شه»): the six plain tiles
+    // commit the WARP LEG; the family sub-tiles commit the CHAIN OVERLAY
+    // that rides on top of that leg — neither replaces the other.
+    final isFamily = id.isTor || id.isPsiphon;
+    final already = isFamily
+        ? widget.store.selectedChain == id
+        : widget.store.selectedProtocol == id;
     setState(() => _pulseId = id);
-    if (!already) widget.store.selectProtocol(id);
+    if (isFamily) {
+      // Re-tapping the ACTIVE overlay clears it (back to the plain leg) —
+      // the sheet's only "off" affordance until the deferred redesign.
+      widget.store.selectChain(already ? null : id);
+    } else if (!already) {
+      widget.store.selectProtocol(id);
+    }
     // Owner v4.16: after choosing a protocol the user is returned to the
     // home page automatically. The 300 ms hold lets the green crossfade +
     // pulse land before the reverse slide.
@@ -275,7 +289,9 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 label:
                                     strings.protocolName(ProtocolId.psiphonChain),
                                 logoAsset: AppAssets.protocolPsiphonLogo,
-                                selected: widget.store.selectedProtocol,
+                                // v4.20 — the family cards bind the CHAIN
+                                // overlay (independent of the leg tiles).
+                                selected: widget.store.selectedChain,
                                 pulse: _pulseId,
                                 onSelect: _select,
                                 onInfo: _openDesc,
@@ -299,7 +315,9 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 label:
                                     strings.protocolName(ProtocolId.torChain),
                                 logoAsset: AppAssets.protocolTorLogo,
-                                selected: widget.store.selectedProtocol,
+                                // v4.20 — the family cards bind the CHAIN
+                                // overlay (independent of the leg tiles).
+                                selected: widget.store.selectedChain,
                                 pulse: _pulseId,
                                 onSelect: _select,
                                 onInfo: _openDesc,
@@ -932,7 +950,9 @@ class _FamilyCard extends StatelessWidget {
   final List<ProtocolId> family;
   final String label;
   final String logoAsset;
-  final ProtocolId selected;
+
+  /// v4.20 — the CHAIN overlay selection (null = no overlay active).
+  final ProtocolId? selected;
   final ProtocolId? pulse;
   final void Function(ProtocolId) onSelect;
   final void Function(ProtocolId) onInfo;
@@ -1321,12 +1341,17 @@ class _DescLayer extends StatelessWidget {
     final strings = AppStrings.of(context);
 
     final bool isFamily = forId.isPsiphon || forId.isTor;
-    final blocks = <({String text, bool chain, bool reverse})>[
+    // v4.20 — every block carries its mode's LOCAL SOCKS PORT (evidence:
+    // transport_modes.dart endpoints; cli.rs L23/L239/L282) so the owner
+    // can see which port each mode actually serves on a device (owner
+    // round 2: tested 1820 while the psiphon chain serves 1821).
+    final blocks = <({String text, bool chain, bool reverse, int port})>[
       if (isFamily) ...[
         (
           text: forId.isPsiphon ? strings.descPsiphonOnly : strings.descTorOnly,
           chain: false,
           reverse: false,
+          port: 1819,
         ),
         (
           text: forId.isPsiphon
@@ -1334,6 +1359,7 @@ class _DescLayer extends StatelessWidget {
               : strings.descTorChain,
           chain: true,
           reverse: false,
+          port: forId.isPsiphon ? 1821 : 1820,
         ),
         (
           text: forId.isPsiphon
@@ -1341,6 +1367,7 @@ class _DescLayer extends StatelessWidget {
               : strings.descTorReverse,
           chain: true,
           reverse: true,
+          port: 1819,
         ),
       ] else
         (
@@ -1355,8 +1382,30 @@ class _DescLayer extends StatelessWidget {
           },
           chain: false,
           reverse: false,
+          port: 1819,
         ),
     ];
+    assert(
+      !isFamily ||
+          blocks.every(
+            (b) => b.port == TransportModes.byId(
+              // The glyph language: reverse implies a stacked (chain) glyph
+              // with an inverted chevron — derive the MODE reverse-first.
+              forId.isPsiphon
+                  ? (b.reverse
+                        ? ProtocolId.psiphonReverse
+                        : b.chain
+                        ? ProtocolId.psiphonChain
+                        : ProtocolId.psiphonOnly)
+                  : (b.reverse
+                        ? ProtocolId.torReverse
+                        : b.chain
+                        ? ProtocolId.torChain
+                        : ProtocolId.torOnly),
+            ).socksEndpoint.port,
+          ),
+      'desc-popup ports must mirror transport_modes.dart',
+    );
 
     return Positioned.fill(
       child: TweenAnimationBuilder<double>(
@@ -1463,17 +1512,38 @@ class _DescLayer extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          blocks[i].text,
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                            fontFamily: 'IRANYekanX',
-                            fontWeight: FontWeight.w400,
-                            fontSize: AethGeometry.protoDescTextSize * s,
-                            height: AethGeometry.protoDescTextHeight /
-                                AethGeometry.protoDescTextSize,
-                            color: AethColors.textPrimary,
-                          ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              blocks[i].text,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontFamily: 'IRANYekanX',
+                                fontWeight: FontWeight.w400,
+                                fontSize: AethGeometry.protoDescTextSize * s,
+                                height: AethGeometry.protoDescTextHeight /
+                                    AethGeometry.protoDescTextSize,
+                                color: AethColors.textPrimary,
+                              ),
+                            ),
+                            // v4.20 — the mode's local SOCKS port (honest
+                            // label, Latin digits like the ping labels).
+                            SizedBox(height: 4 * s),
+                            Text(
+                              strings.protocolPortNote(blocks[i].port),
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontFamily: 'IRANYekanX',
+                                fontWeight: FontWeight.w500,
+                                fontSize:
+                                    (AethGeometry.protoDescTextSize - 2) * s,
+                                height: 1.3,
+                                color: AethColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       SizedBox(width: 12 * s),

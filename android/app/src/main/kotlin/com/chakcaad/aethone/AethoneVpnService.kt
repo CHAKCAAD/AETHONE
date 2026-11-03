@@ -104,9 +104,18 @@ class AethoneVpnService : VpnService() {
 
     private fun startTunnel(port: Int): Boolean {
         if (zeptunUp) {
-            // Already serving (activity restart re-invoked the service).
-            EngineBridge.emit(mapOf("event" to "up", "port" to port))
-            return true
+            // v4.20: a mode switch (e.g. 1819 → 1820) between connects used
+            // to keep serving the OLD port — zeptun would relay into a
+            // listener nothing serves anymore. A different target is a
+            // full restart; the same target is the plain "already serving"
+            // re-entry (activity restart re-invoked the service).
+            if (port != socksPort) {
+                Log.i(TAG, "socks target changed $socksPort -> $port; restarting zeptun")
+                stopTunnel("port-change")
+            } else {
+                EngineBridge.emit(mapOf("event" to "up", "port" to port))
+                return true
+            }
         }
         val builder = Builder()
             .setSession("AETHONE")

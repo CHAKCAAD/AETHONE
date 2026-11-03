@@ -88,8 +88,18 @@ class EngineLogLine extends EngineEvent {
 /// consumes (M2). Implemented by the store — these are USER choices; the
 /// engine never writes them.
 abstract class EngineConfigSource {
-  /// Which protocol tile the user committed on the protocol sheet.
+  /// Which WARP-leg protocol tile the user committed on the protocol sheet
+  /// (AUTO..MIM). In a chain mode this is the protocol of the WARP tunnel
+  /// the inner exit rides on (v4.20 split).
   ProtocolId get selectedProtocol;
+
+  /// v4.20 — the overlay family member (torChain…psiphonOnly) committed on
+  /// a family card, or null = plain connection.
+  ProtocolId? get selectedChain;
+
+  /// The mode the engine actually runs: the overlay when set, else the leg
+  /// (AUTO resolves to MASQUE at the adapter).
+  ProtocolId get effectiveProtocol;
 
   /// تونل (whole-device VpnService + zeptun) or پروکسی (local SOCKS only).
   ConnectionMode get connectionMode;

@@ -32,9 +32,15 @@ void main() {
   });
 
   group('AetherArguments.build — protocol table (evidence-locked)', () {
-    List<String> build(ProtocolId id, {String? country, int scan = 5}) =>
-        AetherArguments.build(
-          protocol: id,
+    // v4.20: [protocol] is the WARP LEG; a family member rides in [chain].
+    List<String> build(
+      ProtocolId id, {
+      String? country,
+      int scan = 5,
+      ProtocolId? chain,
+    }) => AetherArguments.build(
+          protocol: (id.isTor || id.isPsiphon) ? ProtocolId.wireguard : id,
+          chain: chain ?? ((id.isTor || id.isPsiphon) ? id : null),
           countryCode: country,
           scanSpeed: scan,
           filesDir: '/data/files',
@@ -65,36 +71,106 @@ void main() {
     test('mim', () {
       expect(build(ProtocolId.mim), containsAllInOrder(['--protocol', 'mim']));
     });
-    test('torChain uses --tor (chain), NOT --protocol', () {
-      final args = build(ProtocolId.torChain);
+
+    test(
+      'v4.20 CHAIN keeps the WARP leg: --psiphon AND --protocol wg together '
+      '(«اول وایرگارد وصل شه و بعد سایفون»)',
+      () {
+        final args = build(ProtocolId.wireguard, chain: ProtocolId.psiphonChain);
+        expect(args, contains('--psiphon'));
+        expect(args, containsAllInOrder(['--protocol', 'wg']));
+        expect(
+          args,
+          containsAllInOrder(['--psiphon-bin', '/data/lib/libpsiphon.so']),
+        );
+        expect(
+          args,
+          containsAllInOrder(['--psiphon-dir', '/data/files/aether/psiphon']),
+        );
+      },
+    );
+    test('v4.20 CHAIN honors a DIFFERENT leg too (gool under psiphon)', () {
+      final args = build(ProtocolId.gool, chain: ProtocolId.psiphonChain);
+      expect(args, containsAllInOrder(['--protocol', 'gool', '--psiphon']));
+    });
+    test('torChain rides on the leg (--tor + --protocol wg)', () {
+      final args = build(ProtocolId.wireguard, chain: ProtocolId.torChain);
       expect(args, contains('--tor'));
-      expect(args, isNot(contains('--protocol')));
+      expect(args, containsAllInOrder(['--protocol', 'wg']));
     });
-    test('torReverse', () {
-      expect(build(ProtocolId.torReverse), contains('--tor-reverse'));
-    });
-    test('torOnly', () {
-      expect(build(ProtocolId.torOnly), contains('--tor-only'));
-    });
-    test('psiphonChain uses --psiphon + the PT binary + the state dir', () {
-      final args = build(ProtocolId.psiphonChain);
-      expect(args, contains('--psiphon'));
-      // v4.19: the packaged PT is libpsiphon.so (psiphon-tunnel-core) — the
-      // v4.18 liblyrebird.so path exec'd the WRONG program (lyrebird is
-      // Tor's obfs4 PT) and psiphon modes could never come up on a device.
-      expect(args, containsAllInOrder(['--psiphon-bin', '/data/lib/libpsiphon.so']));
-      expect(
-        args,
-        containsAllInOrder(['--psiphon-dir', '/data/files/aether/psiphon']),
-      );
-    });
+    test(
+      'v4.20 tor modes carry the lyrebird PT + a writable state dir '
+      '(without --tor-pt the auto-bridge plan finds NO transport on Android)',
+      () {
+        for (final chain in [
+          ProtocolId.torChain,
+          ProtocolId.torReverse,
+          ProtocolId.torOnly,
+        ]) {
+          final args = build(ProtocolId.wireguard, chain: chain);
+          expect(args, containsAllInOrder([
+            '--tor-pt',
+            'obfs4=/data/lib/liblyrebird.so',
+          ]), reason: '$chain must claim obfs4 on the packaged lyrebird');
+          expect(args, containsAllInOrder([
+            '--tor-pt',
+            'snowflake=/data/lib/liblyrebird.so',
+          ]), reason: 'aether PT_BINARIES maps lyrebird to snowflake too');
+          expect(
+            args,
+            containsAllInOrder(['--tor-dir', '/data/files/aether/tor-state']),
+            reason: '$chain needs a writable tor state dir',
+          );
+        }
+        // PT args are ONLY for the tor family — psiphon/plain never see them.
+        expect(
+          build(ProtocolId.wireguard, chain: ProtocolId.psiphonChain),
+          isNot(contains('--tor-pt')),
+        );
+        expect(build(ProtocolId.wireguard), isNot(contains('--tor-pt')));
+      },
+    );
+    test(
+      'v4.20 REVERSE maps the UDP-to-WARP legs to masque (the core refuses '
+      'wg/gool-classic on reverse: lib.rs L203-218/L229-244)',
+      () {
+        final args = build(ProtocolId.wireguard, chain: ProtocolId.torReverse);
+        expect(args, contains('--tor-reverse'));
+        expect(args, containsAllInOrder(['--protocol', 'masque']));
+        expect(args, isNot(contains('wg')));
+
+        final psiphonArgs = build(
+          ProtocolId.goolClassic,
+          chain: ProtocolId.psiphonReverse,
+        );
+        expect(psiphonArgs, contains('--psiphon-reverse'));
+        expect(psiphonArgs, containsAllInOrder(['--protocol', 'masque']));
+      },
+    );
+    test(
+      'v4.20 ONLY modes pass the core default protocol (the interactive '
+      'select_protocol menu must never hang a headless job)',
+      () {
+        final tor = build(ProtocolId.wireguard, chain: ProtocolId.torOnly);
+        expect(tor, contains('--tor-only'));
+        expect(tor, containsAllInOrder(['--protocol', 'masque']));
+
+        final psiphon = build(ProtocolId.gool, chain: ProtocolId.psiphonOnly);
+        expect(psiphon, contains('--psiphon-only'));
+        expect(psiphon, containsAllInOrder(['--protocol', 'masque']));
+        expect(psiphon, containsAllInOrder([
+          '--psiphon-bin',
+          '/data/lib/libpsiphon.so',
+        ]));
+      },
+    );
     test('psiphonReverse still gets the PT binary (its exit is WARP)', () {
-      final args = build(ProtocolId.psiphonReverse);
+      final args = build(ProtocolId.masque, chain: ProtocolId.psiphonReverse);
       expect(args, contains('--psiphon-reverse'));
       expect(args, containsAllInOrder(['--psiphon-bin', '/data/lib/libpsiphon.so']));
     });
     test('psiphonOnly', () {
-      final args = build(ProtocolId.psiphonOnly);
+      final args = build(ProtocolId.masque, chain: ProtocolId.psiphonOnly);
       expect(args, contains('--psiphon-only'));
       expect(args, containsAllInOrder(['--psiphon-bin', '/data/lib/libpsiphon.so']));
     });
@@ -102,6 +178,20 @@ void main() {
       expect(
         build(ProtocolId.auto),
         containsAllInOrder(['--protocol', 'masque']),
+      );
+    });
+    test('effectiveMode: the overlay wins; auto resolves to masque', () {
+      expect(
+        AetherArguments.effectiveMode(ProtocolId.wireguard, ProtocolId.torChain),
+        ProtocolId.torChain,
+      );
+      expect(
+        AetherArguments.effectiveMode(ProtocolId.auto, null),
+        ProtocolId.masque,
+      );
+      expect(
+        AetherArguments.effectiveMode(ProtocolId.gool, null),
+        ProtocolId.gool,
       );
     });
 
@@ -115,42 +205,44 @@ void main() {
   });
 
   group('AetherArguments.build — country pinning is honest per exit kind', () {
-    List<String> build(ProtocolId id, String country) => AetherArguments.build(
-      protocol: id,
-      countryCode: country,
-      filesDir: '/f',
-      nativeLibraryDir: '/l',
-    );
+    List<String> build(ProtocolId id, ProtocolId? chain, String country) =>
+        AetherArguments.build(
+          protocol: id,
+          chain: chain,
+          countryCode: country,
+          filesDir: '/f',
+          nativeLibraryDir: '/l',
+        );
 
     test('WARP-exit mode pins --exit-loc (uppercased)', () {
       expect(
-        build(ProtocolId.masque, 'de'),
+        build(ProtocolId.masque, null, 'de'),
         containsAllInOrder(['--exit-loc', 'DE']),
       );
       expect(
-        build(ProtocolId.wireguard, 'nl'),
+        build(ProtocolId.wireguard, null, 'nl'),
         containsAllInOrder(['--exit-loc', 'NL']),
       );
       // psiphonReverse exits through WARP → exit-loc applies.
       expect(
-        build(ProtocolId.psiphonReverse, 'de'),
+        build(ProtocolId.masque, ProtocolId.psiphonReverse, 'de'),
         containsAllInOrder(['--exit-loc', 'DE']),
       );
     });
 
     test('Psiphon-exit mode pins --psiphon-region (lowercased)', () {
       expect(
-        build(ProtocolId.psiphonChain, 'de'),
+        build(ProtocolId.wireguard, ProtocolId.psiphonChain, 'de'),
         containsAllInOrder(['--psiphon-region', 'de']),
       );
       expect(
-        build(ProtocolId.psiphonOnly, 'de'),
+        build(ProtocolId.masque, ProtocolId.psiphonOnly, 'de'),
         containsAllInOrder(['--psiphon-region', 'de']),
       );
     });
 
     test('Tor exits are NOT pinned (would be a lie)', () {
-      final args = build(ProtocolId.torChain, 'de');
+      final args = build(ProtocolId.wireguard, ProtocolId.torChain, 'de');
       expect(args, isNot(contains('--exit-loc')));
       expect(args, isNot(contains('--psiphon-region')));
     });
@@ -470,7 +562,157 @@ void main() {
       expect(failure.state, VpnState.failed);
       expect(failure.errorCode, 'libraryMissing');
     });
+
+    test(
+      'v4.20 probe-RETRY: a chain listener whose data path comes up LATE '
+      'still connects (the single 20 s probe used to fail these modes — '
+      'owner: «تور وصل نمیشه، سایفون وصل نمیشه»)', () async {
+      mockChannel();
+      // psiphonChain serves 1821; the first two probes are refused (the
+      // inner protocol is still bootstrapping), the third succeeds.
+      final slow = await _FakeSocks5Server(refuseFirstN: 2).startOn(1821);
+      try {
+        final core = _FakeCore();
+        final adapter = PlatformEngineAdapter(coreFactory: () => core);
+        final events = <EngineEvent>[];
+        adapter.events.listen(events.add);
+        adapter.bind(
+          _FixedConfig(
+            selectedProtocol: ProtocolId.wireguard,
+            selectedChain: ProtocolId.psiphonChain,
+            connectionMode: ConnectionMode.proxy,
+          ),
+        );
+
+        await adapter.connect(); // retries inside (~2 × 2 s)
+        await pumpEventQueue();
+
+        expect(statesOf(events), [VpnState.connecting, VpnState.connected]);
+        final stats = events.whereType<EngineStatsUpdated>().first;
+        expect(stats.exitCountryCode, 'de');
+        // The core got the v4.20 chain args: the WireGuard LEG first, the
+        // psiphon overlay on top of it (owner: «اول وایرگارد وصل شه و بعد
+        // سایفون»).
+        expect(core.startedArgs.single, containsAllInOrder(['--protocol', 'wg']));
+        expect(core.startedArgs.single, contains('--psiphon'));
+        expect(core.startedArgs.single, containsAllInOrder([
+          '--psiphon-bin', '/data/test/lib/libpsiphon.so',
+        ]));
+      } finally {
+        await slow.dispose();
+      }
+    });
+
+    test(
+      'v4.20 probe-retry: a core that dies mid-bootstrap fails FAST with '
+      'the CORE\'s own error (never a probe-budget timeout)', () async {
+      mockChannel();
+      // All probes refused on the psiphon port; the core dies 300 ms in.
+      final refusing = await _FakeSocks5Server(refuseConnect: true).startOn(1821);
+      try {
+        final core = _FakeCore();
+        final adapter = PlatformEngineAdapter(coreFactory: () => core);
+        final events = <EngineEvent>[];
+        adapter.events.listen(events.add);
+        adapter.bind(
+          _FixedConfig(
+            selectedProtocol: ProtocolId.wireguard,
+            selectedChain: ProtocolId.psiphonChain,
+            connectionMode: ConnectionMode.proxy,
+          ),
+        );
+
+        final walking = adapter.connect();
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        core.pollState = 'error'; // the core exits on its own, mid-bootstrap
+        await walking;
+        await pumpEventQueue();
+
+        final failure = events.whereType<EngineStateChanged>().last;
+        expect(failure.state, VpnState.failed);
+        expect(failure.errorCode, 'coreExited');
+        expect(failure.message, contains('the core failed'));
+      } finally {
+        await refusing.dispose();
+      }
+    });
+
+    test(
+      'v4.20 tunnel ORDER: the VpnService starts BEFORE the core (a '
+      'foreground-service start is only legal while the app is visible — the '
+      'old order raced the user backgrounding the app mid-wait)', () async {
+      final order = <String>[];
+      mockChannel(onStartVpn: (_) => order.add('vpn'));
+      final core = _OrderRecordingCore(order);
+      final adapter = PlatformEngineAdapter(coreFactory: () => core);
+      final events = <EngineEvent>[];
+      adapter.events.listen(events.add);
+      adapter.bind(
+        _FixedConfig(
+          selectedProtocol: ProtocolId.masque,
+          connectionMode: ConnectionMode.tunnel,
+        ),
+      );
+
+      unawaited(adapter.connect());
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await pumpEventQueue();
+
+      expect(order, ['vpn', 'core']); // FGS first, core second
+      expect(statesOf(events), [VpnState.connecting, VpnState.connected]);
+    });
+
+    test('v4.20 readyBudget mirrors the core\'s own timeouts per mode', () {
+      // tor.rs: DIRECT_PROBE 75 s + BRIDGE_PROBE 360 s.
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.torChain),
+        const Duration(seconds: 360),
+      );
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.torReverse),
+        const Duration(seconds: 360),
+      );
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.torOnly),
+        const Duration(seconds: 360),
+      );
+      // psiphon.rs: READY_TIMEOUT 180 s (+ margin).
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.psiphonChain),
+        const Duration(seconds: 210),
+      );
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.psiphonReverse),
+        const Duration(seconds: 210),
+      );
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.psiphonOnly),
+        const Duration(seconds: 210),
+      );
+      // Plain WARP = registration + scan ≈ the listener budget.
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.masque),
+        const Duration(seconds: 120),
+      );
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.wireguard),
+        const Duration(seconds: 120),
+      );
+    });
   });
+}
+
+/// Records the walk order into [order] (v4.20 tunnel-order test).
+class _OrderRecordingCore extends _FakeCore {
+  _OrderRecordingCore(this.order);
+
+  final List<String> order;
+
+  @override
+  int coreStart(List<String> args) {
+    order.add('core');
+    return super.coreStart(args);
+  }
 }
 
 /// Simulates the platform→Dart direction (Kotlin emits `onTunnelEvent`).
@@ -488,9 +730,15 @@ Future<void> emitTunnelEvent(Map<String, Object?> args) async {
 /// A minimal REAL-socket SOCKS5 server: greeting → CONNECT (ATYP=domain) →
 /// serves the cloudflare-trace body. [refuseConnect] makes it answer REP≠0.
 class _FakeSocks5Server {
-  _FakeSocks5Server({this.refuseConnect = false});
+  _FakeSocks5Server({this.refuseConnect = false, this.refuseFirstN = 0});
 
   final bool refuseConnect;
+
+  /// v4.20 — refuse the first N CONNECTs, then serve normally: the
+  /// stand-in for a chained protocol whose data path comes up LATE
+  /// (aether binds the listener before the inner protocol is ready).
+  final int refuseFirstN;
+  int _connectsSeen = 0;
   ServerSocket? _server;
   int get port => _server!.port;
   String? lastConnectTarget;
@@ -535,7 +783,8 @@ class _FakeSocks5Server {
       }
       lastConnectTarget = target;
 
-      if (refuseConnect) {
+      final connectIndex = _connectsSeen++;
+      if (refuseConnect || connectIndex < refuseFirstN) {
         socket.add(const <int>[0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
         await socket.flush();
         await socket.close();
@@ -615,6 +864,7 @@ class _FakeCore implements AetherCoreApi {
 class _FixedConfig implements EngineConfigSource {
   _FixedConfig({
     ProtocolId? selectedProtocol,
+    this.selectedChain,
     ConnectionMode? connectionMode,
     this.selectedCountryCode,
   }) : selectedProtocol = selectedProtocol ?? ProtocolId.masque,
@@ -622,6 +872,13 @@ class _FixedConfig implements EngineConfigSource {
 
   @override
   final ProtocolId selectedProtocol;
+
+  /// v4.20 — the overlay family member (null = plain).
+  @override
+  final ProtocolId? selectedChain;
+
+  @override
+  ProtocolId get effectiveProtocol => selectedChain ?? selectedProtocol;
   @override
   final ConnectionMode connectionMode;
   @override

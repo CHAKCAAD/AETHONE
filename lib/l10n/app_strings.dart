@@ -92,6 +92,15 @@ class AppStrings {
   /// "146 ms" style. DOWN/UP/MB stay Latin (part of the visual design).
   String pingMs(int ms) => '$ms ms';
 
+  /// v4.20 — the mode's local SOCKS port note in the descriptions popup
+  /// (digits stay Latin, like the ping/counter labels).
+  String protocolPortNote(int port) => _v['portNote']! .replaceAll('@p', '$port');
+
+  /// v4.20 — the failed-state caption + details sheet.
+  String get failureCodeLabel => _v['failureCodeLabel']!;
+  String get failureDetailsTitle => _v['failureDetailsTitle']!;
+  String get failureDetailsCopy => _v['failureDetailsCopy']!;
+
   /// The SELECTED protocol's display name for the protocol card — the
   /// reference frames show the protocol's own name (e.g. «وارپ»), not the
   /// generic word «پروتکل» (owner prompt §«دکمه انتخاب پروتکل»: هر پروتکلی
@@ -198,6 +207,11 @@ class AppStrings {
       'settingsMainServer': 'آدرس هسته ها',
       'settingsSubpageComingNext':
           'این بخش — در گام بعدی پیاده‌سازی می‌شود',
+      // ---- v4.20 failure visibility + desc-popup port notes ----
+      'failureCodeLabel': 'کد خطا',
+      'failureDetailsTitle': 'جزئیات خطا',
+      'failureDetailsCopy': 'کپی اطلاعات خطا',
+      'portNote': 'پورت محلی SOCKS: @p',
     },
     'en': {
       'offline': 'Offline',
@@ -271,6 +285,11 @@ class AppStrings {
       'settingsRoutingArea': 'Routing region',
       'settingsMainServer': 'Core addresses',
       'settingsSubpageComingNext': 'This section — coming in the next step',
+      // ---- v4.20 failure visibility + desc-popup port notes ----
+      'failureCodeLabel': 'Error code',
+      'failureDetailsTitle': 'Error details',
+      'failureDetailsCopy': 'Copy error details',
+      'portNote': 'Local SOCKS port: @p',
     },
     'ru': {
       'offline': 'Офлайн',
@@ -342,6 +361,10 @@ class AppStrings {
       'settingsRoutingArea': 'Регион маршрутизации',
       'settingsMainServer': 'Адреса ядер',
       'settingsSubpageComingNext': 'Этот раздел — на следующем шаге',
+      'failureCodeLabel': 'Код ошибки',
+      'failureDetailsTitle': 'Детали ошибки',
+      'failureDetailsCopy': 'Копировать детали ошибки',
+      'portNote': 'Локальный порт SOCKS: @p',
     },
     'zh': {
       'offline': '离线',
@@ -412,6 +435,10 @@ class AppStrings {
       'settingsRoutingArea': '路由区域',
       'settingsMainServer': '内核地址',
       'settingsSubpageComingNext': '此部分 — 将在下一步实现',
+      'failureCodeLabel': '错误代码',
+      'failureDetailsTitle': '错误详情',
+      'failureDetailsCopy': '复制错误详情',
+      'portNote': '本地 SOCKS 端口：@p',
     },
     // tk: pending native review — falls back to English (documented gap).
   };

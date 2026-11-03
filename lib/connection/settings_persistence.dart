@@ -12,10 +12,10 @@
 ///    or hand-edited prefs file can only fall back to the built-in
 ///    defaults, never crash the startup.
 ///
-/// Persisted: protocol, connection mode, scan speed, wheel country,
-/// protocol mode (auto/smart), routing region, kill switch, home look,
-/// motion style. Session data (ping, counters, exit country) is
-/// deliberately NOT persisted — it is engine-owned truth.
+/// Persisted: protocol (WARP leg), chain overlay (v4.20), connection mode,
+/// scan speed, wheel country, protocol mode (auto/smart), routing region,
+/// kill switch, home look, motion style. Session data (ping, counters,
+/// exit country) is deliberately NOT persisted — it is engine-owned truth.
 library;
 
 import 'dart:async';
@@ -30,6 +30,7 @@ import 'connection_store.dart';
 
 abstract final class SettingsKeys {
   static const protocol = 'aethone.settings.protocol';
+  static const chain = 'aethone.settings.chain';
   static const connectionMode = 'aethone.settings.connectionMode';
   static const scanSpeed = 'aethone.settings.scanSpeed';
   static const selectedCountry = 'aethone.settings.selectedCountry';
@@ -61,8 +62,28 @@ class SettingsPersistence {
       if (protocolName != null) {
         for (final id in ProtocolId.values) {
           if (id.name == protocolName) {
-            store.selectedProtocol = id;
+            // v4.20 migration: a v4.19 install persisted a family member
+            // (torChain…) as THE protocol — that value now lives in the
+            // chain overlay and the leg keeps its default (WireGuard).
+            if (id.isTor || id.isPsiphon) {
+              store.selectedChain = id;
+            } else {
+              store.selectedProtocol = id;
+            }
             break;
+          }
+        }
+      }
+      final chainName = prefs.getString(SettingsKeys.chain);
+      if (chainName != null) {
+        if (chainName == 'none') {
+          store.selectedChain = null;
+        } else {
+          for (final id in ProtocolId.values) {
+            if (id.name == chainName && (id.isTor || id.isPsiphon)) {
+              store.selectedChain = id;
+              break;
+            }
           }
         }
       }
@@ -145,6 +166,10 @@ class SettingsPersistence {
     try {
       final prefs = await _prefsFuture;
       await prefs.setString(SettingsKeys.protocol, store.selectedProtocol.name);
+      await prefs.setString(
+        SettingsKeys.chain,
+        store.selectedChain?.name ?? 'none',
+      );
       await prefs.setString(
         SettingsKeys.connectionMode,
         store.connectionMode.name,
