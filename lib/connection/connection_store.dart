@@ -10,7 +10,9 @@
 library;
 
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -18,20 +20,32 @@ import '../core/app_assets.dart';
 import '../core/motion.dart';
 import 'connection_state.dart';
 import 'engine.dart';
+import 'platform_engine_adapter.dart';
 
 /// The two selectable home-screen looks (owner: identical logic, different
 /// layout — report §11.2).
 enum HomeLook { one, two }
 
-class ConnectionStore extends ChangeNotifier {
+class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   ConnectionStore({EngineAdapter? engine})
     : _engine = engine ?? _defaultEngine() {
+    // The platform adapter reads the user's live configuration through this
+    // read-only view (M2 seam — see [EngineConfigSource]).
+    _engine.bind(this);
     _subscription = _engine.events.listen(_onEvent);
   }
 
-  static EngineAdapter _defaultEngine() => PreviewEngineAdapter.allowed
-      ? PreviewEngineAdapter()
-      : EngineNotWiredAdapter();
+  /// Engine selection order (M2):
+  ///  1. PREVIEW_MODE (debug CI builds only) → the honest simulator;
+  ///  2. Android → the REAL platform adapter (embedded Aether via FFI +
+  ///     zeptun via the VpnService JNI bridge);
+  ///  3. everything else (desktop, tests, web) → fails honestly with
+  ///     `engineNotWired` instead of ever pretending to be connected.
+  static EngineAdapter _defaultEngine() {
+    if (PreviewEngineAdapter.allowed) return PreviewEngineAdapter();
+    if (!kIsWeb && Platform.isAndroid) return PlatformEngineAdapter();
+    return EngineNotWiredAdapter();
+  }
 
   final EngineAdapter _engine;
   late final StreamSubscription<EngineEvent> _subscription;
@@ -92,7 +106,8 @@ class ConnectionStore extends ChangeNotifier {
 
   /// The location the USER picked on the flag wheel (v4.11, defect #8).
   /// The engine-reported [exitCountryCode] stays the only "connected to X"
-  /// truth; this is the selector state the core will receive in M2.
+  /// truth; this is the selector state the core consumes (M2).
+  @override
   String? selectedCountryCode;
 
   /// Wheel selection commit (flag snap / tap). Ignored while an operation
@@ -104,6 +119,7 @@ class ConnectionStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  @override
   ProtocolId selectedProtocol = ProtocolId.masque; // Aether's real default
 
   /// v4.16 — protocol selection with notify (the sheet binds here; tapping a
@@ -115,7 +131,8 @@ class ConnectionStore extends ChangeNotifier {
   }
 
   /// v4.16 — «حالت اتصال» (تونل/پروکسی). Default proxy per the sheet frame;
-  /// the engine consumes it at M2 (see [ConnectionMode]).
+  /// the engine consumes it (M2 — see [ConnectionMode]).
+  @override
   ConnectionMode connectionMode = ConnectionMode.proxy;
 
   void setConnectionMode(ConnectionMode mode) {
@@ -125,7 +142,8 @@ class ConnectionStore extends ChangeNotifier {
   }
 
   /// v4.16 — «سرعت اسکن» 1..5 (the sheet frame ships the widest pill = 5
-  /// selected). The auto mode's probe cadence consumes it at M2.
+  /// selected). The engine consumes it (M2 — scan profile).
+  @override
   int scanSpeed = 5;
 
   void setScanSpeed(int level) {

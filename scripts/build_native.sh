@@ -1,10 +1,24 @@
 #!/usr/bin/env bash
-# AETHONE — build all native components for ONE ABI at the frozen pins. (v4)
+# AETHONE — build all native components for ONE ABI at the frozen pins. (v5)
 # Status: DELIVERED, NOT TESTED (no Android toolchain in the analysis
 # environment; first execution happens on GitHub Actions after the employer
 # pushes this repository). Every build command replicates the upstream
 # evidence exactly. The lyrebird SOURCE-ORIGIN proof, however, was executed
 # end-to-end in the analysis environment: evidence/lyrebird_pin_independent_test.txt.
+#
+# v5 changes (M2 engine wiring, 2026-11-03):
+#   Export the Aether cdylib too. The SAME `cargo ndk build --release
+#   --features tor` already links libaether.so (crate-type
+#   lib+staticlib+cdylib); v4 only exported the binary. The app loads the
+#   core in-process through its C API (aether_core_start/job_poll, ffi.rs —
+#   architecture B+ of the implementation prompt). No pin, flag, feature or
+#   build command changed: same source tree, same toolchain, same linker
+#   flags; only the export list grows:
+#     * $OUT/aether/libaether.so   (NEW — cdylib, NEEDED-guarded like the
+#       binary: must never need libc++_shared.so)
+#     * manifest artifacts list + the exact-whitelist guard (7 outputs now).
+#   Consumer: the android-apk CI job packages it as
+#   jniLibs/<abi>/libaether.so (extractNativeLibs=true).
 #
 # v4 changes (employer review of bundle v3, 2026-10-31):
 #   Lyrebird pin proof reworked (fix #3) — the pin itself is UNCHANGED
@@ -339,12 +353,24 @@ PY_BORING_SYS
   fi
   bin="target/$RUST_TARGET/release/aether"
   [ -f "$bin" ] || { echo "FATAL: aether binary missing: $bin" >&2; exit 1; }
-  # Upstream's own guard: aether must never need libc++_shared.so
+  # v5 (M2 engine wiring): the SAME cargo build also links the cdylib
+  # (aether/Cargo.toml crate-type lib+staticlib+cdylib) — the app embeds the
+  # core IN-PROCESS through its C API (aether_core_start et al., ffi.rs),
+  # architecture B+. Same source, same pins, same linker flags as the
+  # binary; only the packaging differs (jniLibs/libaether.so in the APK).
+  cdylib="target/$RUST_TARGET/release/libaether.so"
+  [ -f "$cdylib" ] || { echo "FATAL: libaether.so cdylib missing: $cdylib (expected from the same cargo build)" >&2; exit 1; }
+  # Upstream's own guard: aether must never need libc++_shared.so (checked
+  # on BOTH shipped artifacts — the binary and the cdylib).
   needed=$(readelf -d "$bin" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')
-  echo "[aether $ABI] NEEDED: $needed"
+  echo "[aether $ABI] NEEDED (binary): $needed"
   grep -qx 'libc++_shared.so' <<<"$needed" && { echo "ERROR: aether needs libc++_shared.so"; exit 1; }
+  needed_lib=$(readelf -d "$cdylib" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')
+  echo "[aether $ABI] NEEDED (cdylib): $needed_lib"
+  grep -qx 'libc++_shared.so' <<<"$needed_lib" && { echo "ERROR: libaether.so needs libc++_shared.so"; exit 1; }
   mkdir -p "$OUT/aether"
   cp "$bin" "$OUT/aether/aether"
+  cp "$cdylib" "$OUT/aether/libaether.so"
 )
 
 # ------------------------------------------- lyrebird (Aether's frozen script, pin-hardened) ----
@@ -451,6 +477,7 @@ MANIFEST="$OUT/manifest.json"
     "zeptun/libzeptun-jni.so|zeptun|zeptun-jni" \
     "zeptun/libzeptun.a|zeptun|zeptun-static" \
     "aether/aether|aether|aether" \
+    "aether/libaether.so|aether|aether-cdylib" \
     "aether/pt/lyrebird|aether/pt|lyrebird" \
     "aether/pt/psiphon-tunnel-core|aether/pt|psiphon-fork"; do
     IFS='|' read -r rel group component <<<"$spec"
@@ -470,6 +497,7 @@ MANIFEST="$OUT/manifest.json"
 # the manifest — nothing else. This is the build-time counterpart of the
 # hygiene check in scripts/inspect_elf.sh (employer fix #2).
 expected_files="aether/aether
+aether/libaether.so
 aether/pt/lyrebird
 aether/pt/psiphon-tunnel-core
 manifest.json
@@ -485,5 +513,5 @@ $expected_files
 --- actual (sorted) ---
 $actual_files"
 fi
-echo "== done: $OUT (manifest at $MANIFEST; artifact contains exactly the 6 expected outputs + manifest) =="
+echo "== done: $OUT (manifest at $MANIFEST; artifact contains exactly the 7 expected outputs + manifest) =="
 cat "$MANIFEST"

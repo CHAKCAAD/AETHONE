@@ -590,6 +590,7 @@ zeptun/libzeptun.so|zeptun|shared-lib
 zeptun/libzeptun-jni.so|zeptun|shared-lib
 zeptun/libzeptun.a|zeptun|static-archive
 aether/aether|aether|executable-pie
+aether/libaether.so|aether|shared-lib
 aether/pt/psiphon-tunnel-core|aether/pt|go-static
 aether/pt/lyrebird|aether/pt|go-static
 EOF

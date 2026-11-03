@@ -16,7 +16,7 @@
 | گام ۲ | شیت انتخاب پروتکل + صفحهٔ اصلی تنظیمات + زیرصفحه‌ها | ⏳ در انتظار |
 | گام ۳ | صفحهٔ Speed Test + آنبوردینگ ۴ مرحله‌ای + اسکن | ⏳ |
 | گام ۴ | l10n کامل (gen-l10n پنج‌زبانه) + golden test تطبیق پیکسلی | ⏳ |
-| M2 (موازی) | اتصال لایهٔ بومی (Aether + zeptun) از طریق سرویس پلتفرم | ⏳ — تا پیش از آن `EngineNotWiredAdapter` صادقانه خطا می‌دهد |
+| **M2 (v4.18)** | اتصال هسته‌ها به UI: Aether تعبیه‌شده (C API + FFI) + zeptun از طریق JNI داخل VpnService + گیت پروب سرتاسری | ✅ تحویل‌شده — ۸۸/۸۸ تست، آنالیز صفر؛ شرح کامل: `docs/M2_ENGINE_WIRING.md` |
 
 ## بسته‌بندی اندروید — v4.9 (اولین APK قابل نصب)
 
@@ -436,3 +436,32 @@ JPEG روشن‌ترِ طرح؛ رندر پیکسل‌به‌پیکسل همان
 ۵۶ → ۵۹ (اتصال زندهٔ استور، بج‌های سه‌گانه، جد Material؛ تست‌های دستگیره/اسکریم
 با حذف خود آن‌ها حذف شدند). کپچر بصری (`proto_shot_test.dart`) صفحهٔ جدید +
 پنجرهٔ توضیحات را در `/tmp/ui_shots` می‌گیرد.
+
+## اتصال هسته‌ها به UI — M2 (v4.18)
+
+جریان M2 مطابق معماری B+ پرامپت پیاده‌سازی شد (شرح کامل + چک‌لیست تست گوشی:
+`docs/M2_ENGINE_WIRING.md`). خلاصهٔ تغییرات UI-ساید:
+
+- **`PlatformEngineAdapter`** (جديد در `lib/connection/`): آداپتور واقعی
+  `EngineAdapter` — هستهٔ Rust به‌صورت in-process از طریق C API
+  (`libaether.so` + `dart:ffi`، `aether_core_start/job_poll`)، zeptun از
+  طریق جی‌ان‌آی خودش داخل `AethoneVpnService`، و گیت `Connected` فقط پس از
+  پروب سرتاسری (SOCKS5 CONNECT + cloudflare trace → پینگ و پرچم خروجی
+  واقعی).
+- **ترتیب انتخاب موتور** در `ConnectionStore`: PREVIEW_MODE → شبیه‌ساز؛
+  اندروید → آداپتور پلتفرم؛ بقیه → `EngineNotWiredAdapter` صادقانه.
+  رفتار بیلد preview-debug (arm64) تغییر نکرده است.
+- **`EngineConfigSource`**: نما فقط‌خواندنی از انتخاب‌های کاربر (پروتکل،
+  تونل/پروکسی، کشور، سرعت اسکن) که آداپتور از استور می‌گیرد — نگاشت
+  شواهدمحور به فلگ‌های هسته در `AetherArguments` (جدول کامل در سند M2).
+- **Kotlin**: `dev.zeptun.Zeptun` (سطح JNI بالادستی)، `AethoneVpnService`
+  (VpnService با FGS نوع specialUse، TUN با پارامترهای دقیق پرست موبایل
+  zeptun، `addDisallowedApplication` ضدحلقه)، `EngineBridge` + کانال
+  `aethone/engine` در `MainActivity` (paths/prepareVpn/startVpn/stopVpn/
+  vpnStatus/zeptunCounters + رویدادهای up/down/revoked/permission).
+- **بسته‌بندی**: `build_native.sh` v5 آرتیفکت `aether/libaether.so` را هم
+  صادر می‌کند؛ جاب `android-apk` هسته‌ها را در jniLibs می‌گذارد (release
+  یونیورسال ۳ ABI؛ preview-debug طبق قاعدهٔ مالک فقط arm64)؛
+  `extractNativeLibs=true` تا lyrebird فایل واقعی قابل‌اجرا باشد.
+- شمار تست‌ها و وضعیت سبز در بخش «گام بعدی» به‌روز می‌شود؛ UI هیچ تغییری
+  ندیده است (قاعدهٔ مالک: «چیز دیگه‌ای رو تغییر نده»).

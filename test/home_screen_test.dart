@@ -28,6 +28,9 @@ class ScriptedEngine implements EngineAdapter {
 
   @override
   Future<void> disconnect() async {}
+
+  @override
+  void bind(EngineConfigSource config) {} // scripted — config never read
 }
 
 Widget _booth(Widget child) => MaterialApp(

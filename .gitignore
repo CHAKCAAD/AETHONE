@@ -39,6 +39,9 @@ secrets/
 /android/**/build/
 /android/.cxx/
 /android/*.iml
+# M2: CI-staged native cores (jniLibs are copied from the native-* artifacts
+# by the android-apk job — binaries are never committed).
+/android/app/src/main/jniLibs/
 
 # --- IDE / OS noise ---
 .idea/

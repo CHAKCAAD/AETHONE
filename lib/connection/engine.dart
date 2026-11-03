@@ -84,6 +84,23 @@ class EngineLogLine extends EngineEvent {
   final String message;
 }
 
+/// Read-only view of the user's tunnel configuration the platform adapter
+/// consumes (M2). Implemented by the store — these are USER choices; the
+/// engine never writes them.
+abstract class EngineConfigSource {
+  /// Which protocol tile the user committed on the protocol sheet.
+  ProtocolId get selectedProtocol;
+
+  /// تونل (whole-device VpnService + zeptun) or پروکسی (local SOCKS only).
+  ConnectionMode get connectionMode;
+
+  /// Flag-wheel country pick (ISO-3166 alpha-2, lowercase) or null = auto.
+  String? get selectedCountryCode;
+
+  /// «سرعت اسکن» 1..5 (protocol sheet; feeds the core scan profile).
+  int get scanSpeed;
+}
+
 /// The seam the UI talks to. The production implementation (M2) drives the
 /// platform service (MethodChannel/FFI) that owns both engines.
 ///
@@ -95,12 +112,20 @@ abstract class EngineAdapter {
   Stream<EngineEvent> get events;
   Future<void> connect();
   Future<void> disconnect();
+
+  /// Gives the adapter a read-only view of the user's configuration.
+  /// Called once by the store right after construction; default no-op
+  /// (preview / not-wired adapters never read user config).
+  void bind(EngineConfigSource config) {}
 }
 
 /// Default adapter until the native service lands (M2): fails honestly.
 class EngineNotWiredAdapter implements EngineAdapter {
   final StreamController<EngineEvent> _controller =
       StreamController<EngineEvent>.broadcast();
+
+  @override
+  void bind(EngineConfigSource config) {} // nothing to configure — never wired
 
   @override
   Stream<EngineEvent> get events => _controller.stream;
@@ -150,6 +175,9 @@ class PreviewEngineAdapter implements EngineAdapter {
   /// Preview simulation is allowed only in non-release builds with the
   /// explicit opt-in flag.
   static bool get allowed => requested && !kReleaseMode;
+
+  @override
+  void bind(EngineConfigSource config) {} // simulation ignores user config
 
   @override
   Stream<EngineEvent> get events => _controller.stream;

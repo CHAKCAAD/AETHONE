@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- M2 tunnel foreground-service notification (the app's own language
+         set is fa-first, but Android falls back to the default locale
+         strings; fa lives in values-fa). -->
+    <string name="vpn_channel_name">AETHONE tunnel</string>
+    <string name="vpn_notification_title">AETHONE</string>
+    <string name="vpn_notification_text">Tunnel service is running</string>
+</resources>

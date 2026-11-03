@@ -21,6 +21,24 @@
 # every Actions pin: evidence/actions_pins_raw_evidence.txt (v3).
 # actionlint 1.7.7 exit 0 on THIS exact file: evidence/validation_log.txt (v4).
 #
+# v4.18 changes (2026-11-03) — M2 ENGINE WIRING (cores -> UI), NO frozen pin
+#   changed (N1/N8 untouched; the same source trees build the same binaries):
+#   * build_native.sh v5 exports the Aether CDYLIB too
+#     ($OUT/aether/libaether.so — the same `cargo ndk build --release
+#     --features tor` links it; crate-type lib+staticlib+cdylib). The app
+#     embeds the core in-process via its C API (aether_core_start/job_poll,
+#     ffi.rs) — architecture B+ of the implementation prompt.
+#   * inspect_elf.sh registry gains aether/libaether.so (shared-lib).
+#   * android-apk now NEEDS native-build and packages the cores into
+#     jniLibs (libaether.so + liblyrebird.so + libzeptun-jni.so):
+#     release universal (3 ABIs), preview-debug arm64-only re-staged before
+#     the debug build (owner rule). extractNativeLibs=true in app Gradle so
+#     lyrebird is a real +x file in nativeLibraryDir.
+#   * Flutter side: PlatformEngineAdapter (aethone/engine MethodChannel +
+#     dart:ffi) + VpnService/zeptun-JNI Kotlin layer + end-to-end probe
+#     gate (SOCKS5 CONNECT + cloudflare trace) — Connected is only emitted
+#     after a REAL request through the tunnel (prompt §6.6).
+#
 # v4.11 changes (2026-11-02) — SECOND DEVICE-TEST FIX ROUND (14 owner
 #   defect reports on the main screen; owner CSS is the authority):
 #   * #1 patterns: full-width canvases; left art pinned bottom (below center),
@@ -1474,15 +1492,19 @@ jobs:
           if-no-files-found: error
 
   # =========================================================================
-  # Job 8 — android-apk: package the Flutter UI as an installable Android
-  # APK (UI step 1 scope). The APK is UI-ONLY: no engine is wired yet (M2)
-  # and the release build honestly reports engineNotWired on connect.
-  # This job packages the app — it claims NO tunnel functionality, and CI
-  # never installs or launches the APK on any device/emulator (N2).
+  # Job 8 — android-apk: package the Flutter app as an installable Android
+  # APK. M2 (engine wiring): the APK now EMBEDS the native cores from the
+  # native-build legs —
+  #   jniLibs/<abi>/libaether.so      (Rust core, in-process C API)
+  #   jniLibs/<abi>/liblyrebird.so    (Go Psiphon PT, exec'd by Aether)
+  #   jniLibs/<abi>/libzeptun-jni.so  (Zig TUN engine via VpnService JNI)
+  # The RELEASE build stays universal (all 3 ABIs); the preview-debug build
+  # stays arm64-v8a ONLY (owner rule) — staged accordingly between builds.
+  # extractNativeLibs=true (app Gradle) so lyrebird is a real +x file.
   # =========================================================================
   android-apk:
-    name: "Android APK (release + preview-debug — UI-only, engine M2 pending)"
-    needs: [flutter-ui]
+    name: "Android APK (release + preview-debug — M2: engines embedded)"
+    needs: [flutter-ui, native-build]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -1540,18 +1562,51 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
+      - name: Download native artifacts (per ABI — NO merge-multiple)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdfc8093 # v4.3.0
+        with:
+          path: native-out
+          pattern: native-*
+
+      - name: Stage native cores into jniLibs (all 3 ABIs for the universal release)
+        run: |
+          set -euo pipefail
+          JL="android/app/src/main/jniLibs"
+          rm -rf "$JL"
+          for d in native-out/native-*; do
+            [ -d "$d" ] || { echo "::error::native artifact $d missing (native-build leg failed?)"; exit 1; }
+            abi="${d##*/native-}"
+            mkdir -p "$JL/$abi"
+            # Fail-closed: every expected core file must exist in the artifact.
+            for f in aether/libaether.so aether/pt/lyrebird zeptun/libzeptun-jni.so; do
+              [ -f "$d/$f" ] || { echo "::error::$abi/$f missing from the native artifact"; exit 1; }
+            done
+            cp "$d/aether/libaether.so"     "$JL/$abi/libaether.so"
+            cp "$d/aether/pt/lyrebird"      "$JL/$abi/liblyrebird.so"
+            cp "$d/zeptun/libzeptun-jni.so" "$JL/$abi/libzeptun-jni.so"
+          done
+          echo "staged jniLibs:"; find "$JL" -type f -printf '%p  %s bytes\n' | sort
+
       - name: Build universal release APK (debug-signed — test install only)
         run: |
           set -euo pipefail
           flutter build apk --release
           ls -la build/app/outputs/flutter-apk/
 
+      - name: Re-stage jniLibs arm64-only (owner rule for the debug build)
+        run: |
+          set -euo pipefail
+          JL="android/app/src/main/jniLibs"
+          rm -rf "$JL/armeabi-v7a" "$JL/x86_64"
+          echo "jniLibs for the debug build (arm64-v8a ONLY):"
+          find "$JL" -type f -printf '%p  %s bytes\n' | sort
+
       - name: Build preview-debug APK (UI demo — PREVIEW_MODE is debug-only BY CODE)
         run: |
           set -euo pipefail
           # Owner: the DEBUG preview must be arm64-v8a ONLY, never universal
-          # («بیلد دیباگ باید فقط arm64-v8a باشد، نه یونیورسال»). The release
-          # APK above stays universal.
+          # («بیلد دیباگ باید فقط arm64-v8a باشد، نه یونیورسال"). The release
+          # APK above stays universal. jniLibs were re-staged arm64-only above.
           flutter build apk --debug --dart-define=PREVIEW_MODE=true --target-platform android-arm64
           ls -la build/app/outputs/flutter-apk/
 
@@ -1577,7 +1632,8 @@ jobs:
             echo "commit=${{ github.sha }}"
             echo "flutter=${FLUTTER_VERSION} agp=${AGP_VERSION} gradle_wrapper=${GRADLE_VERSION} build_tools=${BUILD_TOOLS_VERSION} jdk=${JDK_VERSION}"
             echo "application_id=com.chakcaad.aethone minSdk=24 (CANDIDATE, not proven) targetSdk=36"
-            echo "scope=UI-ONLY (engine NOT wired — M2). The release APK honestly fails connect with engineNotWired; the preview-debug APK runs the PREVIEW_MODE simulator (debug builds only, by code)."
+            echo "scope=M2 ENGINE WIRING: release APK embeds the native cores (libaether.so + liblyrebird.so + libzeptun-jni.so; universal, 3 ABIs; extractNativeLibs=true). Real connect path: Aether in-process via C API + zeptun via VpnService JNI + end-to-end probe gate. The preview-debug APK (arm64-only) runs the PREVIEW_MODE simulator (debug builds only, by code)."
+            echo "native_pins=aether@$(grep -o '"aether": "[0-9a-f]*"' native-out/native-arm64-v8a/manifest.json | cut -d'"' -f4) zeptun@$(grep -o '"zeptun": "[0-9a-f]*"' native-out/native-arm64-v8a/manifest.json | cut -d'"' -f4)"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > dist/BUILD_INFO.txt
           sha256sum dist/*.apk | tee dist/SHA256SUMS.txt
@@ -1597,7 +1653,7 @@ jobs:
             echo "job=${{ github.job }}"
             echo "status=${{ job.status }}"
             echo "run_id=${{ github.run_id }}"
-            echo "leg=android-apk (UI-only packaging: universal release debug-signed + preview-debug, zipalign -P 16 gate, apksigner verify, build-tools ${BUILD_TOOLS_VERSION}; engine M2 pending)"
+            echo "leg=android-apk (M2 packaging: universal release debug-signed with embedded cores + preview-debug arm64-only, zipalign -P 16 gate, apksigner verify, build-tools ${BUILD_TOOLS_VERSION})"
             echo "flutter=$FLUTTER_VERSION"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > status/build-status-android-apk.txt

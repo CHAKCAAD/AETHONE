@@ -30,6 +30,8 @@ class ScriptedEngine implements EngineAdapter {
   Future<void> connect() async {}
   @override
   Future<void> disconnect() async {}
+  @override
+  void bind(EngineConfigSource config) {} // scripted — config never read
 }
 
 const _shotKey = Key('ui-shot');

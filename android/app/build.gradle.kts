@@ -39,12 +39,28 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    // M2 (engine wiring): the packaged native libraries must be EXTRACTED to
+    // nativeLibraryDir — Aether spawns the lyrebird PT binary from there
+    // (exec needs a real file with the exec bit; in-APK loading cannot be
+    // exec'd). libaether.so / libzeptun-jni.so load fine either way.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    // M2: NotificationCompat + ServiceCompat for the VpnService foreground
+    // notification (specialUse type gating per API level).
+    implementation("androidx.core:core-ktx:1.13.1")
 }
 
 flutter {

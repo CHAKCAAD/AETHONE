@@ -16,6 +16,10 @@ dependencies:
   # SVG rendering for the ZIP-provided asset set (mandatory: the owner requires
   # the exact SVGs from the design package — no generic icon packs).
   flutter_svg: 2.3.2
+  # ---- M2 (engine wiring) ----
+  # Native allocations for the Aether C API (malloc/Utf8 helpers). Pure
+  # Dart; pinned to the version already vendored in the toolchain cache.
+  ffi: 2.2.0
   # Telegram channel link (t.me/AETHONE) — owner-specified behavior of the
   # top-bar info button (decision D1, option A).
   url_launcher: 6.3.3

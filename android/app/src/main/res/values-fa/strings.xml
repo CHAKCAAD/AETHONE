@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Persian notification strings (the design language). -->
+    <string name="vpn_channel_name">تونل AETHONE</string>
+    <string name="vpn_notification_title">AETHONE</string>
+    <string name="vpn_notification_text">سرویس تونل در حال اجراست</string>
+</resources>
