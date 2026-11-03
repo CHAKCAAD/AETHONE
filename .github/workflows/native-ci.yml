@@ -1230,9 +1230,7 @@ jobs:
             ./psiphon/server/psinet ./Server/logging/analysis \
             2>&1 | tee "$GITHUB_WORKSPACE/test-evidence/go-test.log"
           # Recorded, never silent: the ONE skipped test and its reason.
-          echo "skip=^TestInproxy$ (network-bound WebRTC/STUN integration test; \
-        'unexpected STUN server failed count' on run 41716942645 with all relays \
-        completed 10/10, green on 41703712047; deterministic inproxy tests stay gated)" \
+          echo "skip=^TestInproxy$ (network-bound WebRTC/STUN integration test; 'unexpected STUN server failed count' on run 41716942645 with all relays completed 10/10, green on 41703712047; deterministic inproxy tests stay gated)" \
             | tee -a "$GITHUB_WORKSPACE/test-evidence/go-test.log"
 
       - name: Run quic package as a non-gating probe (recorded, never a gate)
