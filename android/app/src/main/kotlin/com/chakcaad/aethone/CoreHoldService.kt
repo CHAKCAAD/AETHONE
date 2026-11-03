@@ -37,14 +37,17 @@ class CoreHoldService : Service() {
 
         @Volatile
         private var instance: CoreHoldService? = null
-        @Volatile
-        private var heldPort: Int = 1819
 
         fun status(): Map<String, Any?> {
             val svc = instance ?: return mapOf("running" to false, "port" to null)
             return mapOf("running" to true, "port" to svc.heldPort)
         }
     }
+
+    // Instance state (read by the companion's status() — the same pattern
+    // as AethoneVpnService.socksPort).
+    @Volatile
+    private var heldPort: Int = 1819
 
     override fun onBind(intent: Intent?): IBinder? = null
 
