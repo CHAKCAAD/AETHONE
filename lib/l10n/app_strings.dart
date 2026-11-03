@@ -29,6 +29,29 @@ class AppStrings {
   String get speedTestComingNext => _v['speedTestComingNext']!;
   String get protocolSheetComingNext => _v['protocolSheetComingNext']!;
 
+  // ---- v4.16 protocol sheet (fa verbatim from the design frame
+  // «صفحه شناور انتخاب پروتکل صفحه اصلی.jpg» + descriptions from the
+  // phase-1 report §11) ----
+  String get sheetHeadingMode => _v['sheetHeadingMode']!;
+  String get modeTunnel => _v['modeTunnel']!;
+  String get modeProxy => _v['modeProxy']!;
+  String get sheetHeadingScanSpeed => _v['sheetHeadingScanSpeed']!;
+  /// «اتوماتیک» — the sheet's tile label for AUTO (the home card keeps
+  /// «اتو / اسمارت»; this is the design frame's own wording).
+  String get protoAutoSheet => _v['protoAutoSheet']!;
+  String get descAuto => _v['descAuto']!;
+  String get descMasque => _v['descMasque']!;
+  String get descWireguard => _v['descWireguard']!;
+  String get descGool => _v['descGool']!;
+  String get descGoolClassic => _v['descGoolClassic']!;
+  String get descMim => _v['descMim']!;
+  String get descPsiphonChain => _v['descPsiphonChain']!;
+  String get descPsiphonReverse => _v['descPsiphonReverse']!;
+  String get descPsiphonOnly => _v['descPsiphonOnly']!;
+  String get descTorChain => _v['descTorChain']!;
+  String get descTorReverse => _v['descTorReverse']!;
+  String get descTorOnly => _v['descTorOnly']!;
+
   // ---- Settings main page (step 2; fa values verbatim from the design) ----
   String get settingsTitle => _v['settingsTitle']!;
   String get settingsRouting => _v['settingsRouting']!;
@@ -101,6 +124,40 @@ class AppStrings {
       'speedTestComingNext': 'تست سرعت — در گام بعدی پیاده‌سازی می‌شود',
       'protocolSheetComingNext':
           'انتخاب پروتکل — در گام بعدی پیاده‌سازی می‌شود',
+      // ---- v4.16 protocol sheet: fa VERBATIM from the design frame + the
+      // phase-1 report §11 descriptions (the owner's own words). The
+      // wireguard/gool/goolClassic/mim lines are evidence-locked to the
+      // transport-mode table (report table 11: WARP exit on the main
+      // listener) — no invented behaviour.
+      'sheetHeadingMode': 'حالت اتصال',
+      'modeTunnel': 'تونل',
+      'modeProxy': 'پروکسی',
+      'sheetHeadingScanSpeed': 'سرعت اسکن',
+      'protoAutoSheet': 'اتوماتیک',
+      'descAuto':
+          'برنامه به‌صورت خودکار روش‌های اتصال پشتیبانی‌شده را بررسی می‌کند و بر اساس موفقیت اتصال، سرعت و پایداری شبکه، مناسب‌ترین گزینه را انتخاب می‌کند. در صورت بروز اختلال، برای برقراری مجدد اتصال تلاش می‌کند؛ بدون نیاز به انتخاب دستی پروتکل توسط شما.',
+      'descMasque':
+          'اتصال رمزگذاری‌شده از طریق ترافیک شبیه HTTPS. از HTTP/3 و HTTP/2 پشتیبانی می‌کند و برای شبکه‌هایی که ترافیک VPN را محدود می‌کنند طراحی شده است.',
+      'descWireguard':
+          'اتصال مستقیم از طریق پروتکل WireGuard روی هستهٔ Aether؛ IP خروجی متعلق به سرور خروجی WARP خواهد بود.',
+      'descGool':
+          'اتصال از طریق حالت Gool روی هستهٔ Aether؛ IP خروجی متعلق به سرور خروجی WARP خواهد بود.',
+      'descGoolClassic':
+          'اتصال از طریق حالت Gool کلاسیک روی هستهٔ Aether؛ IP خروجی متعلق به سرور خروجی WARP خواهد بود.',
+      'descMim':
+          'اتصال از طریق حالت Mim روی هستهٔ Aether؛ IP خروجی متعلق به سرور خروجی WARP خواهد بود.',
+      'descPsiphonChain':
+          'ابتدا تونل Aether برقرار می‌شود و سپس Psiphon از داخل آن به اینترنت متصل می‌شود. آدرس IP خروجی متعلق به سرور خروجی Psiphon خواهد بود.',
+      'descPsiphonReverse':
+          'ابتدا اتصال از طریق Psiphon برقرار می‌شود و سپس تونل Aether از داخل آن شکل می‌گیرد. این روش به Aether اجازه می‌دهد از مسیر خروجی Psiphon به شبکه متصل شود.',
+      'descPsiphonOnly':
+          'اتصال مستقیماً از طریق Psiphon برقرار می‌شود و از تونل Aether یا WARP استفاده نمی‌کند. مسیر خروجی اینترنت توسط Psiphon تأمین می‌شود.',
+      'descTorChain':
+          'ابتدا اتصال Aether برقرار می‌شود و سپس ترافیک از شبکهٔ Tor عبور می‌کند. آدرس IP خروجی متعلق به یک گره خروجی Tor خواهد بود.',
+      'descTorReverse':
+          'ابتدا اتصال به شبکهٔ Tor برقرار می‌شود و سپس تونل Aether از داخل آن ایجاد می‌شود. خروجی نهایی از طریق تونل Aether خواهد بود.',
+      'descTorOnly':
+          'اتصال مستقیماً از طریق شبکهٔ Tor برقرار می‌شود و از تونل Aether یا WARP استفاده نمی‌کند. آدرس IP خروجی متعلق به یک گره خروجی Tor است.',
       'protoAuto': 'اتو / اسمارت',
       'protoMasque': 'ماسک',
       'protoWireguard': 'وایرگارد',
@@ -148,6 +205,37 @@ class AppStrings {
       'speedTestComingNext': 'Speed Test — coming in the next step',
       'protocolSheetComingNext':
           'Protocol selection — coming in the next step',
+      // ---- v4.16 protocol sheet (translations of the fa verbatim frame +
+      // the phase-1 report §11 descriptions) ----
+      'sheetHeadingMode': 'Connection mode',
+      'modeTunnel': 'Tunnel',
+      'modeProxy': 'Proxy',
+      'sheetHeadingScanSpeed': 'Scan speed',
+      'protoAutoSheet': 'Auto',
+      'descAuto':
+          'The app automatically probes the supported transport modes and picks the best one by connection success, speed and network stability. On disruption it keeps trying to re-establish the connection — no manual protocol choice needed.',
+      'descMasque':
+          'An encrypted connection over HTTPS-like traffic. Supports HTTP/3 and HTTP/2 and is designed for networks that restrict VPN traffic.',
+      'descWireguard':
+          'A direct connection over the WireGuard protocol on the Aether core; the exit IP belongs to a WARP exit server.',
+      'descGool':
+          'A connection over the Gool mode on the Aether core; the exit IP belongs to a WARP exit server.',
+      'descGoolClassic':
+          'A connection over the classic Gool mode on the Aether core; the exit IP belongs to a WARP exit server.',
+      'descMim':
+          'A connection over the Mim mode on the Aether core; the exit IP belongs to a WARP exit server.',
+      'descPsiphonChain':
+          'The Aether tunnel comes up first, then Psiphon connects to the internet from inside it. The exit IP address belongs to a Psiphon exit server.',
+      'descPsiphonReverse':
+          'Psiphon connects first, then the Aether tunnel is formed inside it. This lets Aether reach the network through the Psiphon exit path.',
+      'descPsiphonOnly':
+          'The connection is established directly through Psiphon and does not use the Aether tunnel or WARP. The internet exit path is provided by Psiphon.',
+      'descTorChain':
+          'Aether connects first, then the traffic passes through the Tor network. The exit IP address belongs to a Tor exit node.',
+      'descTorReverse':
+          'The connection to the Tor network comes up first, then the Aether tunnel is created inside it. The final exit goes through the Aether tunnel.',
+      'descTorOnly':
+          'The connection is established directly through the Tor network and does not use the Aether tunnel or WARP. The exit IP address belongs to a Tor exit node.',
       'protoAuto': 'AUTO / SMART',
       'protoMasque': 'MASQUE',
       'protoWireguard': 'WIREGUARD',
@@ -188,6 +276,36 @@ class AppStrings {
       'settingsComingNext': 'Настройки — на следующем шаге',
       'speedTestComingNext': 'Тест скорости — на следующем шаге',
       'protocolSheetComingNext': 'Выбор протокола — на следующем шаге',
+      // ---- v4.16 protocol sheet ----
+      'sheetHeadingMode': 'Режим подключения',
+      'modeTunnel': 'Туннель',
+      'modeProxy': 'Прокси',
+      'sheetHeadingScanSpeed': 'Скорость сканирования',
+      'protoAutoSheet': 'Авто',
+      'descAuto':
+          'Приложение автоматически проверяет поддерживаемые режимы подключения и выбирает лучший по успешности подключения, скорости и стабильности сети. При сбое оно само пытается восстановить связь — без ручного выбора протокола.',
+      'descMasque':
+          'Шифрованное подключение через трафик, похожий на HTTPS. Поддерживает HTTP/3 и HTTP/2 и предназначено для сетей, ограничивающих VPN-трафик.',
+      'descWireguard':
+          'Прямое подключение по протоколу WireGuard на ядре Aether; выходной IP принадлежит выходному серверу WARP.',
+      'descGool':
+          'Подключение через режим Gool на ядре Aether; выходной IP принадлежит выходному серверу WARP.',
+      'descGoolClassic':
+          'Подключение через классический режим Gool на ядре Aether; выходной IP принадлежит выходному серверу WARP.',
+      'descMim':
+          'Подключение через режим Mim на ядре Aether; выходной IP принадлежит выходному серверу WARP.',
+      'descPsiphonChain':
+          'Сначала поднимается туннель Aether, затем Psiphon подключается к интернету изнутри него. Выходной IP принадлежит выходному серверу Psiphon.',
+      'descPsiphonReverse':
+          'Сначала подключается Psiphon, затем внутри него строится туннель Aether. Это позволяет Aether выходить в сеть через маршрут Psiphon.',
+      'descPsiphonOnly':
+          'Подключение устанавливается напрямую через Psiphon и не использует туннель Aether или WARP. Выходной маршрут интернета обеспечивает Psiphon.',
+      'descTorChain':
+          'Сначала подключается Aether, затем трафик проходит через сеть Tor. Выходной IP принадлежит выходному узлу Tor.',
+      'descTorReverse':
+          'Сначала устанавливается соединение с сетью Tor, затем внутри него создаётся туннель Aether. Финальный выход — через туннель Aether.',
+      'descTorOnly':
+          'Подключение устанавливается напрямую через сеть Tor и не использует туннель Aether или WARP. Выходной IP принадлежит выходному узлу Tor.',
       'protoAuto': 'АВТО / УМНЫЙ',
       'protoMasque': 'MASQUE',
       'protoWireguard': 'WIREGUARD',
@@ -228,6 +346,35 @@ class AppStrings {
       'settingsComingNext': '设置 — 将在下一步实现',
       'speedTestComingNext': '速度测试 — 将在下一步实现',
       'protocolSheetComingNext': '协议选择 — 将在下一步实现',
+      // ---- v4.16 protocol sheet ----
+      'sheetHeadingMode': '连接模式',
+      'modeTunnel': '隧道',
+      'modeProxy': '代理',
+      'sheetHeadingScanSpeed': '扫描速度',
+      'protoAutoSheet': '自动',
+      'descAuto':
+          '应用自动探测受支持的传输模式，并根据连接成功率、速度与网络稳定性选择最优方案。出现中断时会自动尝试恢复连接，无需手动选择协议。',
+      'descMasque':
+          '通过类似 HTTPS 的流量建立加密连接。支持 HTTP/3 与 HTTP/2，专为限制 VPN 流量的网络设计。',
+      'descWireguard':
+          '在 Aether 内核上通过 WireGuard 协议直连；出口 IP 属于 WARP 出口服务器。',
+      'descGool': '在 Aether 内核上通过 Gool 模式连接；出口 IP 属于 WARP 出口服务器。',
+      'descGoolClassic':
+          '在 Aether 内核上通过经典 Gool 模式连接；出口 IP 属于 WARP 出口服务器。',
+      'descMim':
+          '在 Aether 内核上通过 Mim 模式连接；出口 IP 属于 WARP 出口服务器。',
+      'descPsiphonChain':
+          '首先建立 Aether 隧道，随后 Psiphon 从隧道内接入互联网。出口 IP 属于 Psiphon 出口服务器。',
+      'descPsiphonReverse':
+          '首先通过 Psiphon 建立连接，再在其内部构建 Aether 隧道。这使 Aether 能够经由 Psiphon 的出口路径接入网络。',
+      'descPsiphonOnly':
+          '直接通过 Psiphon 建立连接，不使用 Aether 隧道或 WARP。互联网出口路由由 Psiphon 提供。',
+      'descTorChain':
+          '首先建立 Aether 连接，随后流量经 Tor 网络传出。出口 IP 属于 Tor 出口节点。',
+      'descTorReverse':
+          '首先接入 Tor 网络，再在其内部创建 Aether 隧道。最终出口经由 Aether 隧道。',
+      'descTorOnly':
+          '直接通过 Tor 网络建立连接，不使用 Aether 隧道或 WARP。出口 IP 属于 Tor 出口节点。',
       'protoAuto': '自动 / 智能',
       'protoMasque': 'MASQUE',
       'protoWireguard': 'WIREGUARD',

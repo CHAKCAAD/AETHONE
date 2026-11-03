@@ -106,6 +106,35 @@ class ConnectionStore extends ChangeNotifier {
 
   ProtocolId selectedProtocol = ProtocolId.masque; // Aether's real default
 
+  /// v4.16 — protocol selection with notify (the sheet binds here; tapping a
+  /// tile/sub-tile commits the protocol and auto-pops back to the home).
+  void selectProtocol(ProtocolId id) {
+    if (selectedProtocol == id) return;
+    selectedProtocol = id;
+    notifyListeners();
+  }
+
+  /// v4.16 — «حالت اتصال» (تونل/پروکسی). Default proxy per the sheet frame;
+  /// the engine consumes it at M2 (see [ConnectionMode]).
+  ConnectionMode connectionMode = ConnectionMode.proxy;
+
+  void setConnectionMode(ConnectionMode mode) {
+    if (connectionMode == mode) return;
+    connectionMode = mode;
+    notifyListeners();
+  }
+
+  /// v4.16 — «سرعت اسکن» 1..5 (the sheet frame ships the widest pill = 5
+  /// selected). The auto mode's probe cadence consumes it at M2.
+  int scanSpeed = 5;
+
+  void setScanSpeed(int level) {
+    final clamped = level.clamp(1, 5);
+    if (scanSpeed == clamped) return;
+    scanSpeed = clamped;
+    notifyListeners();
+  }
+
   HomeLook homeLook = HomeLook.one;
   MotionStyle animationStyle = MotionStyle.standard;
 

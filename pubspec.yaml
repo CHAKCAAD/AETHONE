@@ -109,3 +109,8 @@ flutter:
     - design/آیکون های اپ/Security Safe.svg
     - design/آیکون های اپ/Menu Fries.svg
     - design/آیکون های اپ/Situation 1.svg
+    # v4.16 protocol sheet: the «حالت اتصال»/«سرعت اسکن» heading badge
+    # (Password 1.svg — the key-in-frame glyph measured on the sheet frame).
+    - design/آیکون های اپ/Password 1.svg
+    # v4.16 descriptions popup: the × close glyph.
+    - design/آیکون های اپ/Close.svg

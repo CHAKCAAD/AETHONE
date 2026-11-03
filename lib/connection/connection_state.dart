@@ -20,6 +20,13 @@ enum VpnState {
   failed,
 }
 
+/// v4.16 — connection mode («حالت اتصال» on the protocol sheet: تونل /
+/// پروکسی). The sheet's segmented control binds here. The engine consumes
+/// it at M2 (tunnel ⇒ zeptun owns the TUN device; proxy ⇒ the local proxy
+/// port) — documented gap: the UI state is real from day one, the sheet
+/// frame ships پروکسی selected as the default.
+enum ConnectionMode { tunnel, proxy }
+
 /// Pure, side-effect-free transition table — fully unit-tested.
 class VpnStateMachine {
   VpnState _current = VpnState.disconnected;

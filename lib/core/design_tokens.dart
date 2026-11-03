@@ -57,6 +57,19 @@ abstract final class AethColors {
   /// Protocol-logo box inside the protocol card (crop read `#2D323D`).
   static const Color cardIconBg = Color(0xFF2D323D);
 
+  // ---- v4.16 protocol sheet (measured on the sheet frame) ----
+  /// The 66×66 subtile insets inside the family cards — #1A261C measured,
+  /// LIGHTER than the #0F1511 card (a raised inner square, not an inset).
+  static const Color sheetSubtile = Color(0xFF1A261C);
+
+  /// The grab handle (#D9D9D9 measured, lum 218).
+  static const Color sheetHandle = Color(0xFFD9D9D9);
+
+  /// The descriptions-card fill (#0C120F measured — darker than the scrim
+  /// zone, so the card reads as a second, deeper layer over the dimmed
+  /// sheet exactly like the frame).
+  static const Color sheetDescCard = Color(0xFF0C120F);
+
   /// Chevron on the protocol card (crop read coral-red `#E74C5B`).
   static const Color chevronRed = Color(0xFFE74C5B);
 
@@ -322,4 +335,97 @@ abstract final class AethGeometry {
   /// Status-card values (green): 11px w600, centered 79 from the card top
   /// (the subtitle slot of the shared card template).
   static const double settingsStatusValueSize = 11;
+
+  // -----------------------------------------------------------------
+  // v4.16 — PROTOCOL SHEET. Every value below is MEASURED on the design
+  // frame «صفحه شناور انتخاب پروتکل صفحه اصلی.jpg» (402×874, 1:1 ref) and
+  // the companion «صفحه شناور توضیحات پروتکل ها.jpg» (the ⓘ popup).
+  // Measurement scripts: scripts/measure_proto_*.py (pixel clusters, corner
+  // radii from fill-width profiles, colors sampled at ink centers).
+  // -----------------------------------------------------------------
+
+  /// The scrim starts here (the home TOP BAR above stays visible — diff vs
+  /// the plain home frame shows the first dimmed row at y≈101).
+  static const double protoScrimTop = 101;
+
+  /// Grab handle: 85×6 r3 centered (y125..131), #D9D9D9.
+  static const double protoHandleTop = 125;
+  static const double protoHandleW = 85;
+  static const double protoHandleH = 6;
+
+  /// Section headings: text 16 w700 white; the text's right edge sits 74 from
+  /// the screen right edge (measured on all three: x≈328), then a 26 gap,
+  /// then the 20×20 badge at the content inset (right edge x374 → 28 inset).
+  /// Heading rows top: 164 / 262 / 765.
+  static const double protoHeadingTextRightInset = 74;
+  static const double protoHeadingBadgeGap = 26;
+  static const double protoBadgeSize = 20;
+  static const double protoRightInset = 28;
+  static const double protoHeadingTextSize = 16;
+
+  /// Segments (تونل | پروکسی): y201..236 h35 r14, x28..374, gap 21 — RTL
+  /// order: تونل (right, first) then پروکسی; the frame ships پروکسی SELECTED
+  /// (green #1AD995 fill, WHITE text on both states; dark = #0F1511).
+  static const double protoSegmentTop = 201;
+  static const double protoSegmentH = 35;
+  static const double protoSegmentRadius = 14;
+  static const double protoSegmentGap = 21;
+  static const double protoSegmentTextSize = 16;
+
+  /// Tile grid: 3 per row, w103 gap 21 (x27..374), r16; row1 y301 h100,
+  /// row2 y417 h94. Tile internals: ⓘ 13×13 at (11,9); icon center at
+  /// top+41; label 12 w500 center at top+66 (measured cy 342/368 row1).
+  static const double protoTileW = 103;
+  static const double protoTileGap = 21;
+  static const double protoTileRadius = 16;
+  static const double protoTileRow1Top = 301;
+  static const double protoTileRow1H = 100;
+  static const double protoTileRow2Top = 417;
+  static const double protoTileRow2H = 94;
+  static const double protoInfoBadgeSize = 13;
+  static const double protoInfoBadgeInset = 11;
+  static const double protoTileIconCenter = 41;
+  static const double protoTileLabelCenter = 66;
+  static const double protoTileLabelSize = 12;
+
+  /// Family cards (سایفون y531 / تور y646): h100 gap 15, x27..374, r16.
+  /// Main block zone x27..131: logo center at top+37, label 12 at top+69.
+  /// Subtiles 66×66 r14 (#1A261C) at top+16: x131..197 / 213..279 / 295..361
+  /// — visual LEFT→RIGHT: plain(only), ∨(chain), ∧(reverse).
+  /// Stack glyph: Aether logo ~18×19 + 7 gap + chevron 14×6 + 6 gap +
+  /// protocol glyph ~16×20; plain = the protocol glyph alone ~16×20.
+  static const double protoCardTopPsiphon = 531;
+  static const double protoCardTopTor = 646;
+  static const double protoCardH = 100;
+  static const double protoCardRadius = 16;
+  static const double protoSubtile = 66;
+  static const double protoSubtileRadius = 14;
+  static const double protoSubtileGap = 16;
+  static const double protoSubtileInsetTop = 16;
+  static const double protoMainLogoCenterY = 37;
+  static const double protoMainLabelCenterY = 69;
+
+  /// Scan pills: y805..841 h36 r8 gap8, CENTERED (row spans x33..367 —
+  /// center 200 like the handle, NOT the content inset). Widths increase
+  /// toward the right; the frame ships the widest (rightmost, 87) SELECTED.
+  static const double protoPillTop = 805;
+  static const double protoPillH = 36;
+  static const double protoPillRadius = 8;
+  static const double protoPillGap = 8;
+  static const double protoPillW1 = 28;
+  static const double protoPillW2 = 47;
+  static const double protoPillW3 = 64;
+  static const double protoPillW4 = 77;
+  static const double protoPillW5 = 87;
+
+  /// Descriptions popup (the ⓘ sheet): × button Ø22 at y206 (13 above the
+  /// card top 242), card x28..374 r24 #0C120F, blocks 14px/lh18 white,
+  /// dividers 1px #1A261C, icon column right (plain / Aether+∨+proto /
+  /// Aether+∧+proto — same language as the subtiles).
+  static const double protoDescCloseTop = 206;
+  static const double protoDescCloseSize = 22;
+  static const double protoDescCardTop = 242;
+  static const double protoDescCardRadius = 24;
+  static const double protoDescTextSize = 14;
+  static const double protoDescTextHeight = 18;
 }

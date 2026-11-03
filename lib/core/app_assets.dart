@@ -107,6 +107,15 @@ abstract final class AppAssets {
   static const String iconMenuFries = '$_icons/Menu Fries.svg';
   static const String iconSituation1 = '$_icons/Situation 1.svg';
 
+  // --- v4.16 protocol sheet: the two heading badges measured on the sheet
+  // frame — «حالت اتصال» and «سرعت اسکن» both carry the key-in-frame glyph
+  // (Password 1.svg — pixel-verified identical on both headings), and
+  // «پروتکل» carries the scan frame ([iconScan1], already declared).
+  static const String iconPassword1 = '$_icons/Password 1.svg';
+
+  // v4.16 descriptions popup: the × close glyph (the set's own Close.svg).
+  static const String iconClose = '$_icons/Close.svg';
+
   // --- protocol logos. Tor/Psiphon ship as pre-rendered PNGs (their SVGs
   // embed the artwork in hidden tracing layers + the real vector art,
   // which flutter_svg renders partially) — v4.10.
@@ -187,6 +196,8 @@ abstract final class AppAssets {
         iconSecuritySafe,
         iconMenuFries,
         iconSituation1,
+        iconPassword1,
+        iconClose,
         _protoMasque,
         _protoWireguard,
         _protoGool,

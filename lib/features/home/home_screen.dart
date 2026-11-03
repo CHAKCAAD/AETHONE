@@ -19,6 +19,7 @@ import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../../l10n/app_strings.dart';
 import '../settings/settings_screen.dart';
+import 'protocol_sheet/protocol_sheet.dart';
 import 'widgets/bottom_panel.dart';
 import 'widgets/glow_pill.dart';
 import 'widgets/hero_logo.dart';
@@ -75,6 +76,16 @@ class HomeScreen extends StatelessWidget {
       MaterialPageRoute<void>(
         builder: (_) => SettingsScreen(store: store),
       ),
+    );
+  }
+
+  /// v4.16 — the REAL protocol-selection sheet (pixel-faithful to the frame
+  /// «صفحه شناور انتخاب پروتکل صفحه اصلی.jpg"); the placeholder sheet is
+  /// gone. Selecting a protocol auto-returns here (owner: «بعد از انتخاب
+  /// پروتکل به صورت خودکار کاربر باید به صفحه اول بازگردد»).
+  void _openProtocolSheet(BuildContext context) {
+    Navigator.of(context).push(
+      protocolSheetRoute(store: store, style: store.effectiveMotionStyle(context)),
     );
   }
 
@@ -225,10 +236,7 @@ class HomeScreen extends StatelessWidget {
                         downBytes: store.downBytes,
                         upBytes: store.upBytes,
                         showConnectButton: isLookOne,
-                        onProtocolCardTap: () => _openPlaceholderSheet(
-                          context,
-                          strings.protocolSheetComingNext,
-                        ),
+                        onProtocolCardTap: () => _openProtocolSheet(context),
                         // Tap connect (owner v4.12: «دکمه اتصال رو به حالت
                         // کلیک قبلش برگردون، نمیخوام حالت سوییپ داشته باشه»)
                         // — the FAB toggles: tap connects, tap again
