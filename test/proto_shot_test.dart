@@ -102,7 +102,7 @@ void main() {
     final store = ConnectionStore(engine: ScriptedEngine());
     await tester.pumpWidget(_shot(HomeScreen(store: store)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ماسک').first);
+    await tester.tap(find.text('وایرگارد').first);
     await tester.pump();
     await tester.pumpAndSettle();
     await _capture(tester, 'proto_sheet');

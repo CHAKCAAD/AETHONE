@@ -1496,11 +1496,15 @@ jobs:
   # APK. M2 (engine wiring): the APK now EMBEDS the native cores from the
   # native-build legs —
   #   jniLibs/<abi>/libaether.so      (Rust core, in-process C API)
-  #   jniLibs/<abi>/liblyrebird.so    (Go Psiphon PT, exec'd by Aether)
+  #   jniLibs/<abi>/liblyrebird.so    (Go obfs4/lyrebird PT for Tor bridges)
+  #   jniLibs/<abi>/libpsiphon.so     (Go psiphon-tunnel-core — v4.19 FIX:
+  #                                    v4.18 packaged lyrebird in its place,
+  #                                    so psiphon modes could never run)
   #   jniLibs/<abi>/libzeptun-jni.so  (Zig TUN engine via VpnService JNI)
   # The RELEASE build stays universal (all 3 ABIs); the preview-debug build
   # stays arm64-v8a ONLY (owner rule) — staged accordingly between builds.
-  # extractNativeLibs=true (app Gradle) so lyrebird is a real +x file.
+  # extractNativeLibs=true (app Gradle) so the exec'd Go binaries are real
+  # +x files in nativeLibraryDir.
   # =========================================================================
   android-apk:
     name: "Android APK (release + preview-debug — M2: engines embedded)"
@@ -1578,12 +1582,17 @@ jobs:
             abi="${d##*/native-}"
             mkdir -p "$JL/$abi"
             # Fail-closed: every expected core file must exist in the artifact.
-            for f in aether/libaether.so aether/pt/lyrebird zeptun/libzeptun-jni.so; do
+            # v4.19: psiphon-tunnel-core joined the packaged set — the core
+            # execs it for every psiphon mode (psiphon.rs BINARY_NAMES) and
+            # the v4.18 APK shipped liblyrebird.so in its place (lyrebird is
+            # Tor's obfs4 PT), which made psiphon modes impossible on-device.
+            for f in aether/libaether.so aether/pt/lyrebird aether/pt/psiphon-tunnel-core zeptun/libzeptun-jni.so; do
               [ -f "$d/$f" ] || { echo "::error::$abi/$f missing from the native artifact"; exit 1; }
             done
-            cp "$d/aether/libaether.so"     "$JL/$abi/libaether.so"
-            cp "$d/aether/pt/lyrebird"      "$JL/$abi/liblyrebird.so"
-            cp "$d/zeptun/libzeptun-jni.so" "$JL/$abi/libzeptun-jni.so"
+            cp "$d/aether/libaether.so"            "$JL/$abi/libaether.so"
+            cp "$d/aether/pt/lyrebird"             "$JL/$abi/liblyrebird.so"
+            cp "$d/aether/pt/psiphon-tunnel-core"  "$JL/$abi/libpsiphon.so"
+            cp "$d/zeptun/libzeptun-jni.so"        "$JL/$abi/libzeptun-jni.so"
           done
           echo "staged jniLibs:"; find "$JL" -type f -printf '%p  %s bytes\n' | sort
 
@@ -1632,7 +1641,7 @@ jobs:
             echo "commit=${{ github.sha }}"
             echo "flutter=${FLUTTER_VERSION} agp=${AGP_VERSION} gradle_wrapper=${GRADLE_VERSION} build_tools=${BUILD_TOOLS_VERSION} jdk=${JDK_VERSION}"
             echo "application_id=com.chakcaad.aethone minSdk=24 (CANDIDATE, not proven) targetSdk=36"
-            echo "scope=M2 ENGINE WIRING: release APK embeds the native cores (libaether.so + liblyrebird.so + libzeptun-jni.so; universal, 3 ABIs; extractNativeLibs=true). Real connect path: Aether in-process via C API + zeptun via VpnService JNI + end-to-end probe gate. The preview-debug APK (arm64-only) runs the PREVIEW_MODE simulator (debug builds only, by code)."
+            echo "scope=M2 ENGINE WIRING (v4.19): release APK embeds the native cores (libaether.so + liblyrebird.so + libpsiphon.so [psiphon-tunnel-core — v4.19 fixed the v4.18 wrong-binary packaging] + libzeptun-jni.so; universal, 3 ABIs; extractNativeLibs=true). Real connect path: Aether in-process via C API + zeptun via VpnService JNI + end-to-end probe gate. The preview-debug APK (arm64-only) runs the PREVIEW_MODE simulator (debug builds only, by code)."
             echo "native_pins=aether@$(grep -o '"aether": "[0-9a-f]*"' native-out/native-arm64-v8a/manifest.json | cut -d'"' -f4) zeptun@$(grep -o '"zeptun": "[0-9a-f]*"' native-out/native-arm64-v8a/manifest.json | cut -d'"' -f4)"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > dist/BUILD_INFO.txt

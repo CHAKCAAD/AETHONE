@@ -1,6 +1,6 @@
 # M2 — Engine Wiring (هسته ↔ UI)
 
-**Status:** DELIVERED (v4.18, 2026-11-03) — real-device test phase.
+**Status:** DELIVERED (v4.18) — device-test round 1 fixes (v4.19, 2026-11-04).
 **Scope:** the Android vertical slice of the implementation prompt (§ M2):
 «برش عمودی Android؛ Aether تعبیه‌شده + zeptun از طریق JNI + VpnService + ماشین
 حالت + ابزار تشخیص». No frozen pin changed (N1/N8) — the cores build from the
@@ -92,6 +92,11 @@ Common args: `--bind 127.0.0.1:1819`, `--config <filesDir>/aether/warp.toml`,
 jniLibs/<abi>/libaether.so      ← native-build artifact aether/libaether.so
 jniLibs/<abi>/liblyrebird.so    ← aether/pt/lyrebird (renamed: the installer
                                    extracts lib*.so with the exec bit)
+jniLibs/<abi>/libpsiphon.so     ← aether/pt/psiphon-tunnel-core (v4.19 FIX:
+                                   v4.18 shipped lyrebird in this slot —
+                                   psiphon.rs BINARY_NAMES wants the
+                                   psiphon-tunnel-core program, so psiphon
+                                   modes could never come up on a device)
 jniLibs/<abi>/libzeptun-jni.so  ← zeptun/libzeptun-jni.so (statically links
                                    the engine — libzeptun.so is NOT needed)
 ```
@@ -100,7 +105,8 @@ jniLibs/<abi>/libzeptun-jni.so  ← zeptun/libzeptun-jni.so (statically links
 * Preview-debug APK: arm64-v8a ONLY (owner rule) — jniLibs are re-staged
   between the two builds.
 * `extractNativeLibs=true` (Gradle `useLegacyPackaging`) — required so the
-  lyrebird PT binary is a real executable file in `nativeLibraryDir`.
+  exec'd Go binaries (lyrebird, psiphon-tunnel-core) are real executable
+  files in `nativeLibraryDir`.
 * build_native.sh v5 exports `libaether.so` (same cargo build, cdylib
   crate-type; NEEDED-guarded like the binary: never libc++_shared.so).
 
@@ -130,6 +136,63 @@ jniLibs/<abi>/libzeptun-jni.so  ← zeptun/libzeptun-jni.so (statically links
   START_NOT_STICKY on purpose — a sticky restart would tunnel into a dead
   core (silent black hole). The tunnel dies with the process; the app resyncs
   (`vpnStatus` + probe) on next launch and the user reconnects.
+
+## Device-test round 1 fixes (v4.19 — the owner's 10 reports, 2026-11-04)
+
+1. **#6 psiphon packaging FIXED**: `--psiphon-bin` now points at
+   `libpsiphon.so` (= psiphon-tunnel-core, packaged per-ABI). v4.18 shipped
+   `liblyrebird.so` in that slot — lyrebird is Tor's obfs4 PT, NOT the
+   psiphon client, so psiphon modes could never run. Tor's arg surface was
+   verified correct (`--tor`/`--tor-reverse`/`--tor-only`).
+2. **#3 CANCEL during connecting**: the store's `disconnect()` while
+   starting/waitingForPermissions/connecting is a CANCELLATION (the
+   single-flight guard no longer blocks it); the platform walk checkpoints
+   `_disconnecting` at every stage and goes silent (the cancel owns the
+   terminal state); the preview adapter is cancellable too; every connect
+   surface (hero logo, look-2 button, FAB) cancels on tap during the walk.
+   A stale in-flight `connected` emission from the aborted walk is dropped
+   (cancel-generation guard) instead of landing as a fake
+   `failed(illegalTransition)`.
+3. **#2 the app FOLLOWS the core**: while waiting for the listener, the
+   adapter polls the core's job every second; a core that exits fails the
+   walk immediately with `coreExited` + the CORE's own error text — no more
+   generic 120 s `engineStartTimeout` when the core is already dead.
+4. **#7 proxy survives the app being swiped away**: `CoreHoldService`
+   (specialUse FGS, subtype `core-holder`) pins the process for the proxy
+   session (`startCoreHold`/`stopCoreHold`/`coreHoldStatus` on the
+   channel). Resync on app re-entry now recognizes BOTH holders — the VPN
+   service (tunnel) and the core hold (proxy) — and walks
+   starting → connecting → connected with a live probe, so the app shows
+   the TRUE state instead of «در حال اتصال مجدد».
+5. **#1 tunnel crash hardening**: every Java-level throwable in the tunnel
+   leg (`startTunnel`, `Zeptun.nativeStop`, teardown) is converted into the
+   honest `down` event (`tunnelStartFailed`) — the app survives to show
+   the failure. Uncaught Java exceptions leave a breadcrumb at
+   `filesDir/aethone-crash.txt` for the next device test. NOTE: a NATIVE
+   crash (SIGSEGV/SIGABRT inside an embedded core) remains uncatchable by
+   design — `adb logcat -b crash` from a repro is still the native truth.
+6. **#8 settings persistence**: `shared_preferences` + `SettingsPersistence`
+   — restore runs BEFORE the first frame; every change saves (debounced
+   200 ms); invalid/stale values fall back to the defaults safely.
+7. **#4 default protocol = WireGuard** (owner decree until the settings
+   redesign ships; the AUTO tile still selects the core's own MASQUE).
+8. **#5 wheel policy** (`LocationWheelPolicy`): selectable ONLY where the
+   core honors the pin — psiphonOnly/psiphonChain (`--psiphon-region`) and
+   the reverse modes (`--exit-loc`, WARP exit); tor-EXIT modes render a
+   locked display (the pinned core has NO Tor exit-country control —
+   `AETHER_TOR_COUNTRY` is a BridgeDB request country, not an exit pin).
+   The psiphon-EXIT modes filter the wheel to the standing Psiphon egress
+   regions (the live set is announced by the network itself as
+   `AvailableEgressRegions` at connect time); a filter change re-anchors
+   the wheel and commits the pick.
+9. **#10 protocol page chrome**: the BACK and INFO (Telegram) tiles
+   exchanged slots (RTL row: back = visual RIGHT, info = visual LEFT).
+10. **#9 location display** (no code change — it is already real): the
+    connected flag is the cloudflare-trace `loc=` measured THROUGH the
+    tunnel; WARP egress for Iranian clients is genuinely inside IR most of
+    the time, so an IR flag after a WARP-family connect is the honest
+    reading. Verify with a psiphon/tor protocol (their exits are
+    e.g. NL/DE/SE) — the roulette lands on the reported exit.
 
 ## Device-test checklist (owner)
 

@@ -89,13 +89,19 @@ class AetherArguments {
         args.addAll(['--protocol', 'masque']);
     }
 
-    // Psiphon modes need the PT binary + a writable state dir. The packaged
-    // lyrebird is renamed lib*.so so the installer extracts it with the exec
-    // bit (extractNativeLibs).
+    // Psiphon modes need the psiphon-tunnel-core binary + a writable state
+    // dir. The Go binary is packaged renamed to libpsiphon.so so the
+    // installer extracts it with the exec bit (extractNativeLibs) —
+    // evidence: psiphon.rs BINARY_NAMES = psiphon-tunnel-core/psiphon and
+    // `--psiphon-bin` is "the psiphon-tunnel-core binary to run" (cli.rs).
+    // v4.18 shipped liblyrebird.so here — lyrebird is Tor's obfs4 PT, NOT
+    // the psiphon client; the core exec'd the wrong program and psiphon
+    // modes could never come up on a device. Fixed in v4.19 (owner device
+    // test: «از کارکرد تور و سایفون مطمن نیستم»).
     if (mode.exitKind == ExitKind.psiphonExit ||
         protocol == ProtocolId.psiphonReverse) {
       args.addAll([
-        '--psiphon-bin', '$nativeLibraryDir/liblyrebird.so',
+        '--psiphon-bin', '$nativeLibraryDir/libpsiphon.so',
         '--psiphon-dir', '$filesDir/aether/psiphon',
       ]);
     }
@@ -160,6 +166,11 @@ class PlatformEngineAdapter implements EngineAdapter {
   static const Duration _tunnelUpBudget = Duration(seconds: 30);
   static const Duration _probeTimeout = Duration(seconds: 20);
   static const Duration _permissionBudget = Duration(seconds: 180);
+  /// v4.19 — how often the connect walk re-checks the core's health while
+  /// waiting for the listener (owner device test #2: the app must FOLLOW the
+  /// core — a core that dies during registration must fail the walk with
+  /// the CORE's own error, not a generic listener timeout).
+  static const Duration _coreHealthInterval = Duration(seconds: 1);
 
   final Duration _statsInterval;
   final AetherCoreApi Function()? _coreFactory;
@@ -194,6 +205,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     _connecting = true;
     _disconnecting = false;
     _probeStrikes = 0;
+    _coreFailureDuringStart = null;
     try {
       await _connectInner();
     } on AetherFfiException catch (e) {
@@ -252,21 +264,51 @@ class PlatformEngineAdapter implements EngineAdapter {
       ),
     );
 
+    // --- 2b. v4.19 (#7): proxy mode has no VpnService to hold the process,
+    // so swiping the app away used to kill the in-process core. A tiny
+    // foreground service (CoreHoldService) pins the process for the session
+    // and is torn down on disconnect. The tunnel mode already has
+    // AethoneVpnService in the foreground.
+    if (!tunnel) {
+      try {
+        await _channel.invokeMethod<void>(
+          'startCoreHold',
+          {'port': _activePort},
+        );
+      } on PlatformException {
+        // Hold failed — proxy still works while the app is foregrounded;
+        // the honest resync on the next start reports the truth.
+      } on MissingPluginException {
+        // no platform (tests) — nothing to hold
+      }
+    }
+
     // --- 3. Wait for the SOCKS listener of the SELECTED mode (no fallback,
-    // no guessing — prompt §12-الحاقیه).
-    final ready = await TunnelProbe.waitForListener(
+    // no guessing — prompt §12-الحاقیه). v4.19 (#2): while waiting, the
+    // walk FOLLOWS the core — a job that exits on its own fails the walk
+    // immediately with the core's own error (the core is the authority,
+    // owner: «اپ باید تابع هسته ایتر باشه و ناموفق بودن اتصال رو از هسته
+    // ایتر بگیره و منتظر اتصال هسته ایتر باشه»), and a user cancel aborts
+    // the wait right away (#3).
+    final ready = await _waitForListenerFollowingCore(
       _activePort,
       timeout: _listenerBudget,
     );
-    if (!ready) {
+    if (!_disconnecting && !ready) {
       await _hardCleanup();
-      _emitFail(
-        'engineStartTimeout',
-        'the core did not serve 127.0.0.1:$_activePort within '
-        '$_listenerBudget',
-      );
+      if (_coreFailureDuringStart != null) {
+        _emitFail('coreExited', _coreFailureDuringStart);
+      } else {
+        _emitFail(
+          'engineStartTimeout',
+          'the core did not serve 127.0.0.1:$_activePort within '
+          '$_listenerBudget',
+        );
+      }
       return;
     }
+    _coreFailureDuringStart = null;
+    if (_disconnecting) return; // cancel owns the terminal state (#3)
 
     // --- 4. Tunnel mode: VpnService → TUN fd → zeptun (JNI bridge).
     if (tunnel) {
@@ -290,6 +332,7 @@ class PlatformEngineAdapter implements EngineAdapter {
       });
       _tunnelUp = null;
       if (!up) {
+        if (_disconnecting) return; // cancelled mid-tunnel (#3)
         await _hardCleanup();
         _emitFail('tunnelStartFailed', 'zeptun did not come up');
         return;
@@ -302,6 +345,7 @@ class PlatformEngineAdapter implements EngineAdapter {
         port: _activePort,
         timeout: _probeTimeout,
       );
+      if (_disconnecting) return; // cancelled during the probe (#3)
       _emit(
         EngineStatsUpdated(
           pingMs: result.pingMs,
@@ -310,6 +354,7 @@ class PlatformEngineAdapter implements EngineAdapter {
       );
       _emitState(VpnState.connected);
     } catch (e) {
+      if (_disconnecting) return;
       await _hardCleanup();
       _emitFail('endToEndProbeFailed', e.toString());
       return;
@@ -317,6 +362,50 @@ class PlatformEngineAdapter implements EngineAdapter {
 
     // --- 6. Steady state: stats + health (§6 health probe ⇒ reconnecting).
     _startTicker();
+  }
+
+  /// v4.19 (#2) — the core's last words when it died during the listener
+  /// wait ("connection failure comes FROM the core").
+  String? _coreFailureDuringStart;
+
+  /// The listener wait of the v4.19 walk: polls the listener AND the core's
+  /// job liveness. Returns true when the listener is up; when the core
+  /// exits first, records its own error in [_coreFailureDuringStart] and
+  /// returns false. Aborts on cancel (#3).
+  Future<bool> _waitForListenerFollowingCore(
+    int port, {
+    required Duration timeout,
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      if (_disconnecting) return false;
+      if (await TunnelProbe.isListenerReady(port)) return true;
+      // Core liveness — the core owns the truth about its own failure.
+      final jobId = _jobId;
+      final core = _core;
+      if (core != null && jobId != null) {
+        try {
+          final poll = core.jobPoll(jobId);
+          if (poll.body['state'] == 'done') {
+            final result = poll.body['result'];
+            final inner = result is Map ? result['state'] : null;
+            _coreFailureDuringStart = inner == null
+                ? (poll.error ?? 'the core exited on its own')
+                : 'the core exited on its own (state: $inner)';
+            return false;
+          }
+          if (!poll.ok) {
+            _coreFailureDuringStart = poll.error;
+            return false;
+          }
+        } on AetherFfiException catch (e) {
+          _coreFailureDuringStart = e.message ?? e.code;
+          return false;
+        }
+      }
+      await Future<void>.delayed(_coreHealthInterval);
+    }
+    return false;
   }
 
   @override
@@ -475,12 +564,21 @@ class PlatformEngineAdapter implements EngineAdapter {
       } on PlatformException {
         // already down — nothing else to do
       }
+    } else {
+      // v4.19 (#7): release the proxy hold too — a dead core must not keep
+      // the process pinned.
+      try {
+        await _channel.invokeMethod<void>('stopCoreHold');
+      } on PlatformException {
+        // already down
+      }
     }
     _emitFail(code, message);
   }
 
-  /// Full teardown: zeptun (via the service) + aether job. Safe to call in
-  /// any state, twice, or when nothing is running.
+  /// Full teardown: zeptun (via the service) + the core-hold service (proxy)
+  /// + aether job. Safe to call in any state, twice, or when nothing is
+  /// running.
   Future<void> _hardCleanup() async {
     _ticker?.cancel();
     _ticker = null;
@@ -495,6 +593,16 @@ class PlatformEngineAdapter implements EngineAdapter {
         // already stopped
       } on MissingPluginException {
         // no platform (tests) — nothing to stop
+      }
+    } else {
+      // v4.19 (#7): proxy mode — release the process hold so an idle app
+      // costs nothing in the background.
+      try {
+        await _channel.invokeMethod<void>('stopCoreHold');
+      } on PlatformException {
+        // already stopped
+      } on MissingPluginException {
+        // no platform (tests)
       }
     }
     final jobId = _jobId;
@@ -551,42 +659,69 @@ class PlatformEngineAdapter implements EngineAdapter {
     }
   }
 
-  /// If the Flutter engine was restarted while the foreground service kept
-  /// the tunnel alive, resume the honest state instead of showing
-  /// `disconnected` while the device is actually tunnelled.
+  /// If the Flutter engine was restarted while a foreground service kept
+  /// the session alive, resume the honest state instead of showing
+  /// `disconnected` while the device is actually tunnelled/proxied.
+  /// v4.19 (#7): BOTH holders are recognized — AethoneVpnService (tunnel)
+  /// and CoreHoldService (proxy) — so re-entering the app after swiping it
+  /// away shows the TRUE state (owner: «وقتی وارد اپ میشم مجدد میره رو حالت
+  /// اتصال مجدد»). Proxy resume relies on the in-process core still
+  /// listening on the held port (same process — CoreHoldService kept it
+  /// alive); if the listener is gone the session is honestly dead.
   Future<void> _resyncAfterRestart() async {
     if (!Platform.isAndroid) return;
     try {
       final status =
           await _channel.invokeMethod<Map<Object?, Object?>>('vpnStatus') ??
           const {};
-      if (status['running'] != true) return;
-      final port = (status['port'] as num?)?.toInt() ?? 1819;
-      if (!await TunnelProbe.isListenerReady(port)) {
-        // Service alive but the core is gone — stop the zombie service; the
-        // user reconnects through the normal flow.
-        await _channel.invokeMethod<void>('stopVpn');
+      if (status['running'] == true) {
+        final port = (status['port'] as num?)?.toInt() ?? 1819;
+        if (!await TunnelProbe.isListenerReady(port)) {
+          // Service alive but the core is gone — stop the zombie service; the
+          // user reconnects through the normal flow.
+          await _channel.invokeMethod<void>('stopVpn');
+          return;
+        }
+        await _resumeSession(port, ConnectionMode.tunnel);
         return;
       }
-      final result = await TunnelProbe().trace(port: port);
-      _activePort = port;
-      _activeMode = ConnectionMode.tunnel;
-      // Legal walk for a resume: starting → connecting → connected (§8).
-      _emitState(VpnState.starting);
-      _emitState(VpnState.connecting);
-      _emit(
-        EngineStatsUpdated(
-          pingMs: result.pingMs,
-          exitCountryCode: result.exitCountryCode,
-        ),
-      );
-      _emitState(VpnState.connected);
-      _startTicker();
+      // Proxy mode: the core-hold service keeps the process (and the
+      // in-process core) alive after the app was swiped away.
+      final hold =
+          await _channel.invokeMethod<Map<Object?, Object?>>('coreHoldStatus') ??
+          const {};
+      if (hold['running'] != true) return;
+      final port = (hold['port'] as num?)?.toInt() ?? 1819;
+      if (!await TunnelProbe.isListenerReady(port)) {
+        // Process alive but the core is gone — release the hold; the user
+        // reconnects through the normal flow.
+        await _channel.invokeMethod<void>('stopCoreHold');
+        return;
+      }
+      await _resumeSession(port, ConnectionMode.proxy);
     } on PlatformException {
       // platform not ready yet — the next connect() will sort it out
     } on SocketException {
       // probe failed — treat as not connected
     }
+  }
+
+  /// The shared resume walk (legal per §8: starting → connecting →
+  /// connected) once a live listener on [port] was proven.
+  Future<void> _resumeSession(int port, ConnectionMode mode) async {
+    final result = await TunnelProbe().trace(port: port);
+    _activePort = port;
+    _activeMode = mode;
+    _emitState(VpnState.starting);
+    _emitState(VpnState.connecting);
+    _emit(
+      EngineStatsUpdated(
+        pingMs: result.pingMs,
+        exitCountryCode: result.exitCountryCode,
+      ),
+    );
+    _emitState(VpnState.connected);
+    _startTicker();
   }
 
   @visibleForTesting

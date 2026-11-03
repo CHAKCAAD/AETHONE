@@ -233,7 +233,8 @@ void main() {
 
       // The protocol card shows the SELECTED protocol's name, not the generic
       // word (owner prompt: the chosen protocol's logo/name shows on the card).
-      expect(find.text('ماسک'), findsOneWidget);
+      // v4.19: the cold default is WireGuard, so the card renders وایرگارد.
+      expect(find.text('وایرگارد'), findsOneWidget);
       expect(find.text('پروتکل'), findsNothing);
     },
   );
@@ -316,11 +317,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 2700));
     await tester.pump(const Duration(milliseconds: 100));
 
-    // Landed on the REAL exit country, not the stale target.
+    // Landed on the REAL exit country, not the stale target (nl is a
+    // psiphon egress region, so it exists in the v4.19-filtered wheel).
     expect(find.text('هلند'), findsOneWidget);
     // The user's selector was NEVER overwritten by mid-spin countries —
-    // the epoch protocol's no-op guarantee on superseded spins.
-    expect(store.selectedCountryCode, 'ir');
+    // the epoch protocol's no-op guarantee on superseded spins. v4.19: the
+    // committed pick is the FILTER's re-anchor ('ir' is not a psiphon
+    // egress region → the wheel re-anchored on 'at' and committed it).
+    expect(store.selectedCountryCode, 'at');
   });
 
   // v4.12: the flag wheel is INFINITE — at any resting position flags exist
@@ -335,6 +339,12 @@ void main() {
     store.selectedProtocol = ProtocolId.psiphonChain;
     await tester.pumpWidget(_booth(HomeScreen(store: store)));
     await tester.pumpAndSettle();
+
+    // v4.19 #5: the psiphon wheel is FILTERED to the egress regions — the
+    // cold 'ir' pick is not one, so the wheel re-anchored on the first
+    // allowed region and committed it.
+    expect(find.text('اتریش'), findsOneWidget); // 'at' = first allowed
+    expect(store.selectedCountryCode, 'at');
 
     // Flags on BOTH edges of the viewport.
     final xs = <double>[];
@@ -362,6 +372,8 @@ void main() {
     // Psiphon = selectable: drag one pitch left → the next country centers
     // and its NAME (not the code) shows in the header. Small stepped moves
     // with pumps keep the release velocity ≈ 0 (no fling past the neighbor).
+    // v4.19: the wheel is the psiphon subset — from 'at' the next region
+    // is 'au'.
     final wheelCenter = tester.getCenter(find.byType(PageView).first);
     final drag = await tester.startGesture(wheelCenter);
     for (var i = 0; i < 3; i++) {
@@ -375,7 +387,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await drag.up();
     await tester.pumpAndSettle();
-    expect(find.text('ایسلند'), findsOneWidget); // 'ir' + 1 = 'is'
+    expect(find.text('استرالیا'), findsOneWidget); // 'at' + 1 = 'au'
 
     // Display-only protocol: MASQUE — v4.15: the band is HIDDEN while
     // disconnected (zero height behind a clip; NeverScrollable), so a drag

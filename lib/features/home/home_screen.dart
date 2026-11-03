@@ -98,7 +98,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// v4.17 — the REAL protocol-selection PAGE (promoted from the v4.16
+  /// v4.19 — the REAL protocol-selection PAGE (promoted from the v4.16
   /// floating sheet per the owner: «در یک صفحه جدا مثل صفحه اصلی تنظیمات
   /// قرار بدیم»). Selecting a protocol auto-returns here (owner: «بعد از
   /// انتخاب پروتکل به صورت خودکار کاربر باید به صفحه اول بازگردد»).
@@ -106,6 +106,29 @@ class HomeScreen extends StatelessWidget {
     Navigator.of(context).push(
       protocolPageRoute(store: store, style: store.effectiveMotionStyle(context)),
     );
+  }
+
+  /// v4.19 (#3) — tap-to-cancel, owner device test: «حین اتصال کاربر باید
+  /// بتونه اتصال رو کنسل کنه». Every connect surface (hero logo, look-2
+  /// center button, bottom FAB) routes through THIS toggle: while the
+  /// engine walk is in flight a tap CANCELS the pending connection (the
+  /// store's canceling disconnect — legal edges starting/…/connecting →
+  /// disconnecting), instead of being silently ignored by the old
+  /// single-flight guard.
+  void _toggleConnection() {
+    switch (store.state) {
+      case VpnState.starting:
+      case VpnState.waitingForPermissions:
+      case VpnState.connecting:
+      case VpnState.connected:
+        store.disconnect();
+      case VpnState.failed:
+      case VpnState.reconnecting:
+      case VpnState.disconnected:
+        store.connect();
+      case VpnState.disconnecting:
+        break; // one transition already in flight — ignore
+    }
   }
 
   @override
@@ -158,6 +181,11 @@ class HomeScreen extends StatelessWidget {
                       protocolIsTorOrPsiphon:
                           store.selectedProtocol.isTor ||
                           store.selectedProtocol.isPsiphon,
+                      // v4.19 #5 — the wheel is a real SELECTOR only where
+                      // the core honors the pick, and the psiphon-exit
+                      // protocols FILTER the flags to their egress regions.
+                      selectable: store.wheelSelectable,
+                      allowedCodes: store.wheelAllowedCodes,
                       pingMs: store.pingMs,
                       exitCountryCode: store.exitCountryCode,
                       // Wheel selection commit — the store keeps it for the
@@ -221,22 +249,22 @@ class HomeScreen extends StatelessWidget {
                                 // صفحه هم به عنوان دکمه اتصال عمل کنه البته
                                 // دکمه اتصال هم همچنان عملکردش رو داشته
                                 // باشه» — the logo toggles the connection
-                                // exactly like the bottom FAB (the store's
-                                // single-flight guard makes multi-taps
-                                // harmless; the state machine refuses
-                                // nothing here: connected→disconnecting and
-                                // any-idle→starting are legal edges).
+                                // exactly like the bottom FAB. v4.19 (#3):
+                                // the toggle now CANCELS the in-flight walk
+                                // instead of being ignored while connecting.
                                 behavior: HitTestBehavior.opaque,
-                                onTap: connected
-                                    ? store.disconnect
-                                    : store.connect,
+                                onTap: _toggleConnection,
                                 child: HeroLogo(
                                   connected: connected,
                                   style: style,
                                 ),
                               )
                             else
-                              _CenterConnectButton(store: store, style: style),
+                              _CenterConnectButton(
+                                store: store,
+                                style: style,
+                                onTap: _toggleConnection,
+                              ),
                           ],
                         ),
                       ),
@@ -278,9 +306,11 @@ class HomeScreen extends StatelessWidget {
                         // کلیک قبلش برگردون، نمیخوام حالت سوییپ داشته باشه»)
                         // — the FAB toggles: tap connects, tap again
                         // disconnects. The center look-2 button behaves the
-                        // same.
-                        onConnect: store.connect,
-                        onDisconnect: store.disconnect,
+                        // same. v4.19 (#3): both handlers route through the
+                        // tap-to-cancel toggle — during the engine walk a
+                        // tap cancels the pending connection.
+                        onConnect: _toggleConnection,
+                        onDisconnect: _toggleConnection,
                       ),
                     ),
                     SizedBox(height: AethGeometry.gapPanelToBottom * s),
@@ -298,12 +328,18 @@ class HomeScreen extends StatelessWidget {
 /// Look 2: the hero IS the connect button (112px core, 4-layer glow) with
 /// the set's real Off.svg icon. Owner v4.12: back to CLICK — a tap toggles
 /// (connect when disconnected, disconnect when connected); the swipe-only
-/// interaction from defect #11 is reverted.
+/// interaction from defect #11 is reverted. v4.19 (#3): the toggle logic
+/// lives in [HomeScreen._toggleConnection] (tap-to-cancel during the walk).
 class _CenterConnectButton extends StatelessWidget {
-  const _CenterConnectButton({required this.store, required this.style});
+  const _CenterConnectButton({
+    required this.store,
+    required this.style,
+    required this.onTap,
+  });
 
   final ConnectionStore store;
   final MotionStyle style;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -311,13 +347,11 @@ class _CenterConnectButton extends StatelessWidget {
     final connected = store.isConnected;
     final duration = motionDuration(style, MotionDurations.state);
 
-    void toggle() => connected ? store.disconnect() : store.connect();
-
     return GlowCircle(
       active: connected,
       duration: duration,
       curve: style.curve,
-      onTap: toggle, // tap-to-toggle (owner v4.12)
+      onTap: onTap, // tap-to-toggle (owner v4.12) + cancel (v4.19 #3)
       child: TweenAnimationBuilder<Color?>(
         tween: ColorTween(
           begin: connected

@@ -46,8 +46,14 @@
 /// completion is a no-op. The roulette never writes to the store at all —
 /// the engine owns the connected location.
 ///
-/// Selection lock: ONLY Tor and Psiphon select a country; every other
-/// protocol renders the wheel as a locked LOCATION DISPLAY (defect #13).
+/// Selection lock (v4.19 #5 refinement): ONLY the protocols whose pin the
+/// core actually HONORS render the wheel as a selector (psiphon-exit +
+/// reverse modes); tor-exit protocols render it as a locked DISPLAY (the
+/// core has no Tor exit-country control — the roulette still lands on the
+/// real exit). The psiphon-EXIT modes additionally FILTER the flag list to
+/// the Psiphon egress regions (owner: «در حالت تور و سایفون باید فقط پرچم
+/// کشورهایی رو نشون بده که سایفون و تور ساپورت میکنن»); a filter change
+/// re-anchors the wheel on the nearest allowed flag and commits it.
 library;
 
 import 'dart:async';
@@ -67,13 +73,27 @@ class LocationHeader extends StatefulWidget {
     super.key,
     required this.connected,
     required this.protocolIsTorOrPsiphon,
+    required this.selectable,
+    required this.allowedCodes,
     required this.pingMs,
     required this.exitCountryCode,
     required this.onCountrySelected,
   });
 
   final bool connected;
+
+  /// Band-visibility family rule (v4.15 #3) — Tor/Psiphon protocols keep
+  /// the band ALWAYS visible (selector or display), everything else reveals
+  /// it only once connected.
   final bool protocolIsTorOrPsiphon;
+
+  /// v4.19 #5 — true only when the core honors a wheel selection for the
+  /// current protocol (see [LocationWheelPolicy]).
+  final bool selectable;
+
+  /// v4.19 #5 — the allowed country set, or null = the whole manifest.
+  final List<String>? allowedCodes;
+
   final int? pingMs;
   final String? exitCountryCode;
 
@@ -95,6 +115,7 @@ class _LocationHeaderState extends State<LocationHeader> {
   /// boundary), which silently shifted the whole mapping by 106 codes.
   static const int _startLap = 100000;
 
+  List<String> _allCodes = const [defaultCode];
   List<String> _codes = const [defaultCode];
   String _selected = defaultCode;
   PageController? _pageController;
@@ -129,6 +150,26 @@ class _LocationHeaderState extends State<LocationHeader> {
   @override
   void didUpdateWidget(covariant LocationHeader old) {
     super.didUpdateWidget(old);
+
+    // v4.19 #5 — the protocol changed the ALLOWED country set: recompute
+    // the wheel list, re-anchor on the nearest allowed flag and commit it
+    // (the old pick may no longer be honorable). Same epoch discipline as
+    // the manifest load: the re-anchor supersedes any in-flight spin.
+    if (!_sameCodeSet(old.allowedCodes, widget.allowedCodes) &&
+        _allCodes.length > 1) {
+      _applyFilter(commit: true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final c = _pageController;
+        if (c != null && c.hasClients) {
+          _epoch++; // invalidate any in-flight programmatic spin
+          _programmatic = true;
+          c.jumpToPage(_lapBase + _indexOf(_selected));
+          _programmatic = false;
+        }
+      });
+      return;
+    }
 
     // CONNECT EDGE → roulette: spin through the countries, land on the
     // engine-reported (or currently selected) location. Fires on EVERY path
@@ -180,7 +221,12 @@ class _LocationHeaderState extends State<LocationHeader> {
             .toList()
           ..sort();
     if (!mounted) return;
-    setState(() => _codes = codes);
+    _allCodes = codes;
+    // commit:true — when the ALLOWED set excludes the current pick (the
+    // psiphon filter vs the cold 'ir' default), the wheel re-anchors and
+    // the store must mirror what the wheel actually shows.
+    _applyFilter(commit: true);
+    setState(() {});
     // The controller (if already created against the placeholder list) must
     // hop to the same code in the REAL cycle — same visual, correct index.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -193,6 +239,37 @@ class _LocationHeaderState extends State<LocationHeader> {
         _programmatic = false;
       }
     });
+  }
+
+  /// v4.19 #5 — intersects the full flag manifest with [widget.allowedCodes]
+  /// (manifest order kept) and re-anchors the selection when it fell out of
+  /// the allowed set. [commit] also writes the re-anchored pick to the store
+  /// (a filter CHANGE means the protocol changed — the engine must receive
+  /// the pick that is actually honorable). The commit is POST-FRAME: the
+  /// manifest load often resumes mid-build, and store listeners must never
+  /// be notified during a build phase.
+  void _applyFilter({required bool commit}) {
+    final allowed = widget.allowedCodes;
+    final filtered = allowed == null
+        ? _allCodes
+        : _allCodes.where(allowed.contains).toList();
+    _codes = filtered.isEmpty ? _allCodes : filtered;
+    if (!_codes.contains(_selected)) {
+      _selected = _codes.first;
+      if (commit) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) widget.onCountrySelected(_selected);
+        });
+      }
+    }
+  }
+
+  static bool _sameCodeSet(List<String>? a, List<String>? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    if (a.length != b.length) return false;
+    final set = Set<String>.of(a);
+    return b.every(set.contains);
   }
 
   int _indexOf(String code) {
@@ -439,8 +516,10 @@ class _LocationHeaderState extends State<LocationHeader> {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final connected = widget.connected;
 
-    // v4.12 rule kept: the lock follows the PROTOCOL TYPE only.
-    final selectable = widget.protocolIsTorOrPsiphon;
+    // v4.19 #5 — the lock follows the CORE's pin capability: psiphon-exit +
+    // reverse modes are real selectors; tor-exit modes (and everything
+    // else) render the band as a locked display.
+    final selectable = widget.selectable;
     final locked = !selectable;
 
     // v4.15 #3 — the hide rule: a non-Tor/Psiphon protocol keeps the whole

@@ -49,9 +49,9 @@ Widget _booth(Widget child) => MaterialApp(
 Future<void> _openPage(WidgetTester tester, ConnectionStore store) async {
   await tester.pumpWidget(_booth(HomeScreen(store: store)));
   await tester.pumpAndSettle();
-  // The home protocol card shows the selected protocol's own name (masque
-  // default) — that card IS the page's entry point.
-  await tester.tap(find.text('ماسک').first);
+  // The home protocol card shows the selected protocol's own name — the
+  // v4.19 cold default is WIREGUARD (owner device-test decree #4).
+  await tester.tap(find.text('وایرگارد').first);
   await tester.pump();
   await tester.pumpAndSettle();
 }
@@ -78,6 +78,13 @@ void main() {
     expect(find.text('انتخاب پروتکل'), findsOneWidget);
     expect(find.byKey(const ValueKey('proto-page-back')), findsOneWidget);
     expect(find.byKey(const ValueKey('proto-page-info')), findsOneWidget);
+    // v4.19 (#10): the owner swapped the sides — the tiles exchanged their
+    // visual slots. The chrome row lays out under the app's RTL
+    // directionality (first Row child = visual RIGHT): the BACK tile now
+    // takes the visual RIGHT slot and the INFO (Telegram) tile the LEFT.
+    final backX = tester.getCenter(find.byKey(const ValueKey('proto-page-back'))).dx;
+    final infoX = tester.getCenter(find.byKey(const ValueKey('proto-page-info'))).dx;
+    expect(backX, greaterThan(infoX));
 
     // Section headings (verbatim frame text).
     expect(find.text('حالت اتصال'), findsOneWidget);
@@ -144,17 +151,18 @@ void main() {
     // The pills row is CENTERED (frame x33..367) — pill 5 right edge ≈367.
     expect(p5.right, closeTo(367, 3));
 
-    // The frame ships the DEFAULT (masque) selected → its tile is green
-    // (the design's وایرگارد is just the mock's state; the app's default is
-    // Aether's real default = masque — report table 11).
-    final masqueContainer = tester.widget<AnimatedContainer>(
+    // v4.19: the app's cold DEFAULT is WireGuard (owner decree #4 — until
+    // the settings redesign ships), so ITS tile renders selected (green).
+    // The design mock merely shows WireGuard picked; report table 11 still
+    // documents MASQUE as the CORE's own default (the AUTO tile path).
+    final wgContainer = tester.widget<AnimatedContainer>(
       find.descendant(
-        of: find.byKey(const ValueKey('proto-tile-masque')),
+        of: find.byKey(const ValueKey('proto-tile-wireguard')),
         matching: find.byType(AnimatedContainer),
       ).first,
     );
     expect(
-      (masqueContainer.decoration as BoxDecoration).color,
+      (wgContainer.decoration as BoxDecoration).color,
       AethColors.accentConnected,
     );
   });

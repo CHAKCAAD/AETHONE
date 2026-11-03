@@ -79,7 +79,10 @@ void main() {
     test('psiphonChain uses --psiphon + the PT binary + the state dir', () {
       final args = build(ProtocolId.psiphonChain);
       expect(args, contains('--psiphon'));
-      expect(args, containsAllInOrder(['--psiphon-bin', '/data/lib/liblyrebird.so']));
+      // v4.19: the packaged PT is libpsiphon.so (psiphon-tunnel-core) — the
+      // v4.18 liblyrebird.so path exec'd the WRONG program (lyrebird is
+      // Tor's obfs4 PT) and psiphon modes could never come up on a device.
+      expect(args, containsAllInOrder(['--psiphon-bin', '/data/lib/libpsiphon.so']));
       expect(
         args,
         containsAllInOrder(['--psiphon-dir', '/data/files/aether/psiphon']),
@@ -88,10 +91,12 @@ void main() {
     test('psiphonReverse still gets the PT binary (its exit is WARP)', () {
       final args = build(ProtocolId.psiphonReverse);
       expect(args, contains('--psiphon-reverse'));
-      expect(args, containsAllInOrder(['--psiphon-bin', '/data/lib/liblyrebird.so']));
+      expect(args, containsAllInOrder(['--psiphon-bin', '/data/lib/libpsiphon.so']));
     });
     test('psiphonOnly', () {
-      expect(build(ProtocolId.psiphonOnly), contains('--psiphon-only'));
+      final args = build(ProtocolId.psiphonOnly);
+      expect(args, contains('--psiphon-only'));
+      expect(args, containsAllInOrder(['--psiphon-bin', '/data/lib/libpsiphon.so']));
     });
     test('auto falls back to the core default protocol (masque)', () {
       expect(

@@ -176,6 +176,14 @@ class PreviewEngineAdapter implements EngineAdapter {
   /// explicit opt-in flag.
   static bool get allowed => requested && !kReleaseMode;
 
+  /// v4.19 (#3): the simulated walk is CANCELLABLE mid-flight — the owner's
+  /// device-test decree «حین اتصال کاربر باید بتونه اتصال رو کنسل کنه» has
+  /// to be exercisable in the preview builds too. A cancelled walk emits
+  /// NOTHING itself; the disconnect that cancelled it owns the terminal
+  /// event (otherwise a late `connected` would be an illegal jump).
+  bool _cancelled = false;
+  bool _walking = false;
+
   @override
   void bind(EngineConfigSource config) {} // simulation ignores user config
 
@@ -184,8 +192,20 @@ class PreviewEngineAdapter implements EngineAdapter {
 
   @override
   Future<void> connect() async {
+    if (_walking) return;
+    _walking = true;
+    _cancelled = false;
     _emit(const EngineStateChanged(VpnState.connecting));
-    await Future<void>.delayed(stepDelay);
+    // Small slices so a cancel is honored within ~50 ms instead of after
+    // the whole stepDelay.
+    var waited = Duration.zero;
+    while (!_cancelled && waited < stepDelay) {
+      const slice = Duration(milliseconds: 50);
+      await Future<void>.delayed(slice);
+      waited += slice;
+    }
+    _walking = false;
+    if (_cancelled) return;
     // End-to-end probe "passed" in preview — this is a SIMULATION, clearly
     // documented; production Connected only comes from the real probe.
     _emit(const EngineStateChanged(VpnState.connected));
@@ -199,7 +219,15 @@ class PreviewEngineAdapter implements EngineAdapter {
 
   @override
   Future<void> disconnect() async {
-    await Future<void>.delayed(stepDelay);
+    if (_walking) {
+      // Cancellation (#3): the in-flight walk aborts silently (it flips
+      // _walking itself when it exits); this call owns the terminal state.
+      _cancelled = true;
+      // Give the walk slice loop a beat to observe the flag and exit.
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+    } else {
+      await Future<void>.delayed(stepDelay);
+    }
     _emit(const EngineStateChanged(VpnState.disconnected));
   }
 

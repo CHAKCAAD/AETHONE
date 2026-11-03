@@ -1,8 +1,11 @@
 /// v4.17 — THE PROTOCOL SELECTION PAGE, promoted from the v4.16 floating
 /// sheet to a full page «مثل صفحه اصلی تنظیمات» (owner round #6): the same
-/// settings-page chrome — dark stage + the settings edge patterns, an
-/// LTR-locked top bar with the INFO tile (Telegram, visual LEFT) and the
-/// BACK tile (visual RIGHT) around the «انتخاب پروتکل» title.
+/// settings-page chrome around the «انتخاب پروتکل» title. v4.19 (owner
+/// device test #10): the two chrome tiles SWAPPED SLOTS — the BACK chevron
+/// and the INFO tile (i → Telegram channel) exchanged places («جای دکمه
+/// برگشت رو با دکمه ای که آیکون تعجب داره و آدرس کانال تلگرام عملکردشه
+/// جابه جا کن»). The chrome Row runs under the app's RTL directionality:
+/// the FIRST Row child renders on the visual RIGHT.
 ///
 /// The v4.16 pixel work survives verbatim (design frames «صفحه شناور انتخاب
 /// پروتکل صفحه اصلی.jpg» 402×874 + «صفحه شناور توضیحات پروتکل ها.jpg»); the
@@ -387,8 +390,10 @@ class _ProtocolPageState extends State<ProtocolPage> {
 }
 
 // ---------------------------------------------------------------------------
-// Top bar — the settings page's own chrome: info tile (Telegram) · title ·
-// back tile, LTR-locked, «Rectangle 9» 50×50 tiles.
+// Top bar — the settings page's own chrome around the title, «Rectangle 9»
+// 50×50 tiles. v4.19: the owner swapped the tile slots. The Row runs under
+// the app's RTL directionality — the FIRST child renders on the visual
+// RIGHT: back first (visual RIGHT), info second (visual LEFT).
 // ---------------------------------------------------------------------------
 
 class _PageTopBar extends StatelessWidget {
@@ -406,14 +411,15 @@ class _PageTopBar extends StatelessWidget {
       height: tile,
       child: Row(
         children: [
-          // LTR-locked — visual LEFT: the info tile (i → Telegram).
+          // FIRST child → visual RIGHT (RTL row): the back chevron tile
+          // (owner v4.19: slots swapped with the info tile).
           _TileButton(
-            key: const ValueKey('proto-page-info'),
-            asset: AppAssets.iconInformationCircle,
+            key: const ValueKey('proto-page-back'),
+            asset: AppAssets.iconRight2,
             size: tile,
             iconSize: AethGeometry.topTileIcon * s,
-            semanticLabel: 'Telegram channel',
-            onTap: onInfo,
+            semanticLabel: 'Back',
+            onTap: onBack,
           ),
           const Spacer(),
           Text(
@@ -426,14 +432,14 @@ class _PageTopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          // Visual RIGHT: the back chevron tile (Right 2 like the settings).
+          // Visual LEFT: the info tile (i → Telegram channel).
           _TileButton(
-            key: const ValueKey('proto-page-back'),
-            asset: AppAssets.iconRight2,
+            key: const ValueKey('proto-page-info'),
+            asset: AppAssets.iconInformationCircle,
             size: tile,
             iconSize: AethGeometry.topTileIcon * s,
-            semanticLabel: 'Back',
-            onTap: onBack,
+            semanticLabel: 'Telegram channel',
+            onTap: onInfo,
           ),
         ],
       ),

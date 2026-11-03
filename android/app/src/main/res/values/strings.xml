@@ -6,4 +6,8 @@
     <string name="vpn_channel_name">AETHONE tunnel</string>
     <string name="vpn_notification_title">AETHONE</string>
     <string name="vpn_notification_text">Tunnel service is running</string>
+    <!-- v4.19 (#7): the proxy-mode process-hold service notification. -->
+    <string name="core_channel_name">AETHONE proxy</string>
+    <string name="core_notification_title">AETHONE</string>
+    <string name="core_notification_text">Proxy service is running</string>
 </resources>

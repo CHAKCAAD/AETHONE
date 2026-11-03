@@ -49,6 +49,19 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="vpn-tunnel"/>
         </service>
+        <!-- v4.19 (#7) — the proxy-mode process hold: the Aether core runs
+             IN-PROCESS, so without this foreground service swiping the app
+             away killed the process and the proxy session with it. It owns
+             nothing about the core; it only keeps the process alive while a
+             proxy session is up (started/stopped by the engine adapter). -->
+        <service
+            android:name=".CoreHoldService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="core-holder"/>
+        </service>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

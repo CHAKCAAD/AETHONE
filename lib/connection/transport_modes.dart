@@ -176,3 +176,56 @@ abstract final class TransportModes {
 
   static TransportMode byId(ProtocolId id) => all.firstWhere((m) => m.id == id);
 }
+
+/// v4.19 (#5) — the countries the PSIPHON family can offer as its exit
+/// («در حالت تور و سایفون باید فقط پرچم کشورهایی رو نشون بده که سایفون و
+/// تور ساپورت میکنن»).
+///
+/// Evidence status, honestly recorded:
+///  * the core passes the pick through as `EgressRegion` in the
+///    psiphon-tunnel-core config (psiphon.rs L650-652) and validates the
+///    SYNTAX only (2 ASCII letters, psiphon.rs region());
+///  * the LIVE set of offered regions is dynamic — the network announces it
+///    at connect time via the `AvailableEgressRegions` notice
+///    (psiphon.rs L716-718, notice.go L475-484); no static list exists in
+///    the pinned sources;
+///  * this table therefore mirrors the Psiphon network's standing egress
+///    regions (its public network documentation and the region pickers of
+///    the official clients). Picking a region the network no longer offers
+///    fails the psiphon connect HONESTLY (no server matches) — the core
+///    never fakes an exit.
+///  * TOR has NO equivalent: the pinned core has no Tor exit-country
+///    control at all (`AETHER_TOR_COUNTRY` is the BridgeDB/moat request
+///    country for OBTAINING BRIDGES, not an exit pin — CLI_REFERENCE
+///    env-table note, bridges.rs L410-448). Tor-exit protocols therefore
+///    get NO country pin and the wheel is a locked display for them.
+const List<String> psiphonEgressRegions = <String>[
+  'at', 'au', 'be', 'bg', 'ca', 'ch', 'cz', 'de', 'dk', 'ee', //
+  'es', 'fi', 'fr', 'gb', 'hk', 'hr', 'hu', 'ie', 'il', 'in', //
+  'it', 'jp', 'lt', 'lv', 'mk', 'my', 'nl', 'no', 'nz', 'pl', //
+  'pt', 'ro', 'rs', 'se', 'sg', 'si', 'sk', 'ua', 'us', 'za',
+];
+
+/// The per-protocol location-wheel policy (v4.19 #5).
+abstract final class LocationWheelPolicy {
+  /// True when a wheel selection is actually HONORED by the core for this
+  /// protocol: psiphon-exit modes pin --psiphon-region; the reverse modes
+  /// (tor→warp, psiphon→warp) exit through WARP and pin --exit-loc.
+  /// Tor-EXIT modes (torOnly, torChain) cannot pin — the wheel stays a
+  /// display for them (the connect roulette still lands on the real exit).
+  static bool selectable(ProtocolId id) => switch (id) {
+    ProtocolId.psiphonOnly ||
+    ProtocolId.psiphonChain ||
+    ProtocolId.psiphonReverse ||
+    ProtocolId.torReverse => true,
+    _ => false,
+  };
+
+  /// The allowed country set for the wheel, or null = the whole manifest.
+  /// Only the psiphon-EXIT modes are filtered to the Psiphon egress
+  /// regions; everything else shows the full flag set.
+  static List<String>? allowedCodes(ProtocolId id) => switch (id) {
+    ProtocolId.psiphonOnly || ProtocolId.psiphonChain => psiphonEgressRegions,
+    _ => null,
+  };
+}

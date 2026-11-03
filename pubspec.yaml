@@ -23,6 +23,11 @@ dependencies:
   # Telegram channel link (t.me/AETHONE) — owner-specified behavior of the
   # top-bar info button (decision D1, option A).
   url_launcher: 6.3.3
+  # ---- v4.19 (#8 settings persistence) ----
+  # The user's settings must survive app restarts (owner device test: «اپ
+  # انتخاب های تنظیمات رو یادش نمیمونه»). Storage: Android
+  # SharedPreferences via the first-party plugin.
+  shared_preferences: 2.5.3
 
 dev_dependencies:
   flutter_test:

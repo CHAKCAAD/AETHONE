@@ -21,6 +21,7 @@ import '../core/motion.dart';
 import 'connection_state.dart';
 import 'engine.dart';
 import 'platform_engine_adapter.dart';
+import 'transport_modes.dart';
 
 /// The two selectable home-screen looks (owner: identical logic, different
 /// layout — report §11.2).
@@ -54,6 +55,25 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
 
   /// Single-flight guard (prompt §8: only one transition in flight).
   bool _operationInFlight = false;
+
+  /// v4.19 (#3) — re-entrancy guard of the CANCELLING disconnect: a tap on
+  /// the connect button while the engine walk is in flight must reach the
+  /// engine even though [_operationInFlight] is held by that walk.
+  bool _cancelling = false;
+
+  /// v4.19 (#3) — a cancel was executed and no new connect has started
+  /// since: progress emissions from the aborted walk (already in flight
+  /// when the cancel landed) are dropped, even after the machine reached
+  /// `disconnected` — a cancelled session must never end in a fake
+  /// `failed(illegalTransition)`. Cleared by the next user connect.
+  bool _cancelledWalk = false;
+
+  /// The states a tap-to-cancel may interrupt (the engine walk in flight).
+  static const Set<VpnState> _cancelableStates = {
+    VpnState.starting,
+    VpnState.waitingForPermissions,
+    VpnState.connecting,
+  };
 
   // ---- state surface consumed by the UI ----
   VpnState get state => _machine.current;
@@ -110,6 +130,15 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   @override
   String? selectedCountryCode;
 
+  /// v4.19 (#5) — the per-protocol wheel policy (see
+  /// [LocationWheelPolicy]): whether the wheel is a real SELECTOR for the
+  /// current protocol, and which country subset it may offer.
+  bool get wheelSelectable => LocationWheelPolicy.selectable(selectedProtocol);
+
+  /// null = the whole flag manifest (design/flags_png).
+  List<String>? get wheelAllowedCodes =>
+      LocationWheelPolicy.allowedCodes(selectedProtocol);
+
   /// Wheel selection commit (flag snap / tap). Ignored while an operation
   /// is in flight so the selector can never fight a running transition.
   void selectCountry(String code) {
@@ -119,8 +148,13 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
+  /// v4.19 — the app's DEFAULT protocol is WireGuard (owner device-test
+  /// decree #4: «حالا که هنوز بخش تنظیمات رو طراحی نکردیم حالت دیفالت تور
+  /// اور وارپ رو بزار روی پروتکل وایرگارد»). The sheet's AUTO tile still
+  /// selects the core's own default (MASQUE) explicitly — only the cold
+  /// default changed.
   @override
-  ProtocolId selectedProtocol = ProtocolId.masque; // Aether's real default
+  ProtocolId selectedProtocol = ProtocolId.wireguard;
 
   /// v4.16 — protocol selection with notify (the sheet binds here; tapping a
   /// tile/sub-tile commits the protocol and auto-pops back to the home).
@@ -177,6 +211,8 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         state == VpnState.disconnecting) {
       return;
     }
+    // A fresh user intent supersedes any cancelled-walk residue.
+    _cancelledWalk = false;
     _operationInFlight = true;
     notifyListeners();
     try {
@@ -196,11 +232,24 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     }
   }
 
+  /// Disconnect — or, while the engine walk (starting/…/connecting) is in
+  /// flight, CANCEL the pending connection (owner device test #3: «حین
+  /// اتصال کاربر باید بتونه اتصال رو کنسل کنه»). The state machine allows
+  /// every walk state → disconnecting, and the platform adapter aborts its
+  /// walk at the next checkpoint; the cancel owns the terminal state.
   Future<void> disconnect() async {
-    if (_operationInFlight) return;
-    if (state == VpnState.disconnected || state == VpnState.disconnecting) {
+    if (_cancelling) return;
+    final current = state;
+    if (current == VpnState.disconnected || current == VpnState.disconnecting) {
       return;
     }
+    final isCancel = _cancelableStates.contains(current);
+    // A cancel interrupts the in-flight walk ON PURPOSE; a plain disconnect
+    // (from connected/failed/reconnecting) still honors the single-flight
+    // guard so it can never race a connect that is not running.
+    if (!isCancel && _operationInFlight) return;
+    _cancelling = isCancel;
+    if (isCancel) _cancelledWalk = true;
     _operationInFlight = true;
     notifyListeners();
     try {
@@ -210,6 +259,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
       _fail(errorCode: 'engineException', message: e.toString());
     } finally {
       _operationInFlight = false;
+      _cancelling = false;
       notifyListeners();
     }
   }
@@ -242,6 +292,24 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         errorCode: final errorCode,
         message: final message,
       ):
+        // v4.19 (#3) — a cancelled walk's stale emission must never fight
+        // the cancel: between the adapter's _disconnecting checkpoint and
+        // its emission there is an unavoidable event-loop window, and the
+        // emission may even land AFTER the machine already reached
+        // `disconnected`. While disconnecting — or after a cancel until a
+        // fresh connect starts — progress emissions from the aborted walk
+        // are dropped; the cancel owns the terminal state (otherwise the
+        // late `connected` would land as an illegalTransition failure).
+        final cancelResidue = _cancelledWalk &&
+            (_machine.current == VpnState.disconnecting ||
+                _machine.current == VpnState.disconnected);
+        if ((cancelResidue || _machine.current == VpnState.disconnecting) &&
+            (eventState == VpnState.connected ||
+                eventState == VpnState.connecting ||
+                eventState == VpnState.starting ||
+                eventState == VpnState.waitingForPermissions)) {
+          break;
+        }
         if (eventState == VpnState.failed) {
           _fail(errorCode: errorCode, message: message);
         } else {

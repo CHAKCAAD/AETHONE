@@ -77,8 +77,25 @@ class AethoneVpnService : VpnService() {
         startForegroundCompat()
         val port = intent?.getIntExtra(EXTRA_PORT, 1819) ?: 1819
         socksPort = port
-        if (!startTunnel(port)) {
-            EngineBridge.emit(mapOf("event" to "down", "reason" to "establish-failed"))
+        // v4.19 (#1 hardening): the tunnel leg is the one place where a
+        // thrown Java-level error used to KILL the process mid-connection
+        // (an UnsatisfiedLinkError from the JNI bridge, a lifecycle
+        // exception…). Every throwable is now converted into the honest
+        // "down" event — Dart fails the walk with tunnelStartFailed and the
+        // app survives to show it. Native crashes (SIGSEGV inside the
+        // embedded cores) stay uncatchable, as everywhere on Android — the
+        // uncaught-exception breadcrumb in MainActivity covers the Java
+        // seam and adb logcat remains the native-truth source.
+        try {
+            if (!startTunnel(port)) {
+                EngineBridge.emit(mapOf("event" to "down", "reason" to "establish-failed"))
+                stopSelf()
+                return START_NOT_STICKY
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "tunnel start threw", t)
+            EngineBridge.emit(mapOf("event" to "down", "reason" to "start-threw:${t.javaClass.simpleName}"))
+            stopTunnel("start-threw")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -140,7 +157,12 @@ class AethoneVpnService : VpnService() {
 
     private fun stopTunnel(reason: String) {
         if (zeptunUp) {
-            Zeptun.nativeStop()
+            try {
+                Zeptun.nativeStop()
+            } catch (t: Throwable) {
+                // Teardown must never take the process down with it.
+                Log.e(TAG, "zeptun nativeStop threw ($reason)", t)
+            }
             zeptunUp = false
         }
         descriptor?.close()
