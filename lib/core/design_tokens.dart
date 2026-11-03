@@ -238,4 +238,62 @@ abstract final class AethGeometry {
   /// حالت متصل-ضاهر1 — symmetrized to 62 so both texts breathe alike and
   /// the centre can never drift).
   static const double locationSideGap = 62;
+
+  // -------------------------------------------------------------------
+  // Settings main page (step 2) — pixel-measured on the owner's design
+  // frame «صفحه تنظیمات.jpg» (402×874, 3× source). All values in
+  // reference pixels; scaled by `screenWidth / 402` at render time.
+  // -------------------------------------------------------------------
+
+  /// Six-card grid: cards 102×106 at x 33/150/267 (h-gap 15), rows at
+  /// y 106/224 (v-gap 12), page inset 33 = [pageHPadding].
+  static const double settingsCardW = 102;
+  static const double settingsCardH = 106;
+  static const double settingsCardGap = 15;
+  static const double settingsRowGap = 12;
+
+  /// Card corner radius (measured ≈21–22 on the frame's top-left corner).
+  static const double settingsCardRadius = 21;
+
+  /// Card internals: icon 28 centered 31 from the card top, title 13px
+  /// centered at 65, subtitle 10px centered at 79.
+  static const double settingsCardIconSize = 28;
+  static const double settingsCardIconTop = 31;
+  static const double settingsCardTitleSize = 13;
+  static const double settingsCardTitleCenter = 65;
+  static const double settingsCardSubSize = 10;
+  static const double settingsCardSubCenter = 79;
+
+  /// Wide Psiphon/Tor pills: 155.5×87 stadium at y 353 (gap 24 after the
+  /// grid), pill-to-pill gap 24; logo at the leading (visual right) edge
+  /// with 16 inset, texts stacked beside it. The logos are the REAL
+  /// protocol PNGs — their canvases carry different artwork fills, so each
+  /// logo gets its own BOX size such that the final GLYPH matches the
+  /// frame (Psiphon glyph ≈26×35 ⇒ box 56; Tor glyph ≈24×36 ⇒ box 42).
+  static const double settingsPillH = 87;
+  static const double settingsPillGap = 24;
+  static const double settingsPillLogoPsiphon = 56;
+  static const double settingsPillLogoTor = 42;
+  static const double settingsPillInset = 16;
+  static const double settingsPillTitleSize = 13;
+  static const double settingsPillSubSize = 10;
+
+  /// Section headings («وضعیت پیشرفته» / «آدرس سرور اصلی»): 15px w700
+  /// white, icon 20 to the leading side, right-aligned to the page inset,
+  /// first heading 36 below the pills.
+  static const double settingsHeadingSize = 15;
+  static const double settingsHeadingIconSize = 20;
+  static const double settingsHeadingGapFromPills = 36;
+  static const double settingsHeadingGapToCards = 24;
+
+  /// Bottom server pills: 155.5×70 stadium, GitHub logo ≈34 at the
+  /// TRAILING (visual left) edge with 15 inset, single-line title 13.
+  static const double settingsServerPillH = 70;
+  static const double settingsServerLogoSize = 34;
+  static const double settingsServerInset = 15;
+  static const double settingsHeading2GapToServer = 24;
+
+  /// Status-card values (green): 11px w600, centered 79 from the card top
+  /// (the subtitle slot of the shared card template).
+  static const double settingsStatusValueSize = 11;
 }

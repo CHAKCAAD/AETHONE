@@ -12,6 +12,7 @@ import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
 import 'package:aethone/features/home/home_screen.dart';
+import 'package:aethone/features/settings/settings_screen.dart';
 
 // ignore_for_file: avoid_print
 
@@ -129,5 +130,21 @@ void main() {
     );
     await _save(tester, 'home_connected');
     expect(store.isConnected, isTrue);
+  }, timeout: const Timeout(Duration(minutes: 5)));
+
+  testWidgets('render the settings main page to PNG (step 2)', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(402, 874);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final store = ConnectionStore(engine: ScriptedEngine());
+    await tester.pumpWidget(
+      _booth(SettingsScreen(store: store)),
+    );
+    await tester.runAsync(_loadRealFonts);
+    await _save(tester, 'settings_main');
+    expect(find.text('مسیریابی‌ها'), findsOneWidget);
   }, timeout: const Timeout(Duration(minutes: 5)));
 }

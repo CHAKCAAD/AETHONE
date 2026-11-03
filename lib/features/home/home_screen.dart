@@ -18,6 +18,7 @@ import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../../l10n/app_strings.dart';
+import '../settings/settings_screen.dart';
 import 'widgets/bottom_panel.dart';
 import 'widgets/glow_pill.dart';
 import 'widgets/hero_logo.dart';
@@ -67,6 +68,16 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  /// Step 2: the REAL settings main page (pixel-faithful to the design
+  /// frame) — the placeholder sheet is gone.
+  void _openSettings(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsScreen(store: store),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -102,10 +113,7 @@ class HomeScreen extends StatelessWidget {
                     // گوشی نشه»).
                     SizedBox(height: AethGeometry.topSafeExtraGap * s),
                     HomeTopBar(
-                      onSettings: () => _openPlaceholderSheet(
-                        context,
-                        strings.settingsComingNext,
-                      ),
+                      onSettings: () => _openSettings(context),
                     ),
                     SizedBox(height: AethGeometry.gapTopbarToLocation * s),
                     LocationHeader(

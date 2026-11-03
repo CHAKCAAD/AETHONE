@@ -90,3 +90,15 @@ flutter:
     - design/آیکون های اپ/Off.svg
     - design/آیکون های اپ/Activity 4.svg
     - design/آیکون های اپ/Right 2.svg
+    # --- step 2 (settings main page): the set's own line icons for the six
+    # cards + status cards + section headings, plus the owner's GitHub logo
+    # for the server cards (all pixel-matched against the design frame) ---
+    - design/آیکون های اپ/Redo.svg
+    - design/آیکون های اپ/Filter 5.svg
+    - design/آیکون های اپ/Lock 1.svg
+    - design/آیکون های اپ/Website.svg
+    - design/آیکون های اپ/Palette.svg
+    - design/آیکون های اپ/Shield Star.svg
+    - design/آیکون های اپ/Scan 1.svg
+    - design/آیکون های اپ/Menu Hamburger.svg
+    - design/صفحه تنظیمات/لوگو گیت هاب.svg

@@ -54,6 +54,42 @@ class ConnectionStore extends ChangeNotifier {
   int upBytes = 0;
   String? exitCountryCode; // null ⇒ unknown; no flag shown
 
+  // ---- user preferences (settings main page, step 2) ----
+  // These are USER-CHOSEN values rendered by the settings status cards
+  // («هر سه کارت وضعیت به دادهٔ واقعی نگاشت شدند» — phase-1 report D2).
+  // M2 feeds them to the cores; the engine never writes them.
+
+  /// Protocol selection mode — AUTO (default) or SMART
+  /// (SMART_AUTO_SPEC.md: SPEC REQUIRED / NOT IMPLEMENTED in the pinned
+  /// core; the UI setting exists, the core handoff is M2).
+  bool protocolModeSmart = false;
+
+  /// Routing-rules country: 'ir' (default, design shows «Iran»), 'tm',
+  /// 'ru', 'cn' or null = None (phase-1 report: IR/TM/RU/CN + None).
+  String? routingRegion = 'ir';
+
+  /// Kill switch preference — ON by default (design shows «ON»).
+  bool killSwitch = true;
+
+  /// Settings setters (notify; the settings page + status cards rebuild).
+  void setProtocolModeSmart(bool smart) {
+    if (protocolModeSmart == smart) return;
+    protocolModeSmart = smart;
+    notifyListeners();
+  }
+
+  void setRoutingRegion(String? code) {
+    if (routingRegion == code) return;
+    routingRegion = code;
+    notifyListeners();
+  }
+
+  void setKillSwitch(bool on) {
+    if (killSwitch == on) return;
+    killSwitch = on;
+    notifyListeners();
+  }
+
   /// The location the USER picked on the flag wheel (v4.11, defect #8).
   /// The engine-reported [exitCountryCode] stays the only "connected to X"
   /// truth; this is the selector state the core will receive in M2.

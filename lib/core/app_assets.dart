@@ -80,6 +80,21 @@ abstract final class AppAssets {
   static const String iconActivity4 = '$_icons/Activity 4.svg';
   static const String iconRight2 = '$_icons/Right 2.svg';
 
+  // --- step 2 (settings main page): pixel-matched against the design
+  // frame — the six card icons, the status-card icons, the section
+  // heading icon, and the owner's GitHub logo for the server cards.
+  // The routing / Kill-Switch / routing-area cards all use the set's
+  // single curved arrow (Redo) — 9× zoom verification against the frame.
+  static const String iconRedo = '$_icons/Redo.svg';
+  static const String iconFilter5 = '$_icons/Filter 5.svg';
+  static const String iconLock1 = '$_icons/Lock 1.svg';
+  static const String iconWebsite = '$_icons/Website.svg';
+  static const String iconPalette = '$_icons/Palette.svg';
+  static const String iconShieldStar = '$_icons/Shield Star.svg';
+  static const String iconScan1 = '$_icons/Scan 1.svg';
+  static const String iconMenuHamburger = '$_icons/Menu Hamburger.svg';
+  static const String logoGithub = 'design/صفحه تنظیمات/لوگو گیت هاب.svg';
+
   // --- protocol logos. Tor/Psiphon ship as pre-rendered PNGs (their SVGs
   // embed the artwork in hidden tracing layers + the real vector art,
   // which flutter_svg renders partially) — v4.10.
@@ -90,6 +105,11 @@ abstract final class AppAssets {
   static const String _protoMim = '$_protocols/میم.svg';
   static const String _protoTor = '$_protoPng/تور.png';
   static const String _protoPsiphon = '$_protoPng/سایفون.png';
+
+  /// Public protocol-logo paths (the settings Psiphon/Tor pills render the
+  /// REAL logos with an accent-green tint).
+  static const String protocolTorLogo = _protoTor;
+  static const String protocolPsiphonLogo = _protoPsiphon;
 
   /// Logo for a transport mode. AUTO/SMART has NO dedicated SVG in the ZIP —
   /// pending design decision D-pending (report §6.9 suggests Shield Tick with
@@ -142,6 +162,15 @@ abstract final class AppAssets {
         iconOff,
         iconActivity4,
         iconRight2,
+        iconRedo,
+        iconFilter5,
+        iconLock1,
+        iconWebsite,
+        iconPalette,
+        iconShieldStar,
+        iconScan1,
+        iconMenuHamburger,
+        logoGithub,
         brandMark,
         _protoMasque,
         _protoWireguard,

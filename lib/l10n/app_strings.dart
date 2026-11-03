@@ -29,6 +29,38 @@ class AppStrings {
   String get speedTestComingNext => _v['speedTestComingNext']!;
   String get protocolSheetComingNext => _v['protocolSheetComingNext']!;
 
+  // ---- Settings main page (step 2; fa values verbatim from the design) ----
+  String get settingsTitle => _v['settingsTitle']!;
+  String get settingsRouting => _v['settingsRouting']!;
+  String get settingsRoutingSub => _v['settingsRoutingSub']!;
+  String get settingsGeneral => _v['settingsGeneral']!;
+  String get settingsGeneralSub => _v['settingsGeneralSub']!;
+  String get settingsConnection => _v['settingsConnection']!;
+  String get settingsConnectionSub => _v['settingsConnectionSub']!;
+  String get settingsLanguage => _v['settingsLanguage']!;
+  String get settingsLanguageSub => _v['settingsLanguageSub']!;
+  String get settingsAppearance => _v['settingsAppearance']!;
+  String get settingsAppearanceSub => _v['settingsAppearanceSub']!;
+  String get settingsSecurity => _v['settingsSecurity']!;
+  String get settingsSecuritySub => _v['settingsSecuritySub']!;
+  String get settingsPsiphon => _v['settingsPsiphon']!;
+  String get settingsTor => _v['settingsTor']!;
+  String get settingsPillSub => _v['settingsPillSub']!;
+  String get settingsAdvancedStatus => _v['settingsAdvancedStatus']!;
+  String get settingsRoutingArea => _v['settingsRoutingArea']!;
+  String get settingsMainServer => _v['settingsMainServer']!;
+  String get settingsSubpageComingNext => _v['settingsSubpageComingNext']!;
+
+  /// Routing-region value shown on the status card — the design renders
+  /// the LATIN country name («Iran»), so this stays Latin in every locale.
+  String routingRegionName(String? code) => switch (code) {
+        'ir' => 'Iran',
+        'tm' => 'Turkmenistan',
+        'ru' => 'Russia',
+        'cn' => 'China',
+        _ => 'None',
+      };
+
   /// "146 ms" style. DOWN/UP/MB stay Latin (part of the visual design).
   String pingMs(int ms) => '$ms ms';
 
@@ -77,6 +109,28 @@ class AppStrings {
       'protoMim': 'میم',
       'protoTor': 'تور',
       'protoPsiphon': 'سایفون',
+      // ---- settings main page (fa verbatim from the design frame) ----
+      'settingsTitle': 'تنظیمات',
+      'settingsRouting': 'مسیریابی‌ها',
+      'settingsRoutingSub': 'مسیرهای مستقیم',
+      'settingsGeneral': 'تنظیمات عمومی',
+      'settingsGeneralSub': 'تنظیمات اعلان و رویداد',
+      'settingsConnection': 'تنظیمات اتصال',
+      'settingsConnectionSub': 'تنظیمات اتصال و پروتکل',
+      'settingsLanguage': 'تنظیمات زبان',
+      'settingsLanguageSub': 'انتخاب زبان برنامه',
+      'settingsAppearance': 'تنظیمات ظاهری',
+      'settingsAppearanceSub': 'شخصی‌سازی ظاهر برنامه',
+      'settingsSecurity': 'تنظیمات امنیت',
+      'settingsSecuritySub': 'امنیت و حریم خصوصی',
+      'settingsPsiphon': 'تنظیمات سایفون',
+      'settingsTor': 'تنظیمات تور',
+      'settingsPillSub': 'انتخاب لوکیشن و ...',
+      'settingsAdvancedStatus': 'وضعیت پیشرفته',
+      'settingsRoutingArea': 'منطقهٔ مسیریابی',
+      'settingsMainServer': 'آدرس سرور اصلی',
+      'settingsSubpageComingNext':
+          'این بخش — در گام بعدی پیاده‌سازی می‌شود',
     },
     'en': {
       'offline': 'Offline',
@@ -98,6 +152,26 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'settingsTitle': 'Settings',
+      'settingsRouting': 'Routing',
+      'settingsRoutingSub': 'Direct routes',
+      'settingsGeneral': 'General',
+      'settingsGeneralSub': 'Notifications & events',
+      'settingsConnection': 'Connection',
+      'settingsConnectionSub': 'Connection & protocol',
+      'settingsLanguage': 'Language',
+      'settingsLanguageSub': 'Choose the app language',
+      'settingsAppearance': 'Appearance',
+      'settingsAppearanceSub': 'Personalize the app',
+      'settingsSecurity': 'Security',
+      'settingsSecuritySub': 'Security & privacy',
+      'settingsPsiphon': 'Psiphon settings',
+      'settingsTor': 'Tor settings',
+      'settingsPillSub': 'Location & more …',
+      'settingsAdvancedStatus': 'Advanced status',
+      'settingsRoutingArea': 'Routing region',
+      'settingsMainServer': 'Main server address',
+      'settingsSubpageComingNext': 'This section — coming in the next step',
     },
     'ru': {
       'offline': 'Офлайн',
@@ -118,6 +192,26 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'settingsTitle': 'Настройки',
+      'settingsRouting': 'Маршрутизация',
+      'settingsRoutingSub': 'Прямые маршруты',
+      'settingsGeneral': 'Общие',
+      'settingsGeneralSub': 'Уведомления и события',
+      'settingsConnection': 'Подключение',
+      'settingsConnectionSub': 'Подключение и протокол',
+      'settingsLanguage': 'Язык',
+      'settingsLanguageSub': 'Выбор языка приложения',
+      'settingsAppearance': 'Оформление',
+      'settingsAppearanceSub': 'Персонализация приложения',
+      'settingsSecurity': 'Безопасность',
+      'settingsSecuritySub': 'Безопасность и приватность',
+      'settingsPsiphon': 'Настройки Psiphon',
+      'settingsTor': 'Настройки Tor',
+      'settingsPillSub': 'Локация и другое …',
+      'settingsAdvancedStatus': 'Расширенный статус',
+      'settingsRoutingArea': 'Регион маршрутизации',
+      'settingsMainServer': 'Адрес основного сервера',
+      'settingsSubpageComingNext': 'Этот раздел — на следующем шаге',
     },
     'zh': {
       'offline': '离线',
@@ -138,6 +232,26 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'settingsTitle': '设置',
+      'settingsRouting': '路由规则',
+      'settingsRoutingSub': '直连路由',
+      'settingsGeneral': '常规设置',
+      'settingsGeneralSub': '通知与事件',
+      'settingsConnection': '连接设置',
+      'settingsConnectionSub': '连接与协议',
+      'settingsLanguage': '语言设置',
+      'settingsLanguageSub': '选择应用语言',
+      'settingsAppearance': '外观设置',
+      'settingsAppearanceSub': '个性化应用外观',
+      'settingsSecurity': '安全设置',
+      'settingsSecuritySub': '安全与隐私',
+      'settingsPsiphon': 'Psiphon 设置',
+      'settingsTor': 'Tor 设置',
+      'settingsPillSub': '位置等 …',
+      'settingsAdvancedStatus': '高级状态',
+      'settingsRoutingArea': '路由区域',
+      'settingsMainServer': '主服务器地址',
+      'settingsSubpageComingNext': '此部分 — 将在下一步实现',
     },
     // tk: pending native review — falls back to English (documented gap).
   };
