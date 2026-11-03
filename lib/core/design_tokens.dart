@@ -119,10 +119,19 @@ abstract final class AethGeometry {
   /// canvases render at [patternScale] of the screen width (art 40% smaller
   /// than the v4.11 full-width span), keeping the same anchors — left art
   /// hugging the LEFT edge, right art the RIGHT edge.
+  ///
+  /// v4.15 — owner settings round #4: «پترن سمت چپ پس زمینه پایینش حالت
+  /// برش خورده داره یا اون رو پایین تر بیار که بچسبه به پایین و برش
+  /// خوردگیش مشخص نباشه». Measured on the shipped PNG (PIL alpha profile):
+  /// the visible art (alpha>40) ends at canvas row 834/1232 — the OLD anchor
+  /// 969/1232 left that hard end ~71 ref px ABOVE the glass, which read as a
+  /// straight cut. New anchor: the art's end runs 25 canvas rows (~13 ref
+  /// px) BELOW the screen bottom, so the pattern flows off the bottom edge
+  /// and no end edge is ever visible on screen («بچسبه به پایین»).
   static const double patternScale = 0.6;
   static const double patternLeftAspect = 1232 / 456; // h/w of the canvas
   static const double patternRightAspect = 1178 / 464;
-  static const double patternLeftAnchorBottom = 969 / 1232;
+  static const double patternLeftAnchorBottom = 809 / 1232;
   static const double patternRightAnchorTop = 205 / 1178;
 
   /// v4.12 — owner «کمی از بالا کل اپ رو فاصله بده تا اپ وارد فرورفتگی
@@ -256,27 +265,40 @@ abstract final class AethGeometry {
   static const double settingsCardRadius = 21;
 
   /// Card internals: icon 28 centered 31 from the card top, title 13px
-  /// centered at 65, subtitle 10px centered at 79.
+  /// centered at 65, subtitle centered at 79.
+  /// v4.15 — owner settings round #2: «متن توضیحات کارت ها باید کمی کوچک تر
+  /// باشد» — the description line drops 10 → 9 (title/value sizes stay).
   static const double settingsCardIconSize = 28;
   static const double settingsCardIconTop = 31;
   static const double settingsCardTitleSize = 13;
   static const double settingsCardTitleCenter = 65;
-  static const double settingsCardSubSize = 10;
+  static const double settingsCardSubSize = 9;
   static const double settingsCardSubCenter = 79;
 
-  /// Wide Psiphon/Tor pills: 155.5×87 stadium at y 353 (gap 24 after the
-  /// grid), pill-to-pill gap 24; logo at the leading (visual right) edge
-  /// with 16 inset, texts stacked beside it. The logos are the REAL
-  /// protocol PNGs — their canvases carry different artwork fills, so each
-  /// logo gets its own BOX size such that the final GLYPH matches the
-  /// frame (Psiphon glyph ≈26×35 ⇒ box 56; Tor glyph ≈24×36 ⇒ box 42).
+  /// Wide Psiphon/Tor pills: 155.5×87 at y 353 (gap 24 after the grid),
+  /// pill-to-pill gap 24; logo at the leading (visual right) edge with 16
+  /// inset, texts stacked beside it. The logos are the REAL protocol PNGs —
+  /// their canvases carry different artwork fills, so each logo gets its
+  /// own BOX size such that the final GLYPH matches the frame (Psiphon
+  /// glyph ≈26×35 ⇒ box 56; Tor glyph ≈24×36 ⇒ box 42).
+  ///
+  /// v4.15 — owner settings round #3: «پس زمینه کارت های تنظیمات سایفون و
+  /// تور و کارت های آدرس گیت هاب هسته ها گوشه های مناسبی نداره و باید
+  /// گوشه های کمتر گردی داشته باشه» + owner CSS «Rectangle 79»
+  /// (155×84, #0F1510, border-radius 24px): the stadium (h/2 = 43.5) is
+  /// REPLACED by the owner's r24. Sub line 10 → 9 with the cards (round
+  /// #2 — «متن توضیحات کارت ها باید کمی کوچک تر باشد»).
   static const double settingsPillH = 87;
   static const double settingsPillGap = 24;
   static const double settingsPillLogoPsiphon = 56;
   static const double settingsPillLogoTor = 42;
   static const double settingsPillInset = 16;
   static const double settingsPillTitleSize = 13;
-  static const double settingsPillSubSize = 10;
+  static const double settingsPillSubSize = 9;
+
+  /// Owner CSS Rectangle 79 radius for the two wide pills (r24 on the
+  /// 155×84 card — applied flat in reference px).
+  static const double settingsPillRadius = 24;
 
   /// Section headings («وضعیت پیشرفته» / «آدرس سرور اصلی»): 15px w700
   /// white, icon 20 to the leading side, right-aligned to the page inset,
@@ -286,9 +308,13 @@ abstract final class AethGeometry {
   static const double settingsHeadingGapFromPills = 36;
   static const double settingsHeadingGapToCards = 24;
 
-  /// Bottom server pills: 155.5×70 stadium, GitHub logo ≈34 at the
-  /// TRAILING (visual left) edge with 15 inset, single-line title 13.
+  /// Bottom server pills: 155.5×70, GitHub logo ≈34 at the TRAILING
+  /// (visual left) edge with 15 inset, single-line title 13.
+  /// v4.15 — owner settings round #3 (CSS Rectangle 79, r24 on 84 tall):
+  /// the stadium (h/2 = 35) is replaced by the proportional r20
+  /// (24 × 70/84) — same look as the wide pills, never a full round.
   static const double settingsServerPillH = 70;
+  static const double settingsServerPillRadius = 20;
   static const double settingsServerLogoSize = 34;
   static const double settingsServerInset = 15;
   static const double settingsHeading2GapToServer = 24;

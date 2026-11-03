@@ -102,3 +102,10 @@ flutter:
     - design/آیکون های اپ/Scan 1.svg
     - design/آیکون های اپ/Menu Hamburger.svg
     - design/صفحه تنظیمات/لوگو گیت هاب.svg
+    # --- v4.15 (owner settings round #1/#7/#8): the owner named the REAL
+    # set icons for the settings page — Security Safe.svg (security card),
+    # Menu Fries.svg (وضعیت پیکربندی heading), Situation 1.svg (آدرس هسته
+    # ها heading). Send 1.svg is already declared above (line icon set). ---
+    - design/آیکون های اپ/Security Safe.svg
+    - design/آیکون های اپ/Menu Fries.svg
+    - design/آیکون های اپ/Situation 1.svg

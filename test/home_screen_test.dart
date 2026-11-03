@@ -50,8 +50,16 @@ void main() {
     addTearDown(tester.view.reset);
   }
 
-  testWidgets('disconnected home shows غیرفعال pill, offline in the ping slot, '
-      'greyscale locked wheel (NO blur)', (tester) async {
+  // v4.15 (owner home round #3): «بخش پرچم ها در حالت غیر متصل پروتکل های
+  // به غیر از زیرمجموعه سایفون و تور کاملا پنهان باشه و فقط در حالت اتصال
+  // نقش نمایش لوکیشن رو داشته باشه» — for non-Tor/Psiphon protocols the
+  // whole location band is HIDDEN while disconnected (zero height, faded
+  // out) and reveals ANIMATED on connect. The v4.13 greyscale lock is
+  // retired: a hidden band is not greyscale — it is not there at all.
+  testWidgets('disconnected home shows غیرفعال pill; MASQUE hides the whole '
+      'location band (v4.15: no location UI without Tor/Psiphon)', (
+    tester,
+  ) async {
     await useReferenceSurface(tester);
     final engine = ScriptedEngine();
     final store = ConnectionStore(engine: engine);
@@ -59,14 +67,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('غیرفعال'), findsOneWidget);
-    // v4.11 defect #9: «آفلاین» lives in the SAME slot as the connected
-    // ping (exactly one instance) — it no longer overlays the flag wheel.
-    expect(find.text('آفلاین'), findsOneWidget);
-    expect(find.text('146 ms'), findsNothing); // ping only when connected
-    // v4.11 defect #14: the wheel is greyscale-locked for normal protocols
-    // while disconnected — a ColorFiltered (saturation-0) layer, no blur.
-    expect(find.byType(ColorFiltered), findsOneWidget);
+    // The pill's ping slot text exists in the (hidden) tree but the band
+    // renders ZERO height — the flag wheel is completely gone visually.
+    expect(tester.getSize(find.byKey(const ValueKey('location-band'))).height,
+        0.0);
+    // The v4.13 greyscale ColorFiltered is retired with the hide rule.
+    expect(find.byType(ColorFiltered), findsNothing);
     expect(find.byType(BackdropFilter), findsNothing);
+    // No flag pixel row is visible on the disconnected screen: the band's
+    // content stays laid out behind a zero-height clip, so a drag never
+    // reaches it (locked + NeverScrollable anyway).
+    expect(find.text('146 ms'), findsNothing); // ping only when connected
   });
 
   testWidgets('after engine reports connected: متصل pill, ping, speed button', (
@@ -363,10 +374,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('ایسلند'), findsOneWidget); // 'ir' + 1 = 'is'
 
-    // Display-only protocol: MASQUE — the wheel is locked (greyscale,
-    // NeverScrollable) and a drag NEVER changes the selection. (A UniqueKey
-    // forces a fresh LocationHeader state — pumpWidget alone would reuse the
-    // previous screen's header state.)
+    // Display-only protocol: MASQUE — v4.15: the band is HIDDEN while
+    // disconnected (zero height behind a clip; NeverScrollable), so a drag
+    // can NEVER change the selection. (A UniqueKey forces a fresh
+    // LocationHeader state — pumpWidget alone would reuse the previous
+    // screen's header state.)
     final masqueStore = ConnectionStore(engine: engine);
     masqueStore.selectedProtocol = ProtocolId.masque;
     await tester.pumpWidget(_booth(HomeScreen(
@@ -383,5 +395,63 @@ void main() {
     await drag2.up();
     await tester.pumpAndSettle();
     expect(find.text('ایران'), findsOneWidget); // selection unchanged
+  });
+
+  // v4.15 regression (owner home round #3): for a non-Tor/Psiphon protocol
+  // (MASQUE = the default) the location band must be completely hidden
+  // while disconnected and REVEAL ANIMATED on connect, acting as the
+  // location display — with the exit country centred at FULL opacity and
+  // the side falloff per the owner CSS Group 9 (52@1.0 / 42@0.5 / 35@0.2).
+  testWidgets('MASQUE: band hidden while disconnected, reveals on connect '
+      'with the exit location (v4.15 hide rule)', (tester) async {
+    await useReferenceSurface(tester);
+    final engine = ScriptedEngine();
+    final store = ConnectionStore(engine: engine);
+    // MASQUE is the store default — no protocol change needed.
+    await tester.pumpWidget(_booth(HomeScreen(store: store)));
+    await tester.pumpAndSettle();
+
+    // Hidden while disconnected.
+    expect(
+      tester.getSize(find.byKey(const ValueKey('location-band'))).height,
+      0.0,
+    );
+
+    await store.connect();
+    engine.emit(const EngineStateChanged(VpnState.connecting));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 100));
+    engine.emit(const EngineStateChanged(VpnState.connected));
+    engine.emit(
+      const EngineStatsUpdated(
+        pingMs: 90,
+        downBytes: 0,
+        upBytes: 0,
+        exitCountryCode: 'de',
+      ),
+    );
+    // Ride out the 420 ms reveal + the 2.6 s connect roulette in ~frame-sized
+    // steps. flutter_test advances ONE frame per pump(); a single huge pump
+    // lands the whole 2.6 s DrivenScrollActivity on ONE ticker tick, which
+    // the fake clock cannot complete (v4.15.1 debug trace — with coarse
+    // pumps the future never resolves, with ~frame-sized pumps it does). A
+    // real device ticks at 60 fps, so 200 ms steps mirror the real cadence.
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    expect(
+      tester.getSize(find.byKey(const ValueKey('location-band'))).height,
+      greaterThan(80.0),
+      reason: 'the reveal seam must restore the full band height',
+    );
+    for (var i = 0; i < 15; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+
+    // The band now displays the engine-reported exit location.
+    expect(find.text('آلمان'), findsOneWidget);
+    expect(find.text('90 ms'), findsOneWidget);
+    // The centre flag is full colour — the greyscale filter is gone.
+    expect(find.byType(ColorFiltered), findsNothing);
   });
 }

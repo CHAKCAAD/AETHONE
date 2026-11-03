@@ -23,7 +23,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
-import 'custom_icons.dart';
 
 class BottomPanel extends StatelessWidget {
   const BottomPanel({
@@ -349,15 +348,9 @@ class StatCard extends StatelessWidget {
 /// slides between the top slot (connected) and the bottom slot
 /// (disconnected).
 ///
-/// v4.13 (owner round-4 #4):
-///  * the CONNECTED red down-chevrons are GONE («آیکون های فلش رو به پایین
-///    که در حالت متصل درون این بخش وجود داره رو هم کلا بردار»);
-///  * the DISCONNECTED reference pose is restored: three muted-green
-///    UP-chevrons ABOVE the button (measured y≈738–758, ≈26 px above the
-///    button top, accent α≈0.35 over the card);
-///  * the tap target is the WHOLE section: the opaque GestureDetector now
-///    wraps a slightly enlarged invisible hit area around the column, so a
-///    tap on the background/edges still toggles.
+/// v4.15 (owner home round #4: «سه فلش رو به بالا در بخش دکمه اتصال کلا حذف
+/// شود») — the three up-chevrons are gone in EVERY state (the v4.13
+/// restoration of the disconnected reference pose is reverted by decree).
 ///
 /// Owner v4.12 (kept): plain tap toggles; the slot slide + color crossfade
 /// + icon swap stay animated (defect #5).
@@ -407,23 +400,10 @@ class FabColumn extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                // Disconnected only: muted-green UP-chevrons ABOVE the button
-                // (reference pose). Connected: NO chevrons at all (v4.13).
-                if (!connected)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 86 * s,
-                    child: Center(
-                      child: TripleChevronsIcon(
-                        size: 14 * s,
-                        up: true,
-                        color: AethColors.accentConnected.withValues(
-                          alpha: 0.35,
-                        ),
-                      ),
-                    ),
-                  ),
+                // v4.15 #4: the three up-chevrons are REMOVED entirely
+                // (owner: «سه فلش رو به بالا در بخش دکمه اتصال کلا حذف
+                // شود») — nothing else lives in the column besides the
+                // power button.
                 // Power button — NO glow (the reference frames show none).
                 // Icon = the set's own «Off.svg» (owner defect #2).
                 AnimatedPositioned(

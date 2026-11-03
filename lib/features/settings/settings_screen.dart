@@ -2,7 +2,8 @@
 /// frame «صفحه تنظیمات.jpg» (402×874; every geometry value measured on the
 /// 3× source and recorded in [AethGeometry] as `settings*` tokens).
 ///
-/// Structure (phase-1 report §3.2 + pixel extraction):
+/// Structure (phase-1 report §3.2 + pixel extraction; v4.15 renames — the
+/// owner's own words, settings round #5/#8):
 ///   * Top bar: chevron tile (Right 2, visual RIGHT = back) · «تنظیمات»
 ///     centered · info tile (Information Circle, visual LEFT → the Telegram
 ///     channel, same behaviour as the home top bar).
@@ -10,19 +11,21 @@
 ///       row 1 visual L→R: مسیریابی‌ها (Forward) · تنظیمات عمومی
 ///       (Filter 5) · تنظیمات اتصال (Lock 1)
 ///       row 2 visual L→R: تنظیمات زبان (Website) · تنظیمات ظاهری
-///       (Palette) · تنظیمات امنیت (Shield Star)
-///   * Two wide stadium pills — تنظیمات سایفون / تنظیمات تور — the REAL
-///     protocol logos (pre-rendered PNGs) tinted accent green at the
-///     leading edge, like the frame.
-///   * Section «وضعیت پیشرفته» (hamburger icon) + THREE status cards on
-///     the same 3-col grid — every value is the REAL store state
-///     (report D2: «هر سه کارت وضعیت به دادهٔ واقعی نگاشت شدند»):
+///       (Palette) · تنظیمات امنیت (Security Safe — v4.15 #1)
+///   * Two wide pills — «سایفون» / «تور» (renamed from «تنظیمات سایفون» /
+///     «تنظیمات تور», v4.15 #8) — the REAL protocol logos (pre-rendered
+///     PNGs) tinted accent green at the leading edge, like the frame.
+///     Corners: owner CSS «Rectangle 79» r24 (v4.15 #3) — never a stadium.
+///   * Section «وضعیت پیکربندی» (renamed from «وضعیت پیشرفته», v4.15 #5;
+///     icon Menu Fries — v4.15 #7) + THREE status cards on the same 3-col
+///     grid — every value is the REAL store state (report D2: «هر سه کارت
+///     وضعیت به دادهٔ واقعی نگاشت شدند»):
 ///       Kill Switch → ON/OFF · منطقهٔ مسیریابی → Latin region name ·
 ///       پروتکل → AUTO / SMART.
-///   * Section «آدرس سرور اصلی» (crosshair icon — the set has no
-///     crosshair, so it is drawn as a CustomPainter in the set's stroke
-///     style per the doc's missing-artwork rule) + two stadium pills:
-///     Zeptun Tunnel / Aether Core with the owner's own GitHub logo SVG.
+///   * Section «آدرس هسته ها» (renamed from «آدرس سرور اصلی», v4.15 #6;
+///     icon Situation 1 — v4.15 #8, replacing the drawn crosshair) + two
+///     pills: Zeptun Tunnel / Aether Core with the owner's own GitHub logo
+///     SVG, corners r20 (same Rectangle-79 look, v4.15 #3).
 ///
 /// Subpages (the six categories + Psiphon/Tor sheets) are pending the
 /// owner's mockup approval (doc §11.5) — the cards open the same honest
@@ -159,7 +162,7 @@ class SettingsScreen extends StatelessWidget {
                           height: AethGeometry.settingsHeadingGapFromPills * s,
                         ),
                         _SectionHeading(
-                          icon: AppAssets.iconMenuHamburger,
+                          icon: AppAssets.iconMenuFries,
                           title: strings.settingsAdvancedStatus,
                         ),
                         SizedBox(
@@ -169,10 +172,8 @@ class SettingsScreen extends StatelessWidget {
                         SizedBox(
                           height: AethGeometry.settingsHeading2GapToServer * s,
                         ),
-                        _SectionHeading.custom(
-                          customIcon: CrosshairIcon(
-                            size: AethGeometry.settingsHeadingIconSize * s,
-                          ),
+                        _SectionHeading(
+                          icon: AppAssets.iconSituation1,
                           title: strings.settingsMainServer,
                         ),
                         SizedBox(
@@ -348,7 +349,7 @@ class _SixCardGrid extends StatelessWidget {
         sub: strings.settingsAppearanceSub,
       ),
       (
-        asset: AppAssets.iconShieldStar,
+        asset: AppAssets.iconSecuritySafe,
         title: strings.settingsSecurity,
         sub: strings.settingsSecuritySub,
       ),
@@ -533,8 +534,10 @@ class _ProtocolPills extends StatelessWidget {
   }
 }
 
-/// The wide stadium pill (سایفون/تور): real protocol logo tinted accent
+/// The wide pill (سایفون/تور): real protocol logo tinted accent
 /// green at the LEADING edge (visual right in RTL), texts stacked after it.
+/// v4.15 #3 — corners follow the owner CSS «Rectangle 79» (r24), replacing
+/// the v4.14 stadium (h/2 = 43.5).
 class _WidePill extends StatelessWidget {
   const _WidePill({
     required this.logo,
@@ -566,7 +569,9 @@ class _WidePill extends StatelessWidget {
         height: h,
         decoration: BoxDecoration(
           color: AethColors.cardDark,
-          borderRadius: BorderRadius.circular(h / 2), // stadium
+          // v4.15 #3 — owner CSS Rectangle 79: r24, never a stadium.
+          borderRadius:
+              BorderRadius.circular(AethGeometry.settingsPillRadius * s),
         ),
         padding: EdgeInsets.symmetric(
           horizontal: AethGeometry.settingsPillInset * s,
@@ -631,33 +636,23 @@ class _WidePill extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _SectionHeading extends StatelessWidget {
-  const _SectionHeading({required this.icon, required this.title})
-      : customIcon = null;
+  const _SectionHeading({required this.icon, required this.title});
 
-  const _SectionHeading.custom({required this.customIcon, required this.title})
-      : icon = null;
-
-  final String? icon;
-  final Widget? customIcon;
+  final String icon;
   final String title;
 
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final Widget iconWidget;
-    if (customIcon != null) {
-      iconWidget = customIcon!;
-    } else {
-      iconWidget = SvgPicture.asset(
-        icon!,
-        width: AethGeometry.settingsHeadingIconSize * s,
-        height: AethGeometry.settingsHeadingIconSize * s,
-        colorFilter: const ColorFilter.mode(
-          AethColors.textPrimary,
-          BlendMode.srcIn,
-        ),
-      );
-    }
+    final Widget iconWidget = SvgPicture.asset(
+      icon,
+      width: AethGeometry.settingsHeadingIconSize * s,
+      height: AethGeometry.settingsHeadingIconSize * s,
+      colorFilter: const ColorFilter.mode(
+        AethColors.textPrimary,
+        BlendMode.srcIn,
+      ),
+    );
     // LTR-locked parent: the heading block hugs the visual RIGHT edge
     // (measured: text x220–333, icon x336–364, block ends at x368).
     return Align(
@@ -737,9 +732,10 @@ class _StatusCards extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Server pills (Zeptun Tunnel / Aether Core) — GitHub logos
+// Server pills (Zeptun Tunnel / Aether Core) — GitHub logos.
+// v4.15 #3 — corners r20 (owner CSS Rectangle 79 scaled 24 × 70/84),
+// replacing the v4.14 stadium (h/2 = 35).
 // ---------------------------------------------------------------------------
-
 class _ServerPills extends StatelessWidget {
   const _ServerPills();
 
@@ -752,7 +748,9 @@ class _ServerPills extends StatelessWidget {
             height: h,
             decoration: BoxDecoration(
               color: AethColors.cardDark,
-              borderRadius: BorderRadius.circular(h / 2),
+              borderRadius: BorderRadius.circular(
+                AethGeometry.settingsServerPillRadius * s,
+              ),
             ),
             padding: EdgeInsets.symmetric(
               horizontal: AethGeometry.settingsServerInset * s,
@@ -803,80 +801,4 @@ class _ServerPills extends StatelessWidget {
       ],
     );
   }
-}
-
-// ---------------------------------------------------------------------------
-// Crosshair icon — the icon set has NO crosshair, so it is drawn in the
-// set's own stroke style (round caps, hairline): a rounded square frame
-// with side notches, four cross lines and a center ring with a dot.
-// ---------------------------------------------------------------------------
-
-class CrosshairIcon extends StatelessWidget {
-  const CrosshairIcon({super.key, this.size = 20, this.color});
-
-  final double size;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      size: Size.square(size),
-      painter: _CrosshairPainter(color ?? AethColors.textPrimary),
-    );
-  }
-}
-
-class _CrosshairPainter extends CustomPainter {
-  _CrosshairPainter(this.color);
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * 0.075
-      ..strokeCap = StrokeCap.round;
-
-    final w = size.width;
-    final r = w * 0.16; // frame corner radius
-    final c = Offset(w / 2, w / 2);
-    final gap = w * 0.18; // side notch half-length
-
-    // Rounded-square frame with a notch in the middle of each side.
-    final frame = Path()
-      ..moveTo(r, 0)
-      ..lineTo(w / 2 - gap, 0)
-      ..moveTo(w / 2 + gap, 0)
-      ..lineTo(w - r, 0)
-      ..arcToPoint(Offset(w, r), radius: Radius.circular(r))
-      ..moveTo(w, w / 2 - gap)
-      ..lineTo(w, w / 2 + gap)
-      ..moveTo(w, w - r)
-      ..arcToPoint(Offset(w - r, w), radius: Radius.circular(r))
-      ..moveTo(w / 2 + gap, w)
-      ..lineTo(w / 2 - gap, w)
-      ..moveTo(r, w)
-      ..arcToPoint(Offset(0, w - r), radius: Radius.circular(r))
-      ..moveTo(0, w / 2 + gap)
-      ..lineTo(0, w / 2 - gap)
-      ..moveTo(0, r)
-      ..arcToPoint(Offset(r, 0), radius: Radius.circular(r));
-    canvas.drawPath(frame, paint);
-
-    // Four cross lines through the notches.
-    canvas.drawLine(Offset(w * 0.28, c.dy), Offset(w * 0.72, c.dy), paint);
-    canvas.drawLine(Offset(c.dx, w * 0.28), Offset(c.dx, w * 0.72), paint);
-
-    // Center ring + dot.
-    canvas.drawCircle(c, w * 0.13, paint);
-    final dot = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(c, w * 0.045, dot);
-  }
-
-  @override
-  bool shouldRepaint(_CrosshairPainter old) => old.color != color;
 }

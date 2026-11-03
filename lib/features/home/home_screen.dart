@@ -100,9 +100,16 @@ class HomeScreen extends StatelessWidget {
           backgroundColor: AethColors.bgScreen,
           body: Stack(
             children: [
-              // Edge patterns (red ↔ green, animated crossfade).
+              // Edge patterns (red ↔ green, animated crossfade; v4.15 #5:
+              // they also DRIFT while the engine walks or the tunnel is up —
+              // «بعد از اتصال و حین اتصال پترن های پس زمینه هم انیمیشن
+              // داشته باشند»).
               Positioned.fill(
-                child: PatternSides(connected: connected, style: style),
+                child: PatternSides(
+                  connected: connected,
+                  style: style,
+                  active: connected || showScan,
+                ),
               ),
               SafeArea(
                 child: Column(
@@ -151,19 +158,20 @@ class HomeScreen extends StatelessWidget {
                                       key: ValueKey('scan-off'),
                                     ),
                             ),
-                            // v4.12 connected aura: a soft breathing halo
-                            // BEHIND the central icon in BOTH looks, so the
-                            // connected screen keeps a quiet life (owner:
-                            // «بعد از اتصال هم آیکون وسط صفحه یک انیمیشن
-                            // جذاب داشته باشه تا صفحه بی روح نباشه»). The
-                            // hero adds its own breathing scale pulse.
+                            // v4.15 connected halo — AURORA BLOOM (owner
+                            // home round #2: the v4.13 rotating sweep is
+                            // REPLACED by a soft breathing glow + slow
+                            // water-ripples BEHIND the central icon in BOTH
+                            // looks, so the connected screen keeps a quiet
+                            // life. The hero adds its own breathing scale
+                            // pulse.
                             AnimatedSwitcher(
                               duration: motionDuration(
                                 style,
                                 MotionDurations.state,
                               ),
                               child: connected
-                                  ? ConnectedAura(
+                                  ? AuroraBloom(
                                       key: const ValueKey('connected-aura'),
                                       color: AethColors.accentConnected,
                                       size:

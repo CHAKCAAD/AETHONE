@@ -46,13 +46,15 @@ void main() {
     expect(find.text('تنظیمات ظاهری'), findsOneWidget);
     expect(find.text('تنظیمات امنیت'), findsOneWidget);
 
-    // The two wide protocol pills.
-    expect(find.text('تنظیمات سایفون'), findsOneWidget);
-    expect(find.text('تنظیمات تور'), findsOneWidget);
+    // The two wide protocol pills — v4.15 #8: renamed «تنظیمات سایفون» →
+    // «سایفون» and «تنظیمات تور» → «تور» (owner's own words).
+    expect(find.text('سایفون'), findsOneWidget);
+    expect(find.text('تور'), findsOneWidget);
 
-    // Section headings.
-    expect(find.text('وضعیت پیشرفته'), findsOneWidget);
-    expect(find.text('آدرس سرور اصلی'), findsOneWidget);
+    // Section headings — v4.15 #5/#6: «وضعیت پیشرفته» → «وضعیت پیکربندی»,
+    // «آدرس سرور اصلی» → «آدرس هسته ها».
+    expect(find.text('وضعیت پیکربندی'), findsOneWidget);
+    expect(find.text('آدرس هسته ها'), findsOneWidget);
 
     // Status values — the REAL store defaults (ON / Iran / AUTO).
     expect(find.text('ON'), findsOneWidget);

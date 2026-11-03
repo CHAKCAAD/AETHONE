@@ -1,4 +1,5 @@
-/// Location header + flag WHEEL (v4.13 — owner defect reports, round 4):
+/// Location header + flag WHEEL (v4.13 — owner defect reports, round 4;
+/// restyled v4.15 — owner home round #3):
 ///
 /// Header row (v4.13, LTR-locked) — owner re-clarification, EXACT reference
 /// geometry («آیکون پرچم در وسط صفحه باید باشه، متن پینگ ... در سمت راستش
@@ -6,22 +7,33 @@
 ///   [country name] —— [map icon + chevron at the EXACT screen centre] —— [ping / آفلاین]
 /// The map icon is laid out independently of both texts (two EQUAL Expanded
 /// slots + a fixed-width centre box), so NO text change can ever move it off
-/// centre («وقتی متن قسمت پینگ کاراکتر هاش تغیر میکنه ... آیکون از وسط بودن
-/// خارج نشه»). Long names/pings ellipsis INSIDE their own half.
+/// centre. Long names/pings ellipsis INSIDE their own half.
 ///   * connected  : name = wheel/exit country (white) · «146 ms» green.
 ///   * disconnected: name = wheel selection (grey) · «آفلاین» grey.
 ///   * connecting : the ping slot stays empty (honest — nothing measured).
 ///
-/// Flag wheel — REBUILT on PageView (v4.13): the v4.12 virtual-strip ListView
-/// started near its own left edge after the async flag-manifest load (the
-/// controller was created against the 1-code placeholder list), so scrolling
-/// left ran into EMPTY space («نباید پرچم ها از یک طرف خالی باشه»). The
-/// wheel is now an UNBOUNDED PageView started ~1,000,000 pages in, silently
-/// re-centered after every settle — there are ALWAYS flags on BOTH edges and
-/// the cycle wraps («اگه روی پرچم ایران هستی ... در نهایت مجددا به پرچم ایران
-/// برسی»). The nearest-centre flag is the LARGEST with the HIGHEST opacity
-/// (52 > 42 > 36 > 30, 1.0 > .85 > .62 > .45 — measured on the reference
-/// frames) and it updates CONTINUOUSLY while scrolling.
+/// v4.15 #3 — VISIBILITY RULE (owner: «بخش پرچم ها در حالت غیر متصل پروتکل
+/// های به غیر از زیرمجموعه سایفون و تور کاملا پنهان باشه و فقط در حالت
+/// اتصال نقش نمایش لوکیشن رو داشته باشه. دقت کن که این بخش در پروتکل های
+/// زیرمجموعه سایفون و تور نقش انتخاب لوکیشن را دارد»):
+///   * Tor/Psiphon protocols → the band is ALWAYS visible (location SELECTOR).
+///   * every other protocol → the band is completely HIDDEN while
+///     disconnected and REVEALS (animated) once connected, acting as the
+///     location DISPLAY. Every movement of the band (hide/reveal) animates
+///     through a single 420 ms ease tween (clip + fade), so the hero band
+///     glides instead of jumping.
+///
+/// v4.15 #3 — FLAG FALLOFF, owner CSS «Group 9» (301×52 strip, 402 frame):
+///   centre 52×52 @ opacity 1.0 · ±1 42×42 @ 0.5 · ±2 35×35 @ 0.2 —
+///   the centre flag is the LARGEST and the most opaque (the flag that
+///   becomes the selected/displayed location always reads at 100%). The
+///   falloff interpolates CONTINUOUSLY while scrolling (size and opacity
+///   ride the controller, no snap points).
+///
+/// Flag wheel — UNBOUNDED PageView (v4.13): silently re-centered after every
+/// settle — there are ALWAYS flags on BOTH edges and the cycle wraps. The
+/// old v4.13 greyscale lock is RETIRED by the v4.15 hide rule (a hidden band
+/// cannot be greyscale — it is simply not there).
 ///
 /// CONNECT ROULETTE (v4.13, owner: «وقتی اتصال صورت گرفت اسکرول پرچم ها باید
 /// بین کشور ها مقداری اسکرول کند و بعد لوکیشن اصلی رو نشون بده»): the moment
@@ -29,16 +41,10 @@
 /// countries (two full laps) and lands on the engine-reported exit country.
 /// Works on the real-core path too: the trigger is the STATE edge, and a
 /// late exit-country report RE-SPINS the roulette (a fresh two-lap spin from
-/// the current position — the owner's «مقداری اسکرول کند» feel is preserved
-/// even when the exit code arrives mid-spin). A monotonic EPOCH protocol
-/// makes every programmatic spin the sole owner of the wheel: a superseded
-/// animation's completion is a no-op — it never clears the programmatic
-/// flag, never re-centers and never writes to the store. The roulette
-/// never writes to the store at all — the engine owns the connected
-/// location.
-///
-/// State-change animation (v4.13): the disconnected greyscale is TWEENED
-/// (saturation 0 ↔ 1) instead of switching instantly.
+/// the current position). A monotonic EPOCH protocol makes every
+/// programmatic spin the sole owner of the wheel: a superseded animation's
+/// completion is a no-op. The roulette never writes to the store at all —
+/// the engine owns the connected location.
 ///
 /// Selection lock: ONLY Tor and Psiphon select a country; every other
 /// protocol renders the wheel as a locked LOCATION DISPLAY (defect #13).
@@ -436,7 +442,11 @@ class _LocationHeaderState extends State<LocationHeader> {
     // v4.12 rule kept: the lock follows the PROTOCOL TYPE only.
     final selectable = widget.protocolIsTorOrPsiphon;
     final locked = !selectable;
-    final greyscale = locked && !connected;
+
+    // v4.15 #3 — the hide rule: a non-Tor/Psiphon protocol keeps the whole
+    // band completely hidden while disconnected; it only exists (revealing
+    // animated) as the location display once connected.
+    final hidden = locked && !connected;
 
     _ensureController();
 
@@ -444,7 +454,6 @@ class _LocationHeaderState extends State<LocationHeader> {
       codes: _codes,
       controller: _pageController!,
       locked: locked,
-      greyscale: greyscale,
       onTapFlag: locked
           ? null
           : (page) {
@@ -475,7 +484,7 @@ class _LocationHeaderState extends State<LocationHeader> {
       },
     );
 
-    return Column(
+    final band = Column(
       children: [
         _buildHeaderRow(context, strings, s),
         SizedBox(height: 3 * s),
@@ -483,12 +492,49 @@ class _LocationHeaderState extends State<LocationHeader> {
         Directionality(
           textDirection: TextDirection.ltr,
           child: Center(
-            child: ChevronDownIcon(size: 8 * s, color: AethColors.textSecondary),
+            child: ChevronDownIcon(
+              size: 8 * s,
+              color: AethColors.textSecondary,
+            ),
           ),
         ),
         SizedBox(height: AethGeometry.gapLocationToFlags * s),
         wheel,
       ],
+    );
+
+    // v4.15 #3 — the reveal seam. One tween drives clip + fade: the band
+    // grows from zero height (Align heightFactor) and fades in together,
+    // so the layout above/below GLIDES. The wheel stays laid out at full
+    // size behind the clip while hidden — the PageController never loses
+    // its clients, so the connect-edge roulette is always safe.
+    //
+    // v4.15.1 — BUGFIX: the wrapper tree must NEVER change shape. The first
+    // cut short-circuited `t >= 0.999` to the bare child, which swapped the
+    // element at this slot (ClipRect ≠ Column) the moment the reveal
+    // finished — mid-roulette, 420 ms into the spin. The PageView subtree
+    // was inflated FRESH, the old scroll position detached (completing the
+    // animateToPage future as a fake success) and the new client re-attached
+    // at initialPage — the wheel snapped back to ایران and the roulette
+    // died. A CONSTANT ClipRect > Align > Opacity tree with only the `t`
+    // values tweened is visually identical at t = 1 (Align heightFactor 1
+    // and Opacity 1 are no-ops) and keeps the PageView's element — and its
+    // scroll position — alive through the whole reveal + roulette.
+    return TweenAnimationBuilder<double>(
+      key: const ValueKey('location-band'),
+      tween: Tween(end: hidden ? 0.0 : 1.0),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeInOutCubic,
+      builder: (context, t, child) {
+        return ClipRect(
+          child: Align(
+            alignment: AlignmentDirectional.topCenter,
+            heightFactor: t,
+            child: Opacity(opacity: t, child: child),
+          ),
+        );
+      },
+      child: band,
     );
   }
 }
@@ -499,7 +545,6 @@ class _FlagsWheel extends StatelessWidget {
     required this.codes,
     required this.controller,
     required this.locked,
-    required this.greyscale,
     required this.onTapFlag,
     required this.onPageSettled,
     required this.onPageChanged,
@@ -508,27 +553,15 @@ class _FlagsWheel extends StatelessWidget {
   final List<String> codes;
   final PageController controller;
   final bool locked;
-  final bool greyscale;
   final void Function(int page)? onTapFlag;
   final void Function(int page) onPageSettled;
   final void Function(int page) onPageChanged;
 
-  /// Design falloff: 52/42/36/30 px and 1.0/.85/.62/.45 opacity (reference
-  /// frames: the centre flag is the largest and the most opaque).
-  static const List<double> _sizes = [52, 42, 36, 30];
-  static const List<double> _opacities = [1.0, 0.85, 0.62, 0.45];
-
-  /// Saturation-lerped color matrix (1 = full colour, 0 = grey; rec709 luma).
-  static List<double> _saturationMatrix(double sat) {
-    const r = 0.2126, g = 0.7152, b = 0.0722;
-    final ir = (1 - sat) * r, ig = (1 - sat) * g, ib = (1 - sat) * b;
-    return [
-      ir + sat, ig, ib, 0, 0, //
-      ir, ig + sat, ib, 0, 0, //
-      ir, ig, ib + sat, 0, 0, //
-      0, 0, 0, 1, 0,
-    ];
-  }
+  /// v4.15 #3 — owner CSS «Group 9» falloff, restated from the 402 frame:
+  /// centre 52 @ 1.0 · ±1 42 @ 0.5 · ±2 35 @ 0.2 (flat beyond ±2 —
+  /// everything past ±2 is off the 301-wide strip anyway).
+  static const List<double> _sizes = [52, 42, 35];
+  static const List<double> _opacities = [1.0, 0.5, 0.2];
 
   (double, double) _lookFor(double distance) {
     final d = distance.abs();
@@ -546,7 +579,10 @@ class _FlagsWheel extends StatelessWidget {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final n = codes.length;
 
-    final wheel = Directionality(
+    // v4.15 #3: the greyscale ColorFiltered wrapper is RETIRED — the locked
+    // band is HIDDEN while disconnected instead (see the reveal seam in the
+    // parent), and a connected display shows full colour.
+    return Directionality(
       textDirection: TextDirection.ltr,
       child: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
@@ -596,23 +632,6 @@ class _FlagsWheel extends StatelessWidget {
           ),
         ),
       ),
-    );
-
-    // Defect #14 rule kept: saturation-0 (NOT blur) for locked protocols
-    // while disconnected — but now TWEENED on state change (owner round 4
-    // #6: «تغیر وضعیت پرچم کشور ها ... باید با انیمیشن انجام شود»).
-    return TweenAnimationBuilder<double>(
-      tween: Tween(end: greyscale ? 0.0 : 1.0),
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeInOutCubic,
-      builder: (context, sat, child) {
-        if (sat > 0.995) return child!;
-        return ColorFiltered(
-          colorFilter: ColorFilter.matrix(_saturationMatrix(sat)),
-          child: child,
-        );
-      },
-      child: wheel,
     );
   }
 }

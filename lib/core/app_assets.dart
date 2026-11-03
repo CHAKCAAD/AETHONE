@@ -95,6 +95,18 @@ abstract final class AppAssets {
   static const String iconMenuHamburger = '$_icons/Menu Hamburger.svg';
   static const String logoGithub = 'design/صفحه تنظیمات/لوگو گیت هاب.svg';
 
+  // --- v4.15 (owner settings round #1/#7/#8): the three real set icons the
+  // owner named for the settings page — «Security Safe.svg» for the
+  // security card, «Menu Fries.svg» for the وضعیت پیکربندی heading,
+  // «Situation 1.svg» for the آدرس هسته ها heading (the v4.14 stand-ins
+  // Shield Star / Menu Hamburger / the drawn CrosshairIcon are retired
+  // from the UI; the constants above stay for reference). [iconSend]
+  // (Send 1.svg) gains its first real use: the status pill's connecting
+  // icon (owner home round #6).
+  static const String iconSecuritySafe = '$_icons/Security Safe.svg';
+  static const String iconMenuFries = '$_icons/Menu Fries.svg';
+  static const String iconSituation1 = '$_icons/Situation 1.svg';
+
   // --- protocol logos. Tor/Psiphon ship as pre-rendered PNGs (their SVGs
   // embed the artwork in hidden tracing layers + the real vector art,
   // which flutter_svg renders partially) — v4.10.
@@ -172,6 +184,9 @@ abstract final class AppAssets {
         iconMenuHamburger,
         logoGithub,
         brandMark,
+        iconSecuritySafe,
+        iconMenuFries,
+        iconSituation1,
         _protoMasque,
         _protoWireguard,
         _protoGool,

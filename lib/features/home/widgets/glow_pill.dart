@@ -124,6 +124,11 @@ class _LayerStackPainter extends CustomPainter {
 /// green. Content row keeps the INHERITED (RTL) directionality — under the
 /// fa locale it lays out exactly like the reference frames: text visual-left,
 /// shield visual-right.
+///
+/// v4.15 — owner home round #6: «آیکون دکمه وضعیت اتصال در حالت در حال اتصال
+/// باید آیکون Send 1.svg درون پوشه آیکون های اپ باشد» — the CONNECTING
+/// icon is the set's Send glyph (the v4.14 Shield Cross stays for the
+/// disconnected/failed/reconnecting states, Shield Tick when connected).
 class StatusPill extends StatelessWidget {
   const StatusPill({super.key, required this.state, required this.style});
 
@@ -140,10 +145,8 @@ class StatusPill extends StatelessWidget {
     final connected = state == VpnState.connected;
     final (label, iconAsset) = switch (state) {
       VpnState.connected => (strings.statusConnected, AppAssets.iconShieldTick),
-      VpnState.connecting => (
-        strings.statusConnecting,
-        AppAssets.iconShieldCross,
-      ),
+      // v4.15 #6 — the connecting icon is the set's own Send 1.svg.
+      VpnState.connecting => (strings.statusConnecting, AppAssets.iconSend),
       VpnState.reconnecting => (
         strings.statusReconnecting,
         AppAssets.iconShieldCross,

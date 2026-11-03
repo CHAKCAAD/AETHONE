@@ -1,22 +1,27 @@
 /// Look-1 hero: the central app logo. Disconnected: the artwork as committed
 /// (correlation 0.997 against the reference frame). Connected: rotated 57°
-/// counter-clockwise (v4.12 — owner: «میزان چرخش آیکون وسط صفحه به اندازه ۶۰
-/// درجه زیاده، کمترش کن به ۵۷ درجه»; the v4.11 pose was the measured 60°).
-/// Tint animates red ↔ green with the state.
+/// (v4.12 — owner: «میزان چرخش آیکون وسط صفحه به اندازه ۶۰ درجه زیاده،
+/// کمترش کن به ۵۷ درجه»).
+///
+/// v4.15 — owner home round #1: «چرخش آیکون وسط صفحه به سمت راست بعد از
+/// اتصال باید با انیمیشن انجام شود و کاملا نرم باید» — the pose now turns
+/// CLOCKWISE (to the RIGHT) on a dedicated 600 ms ease curve so the motion
+/// reads as one butter-smooth turn (the v4.12–v4.14 pose was CCW). Tint
+/// animates red ↔ green with the state as before.
 ///
 /// While the engine is walking toward a connection (starting / connecting /
 /// reconnecting) an animated scanning halo (expanding rings, defect #10)
 /// plays BEHIND the logo — see [ScanRings].
 ///
-/// CONNECTED IDLE (v4.12 — owner: «بعد از اتصال هم آیکون وسط صفحه یک انیمیشن
-/// جذاب داشته باشه تا صفحه بی روح نباشه»): the logo breathes — a slow,
-/// gentle scale pulse driven by [ConnectedAura]'s phase — and the
-/// [ConnectedAura] radial halo breathes BEHIND it (see home_screen: the aura
-/// is mounted for BOTH looks). MotionStyle.off disables the idle motion
-/// (accessibility rule) — the state change animations stay.
+/// CONNECTED IDLE: the logo breathes — a slow, gentle scale pulse driven by
+/// [AuroraBloom]'s phase — and the [AuroraBloom] glow/ripple halo breathes
+/// BEHIND it (see home_screen: the halo is mounted for BOTH looks).
+/// MotionStyle.off disables the idle motion (accessibility rule) — the
+/// state change animations stay.
 library;
 
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -31,9 +36,9 @@ class HeroLogo extends StatelessWidget {
   final bool connected;
   final MotionStyle style;
 
-  /// v4.12 pose: 57° CCW (owner-tuned down from the measured 60°). Flutter
-  /// `turns` are clockwise-positive, hence the negative fraction.
-  static const double _connectedTurns = -57 / 360;
+  /// v4.12 pose: 57°. v4.15 — owner: the turn is CLOCKWISE («به سمت راست»)
+  /// on connection; Flutter `turns` are clockwise-positive.
+  static const double _connectedTurns = 57 / 360;
 
   @override
   Widget build(BuildContext context) {
@@ -42,9 +47,12 @@ class HeroLogo extends StatelessWidget {
     final duration = motionDuration(style, MotionDurations.state);
     final curve = style.curve;
 
+    // v4.15 #1: the rotation gets its own slower base (600 ms) — «کاملا نرم».
+    final turnDuration = motionDuration(style, 600);
+
     final Widget logo = AnimatedRotation(
       turns: connected ? _connectedTurns : 0.0,
-      duration: duration,
+      duration: turnDuration,
       curve: curve,
       child: TweenAnimationBuilder<Color?>(
         tween: ColorTween(
@@ -145,33 +153,35 @@ class _BreathingWhileConnectedState extends State<_BreathingWhileConnected>
   }
 }
 
-/// The connected aura (v4.13 — owner round-4 #3: «انیمیشن این آیکون در حالت
-/// متصل زیاد پیدا نیست، میخوام توی پس زمینه‌ش یه انیمیشن جالب اجرا شه»): a
-/// slow ROTATING SWEEP (two soft comet lobes, 7 s/turn — a quiet aurora)
-/// UNDER the breathing radial halo from v4.12. Both live BEHIND the central
-/// icon in BOTH looks; MotionStyle.off renders them static/hidden (the
-/// home_screen mounts the aura only while connected).
-class ConnectedAura extends StatefulWidget {
-  const ConnectedAura({super.key, required this.color, required this.size});
+/// The connected halo (v4.15 — owner home round #2: «انیمیشن بعد از اتصال
+/// پشت آیکون وسط صفحه زیبا نیست یک انیمیشن زیبا ایجاد کن و این انیمیشن
+/// رو بردار»: the v4.13 rotating comet sweep is RETIRED). AURORA BLOOM in
+/// its place: a soft breathing glow + three slow water-ripples that expand
+/// and fade behind the icon — one quiet 3.9 s ripple cycle (a new ring is
+/// born every 1.3 s) and a 2.6 s breath that matches the logo's own pulse
+/// (they breathe together, like v4.12). It lives BEHIND the central icon in
+/// BOTH looks; the home_screen mounts it only while connected.
+class AuroraBloom extends StatefulWidget {
+  const AuroraBloom({super.key, required this.color, required this.size});
 
   final Color color;
   final double size;
 
   @override
-  State<ConnectedAura> createState() => _ConnectedAuraState();
+  State<AuroraBloom> createState() => _AuroraBloomState();
 }
 
-class _ConnectedAuraState extends State<ConnectedAura>
+class _AuroraBloomState extends State<AuroraBloom>
     with TickerProviderStateMixin {
-  /// 7 s/turn rotation — slow enough to read as ambience, fast enough to
-  /// be clearly alive.
-  late final AnimationController _spin = AnimationController(
+  /// One ripple phase cycle — every 1/3 of it a new ring is born; each ring
+  /// takes the full 3.9 s to expand and dissolve.
+  late final AnimationController _ripple = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 7000),
+    duration: const Duration(milliseconds: 3900),
   );
 
-  /// The 2.6 s breathing phase (unchanged from v4.12 — the logo pulse and
-  /// the halo breathe together).
+  /// The 2.6 s breathing phase (the logo pulse and the halo breathe
+  /// together — kept from v4.12).
   late final AnimationController _breath = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 2600),
@@ -180,76 +190,109 @@ class _ConnectedAuraState extends State<ConnectedAura>
   @override
   void initState() {
     super.initState();
-    _spin.repeat();
+    _ripple.repeat();
     _breath.repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    _spin.dispose();
+    _ripple.dispose();
     _breath.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.color;
     return AnimatedBuilder(
-      animation: Listenable.merge([_spin, _breath]),
+      animation: Listenable.merge([_ripple, _breath]),
       builder: (context, _) {
-        final spin = _spin.value;
-        final t = Curves.easeInOut.transform(_breath.value);
-        final halo = widget.size * (0.92 + 0.14 * t);
-        return SizedBox(
-          width: widget.size,
-          height: widget.size,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // 1) The rotating aurora sweep (two comet lobes, soft edges).
-              Transform.rotate(
-                angle: spin * 2 * math.pi,
-                child: SizedBox.expand(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: SweepGradient(
-                        transform: const GradientRotation(-math.pi / 2),
-                        colors: [
-                          c.withValues(alpha: 0.0),
-                          c.withValues(alpha: 0.15 + 0.03 * t),
-                          c.withValues(alpha: 0.0),
-                          c.withValues(alpha: 0.0),
-                          c.withValues(alpha: 0.09),
-                          c.withValues(alpha: 0.0),
-                          c.withValues(alpha: 0.0),
-                        ],
-                        stops: const [0.0, 0.10, 0.24, 0.52, 0.62, 0.76, 1.0],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // 2) The breathing radial halo (v4.12, kept).
-              Container(
-                width: halo,
-                height: halo,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      c.withValues(alpha: 0.06 + 0.10 * t),
-                      c.withValues(alpha: 0.0),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+        final breath = Curves.easeInOut.transform(_breath.value);
+        return CustomPaint(
+          size: Size.square(widget.size),
+          painter: _AuroraBloomPainter(
+            color: widget.color,
+            ripple: _ripple.value,
+            breath: breath,
           ),
         );
       },
     );
   }
+}
+
+/// Paints the aurora bloom — all soft edges, no hard rings:
+///  1. a faint outer halo (breathes 0.05 ↔ 0.09 alpha);
+///  2. a breathing core glow (0.14 ↔ 0.26 alpha, radius 0.28 ↔ 0.35 of the
+///     box) that fades to nothing at its edge;
+///  3. three staggered water-ripples (phase 0, ⅓, ⅔): each expands from
+///     0.16 to 0.46 of the box over 3.9 s while its stroke thins and its
+///     alpha decays quadratically — heavily blurred (MaskFilter), so the
+///     rings read as soft light, never as hard circles.
+class _AuroraBloomPainter extends CustomPainter {
+  _AuroraBloomPainter({
+    required this.color,
+    required this.ripple,
+    required this.breath,
+  });
+
+  final Color color;
+  final double ripple;
+  final double breath;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final col = color;
+
+    // 1) Faint outer halo.
+    final halo = Paint()
+      ..shader = ui.Gradient.radial(
+        c,
+        size.width * 0.5,
+        [
+          col.withValues(alpha: 0.05 + 0.04 * breath),
+          col.withValues(alpha: 0.0),
+        ],
+      );
+    canvas.drawCircle(c, size.width * 0.5, halo);
+
+    // 2) Breathing core glow.
+    final glowRadius = size.width * (0.28 + 0.07 * breath);
+    final glow = Paint()
+      ..shader = ui.Gradient.radial(
+        c,
+        glowRadius,
+        [
+          col.withValues(alpha: 0.14 + 0.12 * breath),
+          col.withValues(alpha: 0.0),
+        ],
+      );
+    canvas.drawCircle(c, glowRadius, glow);
+
+    // 3) The three water-ripples.
+    for (var i = 0; i < 3; i++) {
+      final p = (ripple + i / 3) % 1.0;
+      final e = Curves.easeOutCubic.transform(p);
+      final fade = math.pow(1 - e, 2).toDouble();
+      final ring = Paint()
+        ..color = col.withValues(alpha: 0.24 * fade)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size.width * (0.008 + 0.024 * fade)
+        ..maskFilter = MaskFilter.blur(
+          BlurStyle.normal,
+          size.width * (0.007 + 0.014 * fade),
+        );
+      canvas.drawCircle(
+        c,
+        size.width * (0.16 + 0.30 * e),
+        ring,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_AuroraBloomPainter old) =>
+      old.ripple != ripple || old.breath != breath || old.color != color;
 }
 
 /// Scanning halo behind the central icon while the engine is trying to
