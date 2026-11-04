@@ -285,10 +285,13 @@
 # ---------------------------------------------------------------------------
 name: AETHONE Native CI
 
+# v4.21 — the owner's GitHub Actions quota is EXHAUSTED (device-test round
+# 3: «۱۰۰ درصد از سهمیه اکشن گیت‌هابم رو مصرف کردم از این به بعد باید صرفا
+# کومیت پوش کنی و اکشنی اجرا نشه»). Push/PR triggers are disabled until the
+# quota resets; manual runs remain possible via workflow_dispatch when
+# explicitly wanted. Local builds follow docs/LOCAL_BUILD_FA.md (Android
+# Studio). The v4.4-v4.21 green history stays recorded below.
 on:
-  push:
-    branches: ["**"]
-  pull_request:
   workflow_dispatch:
 
 permissions:
