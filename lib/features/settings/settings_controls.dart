@@ -15,6 +15,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
+import '../../core/motion.dart';
 
 /// A small secondary caption (option descriptions, section notes).
 class SettingInfoText extends StatelessWidget {
@@ -144,7 +145,10 @@ class SettingToggleRow extends StatelessWidget {
 }
 
 /// The hand-drawn switch — 46×26 track r13, 20 white knob; ON fills the
-/// track with the accent green (the connected colour).
+/// track with the accent green (the connected colour). v4.25 — the snap
+/// follows the ambient motion style ([MotionScope]): SPRING flicks in
+/// 140 ms with an overshoot, TIDE flows in 320 ms, BLINK blinks at
+/// 90 ms, OFF lands instantly.
 class _CustomSwitch extends StatelessWidget {
   const _CustomSwitch({super.key, required this.value, required this.onChanged});
 
@@ -154,6 +158,8 @@ class _CustomSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const track = Size(46, 26);
+    final recipe = MotionScope.of(context).recipe;
+    final duration = Duration(milliseconds: recipe.controlMs);
     return Semantics(
       toggled: value,
       button: true,
@@ -161,8 +167,8 @@ class _CustomSwitch extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: () => onChanged(!value),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
+          duration: duration,
+          curve: recipe.controlCurve,
           width: track.width,
           height: track.height,
           decoration: BoxDecoration(
@@ -170,8 +176,8 @@ class _CustomSwitch extends StatelessWidget {
             borderRadius: BorderRadius.circular(13),
           ),
           child: AnimatedAlign(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
+            duration: duration,
+            curve: recipe.controlCurve,
             // RTL row: the knob travels toward the visual LEFT when on.
             alignment: value ? Alignment.centerLeft : Alignment.centerRight,
             child: Container(
@@ -213,6 +219,8 @@ class SettingPills<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    // v4.25 — the highlight snap follows the ambient motion style.
+    final recipe = MotionScope.of(context).recipe;
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Wrap(
@@ -224,8 +232,8 @@ class SettingPills<T> extends StatelessWidget {
               key: keyId == null ? null : ValueKey('pill-$keyId-$label'),
               onTap: () => onSelect(v),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
+                duration: Duration(milliseconds: recipe.controlMs),
+                curve: recipe.controlCurve,
                 padding: EdgeInsets.symmetric(
                   horizontal: 14 * s,
                   vertical: 9 * s,
@@ -638,14 +646,16 @@ class FlagPickStrip extends StatelessWidget {
           itemBuilder: (context, i) {
             final code = codes[i];
             final isSel = code == selected;
+            // v4.25 — the selection ring snaps in the ambient style.
+            final recipe = MotionScope.of(context).recipe;
             return GestureDetector(
               key: ValueKey('flag-pick-$code'),
               behavior: HitTestBehavior.opaque,
               onTap: () => onSelect(code),
               child: Center(
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOut,
+                  duration: Duration(milliseconds: recipe.controlMs),
+                  curve: recipe.controlCurve,
                   padding: EdgeInsets.all(3 * s),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12 * s),

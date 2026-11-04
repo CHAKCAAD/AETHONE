@@ -126,6 +126,9 @@ void main() {
       s.motionStandard;
       s.motionSmooth;
       s.motionDynamic;
+      s.motionMinimal;
+      s.animationsOffTitle;
+      s.animationsOffDesc;
       s.secPatterns;
       s.showPatterns;
       s.showPatternsDesc;

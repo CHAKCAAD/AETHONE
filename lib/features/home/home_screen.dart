@@ -47,29 +47,16 @@ class HomeScreen extends StatelessWidget {
 
   /// Step 2: the REAL settings main page (pixel-faithful to the design
   /// frame). v4.17 — owner settings round #4: «به صفحه و کارت ها انیمیشن
-  /// ورود و خروج اضافه کن» — the route is a fade+slide PageRouteBuilder and
-  /// the screen staggers its blocks on the route timeline (see
-  /// [SettingsScreen._enter]); pop retraces the cascade.
+  /// ورود و خروج اضافه کن» — the route animates and the screen staggers
+  /// its blocks on the route timeline (see [SettingsScreen._enter]).
+  /// v4.25 — the push rides [aethPageRoute]: the page enters with the
+  /// SELECTED STYLE'S own personality (SILK fade-rise / TIDE zoom-
+  /// dissolve / SPRING pop / BLINK fade / OFF instant cut).
   void _openSettings(BuildContext context) {
-    final style = store.effectiveMotionStyle(context);
     Navigator.of(context).push(
-      PageRouteBuilder<void>(
-        transitionDuration: motionDuration(style, 380),
-        reverseTransitionDuration: motionDuration(style, 320),
-        pageBuilder: (_, _, _) => SettingsScreen(store: store),
-        transitionsBuilder: (context, animation, _, child) => FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-          child: SlideTransition(
-            position: Tween(
-              begin: const Offset(0, 0.03),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            )),
-            child: child,
-          ),
-        ),
+      aethPageRoute<void>(
+        style: store.effectiveMotionStyle(context),
+        builder: (_) => SettingsScreen(store: store),
       ),
     );
   }
@@ -127,7 +114,11 @@ class HomeScreen extends StatelessWidget {
 
         return Scaffold(
           backgroundColor: AethColors.bgScreen,
+          // v4.25 — `StackFit.expand` for uniformity with every other page
+          // (the pattern-placement fix; home already filled via the Column
+          // `Expanded`, but the body now pins itself explicitly).
           body: Stack(
+            fit: StackFit.expand,
             children: [
               // Edge patterns (red ↔ green, animated crossfade; v4.15 #5:
               // they also DRIFT while the engine walks or the tunnel is up —
@@ -187,7 +178,11 @@ class HomeScreen extends StatelessWidget {
                           alignment: Alignment.center,
                           children: [
                             AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 250),
+                              // v4.25 — style-scaled (was a fixed 250 ms).
+                              duration: motionDuration(
+                                style,
+                                MotionDurations.quick,
+                              ),
                               child: showScan
                                   ? ScanRings(
                                       key: const ValueKey('scan-rings'),
@@ -222,6 +217,7 @@ class HomeScreen extends StatelessWidget {
                                               : AethGeometry.centerButtonSize) *
                                           1.25 *
                                           s,
+                                      style: style,
                                     )
                                   : const SizedBox.shrink(
                                       key: ValueKey('aura-off'),

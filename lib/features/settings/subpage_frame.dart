@@ -24,6 +24,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
+import '../../core/motion.dart';
 import '../home/widgets/pattern_sides.dart';
 
 /// The Telegram channel — the info tile's destination on every page.
@@ -33,29 +34,16 @@ Future<void> openTelegramChannel() async {
   await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
-/// The block-cascade entrance the settings pages share. With no route
-/// (bare-harness pumps) the child renders untouched.
-Widget subpageEnter(BuildContext context, int block, Widget child) {
-  final anim = ModalRoute.of(context)?.animation;
-  if (anim == null) return child;
-  return AnimatedBuilder(
-    animation: anim,
-    builder: (context, _) {
-      final t = anim.value;
-      final start = (block * 0.075).clamp(0.0, 0.45);
-      final bt = Curves.easeOutCubic
-          .transform(Interval(start, start + 0.55).transform(t));
-      if (bt >= 0.999) return child;
-      final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-      return Opacity(
-        opacity: bt,
-        child: Transform.translate(
-          offset: Offset(0, (1 - bt) * 22 * s),
-          child: child,
-        ),
-      );
-    },
-  );
+/// The block-cascade entrance the settings pages share — the per-style
+/// v4.25 recipe (each mode's own rise/zoom/curve/stagger; OFF = no-op).
+/// With no route (bare-harness pumps) the child renders untouched.
+Widget subpageEnter(
+  BuildContext context,
+  MotionStyle style,
+  int block,
+  Widget child,
+) {
+  return motionCascade(context, style, block, child);
 }
 
 /// One sub-page: [title] in the chrome, [children] as the cascading body
@@ -81,20 +69,29 @@ class SubPageFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    // v4.25 — the effective style (the master kill-switch clamps to OFF);
+    // every block cascade AND the small controls inside the cards read it.
+    final style = store.effectiveMotionStyle(context);
     return AnimatedBuilder(
       animation: store,
       builder: (context, _) => Scaffold(
         backgroundColor: AethColors.bgScreen,
+        // v4.25 — the pattern-placement fix: `StackFit.expand` pins the
+        // body (and the `Positioned.fill` pattern box behind it) to the
+        // FULL screen height — the default loose fit collapsed it to the
+        // content height and the composition drifted off the main page's
+        // placement (the owner's «مکانش دقیقا مثل صفحه اصلی باشه»).
         body: Stack(
+          fit: StackFit.expand,
           children: [
-            // The home patterns behind (v4.21 decree), gated by the
-            // appearance switch (v4.22).
+            // The home patterns behind (v4.21 decree; v4.22: gated by the
+            // appearance switch; v4.25: ONE composition for every page —
+            // exactly the main screen's placement, single code path).
             if (store.showPatterns)
               Positioned.fill(
                 child: PatternSides(
                   connected: store.isConnected,
-                  style: store.animationStyle,
-                  stage: PatternStage.home,
+                  style: style,
                 ),
               ),
             // LTR-locked geometry (the settings-page precedent): the
@@ -108,34 +105,43 @@ class SubPageFrame extends StatelessWidget {
                     padding: EdgeInsets.symmetric(
                       horizontal: AethGeometry.pageHPadding * s,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(height: AethGeometry.topSafeExtraGap * s),
-                        subpageEnter(
-                          context,
-                          0,
-                          _SubPageTopBar(
-                            title: title,
-                            onInfo: openTelegramChannel,
-                            onBack: () => Navigator.of(context).maybePop(),
+                    child: MotionScope(
+                      style: style,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(height: AethGeometry.topSafeExtraGap * s),
+                          subpageEnter(
+                            context,
+                            style,
+                            0,
+                            _SubPageTopBar(
+                              title: title,
+                              onInfo: openTelegramChannel,
+                              onBack: () => Navigator.of(context).maybePop(),
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 22 * s),
-                        Builder(
-                          builder: (context) {
-                            final blocks = children();
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                for (var i = 0; i < blocks.length; i++)
-                                  subpageEnter(context, i + 1, blocks[i]),
-                                SizedBox(height: 30 * s),
-                              ],
-                            );
-                          },
-                        ),
-                      ],
+                          SizedBox(height: 22 * s),
+                          Builder(
+                            builder: (context) {
+                              final blocks = children();
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  for (var i = 0; i < blocks.length; i++)
+                                    subpageEnter(
+                                      context,
+                                      style,
+                                      i + 1,
+                                      blocks[i],
+                                    ),
+                                  SizedBox(height: 30 * s),
+                                ],
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

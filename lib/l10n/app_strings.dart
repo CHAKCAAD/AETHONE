@@ -234,6 +234,11 @@ class AppStrings {
   String get motionStandard => _v['motionStandard']!;
   String get motionSmooth => _v['motionSmooth']!;
   String get motionDynamic => _v['motionDynamic']!;
+
+  /// v4.25 — the fourth style pill + the master kill-switch row.
+  String get motionMinimal => _v['motionMinimal']!;
+  String get animationsOffTitle => _v['animationsOffTitle']!;
+  String get animationsOffDesc => _v['animationsOffDesc']!;
   String get secPatterns => _v['secPatterns']!;
   String get showPatterns => _v['showPatterns']!;
   String get showPatternsDesc => _v['showPatternsDesc']!;
@@ -555,6 +560,9 @@ class AppStrings {
       'motionStandard': 'استاندارد',
       'motionSmooth': 'نرم',
       'motionDynamic': 'پویا',
+      'motionMinimal': 'حداقلی',
+      'animationsOffTitle': 'خاموش کردن همهٔ انیمیشن‌ها',
+      'animationsOffDesc': 'همهٔ انیمیشن‌های برنامه فوراً متوقف می‌شوند',
       'secPatterns': 'الگوهای پس‌زمینه',
       'showPatterns': 'نمایش الگوهای پس‌زمینه',
       'showPatternsDesc': 'الگوهای سبز/قرمز دو طرف همهٔ صفحات',
@@ -793,6 +801,9 @@ class AppStrings {
       'motionStandard': 'Standard',
       'motionSmooth': 'Smooth',
       'motionDynamic': 'Dynamic',
+      'motionMinimal': 'Minimal',
+      'animationsOffTitle': 'Turn off all animations',
+      'animationsOffDesc': 'Stops every animation in the app instantly',
       'secPatterns': 'Background patterns',
       'showPatterns': 'Show background patterns',
       'showPatternsDesc': 'The green/red patterns on every page',
@@ -1028,6 +1039,9 @@ class AppStrings {
       'motionStandard': 'Стандартная',
       'motionSmooth': 'Плавная',
       'motionDynamic': 'Динамичная',
+      'motionMinimal': 'Минимальная',
+      'animationsOffTitle': 'Отключить все анимации',
+      'animationsOffDesc': 'Мгновенно останавливает все анимации приложения',
       'secPatterns': 'Фоновые узоры',
       'showPatterns': 'Показывать фоновые узоры',
       'showPatternsDesc': 'Зелёные/красные узоры по краям всех страниц',
@@ -1260,8 +1274,11 @@ class AppStrings {
       'lookTwo': '样式二',
       'secMotion': '动画',
       'motionStandard': '标准',
-      'motionSmooth': '平滑',
+      'motionSmooth': '柔和',
       'motionDynamic': '动感',
+      'motionMinimal': '极简',
+      'animationsOffTitle': '关闭所有动画',
+      'animationsOffDesc': '立即停止应用中的所有动画',
       'secPatterns': '背景花纹',
       'showPatterns': '显示背景花纹',
       'showPatternsDesc': '所有页面两侧的绿/红花纹',

@@ -64,6 +64,9 @@ abstract final class SettingsKeys {
   /// v4.22 — the background-patterns switch (default ON).
   static const showPatterns = 'aethone.settings.showPatterns';
 
+  /// v4.25 — the master animation kill-switch (default ON).
+  static const animationsEnabled = 'aethone.settings.animationsEnabled';
+
   /// v4.23 — the first-run wizard («صفحه شروع») completed flag; missing
   /// means the onboarding still owes the user a run.
   static const onboardingComplete = 'aethone.onboarding.complete';
@@ -161,6 +164,9 @@ class SettingsPersistence {
         store.animationStyle = MotionStyle.smooth;
       } else if (motion == MotionStyle.dynamic.name) {
         store.animationStyle = MotionStyle.dynamic;
+      } else if (motion == MotionStyle.minimal.name) {
+        // v4.25 — the fourth style joins the picker.
+        store.animationStyle = MotionStyle.minimal;
       }
       // v4.22 — the Aether core fine-grained layer (one JSON blob).
       final coreRaw = prefs.getString(SettingsKeys.coreSettings);
@@ -187,6 +193,10 @@ class SettingsPersistence {
       }
       if (prefs.containsKey(SettingsKeys.showPatterns)) {
         store.showPatterns = prefs.getBool(SettingsKeys.showPatterns)!;
+      }
+      // v4.25 — the master animation kill-switch.
+      if (prefs.containsKey(SettingsKeys.animationsEnabled)) {
+        store.animationsEnabled = prefs.getBool(SettingsKeys.animationsEnabled)!;
       }
       // v4.23 — the onboarding flag.
       store.onboardingComplete =
@@ -298,6 +308,11 @@ class SettingsPersistence {
         await prefs.setString(SettingsKeys.appLocale, locale);
       }
       await prefs.setBool(SettingsKeys.showPatterns, store.showPatterns);
+      // v4.25 — the animation kill-switch rides every snapshot.
+      await prefs.setBool(
+        SettingsKeys.animationsEnabled,
+        store.animationsEnabled,
+      );
       // v4.23 — the wizard flag rides every snapshot so a completed run
       // survives restarts (and mid-flow kills resume rather than restart
       // — the flow re-runs, but each step's persisted picks reload).

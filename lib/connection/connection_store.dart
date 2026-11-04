@@ -278,6 +278,19 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   HomeLook homeLook = HomeLook.one;
   MotionStyle animationStyle = MotionStyle.standard;
 
+  /// v4.25 — the master animation kill-switch (appearance page: «خاموش
+  /// کردن همهٔ انیمیشن‌ها»). When false, EVERY animated surface renders
+  /// without non-essential motion: [effectiveMotionStyle] clamps to
+  /// [MotionStyle.off] regardless of the picked style (the pick itself
+  /// stays remembered — flipping the switch back restores it).
+  bool animationsEnabled = true;
+
+  void setAnimationsEnabled(bool on) {
+    if (animationsEnabled == on) return;
+    animationsEnabled = on;
+    notifyListeners();
+  }
+
   // ---- v4.22 settings sub-pages ----
 
   /// The fine-grained Aether core layer (fragment / TLS / transport /
@@ -338,8 +351,11 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
-  /// Effective style after the OS reduce-motion clamp.
+  /// Effective style after the master kill-switch and the OS
+  /// reduce-motion clamp (in that order — a disabled app never animates,
+  /// whatever the accessibility setting says).
   MotionStyle effectiveMotionStyle(BuildContext context) {
+    if (!animationsEnabled) return MotionStyle.off;
     final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     return reduce ? clampForReduceMotion(animationStyle) : animationStyle;
   }

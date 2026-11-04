@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import '../../../connection/connection_store.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
+import '../../../core/motion.dart';
 import '../../../l10n/app_strings.dart';
 import 'settings_screen.dart';
 import 'settings_controls.dart';
@@ -56,10 +57,15 @@ class SecuritySettingsPage extends StatelessWidget {
             keyId: 'core-log',
             icon: AppAssets.iconInformationCircle,
             title: strings.coreLogTitle,
+            // v4.25 — the style-personal route + the honest pattern state.
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    CoreLogPage(showPatterns: store.showPatterns),
+              aethPageRoute<void>(
+                style: store.effectiveMotionStyle(context),
+                builder: (_) => CoreLogPage(
+                  showPatterns: store.showPatterns,
+                  connected: store.isConnected,
+                  style: store.effectiveMotionStyle(context),
+                ),
               ),
             ),
           ),

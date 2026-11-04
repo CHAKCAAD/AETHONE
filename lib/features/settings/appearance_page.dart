@@ -1,7 +1,14 @@
-/// «تنظیمات ظاهری» — the appearance sub-page (v4.22): the home look
-/// (the two designs of §11.2), the motion style (standard/smooth/dynamic
-/// — the same knob the protocol page's patterns read), and the v4.22
-/// background-patterns switch every page honors.
+/// «تنظیمات ظاهری» — the appearance sub-page: the home look (the two
+/// designs of §11.2), the motion style, and the v4.22 background-patterns
+/// switch every page honors.
+///
+/// v4.25 — the owner's «انیمیشن‌های اختصاصی» round: the style picker now
+/// offers ALL FOUR personalities (استاندارد SILK · نرم TIDE · پویا SPRING ·
+/// حداقلی BLINK — each with its own choreography, see [MotionRecipe]) and
+/// the section gains the master kill-switch row «خاموش کردن همهٔ
+/// انیمیشن‌ها»: flipping it clamps the whole app to [MotionStyle.off]
+/// instantly (the pick itself stays remembered — flipping back restores
+/// it).
 library;
 
 import 'package:flutter/material.dart';
@@ -53,15 +60,35 @@ class AppearanceSettingsPage extends StatelessWidget {
         ),
         const SubSectionGap.headingToCard(),
         SubSectionCard(
-          child: SettingPills<MotionStyle>(
-            keyId: 'motion',
-            options: [
-              (MotionStyle.standard, strings.motionStandard),
-              (MotionStyle.smooth, strings.motionSmooth),
-              (MotionStyle.dynamic, strings.motionDynamic),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // v4.25 — the four styles; each one is a distinct personality
+              // (rise/zoom/curve/stagger/sway all differ — motion.dart).
+              SettingPills<MotionStyle>(
+                keyId: 'motion',
+                options: [
+                  (MotionStyle.standard, strings.motionStandard),
+                  (MotionStyle.smooth, strings.motionSmooth),
+                  (MotionStyle.dynamic, strings.motionDynamic),
+                  (MotionStyle.minimal, strings.motionMinimal),
+                ],
+                selected: store.animationStyle,
+                onSelect: store.setMotionStyle,
+              ),
+              const SubSectionGap.betweenRows(),
+              // v4.25 — the master kill-switch (owner: «یه دکمه هم برای
+              // خاموش کردن همه انیمیشن ها بزار»): ON = every animation in
+              // the app stops instantly, whatever the style pick above.
+              SettingToggleRow(
+                keyId: 'animations-off',
+                icon: AppAssets.iconCloseCircle,
+                title: strings.animationsOffTitle,
+                description: strings.animationsOffDesc,
+                value: !store.animationsEnabled,
+                onChanged: (off) => store.setAnimationsEnabled(!off),
+              ),
             ],
-            selected: store.animationStyle,
-            onSelect: store.setMotionStyle,
           ),
         ),
 

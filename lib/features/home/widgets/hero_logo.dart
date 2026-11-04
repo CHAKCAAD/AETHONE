@@ -87,8 +87,12 @@ class HeroLogo extends StatelessWidget {
   }
 }
 
-/// Slow scale pulse (1.00 → 1.02) that runs ONLY while [connected].
-/// With MotionStyle.off the child renders statically (accessibility clamp).
+/// Slow scale pulse that runs ONLY while [connected] — v4.25: the
+/// tempo and depth are the STYLE'S OWN ([MotionRecipe.heroBreathMs]/
+/// heroBreathAmp): TIDE breathes slower and deeper (3.4 s ±3%), SPRING
+/// quicker and livelier (2.0 s ±2.5%), BLINK barely moves (±0.8%).
+/// With MotionStyle.off the child renders statically (accessibility
+/// clamp).
 class _BreathingWhileConnected extends StatefulWidget {
   const _BreathingWhileConnected({
     required this.connected,
@@ -109,7 +113,7 @@ class _BreathingWhileConnectedState extends State<_BreathingWhileConnected>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2600),
+    duration: Duration(milliseconds: widget.style.recipe.heroBreathMs),
   );
 
   @override
@@ -123,6 +127,9 @@ class _BreathingWhileConnectedState extends State<_BreathingWhileConnected>
   @override
   void didUpdateWidget(covariant _BreathingWhileConnected old) {
     super.didUpdateWidget(old);
+    // v4.25 — a style change mid-session retunes the breath.
+    _controller.duration =
+        Duration(milliseconds: widget.style.recipe.heroBreathMs);
     final animate = widget.connected && widget.style != MotionStyle.off;
     if (animate && !_controller.isAnimating) {
       _controller.repeat(reverse: true);
@@ -143,11 +150,13 @@ class _BreathingWhileConnectedState extends State<_BreathingWhileConnected>
     if (!widget.connected || widget.style == MotionStyle.off) {
       return widget.child;
     }
+    final amp = widget.style.recipe.heroBreathAmp;
+    if (amp <= 0) return widget.child;
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
         final t = Curves.easeInOut.transform(_controller.value);
-        return Transform.scale(scale: 1.0 + 0.02 * t, child: child);
+        return Transform.scale(scale: 1.0 + amp * t, child: child);
       },
       child: widget.child,
     );
@@ -163,10 +172,20 @@ class _BreathingWhileConnectedState extends State<_BreathingWhileConnected>
 /// (they breathe together, like v4.12). It lives BEHIND the central icon in
 /// BOTH looks; the home_screen mounts it only while connected.
 class AuroraBloom extends StatefulWidget {
-  const AuroraBloom({super.key, required this.color, required this.size});
+  const AuroraBloom({
+    super.key,
+    required this.color,
+    required this.size,
+    this.style = MotionStyle.standard,
+  });
 
   final Color color;
   final double size;
+
+  /// v4.25 — the halo's tempo follows the style's recipe (TIDE's ripples
+  /// expand slow and wide, SPRING's race at 2.8 s, SILK keeps the owner's
+  /// approved 3.9 s).
+  final MotionStyle style;
 
   @override
   State<AuroraBloom> createState() => _AuroraBloomState();
@@ -174,18 +193,19 @@ class AuroraBloom extends StatefulWidget {
 
 class _AuroraBloomState extends State<AuroraBloom>
     with TickerProviderStateMixin {
-  /// One ripple phase cycle — every 1/3 of it a new ring is born; each ring
-  /// takes the full 3.9 s to expand and dissolve.
+  /// One ripple phase cycle — every 1/3 of it a new ring is born; each
+  /// ring takes the full cycle to expand and dissolve (the recipe's
+  /// [MotionRecipe.rippleMs]).
   late final AnimationController _ripple = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 3900),
+    duration: Duration(milliseconds: widget.style.recipe.rippleMs),
   );
 
-  /// The 2.6 s breathing phase (the logo pulse and the halo breathe
-  /// together — kept from v4.12).
+  /// The breathing phase (the recipe's hero tempo — the logo pulse and
+  /// the halo breathe together).
   late final AnimationController _breath = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2600),
+    duration: Duration(milliseconds: widget.style.recipe.heroBreathMs),
   );
 
   @override
@@ -193,6 +213,15 @@ class _AuroraBloomState extends State<AuroraBloom>
     super.initState();
     _ripple.repeat();
     _breath.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant AuroraBloom old) {
+    super.didUpdateWidget(old);
+    // v4.25 — a style change mid-session retunes the halo's tempo.
+    _ripple.duration = Duration(milliseconds: widget.style.recipe.rippleMs);
+    _breath.duration =
+        Duration(milliseconds: widget.style.recipe.heroBreathMs);
   }
 
   @override

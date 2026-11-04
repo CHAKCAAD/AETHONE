@@ -48,30 +48,16 @@ import '../home/widgets/pattern_sides.dart';
 import '../settings/subpage_frame.dart'
     show openTelegramChannel, subpageEnter;
 
-/// The family route (fade+slide, the settings/protocol recipe).
+/// The family route — v4.25: the STYLE'S OWN personality via
+/// [aethPageRoute] (was the fixed fade+slide recipe).
 PageRouteBuilder<void> speedTestPageRoute({
   required ConnectionStore store,
   required MotionStyle style,
   SpeedTestEngine? engine,
 }) {
-  return PageRouteBuilder<void>(
-    transitionDuration: motionDuration(style, 380),
-    reverseTransitionDuration: motionDuration(style, 320),
-    pageBuilder: (_, _, _) =>
-        SpeedTestPage(store: store, style: style, engine: engine),
-    transitionsBuilder: (context, animation, _, child) => FadeTransition(
-      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-      child: SlideTransition(
-        position: Tween(
-          begin: const Offset(0, 0.03),
-          end: Offset.zero,
-        ).animate(CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        )),
-        child: child,
-      ),
-    ),
+  return aethPageRoute<void>(
+    style: style,
+    builder: (_) => SpeedTestPage(store: store, style: style, engine: engine),
   );
 }
 
@@ -155,7 +141,10 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
       animation: widget.store,
       builder: (context, _) => Scaffold(
         backgroundColor: AethColors.bgScreen,
+        // v4.25 — the pattern-placement fix: expand keeps the pattern box
+        // at the FULL screen height (see the settings page's Stack).
         body: Stack(
+          fit: StackFit.expand,
           children: [
             // The home patterns behind (the owner's per-page decree),
             // gated by the appearance switch; alive while a test runs —
@@ -169,7 +158,6 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
                     connected: widget.store.isConnected,
                     style: widget.style,
                     active: _state == _RunState.running,
-                    stage: PatternStage.home,
                   ),
                 ),
               ),
@@ -188,24 +176,37 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
                         SizedBox(
                           height: AethGeometry.topSafeExtraGap * _scale(context),
                         ),
-                        subpageEnter(context, 0, const _SpeedTopBar()),
+                        subpageEnter(
+                          context,
+                          widget.style,
+                          0,
+                          const _SpeedTopBar(),
+                        ),
                         _gap(context, AethGeometry.speedGapTopbarToTitle),
-                        subpageEnter(context, 1, const _TitleRow()),
+                        subpageEnter(
+                          context,
+                          widget.style,
+                          1,
+                          const _TitleRow(),
+                        ),
                         _gap(context, AethGeometry.speedGapTitleToDial),
                         subpageEnter(
                           context,
+                          widget.style,
                           2,
                           _DialZone(state: _state, snap: _snap),
                         ),
                         _gap(context, AethGeometry.speedGapDialToCards),
                         subpageEnter(
                           context,
+                          widget.style,
                           3,
                           _StatGrid(snap: _snap, state: _state),
                         ),
                         _gap(context, AethGeometry.speedGapCardsToButton),
                         subpageEnter(
                           context,
+                          widget.style,
                           4,
                           _StartButton(
                             running: _state == _RunState.running,

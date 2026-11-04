@@ -116,12 +116,23 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           final strings = AppStrings.of(context);
           final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
           final duration = motionDuration(style, MotionDurations.page);
+          // v4.25 — the step change follows the STYLE'S OWN recipe:
+          // the slide travel shrinks to a pure fade on BLINK, turns into
+          // a soft zoom on TIDE and springs with an overshoot on SPRING.
+          final r = style.recipe;
+          final stepCurve = style == MotionStyle.off
+              ? Curves.linear
+              : r.blockCurve;
           return Scaffold(
             backgroundColor: AethColors.bgScreen,
+            // v4.25 — the pattern-placement fix: expand keeps the body
+            // (and the pattern box) at the FULL screen height.
             body: Stack(
+              fit: StackFit.expand,
               children: [
-                // The main-page patterns (owner decree), green variant at
-                // the frames' low opacity, gated by the appearance switch.
+                // The main-page patterns (owner decree; v4.25 — the ONE
+                // composition), green variant at the frames' low opacity,
+                // gated by the appearance switch.
                 if (store.showPatterns)
                   Positioned.fill(
                     child: IgnorePointer(
@@ -130,7 +141,6 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                         child: PatternSides(
                           connected: true,
                           style: style,
-                          stage: PatternStage.home,
                         ),
                       ),
                     ),
@@ -141,22 +151,37 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                   switchOutCurve: Curves.easeInCubic,
                   transitionBuilder: (child, anim) {
                     // RTL forward: the incoming page slides in from the
-                    // visual LEFT (the reading direction's "next").
+                    // visual LEFT (the reading direction's "next"); the
+                    // travel is the recipe's (0 on BLINK, springy on
+                    // SPRING, flowing on TIDE).
                     final dx = (_forward ? -0.06 : 0.06) *
                         (MediaQuery.sizeOf(context).width /
-                            AethGeometry.refWidth);
-                    return FadeTransition(
+                            AethGeometry.refWidth) *
+                        (r.blockRise > 0 ? 1 : 0);
+                    Widget node = FadeTransition(
                       opacity: anim,
                       child: SlideTransition(
                         position: anim.drive(
                           Tween(
                             begin: Offset(dx, 0),
                             end: Offset.zero,
-                          ).chain(CurveTween(curve: Curves.easeOutCubic)),
+                          ).chain(CurveTween(curve: stepCurve)),
                         ),
                         child: child,
                       ),
                     );
+                    if (r.blockScaleFrom < 1) {
+                      node = ScaleTransition(
+                        scale: anim.drive(
+                          Tween(
+                            begin: r.blockScaleFrom,
+                            end: 1.0,
+                          ).chain(CurveTween(curve: stepCurve)),
+                        ),
+                        child: node,
+                      );
+                    }
+                    return node;
                   },
                   child: _buildStep(store, strings, s, style),
                 ),

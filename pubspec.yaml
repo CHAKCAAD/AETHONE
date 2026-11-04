@@ -3,7 +3,7 @@ description: >-
   AETHONE — cross-platform VPN client. Flutter UI layer; network engines are
   Aether (Rust, WARP client) and zeptun (Zig, userspace TUN router).
 publish_to: none
-version: 4.24.0+1
+version: 4.25.0+1
 
 environment:
   sdk: ^3.13.0

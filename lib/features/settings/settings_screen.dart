@@ -68,37 +68,20 @@ class SettingsScreen extends StatelessWidget {
   static const String telegramChannelUrl = 'https://t.me/AETHONE';
 
   /// v4.17 — owner settings round #4: «به صفحه و کارت ها انیمیشن ورود و
-  /// خروج اضافه کن». Every page block slides up 22 px + fades on its own
-  /// slice of the ROUTE timeline (the protocol page's [._enter] recipe):
-  /// the entrance cascades block-by-block and the SAME slices retrace on
-  /// pop, so the exit folds the page away gently. Blocks: top bar 0, grid
-  /// rows 1–2, pills 3, headings 4/6, status cards 5, server pills 7.
+  /// خروج اضافه کن». Every page block enters on its own slice of the
+  /// ROUTE timeline; v4.25 — the choreography is the STYLE'S OWN recipe
+  /// (SILK rise / TIDE drift-zoom / SPRING pop / BLINK pure fade / OFF =
+  /// untouched) and the SAME slices retrace on pop, so the exit folds
+  /// the page away gently. Blocks: top bar 0, grid rows 1–2, pills 3,
+  /// headings 4/6, status cards 5, server pills 7, core log 8.
   /// With no route (bare-harness pumps) the child renders untouched.
-  static Widget _enter(BuildContext context, int block, Widget child) {
-    // ModalRoute.of is nullable-returning in the current SDK — no route
-    // (bare-harness pumps) ⇒ render the child untouched.
-    final anim = ModalRoute.of(context)?.animation;
-    if (anim == null) return child;
-    return AnimatedBuilder(
-      animation: anim,
-      builder: (context, _) {
-        final t = anim.value;
-        final start = (block * 0.075).clamp(0.0, 0.45);
-        final bt = Curves.easeOutCubic
-            .transform(Interval(start, start + 0.55).transform(t));
-        if (bt >= 0.999) return child;
-        final s =
-            MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-        return Opacity(
-          opacity: bt,
-          child: Transform.translate(
-            offset: Offset(0, (1 - bt) * 22 * s),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
+  static Widget _enter(
+    BuildContext context,
+    MotionStyle style,
+    int block,
+    Widget child,
+  ) =>
+      motionCascade(context, style, block, child);
 
   Future<void> _openTelegram() async {
     final uri = Uri.parse(telegramChannelUrl);
@@ -107,22 +90,35 @@ class SettingsScreen extends StatelessWidget {
   }
 
   /// v4.22 — pushes one of the eight sub-pages (the six cards, the two
-  /// family pills, the status cards all land here). Plain MaterialPageRoute:
-  /// the sub-pages' own entrance cascade rides its route animation.
+  /// family pills, the status cards all land here). v4.25 — every push
+  /// rides [aethPageRoute]: the page enters with the SELECTED STYLE'S own
+  /// personality (SILK fade-rise / TIDE zoom-dissolve / SPRING pop /
+  /// BLINK fade / OFF instant cut).
   void _openSubPage(BuildContext context, Widget page) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => page),
+      aethPageRoute<void>(
+        style: store.effectiveMotionStyle(context),
+        builder: (_) => page,
+      ),
     );
   }
 
   /// v4.21 — opens the core diagnostics page (the captured stderr of both
   /// engines — owner: «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا
   /// بهتر بتونیم دیباگ کنیم»). v4.22 — carries the appearance switch so
-  /// the page honors the patterns-off preference too.
+  /// the page honors the patterns-off preference too. v4.25 — the honest
+  /// connected state + the effective motion style ride along (the page's
+  /// patterns were hardcoded red/static — state honesty, the app's #1
+  /// rule), and the push itself is style-personal.
   void _openCoreLog(BuildContext context) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => CoreLogPage(showPatterns: store.showPatterns),
+      aethPageRoute<void>(
+        style: store.effectiveMotionStyle(context),
+        builder: (_) => CoreLogPage(
+          showPatterns: store.showPatterns,
+          connected: store.isConnected,
+          style: store.effectiveMotionStyle(context),
+        ),
       ),
     );
   }
@@ -138,23 +134,34 @@ class SettingsScreen extends StatelessWidget {
 
     // Subscribed to the store: the status cards + patterns re-render on
     // every preference/state change (same pattern as the home screen).
+    // v4.25 — the effective style (the master kill-switch clamps to OFF)
+    // drives the cascade AND the small controls (MotionScope below).
+    final style = store.effectiveMotionStyle(context);
     return AnimatedBuilder(
       animation: store,
       builder: (context, _) => Scaffold(
         backgroundColor: AethColors.bgScreen,
+        // v4.25 — THE pattern-placement fix: the default `StackFit.loose`
+        // let the Stack collapse to the CONTENT height (~855 of 874 on the
+        // reference frame), so the `Positioned.fill` pattern box was SHORT
+        // and the whole composition shifted up — the owner's «مکان درستی
+        // نداره باید دقیقا مکانش مثل صفحه اصلی باشه». `StackFit.expand`
+        // pins the body (and with it the pattern) to the FULL screen on
+        // every device; the ScrollView simply scrolls inside it.
         body: Stack(
+          fit: StackFit.expand,
           children: [
             // v4.21 — the owner's decree: the settings page carries the
             // HOME screen's patterns, exactly the same, same position
             // («از پترن های صفحه اصلی برای سایر صفحات مثل انتخاب پروتکل و
-            // تنطیمات استفاده کن دقیقا همونا با همون مکان»). v4.22 —
-            // gated by the appearance switch (bare bg when off).
+            // تنطیمات استفاده کن دقیقا همونا با همون مکان»; v4.25 — one
+            // single composition, no per-page variant left in the code).
+            // v4.22 — gated by the appearance switch (bare bg when off).
             if (store.showPatterns)
               Positioned.fill(
                 child: PatternSides(
                   connected: store.isConnected,
-                  style: store.animationStyle,
-                  stage: PatternStage.home,
+                  style: style,
                 ),
               ),
             // v4.10 lesson (main-screen defect): under the fa/RTL locale a
@@ -169,86 +176,89 @@ class SettingsScreen extends StatelessWidget {
                     padding: EdgeInsets.symmetric(
                       horizontal: AethGeometry.pageHPadding * s,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(height: AethGeometry.topSafeExtraGap * s),
-                        _enter(context, 0, _SettingsTopBar(
-                          onInfo: _openTelegram,
-                          onBack: () => Navigator.of(context).maybePop(),
-                        )),
-                        SizedBox(height: 22 * s),
-                        _enter(context, 1, _SixCardGrid(
-                          onCardTap: (i) => _openSubPage(
-                            context,
-                            switch (i) {
-                              0 => RoutingSettingsPage(store: store),
-                              1 => GeneralSettingsPage(store: store),
-                              2 => ConnectionSettingsPage(store: store),
-                              3 => LanguageSettingsPage(store: store),
-                              4 => AppearanceSettingsPage(store: store),
-                              _ => SecuritySettingsPage(store: store),
-                            },
+                    child: MotionScope(
+                      style: style,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(height: AethGeometry.topSafeExtraGap * s),
+                          _enter(context, style, 0, _SettingsTopBar(
+                            onInfo: _openTelegram,
+                            onBack: () => Navigator.of(context).maybePop(),
+                          )),
+                          SizedBox(height: 22 * s),
+                          _enter(context, style, 1, _SixCardGrid(
+                            onCardTap: (i) => _openSubPage(
+                              context,
+                              switch (i) {
+                                0 => RoutingSettingsPage(store: store),
+                                1 => GeneralSettingsPage(store: store),
+                                2 => ConnectionSettingsPage(store: store),
+                                3 => LanguageSettingsPage(store: store),
+                                4 => AppearanceSettingsPage(store: store),
+                                _ => SecuritySettingsPage(store: store),
+                              },
+                            ),
+                          )),
+                          SizedBox(height: AethGeometry.settingsPillGap * s),
+                          _enter(context, style, 3, _ProtocolPills(
+                            textDir: appDir,
+                            onPsiphon: () => _openSubPage(
+                              context,
+                              PsiphonSettingsPage(store: store),
+                            ),
+                            onTor: () => _openSubPage(
+                              context,
+                              TorSettingsPage(store: store),
+                            ),
+                          )),
+                          SizedBox(
+                            height: AethGeometry.settingsHeadingGapFromPills * s,
                           ),
-                        )),
-                        SizedBox(height: AethGeometry.settingsPillGap * s),
-                        _enter(context, 3, _ProtocolPills(
-                          textDir: appDir,
-                          onPsiphon: () => _openSubPage(
-                            context,
-                            PsiphonSettingsPage(store: store),
+                          _enter(context, style, 4, _SectionHeading(
+                            icon: AppAssets.iconMenuFries,
+                            title: strings.settingsAdvancedStatus,
+                          )),
+                          SizedBox(
+                            height: AethGeometry.settingsHeadingGapToCards * s,
                           ),
-                          onTor: () => _openSubPage(
-                            context,
-                            TorSettingsPage(store: store),
+                          _enter(context, style, 5, _StatusCards(
+                            store: store,
+                            onKillSwitch: () => _openSubPage(
+                              context,
+                              SecuritySettingsPage(store: store),
+                            ),
+                            onRoutingArea: () => _openSubPage(
+                              context,
+                              RoutingSettingsPage(store: store),
+                            ),
+                            onProtocol: () => _openSubPage(
+                              context,
+                              ConnectionSettingsPage(store: store),
+                            ),
+                          )),
+                          SizedBox(
+                            height: AethGeometry.settingsHeading2GapToServer * s,
                           ),
-                        )),
-                        SizedBox(
-                          height: AethGeometry.settingsHeadingGapFromPills * s,
-                        ),
-                        _enter(context, 4, _SectionHeading(
-                          icon: AppAssets.iconMenuFries,
-                          title: strings.settingsAdvancedStatus,
-                        )),
-                        SizedBox(
-                          height: AethGeometry.settingsHeadingGapToCards * s,
-                        ),
-                        _enter(context, 5, _StatusCards(
-                          store: store,
-                          onKillSwitch: () => _openSubPage(
-                            context,
-                            SecuritySettingsPage(store: store),
+                          _enter(context, style, 6, _SectionHeading(
+                            icon: AppAssets.iconSituation1,
+                            title: strings.settingsMainServer,
+                          )),
+                          SizedBox(
+                            height: AethGeometry.settingsHeadingGapToCards * s,
                           ),
-                          onRoutingArea: () => _openSubPage(
-                            context,
-                            RoutingSettingsPage(store: store),
-                          ),
-                          onProtocol: () => _openSubPage(
-                            context,
-                            ConnectionSettingsPage(store: store),
-                          ),
-                        )),
-                        SizedBox(
-                          height: AethGeometry.settingsHeading2GapToServer * s,
-                        ),
-                        _enter(context, 6, _SectionHeading(
-                          icon: AppAssets.iconSituation1,
-                          title: strings.settingsMainServer,
-                        )),
-                        SizedBox(
-                          height: AethGeometry.settingsHeadingGapToCards * s,
-                        ),
-                        _enter(context, 7, const _ServerPills()),
-                        SizedBox(height: 22 * s),
-                        // v4.21 — the core diagnostics entry (owner:
-                        // «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا
-                        // بهتر بتونیم دیباگ کنیم») — the full captured
-                        // stderr of the engines, tailed live.
-                        _enter(context, 8, _CoreLogCard(
-                          onTap: () => _openCoreLog(context),
-                        )),
-                        SizedBox(height: 30 * s),
-                      ],
+                          _enter(context, style, 7, const _ServerPills()),
+                          SizedBox(height: 22 * s),
+                          // v4.21 — the core diagnostics entry (owner:
+                          // «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا
+                          // بهتر بتونیم دیباگ کنیم») — the full captured
+                          // stderr of the engines, tailed live.
+                          _enter(context, style, 8, _CoreLogCard(
+                            onTap: () => _openCoreLog(context),
+                          )),
+                          SizedBox(height: 30 * s),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -974,10 +984,22 @@ class _CoreLogCard extends StatelessWidget {
 /// open, supports copy (share sheet is out of scope — Clipboard + a toast
 /// is honest) and clear.
 class CoreLogPage extends StatefulWidget {
-  const CoreLogPage({super.key, this.showPatterns = true});
+  const CoreLogPage({
+    super.key,
+    this.showPatterns = true,
+    this.connected = false,
+    this.style = MotionStyle.standard,
+  });
 
   /// v4.22 — the appearance switch (bare bg when off, like every page).
   final bool showPatterns;
+
+  /// v4.25 — the HONEST connection state + the effective motion style:
+  /// the page's patterns used to be hardcoded red/static, which broke the
+  /// app's #1 rule (animation reflects state) whenever the log was opened
+  /// from a CONNECTED session.
+  final bool connected;
+  final MotionStyle style;
 
   @override
   State<CoreLogPage> createState() => _CoreLogPageState();
@@ -1034,16 +1056,19 @@ class _CoreLogPageState extends State<CoreLogPage> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: AethColors.bgScreen,
+        // v4.25 — the pattern-placement fix (see the settings page's Stack):
+        // expand keeps the pattern box at the FULL screen height.
         body: Stack(
+          fit: StackFit.expand,
           children: [
-            // The home patterns behind (v4.21 — same stage as every page;
-            // v4.22 — honors the appearance switch).
+            // The home patterns behind (v4.21 — same composition as every
+            // page; v4.22 — honors the appearance switch; v4.25 — the
+            // honest connected state + the effective motion style).
             if (widget.showPatterns)
-              const Positioned.fill(
+              Positioned.fill(
                 child: PatternSides(
-                  connected: false,
-                  style: MotionStyle.off,
-                  stage: PatternStage.home,
+                  connected: widget.connected,
+                  style: widget.style,
                 ),
               ),
             SafeArea(

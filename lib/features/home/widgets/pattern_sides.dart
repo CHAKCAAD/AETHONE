@@ -5,40 +5,36 @@
 /// the single worst visual defect of the first preview build).
 ///
 /// The canvases render at [AethGeometry.patternScale] (0.6) of the screen
-/// width (v4.12 — owner: «پترن‌های چپ و راست رو ۴۰ درصد کوچک‌تر کن»). The
-/// placement is PER-SCREEN since v4.17 ([PatternStage]):
+/// width (v4.12 — owner: «پترن‌های چپ و راست رو ۴۰ درصد کوچک‌تر کن»).
 ///
-///  * [PatternStage.settings] — the v4.12/v4.15 composition: the LEFT art
-///    is GLUED to the screen bottom (owner settings round #4 + v4.17
-///    round #3: «پترن پس زمینه سمت چپ رو به پایین بچسبون» — the art's end
-///    runs ~13 ref px BELOW the glass so no cut edge is ever visible,
-///    anchor [AethGeometry.patternLeftAnchorBottom]); the RIGHT art hangs
-///    from the screen top (anchor [AethGeometry.patternRightAnchorTop]).
-///
-///  * [PatternStage.home] — v4.17 owner round: «پترن سمت چپ رو بیار بالا تر
-///    در حدی که حدود ۱۰٪ پایین‌تر از وسط صفحه باشه» + «پترن سمت راست رو
-///    بیار پایین تر در حدی که حدود ۱۰٪ بالاتر از وسط صفحه باشه». The ART
-///    (not the canvas) is placed with the measured art bounds
-///    ([AethGeometry.patternLeftArtTopRow] etc.): the LEFT art is centred
-///    at 60% of the screen height (10% below the middle), the RIGHT art's
-///    bottom edge lands at 40% (10% above the middle) — the diagonal frame
-///    the reference screens show, computed from the LIVE height so it holds
-///    on every device.
+/// v4.25 — ONE composition for EVERY page (the owner's twin decrees:
+/// «از پترن های صفحه اصلی برای سایر صفحات مثل انتخاب پروتکل و تنطیمات
+/// استفاده کن دقیقا همونا با همون مکان» and «مکانش دقیقا مثل صفحه اصلی
+/// باشه»): the v4.17 per-screen [PatternStage] split is RETIRED — the old
+/// edge-glued settings variant could still ship in a stale build and read
+/// as "wrong place"; now there is a single code path and it cannot diverge.
+/// The ART (not the canvas) is placed with the measured art bounds
+/// ([AethGeometry.patternLeftArtTopRow] etc.): the LEFT art is centred at
+/// 60% of the screen height (10% below the middle — owner v4.17: «پترن سمت
+/// چپ رو بیار بالا تر در حدی که حدود ۱۰٪ پایین‌تر از وسط صفحه باشه»),
+/// the RIGHT art's bottom edge lands at 40% (10% above the middle — «پترن
+/// سمت راست رو بیار پایین تر در حدی که حدود ۱۰٪ بالاتر از وسط صفحه
+/// باشه») — the diagonal frame the reference screens show, computed from
+/// the LIVE height so it holds on every device.
 ///
 /// The color change is animated as a crossfade between the two artwork
 /// variants (owner: «با انیمیشن به رنگ سبز تغییر پیدا میکنند»).
 ///
 /// While [active] (the engine walking OR the tunnel up — home only) the
-/// canvases come alive: a slow 6.5 s VERTICAL drift (±7 ref px,
-/// counter-phased left↔right) plus a gentle luminance breath (opacity
-/// 0.88 ↔ 1.00). v4.17 — owner home round #4: «انیمیشن پترن ها ... باعث
-/// میشه از صفحه بیرون بزنند. انیمیشن رو عوض کن و یا حالتش رو بالا به پایین
-/// کن (در حال حاضر به چپ و راست میرن)» — the v4.15 HORIZONTAL sway is
-/// turned to the vertical axis: with the v4.17 floating anchors neither art
-/// touches a screen edge, so an up-down drift can never push ink off-screen
-/// (the old horizontal sway slid the edge-hugging art out of view). The
-/// settings page keeps [active] = false (static, as before). MotionStyle.off
-/// keeps them static (accessibility clamp).
+/// canvases come alive: a slow VERTICAL drift plus a gentle luminance
+/// breath — v4.25 makes the drift the STYLE'S OWN tempo ([MotionRecipe]):
+/// SILK 6.5 s ±7 px · TIDE 9.5 s ±11 px (slow, wide, deep breath) ·
+/// SPRING 4.2 s ±9 px (a quick bob) · BLINK ±3 px (barely there) ·
+/// OFF static. v4.17 — the drift runs on the VERTICAL axis (owner home
+/// round #4: the old horizontal sway slid the edge-hugging art out of
+/// view; with the floating anchors neither art touches a screen edge, so
+/// an up-down drift can never push ink off-screen). MotionStyle.off keeps
+/// them static (accessibility clamp).
 library;
 
 import 'dart:math' as math;
@@ -49,29 +45,22 @@ import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 
-/// Which composition the patterns follow (v4.17).
-enum PatternStage { home, settings }
-
 class PatternSides extends StatefulWidget {
   const PatternSides({
     super.key,
     required this.connected,
     required this.style,
     this.active = false,
-    this.stage = PatternStage.home,
   });
 
   final bool connected;
   final MotionStyle style;
 
-  /// v4.15 #5 — true while the patterns should be alive (engine walking or
-  /// connected). The settings page keeps the default `false` (static, as
-  /// before — the owner asked for the motion on the HOME screen).
+  /// True while the patterns should be alive (engine walking or
+  /// connected). The settings pages keep the default `false` (static —
+  /// the owner asked for the motion on the HOME screen; the speed-test
+  /// page passes its own running state).
   final bool active;
-
-  /// v4.17 — home floats the arts around the middle band; settings keeps
-  /// the v4.12/v4.15 edge-glued composition.
-  final PatternStage stage;
 
   @override
   State<PatternSides> createState() => _PatternSidesState();
@@ -79,13 +68,9 @@ class PatternSides extends StatefulWidget {
 
 class _PatternSidesState extends State<PatternSides>
     with SingleTickerProviderStateMixin {
-  static const Duration _swayPeriod = Duration(milliseconds: 6500);
-  static const double _swayAmpY = 7; // ref px
-  static const double _breathFloor = 0.88;
-
   late final AnimationController _sway = AnimationController(
     vsync: this,
-    duration: _swayPeriod,
+    duration: Duration(milliseconds: widget.style.recipe.swayPeriodMs),
   );
 
   @override
@@ -97,9 +82,11 @@ class _PatternSidesState extends State<PatternSides>
   @override
   void didUpdateWidget(covariant PatternSides old) {
     super.didUpdateWidget(old);
-    if (old.active != widget.active ||
-        old.style != widget.style ||
-        old.stage != widget.stage) {
+    if (old.active != widget.active || old.style != widget.style) {
+      // The recipe's tempo can differ between styles — retune the live
+      // controller so a mid-session style change re-times the drift.
+      _sway.duration =
+          Duration(milliseconds: widget.style.recipe.swayPeriodMs);
       _sync();
     }
   }
@@ -129,6 +116,7 @@ class _PatternSidesState extends State<PatternSides>
   @override
   Widget build(BuildContext context) {
     final duration = motionDuration(widget.style, MotionDurations.state);
+    final recipe = widget.style.recipe;
     return LayoutBuilder(
       builder: (context, box) {
         final w = box.maxWidth;
@@ -141,25 +129,14 @@ class _PatternSidesState extends State<PatternSides>
         final rightW = w * AethGeometry.patternScale;
         final rightH = rightW * AethGeometry.patternRightAspect;
 
-        final double leftTop;
-        final double rightTop;
-        switch (widget.stage) {
-          case PatternStage.settings:
-            // v4.12/v4.15 composition: left art glued to the screen bottom
-            // (its end runs below the glass — never a visible cut), right
-            // art hanging from the top.
-            leftTop = h - leftH * AethGeometry.patternLeftAnchorBottom;
-            rightTop = -rightH * AethGeometry.patternRightAnchorTop;
-          case PatternStage.home:
-            // v4.17 — the ART bands around the middle, from the LIVE height:
-            //   LEFT  : art centred at 0.60h (10% below the middle).
-            //   RIGHT : art bottom edge at 0.40h (10% above the middle).
-            const leftArtMidRow = AethGeometry.patternLeftArtTopRow +
-                AethGeometry.patternLeftArtRows / 2;
-            leftTop = 0.60 * h - leftArtMidRow * leftH / 1232;
-            rightTop = 0.40 * h -
-                AethGeometry.patternRightArtBottomRow * rightH / 1178;
-        }
+        // v4.25 — the ONE composition (the v4.17 home placement, from the
+        // LIVE height): the LEFT art centred at 0.60h (10% below the
+        // middle), the RIGHT art's bottom edge at 0.40h (10% above it).
+        const leftArtMidRow = AethGeometry.patternLeftArtTopRow +
+            AethGeometry.patternLeftArtRows / 2;
+        final leftTop = 0.60 * h - leftArtMidRow * leftH / 1232;
+        final rightTop =
+            0.40 * h - AethGeometry.patternRightArtBottomRow * rightH / 1178;
 
         return IgnorePointer(
           child: Stack(
@@ -173,8 +150,8 @@ class _PatternSidesState extends State<PatternSides>
                 child: _Alive(
                   controller: _sway,
                   phase: 0.0,
-                  ampY: _swayAmpY * s,
-                  breathFloor: _breathFloor,
+                  ampY: recipe.swayAmpRef * s,
+                  breathFloor: recipe.swayBreathFloor,
                   child: AnimatedSwitcher(
                     duration: duration,
                     child: Image.asset(
@@ -198,8 +175,8 @@ class _PatternSidesState extends State<PatternSides>
                 child: _Alive(
                   controller: _sway,
                   phase: math.pi, // counter-phased to the left canvas
-                  ampY: _swayAmpY * s,
-                  breathFloor: _breathFloor,
+                  ampY: recipe.swayAmpRef * s,
+                  breathFloor: recipe.swayBreathFloor,
                   child: AnimatedSwitcher(
                     duration: duration,
                     child: Image.asset(
@@ -223,9 +200,9 @@ class _PatternSidesState extends State<PatternSides>
   }
 }
 
-/// Applies the v4.17 sway (dy — VERTICAL, owner home round #4) + luminance
-/// breath to one pattern canvas. t = 0 ⇒ identity, so a stopped controller
-/// renders the static pose.
+/// Applies the vertical drift + luminance breath to one pattern canvas,
+/// timed by the style's own recipe. t = 0 ⇒ identity, so a stopped
+/// controller renders the static pose.
 class _Alive extends StatelessWidget {
   const _Alive({
     required this.controller,

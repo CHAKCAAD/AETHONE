@@ -51,22 +51,18 @@ import '../../../l10n/app_strings.dart';
 import '../widgets/pattern_sides.dart';
 import '../widgets/top_bar.dart';
 
-/// Pushes the protocol-selection page. The fade + internal cascade both
-/// ride the route animation so entry, pop and system-back share one
-/// timeline (the sheet's recipe, kept per the owner's «انیمیشن های فعلی رو
-/// حذف نکن»).
+/// Pushes the protocol-selection page. v4.25 — the route itself is the
+/// STYLE'S OWN personality via [aethPageRoute] (SILK fade-rise / TIDE
+/// zoom-dissolve / SPRING pop / BLINK fade / OFF instant cut); the
+/// internal block cascade rides the same timeline (the sheet's recipe,
+/// kept per the owner's «انیمیشن های فعلی رو حذف نکن»).
 PageRouteBuilder<void> protocolPageRoute({
   required ConnectionStore store,
   required MotionStyle style,
 }) {
-  return PageRouteBuilder<void>(
-    transitionDuration: motionDuration(style, 380),
-    reverseTransitionDuration: motionDuration(style, 320),
-    pageBuilder: (_, _, _) => ProtocolPage(store: store, style: style),
-    transitionsBuilder: (context, animation, _, child) => FadeTransition(
-      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-      child: child,
-    ),
+  return aethPageRoute<void>(
+    style: style,
+    builder: (_) => ProtocolPage(store: store, style: style),
   );
 }
 
@@ -154,18 +150,23 @@ class _ProtocolPageState extends State<ProtocolPage> {
             final s =
                 MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
             return Stack(
+              // v4.25 — the pattern-placement fix: expand keeps the root
+              // (and the `Positioned.fill` pattern box) at the FULL screen
+              // height — the loose default collapsed it to the content
+              // height and the composition drifted (the owner's decree).
+              fit: StackFit.expand,
               children: [
                 // v4.21 — the owner's decree: the OTHER pages carry the
                 // home screen's patterns, exactly the same, same position
                 // («از پترن های صفحه اصلی برای سایر صفحات مثل انتخاب پروتکل
-                // و تنطیمات استفاده کن دقیقا همونا با همون مکان»). v4.22 —
-                // gated by the appearance switch (bare bg when off).
+                // و تنطیمات استفاده کن دقیقا همونا با همون مکان»; v4.25 —
+                // one single composition, no per-page variant left).
+                // v4.22 — gated by the appearance switch (bare bg when off).
                 if (widget.store.showPatterns)
                   Positioned.fill(
                     child: PatternSides(
                       connected: widget.store.isConnected,
-                      style: widget.store.animationStyle,
-                      stage: PatternStage.home,
+                      style: widget.store.effectiveMotionStyle(context),
                     ),
                   ),
                 SafeArea(
@@ -384,13 +385,18 @@ class _ProtocolPageState extends State<ProtocolPage> {
   }
 
   /// The stagger wrapper (kept from the sheet — owner: «انیمیشن های فعلی رو
-  /// حذف نکن»): block [i] slides up 22px + fades on its own slice of the
-  /// route timeline (starts i*0.075, 0.55 wide, easeOutCubic). On reverse
-  /// the same slices retrace — the page folds away gently.
+  /// حذف نکن»): block [i] enters on its own slice of the route timeline.
+  /// v4.25 — the choreography is the STYLE'S OWN recipe: SILK rises 22 px,
+  /// TIDE drifts up 34 px out of a soft zoom, SPRING pops from 90% with an
+  /// overshoot, BLINK pure-fades, OFF renders untouched. On reverse the
+  /// same slices retrace — the page folds away gently.
   Widget _enter(double t, int block, Widget child) {
-    final start = (block * 0.075).clamp(0.0, 0.45);
-    final bt =
-        Curves.easeOutCubic.transform(Interval(start, start + 0.55).transform(t));
+    final style = widget.style;
+    if (style == MotionStyle.off) return child;
+    final r = style.recipe;
+    final start = (block * r.staggerStep).clamp(0.0, 0.45);
+    final bt = r.blockCurve
+        .transform(Interval(start, start + r.staggerSpan).transform(t));
     if (bt >= 0.999) return child;
 
     // The animation must live INSIDE the Positioned (ParentData rule:
@@ -399,13 +405,20 @@ class _ProtocolPageState extends State<ProtocolPage> {
     final pd = child is Positioned ? child : null;
     final inner = pd?.child ?? child;
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final animated = Opacity(
-      opacity: bt,
-      child: Transform.translate(
-        offset: Offset(0, (1 - bt) * 22 * s),
-        child: inner,
-      ),
-    );
+    Widget animated = inner;
+    if (r.blockRise > 0) {
+      animated = Transform.translate(
+        offset: Offset(0, (1 - bt) * r.blockRise * s),
+        child: animated,
+      );
+    }
+    if (r.blockScaleFrom < 1) {
+      animated = Transform.scale(
+        scale: r.blockScaleFrom + (1 - r.blockScaleFrom) * bt,
+        child: animated,
+      );
+    }
+    animated = Opacity(opacity: bt, child: animated);
     if (pd == null) return animated;
     return Positioned(
       left: pd.left,
