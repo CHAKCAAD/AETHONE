@@ -30,6 +30,24 @@
 ///    instance's late `down/destroy` can no longer kill the next walk;
 ///  * the connect walk waits for the previous session's listener port to
 ///    actually come free before starting the new core (bind-race guard).
+///
+/// v4.26 connection-logic round (owner device-test round 4 — «منطق اتصال رو
+/// چک کن و عملکرد برنامه رو طبق منطق اتصال اصلاح کن»):
+///  * WALK GENERATIONS replace the boolean `_disconnecting` cancellation —
+///    a cancelled walk can never resume, never emit a late failure, never
+///    kill the NEXT session's engines, and a cancel during the walk's own
+///    startup cleanup can no longer be LOST (the old bug established a
+///    tunnel while the UI showed «disconnected»);
+///  * the job id is PROCESS-DURABLE (Kotlin companion): a recreated
+///    isolate adopts it on resync, so a disconnect after reopening the app
+///    actually CANCELS the core (no more orphaned listener blocking the
+///    next connect until a force-close);
+///  * the resume sets the holder identity BEFORE its probe (a disconnect
+///    during the resume probe used to stop the core hold instead of the
+///    VPN service and left the tunnel running);
+///  * the expected `down: destroy` of OUR OWN stop is filtered (no spurious
+///    failed screen after a clean disconnect);
+///  * the stats ticker is generation-scoped and non-reentrant.
 library;
 
 import 'dart:async';
@@ -413,6 +431,42 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// «در حالت تونل … ارور tunnelStartFailed / destroy»).
   int _tunnelSession = 0;
 
+  /// v4.26 — the tunnel session WE tore down ourselves (a user disconnect
+  /// or a walk cleanup). The service's asynchronous `onDestroy` emits its
+  /// `down: destroy` event whenever the system gets around to processing
+  /// the stop — which can land long after [disconnect] already finished and
+  /// reset `_disconnecting`. Without this stamp that late event surfaced as
+  /// a spurious `failed(tunnelDown)` right after a clean disconnect (owner
+  /// device-test round 4).
+  int? _tornDownTunnelSession;
+
+  /// v4.26 — monotonic WALK generation. Every user action (connect or
+  /// disconnect) bumps it; a walk captures the value at its start and is
+  /// STALE the moment the field moves. This replaces the old boolean
+  /// `_disconnecting` walk-cancellation, whose flag was reset by the
+  /// disconnect's own completion and wiped again by the next connect:
+  ///  * a cancelled walk kept polling for up to its full budget (120 s
+  ///    listener / 360 s tor probe) and then emitted a late `failed`;
+  ///  * its failure-path cleanup could STOP THE NEXT SESSION's service and
+  ///    cancel its job (the «retry after cancel randomly dies» bug);
+  ///  * worst of all, a cancel landing during the walk's own startup
+  ///    cleanup was LOST — `_disconnecting` was already reset when the
+  ///    walk resumed, so it went on to startVpn + coreStart and CONNECTED
+  ///    anyway: a live tunnel with the UI showing «disconnected» that only
+  ///    a force-close could end (owner: «فقط اتصال هسته اول قطع میشه و
+  ///    همچنان تونل برقراره»).
+  int _walkGeneration = 0;
+
+  /// True when [gen] is no longer the live walk generation.
+  bool _stale(int gen) => gen != _walkGeneration;
+
+  /// v4.26 — re-entrancy guard for the 5 s stats ticker (a 20 s probe used
+  /// to stack up to four concurrent probes on one core).
+  bool _ticking = false;
+
+  /// The generation the current ticker belongs to (dropped with its walk).
+  int? _tickerGeneration;
+
   EngineConfigSource? _config;
   AetherCoreApi? _core;
   int? _jobId;
@@ -448,23 +502,32 @@ class PlatformEngineAdapter implements EngineAdapter {
 
   @override
   Future<void> connect() async {
-    if (_connecting) return;
+    // v4.26 — a fresh user intent supersedes ANY residue: the generation
+    // bump invalidates a zombie walk from an already-cancelled session
+    // (the store's single-flight guard means the only walk that can still
+    // be unwinding here is one the user cancelled). There is deliberately
+    // NO `_connecting` early-return any more: that guard used to swallow
+    // the reconnect-after-cancel SILENTLY while the store had already
+    // entered `starting` — the app hung on «در حال اتصال» forever.
+    final gen = ++_walkGeneration;
     _connecting = true;
-    _disconnecting = false;
     _probeStrikes = 0;
     _coreFailureDuringStart = null;
     try {
-      await _connectInner();
+      await _connectInner(gen);
     } on AetherFfiException catch (e) {
-      _emitFail(e.code, e.message);
+      if (!_stale(gen)) _emitFail(e.code, e.message);
     } catch (e) {
-      _emitFail('engineException', e.toString());
+      if (!_stale(gen)) _emitFail('engineException', e.toString());
     } finally {
-      _connecting = false;
+      // Only the LIVE walk may clear the flag — a stale walk's finally
+      // must not clobber a newer session's marker (event filtering reads
+      // it in _onPlatformCall).
+      if (!_stale(gen)) _connecting = false;
     }
   }
 
-  Future<void> _connectInner() async {
+  Future<void> _connectInner(int gen) async {
     final config = _config;
     if (config == null) {
       _emitFail('notBound', 'the adapter was never bound to a config source');
@@ -478,6 +541,12 @@ class PlatformEngineAdapter implements EngineAdapter {
     // died instantly on "address already in use".
     final hadPreviousSession = _jobId != null;
     await _hardCleanup();
+    // v4.26 — THE LOST-CANCEL FIX: a cancel that lands while this walk is
+    // parked in the cleanup above (or in the permission round-trip below)
+    // has already bumped the generation; the walk dies HERE, before any
+    // startVpn/coreStart — the old boolean flag was already reset by then
+    // and the walk went on to establish a tunnel nobody owned.
+    if (_stale(gen)) return;
 
     // v4.21 — the v4.20 chain/leg split is REVERTED to the single-knob
     // selection (owner decree; the WARP leg under a family mode stays the
@@ -498,12 +567,14 @@ class PlatformEngineAdapter implements EngineAdapter {
     // SOCKS port actually refuses connections before the new coreStart
     // (the old job's abort is asynchronous on the Rust runtime).
     if (hadPreviousSession) {
-      await _waitForPortFree(_activePort);
+      await _waitForPortFree(gen, _activePort);
+      if (_stale(gen)) return;
     }
 
     // --- 1. VPN permission (tunnel mode only) — asked BEFORE any core work
     // so a denial wastes no registration. The store is in `starting`.
-    if (tunnel && !await _ensureVpnPermission()) {
+    if (tunnel && !await _ensureVpnPermission(gen)) {
+      if (_stale(gen)) return; // cancelled mid-dialog — cancel owns the end
       if (!_disconnecting) {
         _emitFail('vpnPermissionDenied', 'the VPN permission was not granted');
       } else {
@@ -511,6 +582,7 @@ class PlatformEngineAdapter implements EngineAdapter {
       }
       return;
     }
+    if (_stale(gen)) return;
 
     // --- 1b. v4.20 (tunnel mode): the VpnService comes up FIRST, before the
     // core work. A foreground-service start is only legal while the app is
@@ -522,34 +594,45 @@ class PlatformEngineAdapter implements EngineAdapter {
     // greeting is held), so bringing the TUN up early is safe — it is the
     // standard "connecting…" state every VPN app shows.
     if (tunnel) {
-      _tunnelUp = Completer<bool>();
+      // v4.26 — the walk holds its completer in a LOCAL: a concurrent
+      // disconnect completes/nulls the FIELD, and the old `_tunnelUp!`
+      // re-read crashed the walk with a null-check TypeError that raced
+      // the cancel's terminal state.
+      final tunnelUp = Completer<bool>();
+      _tunnelUp = tunnelUp;
       _tunnelDownReason = null;
       _tunnelAlive = false;
       _tunnelSession++; // v4.21 — events from older sessions are dropped
+      _tornDownTunnelSession = null; // v4.26 — this session is live
       try {
         await _channel.invokeMethod<void>('startVpn', {
           'port': _activePort,
           'session': _tunnelSession,
         });
       } on PlatformException catch (e) {
-        await _hardCleanup();
-        _emitFail('vpnStartFailed', '${e.code}: ${e.message}');
+        if (!_stale(gen)) {
+          await _hardCleanup();
+          _emitFail('vpnStartFailed', '${e.code}: ${e.message}');
+        }
         return;
       } on MissingPluginException {
-        await _hardCleanup();
-        _emitFail(
-          'platformBridgeMissing',
-          'the aethone/engine platform channel is not available in this build',
-        );
+        if (!_stale(gen)) {
+          await _hardCleanup();
+          _emitFail(
+            'platformBridgeMissing',
+            'the aethone/engine platform channel is not available in this build',
+          );
+        }
         return;
       }
-      final up = await _tunnelUp!.future.timeout(_tunnelUpBudget, onTimeout: () {
+      if (_stale(gen)) return; // cancelled mid-start — straggler-safe (Kotlin gate)
+      final up = await tunnelUp.future.timeout(_tunnelUpBudget, onTimeout: () {
         return false;
       });
       _tunnelUp = null;
       _tunnelAlive = up;
       if (!up) {
-        if (_disconnecting) return; // cancelled mid-tunnel (#3)
+        if (_stale(gen)) return; // cancelled mid-tunnel (#3)
         await _hardCleanup();
         _emitFail(
           'tunnelStartFailed',
@@ -557,9 +640,11 @@ class PlatformEngineAdapter implements EngineAdapter {
         );
         return;
       }
+      if (_stale(gen)) return;
     }
 
     // --- 2. Aether in-process (embedded core, architecture B+).
+    if (_stale(gen)) return; // a cancel must never hear `connecting`
     _emitState(VpnState.connecting);
 
     // v4.21 — PROCESS-ENVIRONMENT HYGIENE (the engineClosed fix). The
@@ -584,6 +669,12 @@ class PlatformEngineAdapter implements EngineAdapter {
     final core = _core =
         _coreFactory == null ? AetherCore.open() : _coreFactory();
     final paths = await _paths();
+    // v4.26 — CRITICAL ordering: everything from here to coreStart below
+    // is SYNCHRONOUS (no await), so a cancel can never land between this
+    // staleness check and the job spawn — a walk that goes stale after the
+    // check but before coreStart would start a core that no cleanup ever
+    // cancels (the job id lands in the field only AFTER the spawn).
+    if (_stale(gen)) return;
     _jobId = core.coreStart(
       AetherArguments.build(
         protocol: leg,
@@ -595,6 +686,12 @@ class PlatformEngineAdapter implements EngineAdapter {
         nativeLibraryDir: paths.nativeLibraryDir,
       ),
     );
+    // v4.26 — record the job id on the PROCESS side (Kotlin companion):
+    // the Rust registry is process-scoped, so a RECREATED isolate can adopt
+    // this id on resync and actually cancel the core on disconnect (the
+    // orphaned-core bug: «باید اپ رو کلا بندی تا اتصال تونل قطع بشه»).
+    await _recordCoreJob();
+    if (_stale(gen)) return;
 
     // --- 2b. v4.19 (#7): proxy mode has no VpnService to hold the process,
     // so swiping the app away used to kill the in-process core. A tiny
@@ -613,6 +710,7 @@ class PlatformEngineAdapter implements EngineAdapter {
       } on MissingPluginException {
         // no platform (tests) — nothing to hold
       }
+      if (_stale(gen)) return;
     }
 
     // --- 3. Wait for the SOCKS listener of the SELECTED mode (no fallback,
@@ -623,10 +721,18 @@ class PlatformEngineAdapter implements EngineAdapter {
     // ایتر بگیره و منتظر اتصال هسته ایتر باشه»), and a user cancel aborts
     // the wait right away (#3).
     final ready = await _waitForListenerFollowingCore(
+      gen,
       _activePort,
       timeout: _listenerBudget,
     );
-    if (!_disconnecting && !ready) {
+    // v4.26 — a stale walk (cancelled or superseded by a newer connect)
+    // stays SILENT from here on: the cancel owns the terminal state, and a
+    // newer walk owns every success/failure of the CURRENT engines. The
+    // zombie used to keep polling, "succeed" against the NEXT session's
+    // listener, emit a premature Connected, and on its own timeout run a
+    // _hardCleanup that KILLED the next session's service and job.
+    if (_stale(gen)) return;
+    if (!ready) {
       await _hardCleanup();
       if (_coreFailureDuringStart != null) {
         _emitFail('coreExited', _coreFailureDuringStart);
@@ -640,7 +746,6 @@ class PlatformEngineAdapter implements EngineAdapter {
       return;
     }
     _coreFailureDuringStart = null;
-    if (_disconnecting) return; // cancel owns the terminal state (#3)
 
     // --- 4. End-to-end probe with RETRIES — the ONLY path to Connected
     // (§6.6). v4.20: a single 20 s attempt failed every mode whose inner
@@ -650,10 +755,11 @@ class PlatformEngineAdapter implements EngineAdapter {
     // within the mode's own budget while still FOLLOWING the core — a core
     // that dies fails the walk immediately with its own error.
     final stats = await _probeUntilReadyFollowingCore(
+      gen,
       _activePort,
       budget: readyBudget(modeId),
     );
-    if (_disconnecting) return; // cancelled during the probe (#3)
+    if (_stale(gen)) return; // cancelled during the probe (#3)
     if (stats == null) {
       await _hardCleanup();
       if (_coreFailureDuringStart != null) {
@@ -684,7 +790,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     _emitState(VpnState.connected);
 
     // --- 5. Steady state: stats + health (§6 health probe ⇒ reconnecting).
-    _startTicker();
+    _startTicker(gen);
   }
 
   /// v4.19 (#2) — the core's last words when it died during the listener
@@ -717,10 +823,11 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// v4.21 — bind-race guard: waits until [port] no longer accepts SOCKS
   /// connections (the previous job's abort releasing its listener),
   /// bounded to [_portFreeBudget]. A refusal/error means the port is free.
-  Future<void> _waitForPortFree(int port) async {
+  /// v4.26 — generation-aware: a superseded walk stops waiting.
+  Future<void> _waitForPortFree(int gen, int port) async {
     final deadline = DateTime.now().add(_portFreeBudget);
     while (DateTime.now().isBefore(deadline)) {
-      if (_disconnecting) return;
+      if (_stale(gen)) return;
       try {
         if (!await TunnelProbe.isListenerReady(port)) return;
       } catch (_) {
@@ -785,15 +892,17 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// The listener wait of the v4.19 walk: polls the listener AND the core's
   /// job liveness. Returns true when the listener is up; when the core
   /// exits first, records its own error in [_coreFailureDuringStart] and
-  /// returns false. Aborts on cancel (#3).
+  /// returns false. Aborts on cancel (#3) — v4.26: via the generation, so
+  /// the abort is permanent (the old flag reset let the walk resume).
   Future<bool> _waitForListenerFollowingCore(
+    int gen,
     int port, {
     required Duration timeout,
   }) async {
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
-      if (_disconnecting) return false;
-      if (await TunnelProbe.isListenerReady(port)) return true;
+      if (_stale(gen)) return false;
+      if (await TunnelProbe.isListenerReady(port)) return !_stale(gen);
       // Core liveness — the core owns the truth about its own failure.
       final failure = _pollCoreOnce();
       if (failure != null) {
@@ -812,18 +921,23 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// core: a job that dies fails the walk immediately with the core's own
   /// error; a cancel aborts at the next checkpoint. Returns the successful
   /// probe's stats, or null (budget exhausted / core died / cancelled).
+  /// v4.26 — a probe success that belongs to a NEWER session (this walk was
+  /// superseded mid-probe and the new core's listener answered) is NOT this
+  /// walk's success: return null and let the staleness check silence it.
   Future<EngineStatsUpdated?> _probeUntilReadyFollowingCore(
+    int gen,
     int port, {
     required Duration budget,
   }) async {
     final deadline = DateTime.now().add(budget);
     while (true) {
-      if (_disconnecting) return null;
+      if (_stale(gen)) return null;
       try {
         final result = await TunnelProbe().trace(
           port: port,
           timeout: _probeTimeout,
         );
+        if (_stale(gen)) return null;
         return EngineStatsUpdated(
           pingMs: result.pingMs,
           exitCountryCode: result.exitCountryCode,
@@ -848,6 +962,14 @@ class PlatformEngineAdapter implements EngineAdapter {
   Future<void> disconnect() async {
     if (_disconnecting) return;
     _disconnecting = true;
+    // v4.26 — the generation bump comes FIRST: every in-flight walk (and
+    // the resume) is stale from this line on, permanently. The cancel owns
+    // the terminal state; nothing the aborted walk does afterwards can
+    // start/stop engines or emit progress. The old flag-based design reset
+    // `_disconnecting` when THIS method finished — right when the walk's
+    // next poll was due — so a cancelled walk RESUMED and kept running.
+    ++_walkGeneration;
+    _connecting = false; // no live walk remains after a cancel
     // Release anyone still waiting on connect-phase events.
     if (_tunnelUp != null && !_tunnelUp!.isCompleted) {
       _tunnelUp!.complete(false);
@@ -887,43 +1009,65 @@ class PlatformEngineAdapter implements EngineAdapter {
 
   /// Asks the platform whether the VPN consent is needed; when it is, waits
   /// for the user's answer (surfaced as `waitingForPermissions` first).
-  Future<bool> _ensureVpnPermission() async {
+  /// v4.26 — generation-aware: a cancel during the dialog aborts the wait,
+  /// and a walk that was superseded reports nothing.
+  Future<bool> _ensureVpnPermission(int gen) async {
     final Map<Object?, Object?> answer;
     try {
       answer =
           await _channel.invokeMethod<Map<Object?, Object?>>('prepareVpn') ??
           const {};
     } on MissingPluginException {
-      _emitFail(
-        'platformBridgeMissing',
-        'the aethone/engine platform channel is not available in this build',
-      );
+      if (!_stale(gen)) {
+        _emitFail(
+          'platformBridgeMissing',
+          'the aethone/engine platform channel is not available in this build',
+        );
+      }
       return false;
     }
+    if (_stale(gen)) return false;
     if (answer['needsPermission'] != true) return true;
 
     _emitState(VpnState.waitingForPermissions);
-    _permissionAnswer = Completer<bool>();
-    final granted = await _permissionAnswer!.future.timeout(
+    final permissionAnswer = Completer<bool>();
+    _permissionAnswer = permissionAnswer;
+    final granted = await permissionAnswer.future.timeout(
       _permissionBudget,
       onTimeout: () => false,
     );
     _permissionAnswer = null;
-    return granted;
+    return granted && !_stale(gen);
   }
 
-  void _startTicker() {
+  void _startTicker(int gen) {
     _ticker?.cancel();
+    _tickerGeneration = gen;
     _ticker = Timer.periodic(_statsInterval, (_) => _tick());
   }
 
   Future<void> _tick() async {
-    if (_disconnecting) return;
+    // v4.26 — the tick belongs to its walk's generation (a cancelled or
+    // superseded session's ticker dies with it) and never re-enters (a
+    // 20 s probe inside a 5 s interval used to stack up to four
+    // concurrent probes on one core).
+    final gen = _tickerGeneration;
+    if (gen == null || _stale(gen) || _disconnecting || _ticking) return;
+    _ticking = true;
+    try {
+      await _tickInner();
+    } finally {
+      _ticking = false;
+    }
+  }
+
+  Future<void> _tickInner() async {
     final core = _core;
     final jobId = _jobId;
 
-    // 1. Core liveness (only when WE spawned the job this Dart lifetime; a
-    //    resumed session has no job id and relies on the health probe).
+    // 1. Core liveness (when a job id is known — spawned this lifetime OR
+    //    adopted from the process-durable store after an isolate restart,
+    //    v4.26: a resumed session now watches its core too).
     if (core != null && jobId != null) {
       try {
         final poll = core.jobPoll(jobId);
@@ -998,10 +1142,17 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// The core died while we believed we were connected: stop faking, tear
   /// everything down, report failed (any → failed is legal, §8).
   Future<void> _onEngineDied(String code, String? message) async {
+    // v4.26 — a disconnect already in flight owns the terminal state (and
+    // its own cleanup); a concurrent death probe must not flip the UI to
+    // `failed` right after the user asked to disconnect.
+    if (_disconnecting) return;
     _ticker?.cancel();
     _ticker = null;
+    _tickerGeneration = null;
     _jobId = null;
+    await _clearCoreJob();
     if (_activeMode == ConnectionMode.tunnel) {
+      _tornDownTunnelSession = _tunnelSession;
       try {
         await _channel.invokeMethod<void>('stopVpn');
       } on PlatformException {
@@ -1028,6 +1179,7 @@ class PlatformEngineAdapter implements EngineAdapter {
   Future<void> _hardCleanup() async {
     _ticker?.cancel();
     _ticker = null;
+    _tickerGeneration = null;
     if (_tunnelUp != null && !_tunnelUp!.isCompleted) {
       _tunnelUp!.complete(false);
     }
@@ -1037,6 +1189,11 @@ class PlatformEngineAdapter implements EngineAdapter {
     }
     _permissionAnswer = null;
     if (_activeMode == ConnectionMode.tunnel) {
+      // v4.26 — mark the session WE are stopping: the service's
+      // asynchronous onDestroy emits `down: destroy` whenever the system
+      // processes the stop, and that late event must never surface as a
+      // failure after a clean disconnect.
+      _tornDownTunnelSession = _tunnelSession;
       try {
         await _channel.invokeMethod<void>('stopVpn');
       } on PlatformException {
@@ -1076,6 +1233,68 @@ class PlatformEngineAdapter implements EngineAdapter {
         // job already gone
       }
     }
+    // v4.26 — the durable job id dies with the session (a later isolate
+    // must not adopt a cancelled core).
+    await _clearCoreJob();
+  }
+
+  // ---- durable job id (v4.26 — isolate-restart hardening) ------------------
+
+  /// Records the live job id on the PROCESS side (the Kotlin companion
+  /// outlives the Dart isolate). Best-effort: an older platform build
+  /// simply keeps none, and this lifetime's in-memory id still works.
+  Future<void> _recordCoreJob() async {
+    final id = _jobId;
+    if (id == null) return;
+    try {
+      await _channel.invokeMethod<void>('setCoreJob', {'job': id});
+    } on PlatformException {
+      // older platform — ignore
+    } on MissingPluginException {
+      // no platform (tests) — ignore
+    }
+  }
+
+  /// Clears the process-side job id (the job is cancelled/dead).
+  Future<void> _clearCoreJob() async {
+    try {
+      await _channel.invokeMethod<void>('clearCoreJob');
+    } on PlatformException {
+      // older platform — ignore
+    } on MissingPluginException {
+      // no platform (tests) — ignore
+    }
+  }
+
+  /// Adopts the process-side job id after an isolate restart. The Rust job
+  /// registry is process-scoped: a core the DEAD isolate spawned is still
+  /// running (listener bound, WARP session up) while the fresh adapter had
+  /// no id — a disconnect then cancelled NOTHING, the orphan kept the SOCKS
+  /// port bound and the NEXT connect died on «address already in use»
+  /// until the app was force-closed (owner round 4: «باید اپ رو کلا بندی
+  /// تا اتصال تونل قطع بشه»). Only called once a LIVE listener proved the
+  /// core really is alive (a restarted process has an empty registry).
+  Future<void> _adoptDurableJob() async {
+    if (_jobId != null) return;
+    try {
+      final reply =
+          await _channel.invokeMethod<Map<Object?, Object?>>('getCoreJob');
+      final id = (reply?['job'] as num?)?.toInt();
+      if (id == null || id <= 0) return;
+      _jobId = id;
+      // The core handle: tests inject a factory; production re-opens the
+      // (process-global) library. A failure here keeps the id adopted —
+      // the next connect's port-free wait still honors the live listener.
+      if (_core == null) {
+        _core = _coreFactory == null ? AetherCore.open() : _coreFactory!();
+      }
+    } on PlatformException {
+      // older platform — nothing to adopt
+    } on MissingPluginException {
+      // no platform (tests) — nothing to adopt
+    } on AetherFfiException {
+      // no embedded library in this build — keep the id, drop the handle
+    }
   }
 
   // ---- platform → Dart -----------------------------------------------------
@@ -1109,11 +1328,22 @@ class PlatformEngineAdapter implements EngineAdapter {
             if (_tunnelUp != null && !_tunnelUp!.isCompleted) {
               _tunnelUp!.complete(false);
             }
+            // v4.26 — a teardown WE initiated (user disconnect / walk
+            // cleanup / engine death): the service's onDestroy fires
+            // whenever the system processes the stop — often AFTER the
+            // disconnect already finished. That expected event must never
+            // surface as a failure; the disconnect owns the terminal state
+            // (owner round 4: a clean disconnect used to flip the UI to
+            // `failed(tunnelDown: destroy)` a moment later).
+            if (session is int && session == _tornDownTunnelSession) {
+              break;
+            }
             // A tunnel that goes down while connected is surfaced
             // immediately instead of waiting for the next health probe.
             if (!_connecting && !_disconnecting) {
               _ticker?.cancel();
               _ticker = null;
+              _tickerGeneration = null;
               _jobId = null;
               _emitFail(
                 event == 'revoked' ? 'tunnelRevoked' : 'tunnelDown',
@@ -1143,25 +1373,47 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// اتصال مجدد»). Proxy resume relies on the in-process core still
   /// listening on the held port (same process — CoreHoldService kept it
   /// alive); if the listener is gone the session is honestly dead.
-  Future<void> _resyncAfterRestart() async {
-    if (!Platform.isAndroid) return;
+  ///
+  /// v4.26 hardening (owner round 4 — the «تونل فعاله» complaints after
+  /// reopening the app):
+  ///  * the resume runs under the WALK GENERATION — any user action
+  ///    supersedes it (the old code could emit its starting/connected walk
+  ///    INTO a user-initiated one and fail the machine with
+  ///    illegalTransition, or stop a JUST-STARTED service mid-walk);
+  ///  * `_activeMode`/`_activePort` are set BEFORE the (up to 20 s) probe —
+  ///    a disconnect during the probe used to stop the WRONG holder (the
+  ///    default `proxy` → stopCoreHold) and leave the TUNNEL RUNNING;
+  ///  * the durable job id is adopted so the resumed session's disconnect
+  ///    actually cancels the core (see [_adoptDurableJob]).
+  Future<void> _resyncAfterRestart({bool force = false}) async {
+    if (!Platform.isAndroid && !force) return;
     // v4.21 — never race a user-initiated walk: bind() can fire while an
     // activity recreation spins up a fresh engine, and a zombie probe here
     // used to stop the LIVE session's VPN service mid-walk.
     if (_connecting || _disconnecting) return;
+    final gen = _walkGeneration; // v4.26 — the resume lives under this gen
     try {
       final status =
           await _channel.invokeMethod<Map<Object?, Object?>>('vpnStatus') ??
           const {};
+      if (_stale(gen)) return; // a user action superseded the resync
       if (status['running'] == true) {
         final port = (status['port'] as num?)?.toInt() ?? 1819;
+        // v4.26 — the holder identity is known BEFORE the probe: a
+        // disconnect during the probe must stop the RIGHT service.
+        _activePort = port;
+        _activeMode = ConnectionMode.tunnel;
         if (!await TunnelProbe.isListenerReady(port)) {
+          if (_stale(gen)) return;
           // Service alive but the core is gone — stop the zombie service; the
           // user reconnects through the normal flow.
           await _channel.invokeMethod<void>('stopVpn');
+          await _clearCoreJob();
           return;
         }
-        await _resumeSession(port, ConnectionMode.tunnel);
+        if (_stale(gen)) return;
+        await _adoptDurableJob();
+        await _resumeSession(gen, port, ConnectionMode.tunnel);
         return;
       }
       // Proxy mode: the core-hold service keeps the process (and the
@@ -1169,15 +1421,22 @@ class PlatformEngineAdapter implements EngineAdapter {
       final hold =
           await _channel.invokeMethod<Map<Object?, Object?>>('coreHoldStatus') ??
           const {};
+      if (_stale(gen)) return;
       if (hold['running'] != true) return;
       final port = (hold['port'] as num?)?.toInt() ?? 1819;
+      _activePort = port;
+      _activeMode = ConnectionMode.proxy;
       if (!await TunnelProbe.isListenerReady(port)) {
+        if (_stale(gen)) return;
         // Process alive but the core is gone — release the hold; the user
         // reconnects through the normal flow.
         await _channel.invokeMethod<void>('stopCoreHold');
+        await _clearCoreJob();
         return;
       }
-      await _resumeSession(port, ConnectionMode.proxy);
+      if (_stale(gen)) return;
+      await _adoptDurableJob();
+      await _resumeSession(gen, port, ConnectionMode.proxy);
     } on PlatformException {
       // platform not ready yet — the next connect() will sort it out
     } on SocketException {
@@ -1186,22 +1445,42 @@ class PlatformEngineAdapter implements EngineAdapter {
   }
 
   /// The shared resume walk (legal per §8: starting → connecting →
-  /// connected) once a live listener on [port] was proven.
-  Future<void> _resumeSession(int port, ConnectionMode mode) async {
-    final result = await TunnelProbe().trace(port: port);
+  /// connected) once a live listener on [port] was proven. v4.26 —
+  /// generation-guarded (a user action supersedes the resume) and a FAILED
+  /// resume probe tears the zombie session down instead of leaving a
+  /// half-alive service for the next connect to fight.
+  Future<void> _resumeSession(int gen, int port, ConnectionMode mode) async {
     _activePort = port;
     _activeMode = mode;
-    _emitState(VpnState.starting);
-    _emitState(VpnState.connecting);
-    _emit(
-      EngineStatsUpdated(
-        pingMs: result.pingMs,
-        exitCountryCode: result.exitCountryCode,
-      ),
-    );
-    _emitState(VpnState.connected);
-    _startTicker();
+    try {
+      final result = await TunnelProbe().trace(
+        port: port,
+        timeout: _probeTimeout,
+      );
+      if (_stale(gen)) return;
+      _emitState(VpnState.starting);
+      _emitState(VpnState.connecting);
+      _emit(
+        EngineStatsUpdated(
+          pingMs: result.pingMs,
+          exitCountryCode: result.exitCountryCode,
+        ),
+      );
+      _emitState(VpnState.connected);
+      _startTicker(gen);
+    } catch (_) {
+      if (_stale(gen)) return;
+      // The session is a zombie (listener up, data path dead) — stop it so
+      // the user's next connect starts clean instead of losing the bind
+      // race against a listener nothing serves.
+      await _hardCleanup();
+    }
   }
+
+  /// v4.26 — test seam for [_resyncAfterRestart] (the platform gate keeps
+  /// it inert on the desktop VM; tests drive it with [force]).
+  @visibleForTesting
+  Future<void> debugResync() => _resyncAfterRestart(force: true);
 
   @visibleForTesting
   Future<void> debugTick() => _tick();

@@ -4,7 +4,10 @@
 ///  * the end-to-end probe against a REAL local SOCKS5 server,
 ///  * the PlatformEngineAdapter state walks (proxy/tunnel modes, permission
 ///    denial, engine death, disconnect cleanup) over a mocked
-///    `aethone/engine` channel + a fake embedded core.
+///    `aethone/engine` channel + a fake embedded core;
+///  * v4.26 device-test round 4 regressions: the lost-cancel window, the
+///    zombie walk, the durable-job resume, the late `down: destroy`, and
+///    the resume-window holder identity.
 library;
 
 import 'dart:async';
@@ -352,48 +355,6 @@ void main() {
     tearDown(() async {
       await listener.dispose();
     });
-
-    void mockChannel({
-      Map<Object?, Object?> Function()? prepareVpn,
-      void Function(int port)? onStartVpn,
-      bool Function()? onStopVpn,
-      Map<Object?, Object?> Function()? counters,
-    }) {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(const MethodChannel(_channelName), (call) async {
-            switch (call.method) {
-              case 'paths':
-                return <String, Object?>{
-                  'filesDir': '/data/test/files',
-                  'nativeLibraryDir': '/data/test/lib',
-                };
-              case 'prepareVpn':
-                return prepareVpn?.call() ??
-                    <String, Object?>{'needsPermission': false};
-              case 'startVpn':
-                final port = (call.arguments as Map?)?['port'] as int? ?? 1819;
-                onStartVpn?.call(port);
-                // The real service establishes the TUN + zeptun and THEN
-                // emits 'up' — the mock mirrors that timing.
-                Timer(const Duration(milliseconds: 150), () {
-                  unawaited(emitTunnelEvent({'event': 'up', 'port': port}));
-                });
-                return null;
-              case 'stopVpn':
-                onStopVpn?.call();
-                return null;
-              case 'vpnStatus':
-                return <String, Object?>{'running': false, 'port': null};
-              case 'zeptunCounters':
-                return counters?.call() ??
-                    <String, Object?>{'rxBytes': 111, 'txBytes': 222};
-            }
-            return null;
-          });
-    }
-
-    List<VpnState> statesOf(List<EngineEvent> events) =>
-        events.whereType<EngineStateChanged>().map((e) => e.state).toList();
 
     test('proxy mode: connecting → connected ONLY via the probe; core args locked', () async {
       mockChannel();
@@ -790,8 +751,322 @@ void main() {
         const Duration(seconds: 120),
       );
     });
+
+    test(
+      'v4.26 lost-cancel: a cancel during the walk STARTUP is honored — '
+      'no startVpn, no core, no tunnel (the old walk connected anyway and '
+      'the UI showed «disconnected» while the tunnel ran — owner: «فقط اتصال '
+      'هسته اول قطع میشه و همچنان تونل برقراره»)', () async {
+      var vpnStarts = 0;
+      mockChannel(
+        prepareVpn: () async {
+          // A slow permission round-trip: the cancel lands while the walk
+          // is parked in the platform reply (the old lost-cancel window).
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+          return <String, Object?>{'needsPermission': false};
+        },
+        onStartVpn: (_) => vpnStarts++,
+      );
+      final core = _FakeCore();
+      final adapter = PlatformEngineAdapter(coreFactory: () => core);
+      final events = <EngineEvent>[];
+      adapter.events.listen(events.add);
+      adapter.bind(
+        _FixedConfig(
+          selectedProtocol: ProtocolId.masque,
+          connectionMode: ConnectionMode.tunnel,
+        ),
+      );
+
+      unawaited(adapter.connect());
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await adapter.disconnect(); // mid-startup cancel
+      // Let the slow reply land after the cancel.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await pumpEventQueue();
+
+      expect(vpnStarts, 0); // the tunnel was NEVER started
+      expect(core.startedArgs, isEmpty); // neither was the core
+      expect(statesOf(events), [VpnState.disconnected]);
+      expect(
+        events
+            .whereType<EngineStateChanged>()
+            .where((e) => e.state == VpnState.failed),
+        isEmpty,
+      );
+    });
+
+    test(
+      'v4.26 zombie walk: a cancelled walk can never hijack the NEXT '
+      'session — exactly ONE Connected, no late failure, no stopVpn aimed '
+      'at the new session', () async {
+      var stopVpnCalls = 0;
+      mockChannel(onStopVpn: () => stopVpnCalls++);
+      final core = _FakeCore();
+      final adapter = PlatformEngineAdapter(coreFactory: () => core);
+      final events = <EngineEvent>[];
+      adapter.events.listen(events.add);
+      // torChain walks the 1820 listener — nothing serves it YET.
+      adapter.bind(
+        _FixedConfig(
+          selectedProtocol: ProtocolId.torChain,
+          connectionMode: ConnectionMode.tunnel,
+        ),
+      );
+
+      // First connect: parks in the listener wait (no 1820 listener).
+      unawaited(adapter.connect());
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await adapter.disconnect(); // cancel mid-listener-wait
+      await pumpEventQueue();
+      expect(statesOf(events).last, VpnState.disconnected);
+
+      // The inner protocol "comes up" — the listener appears NOW.
+      final listener = await _FakeSocks5Server().startOn(1820);
+      try {
+        // The fake's jobCancel flipped it to done; the NEW job is running.
+        core.pollState = 'running';
+        await adapter.connect(); // the reconnect
+        await pumpEventQueue();
+        expect(statesOf(events).last, VpnState.connected);
+
+        // Drain well past the OLD zombie's poll interval: it must stay
+        // dead — no second Connected (the zombie used to "succeed" against
+        // the NEW listener), no failure, no extra stopVpn.
+        await Future<void>.delayed(const Duration(milliseconds: 1600));
+        await pumpEventQueue();
+        final connectedCount =
+            events
+                .whereType<EngineStateChanged>()
+                .where((e) => e.state == VpnState.connected)
+                .length;
+        expect(connectedCount, 1);
+        expect(
+          events
+              .whereType<EngineStateChanged>()
+              .where((e) => e.state == VpnState.failed),
+          isEmpty,
+        );
+        // cancel(1) + the reconnect's startup hygiene(1) — nothing after.
+        expect(stopVpnCalls, 2);
+      } finally {
+        await listener.dispose();
+      }
+    });
+
+    test(
+      'v4.26 resume: a recreated isolate ADOPTS the durable job id — the '
+      'disconnect after reopening the app cancels the core AND stops the '
+      'VPN (the orphaned-core bug needed a force-close — owner: «باید اپ رو '
+      'کلا بندی تا اتصال تونل قطع بشه»)', () async {
+      var stopVpn = 0;
+      var coreJobCleared = false;
+      mockChannel(
+        vpnStatus: () => <String, Object?>{'running': true, 'port': 1819},
+        getCoreJob: () => 42,
+        onStopVpn: () => stopVpn++,
+        onClearCoreJob: () => coreJobCleared = true,
+      );
+      final core = _FakeCore();
+      final adapter = PlatformEngineAdapter(coreFactory: () => core);
+      final events = <EngineEvent>[];
+      adapter.events.listen(events.add);
+      adapter.bind(
+        _FixedConfig(
+          selectedProtocol: ProtocolId.masque,
+          connectionMode: ConnectionMode.tunnel,
+        ),
+      );
+
+      // The resync walk (what bind() does on a real Android restart):
+      // vpnStatus says the tunnel is up, the listener (this group's 1819
+      // server) answers → resume + ADOPT job 42.
+      await adapter.debugResync();
+      await pumpEventQueue();
+      expect(statesOf(events).last, VpnState.connected);
+      expect(core.startedArgs, isEmpty); // resumed — nothing re-spawned
+
+      await adapter.disconnect();
+      await pumpEventQueue();
+
+      // THE FIX: the adopted job is cancelled + freed, the service stopped
+      // and the durable id cleared (nothing left bound for the next walk).
+      expect(core.cancelled, [42]);
+      expect(core.freed, [42]);
+      expect(stopVpn, 1);
+      expect(coreJobCleared, isTrue);
+      expect(statesOf(events).last, VpnState.disconnected);
+    });
+
+    test(
+      'v4.26 the late `down: destroy` of OUR OWN stop never flips a clean '
+      'disconnect into failed', () async {
+      var stopVpn = 0;
+      mockChannel(onStopVpn: () => stopVpn++);
+      final adapter = PlatformEngineAdapter(coreFactory: _FakeCore.new);
+      final events = <EngineEvent>[];
+      adapter.events.listen(events.add);
+      adapter.bind(
+        _FixedConfig(
+          selectedProtocol: ProtocolId.masque,
+          connectionMode: ConnectionMode.tunnel,
+        ),
+      );
+
+      unawaited(adapter.connect());
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await pumpEventQueue();
+      expect(statesOf(events).last, VpnState.connected);
+
+      await adapter.disconnect();
+      await pumpEventQueue();
+      expect(statesOf(events).last, VpnState.disconnected);
+
+      // The system delivers the service's onDestroy AFTER the disconnect
+      // finished (session 1 — the session we stopped ourselves).
+      await emitTunnelEvent({
+        'event': 'down',
+        'reason': 'destroy',
+        'session': 1,
+      });
+      await pumpEventQueue();
+
+      expect(statesOf(events).last, VpnState.disconnected); // never failed
+      expect(
+        events
+            .whereType<EngineStateChanged>()
+            .where((e) => e.state == VpnState.failed),
+        isEmpty,
+      );
+      expect(stopVpn, 1);
+    });
+  });
+
+  group('v4.26 device-test round 4 — the resume window (own listeners)', () {
+    test(
+      'a disconnect DURING the resume probe stops the VPN service — not the '
+      'core hold (the tunnel used to survive it: `_activeMode` was still the '
+      'proxy default until the probe finished)', () async {
+      var stopVpn = 0;
+      var stopCoreHold = 0;
+      mockChannel(
+        vpnStatus: () => <String, Object?>{'running': true, 'port': 1819},
+        getCoreJob: () => 42,
+        onStopVpn: () => stopVpn++,
+        onStopCoreHold: () => stopCoreHold++,
+      );
+      final core = _FakeCore();
+      final adapter = PlatformEngineAdapter(coreFactory: () => core);
+      final events = <EngineEvent>[];
+      adapter.events.listen(events.add);
+      adapter.bind(
+        _FixedConfig(
+          selectedProtocol: ProtocolId.masque,
+          connectionMode: ConnectionMode.tunnel,
+        ),
+      );
+
+      // The resume's end-to-end probe hangs on a slow data path (the first
+      // CONNECT reply is delayed past the disconnect below).
+      final slow = await _FakeSocks5Server(hangFirstConnect: true).startOn(
+        1819,
+      );
+      try {
+        unawaited(adapter.debugResync());
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+
+        await adapter.disconnect(); // lands mid-probe
+        await pumpEventQueue();
+
+        // The RIGHT holder was stopped (the old code stopped the core hold
+        // and left the VpnService — and with it the TUN — running).
+        expect(stopVpn, 1);
+        expect(stopCoreHold, 0);
+        expect(statesOf(events), [VpnState.disconnected]);
+        expect(
+          events
+              .whereType<EngineStateChanged>()
+              .where((e) => e.state == VpnState.failed),
+          isEmpty,
+        );
+
+        // The hung resume eventually completes — into a superseded
+        // generation: it must stay silent (no late connected).
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        await pumpEventQueue();
+        expect(statesOf(events), [VpnState.disconnected]);
+      } finally {
+        await slow.dispose();
+      }
+    });
   });
 }
+
+/// The mocked `aethone/engine` channel (v4.26: hoisted to top level — the
+/// round-4 groups share it; it captures nothing group-local).
+void mockChannel({
+  FutureOr<Map<Object?, Object?>?> Function()? prepareVpn,
+  void Function(int port)? onStartVpn,
+  void Function()? onStopVpn,
+  Map<Object?, Object?> Function()? counters,
+  Map<Object?, Object?> Function()? vpnStatus,
+  Map<Object?, Object?> Function()? coreHoldStatus,
+  int? Function()? getCoreJob,
+  void Function(int?)? onSetCoreJob,
+  void Function()? onClearCoreJob,
+  void Function()? onStopCoreHold,
+}) {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(const MethodChannel(_channelName), (call) async {
+        switch (call.method) {
+          case 'paths':
+            return <String, Object?>{
+              'filesDir': '/data/test/files',
+              'nativeLibraryDir': '/data/test/lib',
+            };
+          case 'prepareVpn':
+            return prepareVpn?.call() ??
+                <String, Object?>{'needsPermission': false};
+          case 'startVpn':
+            final port = (call.arguments as Map?)?['port'] as int? ?? 1819;
+            onStartVpn?.call(port);
+            // The real service establishes the TUN + zeptun and THEN
+            // emits 'up' — the mock mirrors that timing.
+            Timer(const Duration(milliseconds: 150), () {
+              unawaited(emitTunnelEvent({'event': 'up', 'port': port}));
+            });
+            return null;
+          case 'stopVpn':
+            onStopVpn?.call();
+            return null;
+          // v4.26 — the process-durable job-id seam.
+          case 'setCoreJob':
+            onSetCoreJob?.call((call.arguments as Map?)?['job'] as int?);
+            return null;
+          case 'clearCoreJob':
+            onClearCoreJob?.call();
+            return null;
+          case 'getCoreJob':
+            return <String, Object?>{'job': getCoreJob?.call()};
+          case 'vpnStatus':
+            return vpnStatus?.call() ??
+                <String, Object?>{'running': false, 'port': null};
+          case 'coreHoldStatus':
+            return coreHoldStatus?.call() ??
+                <String, Object?>{'running': false, 'port': null};
+          case 'stopCoreHold':
+            onStopCoreHold?.call();
+            return null;
+          case 'zeptunCounters':
+            return counters?.call() ??
+                <String, Object?>{'rxBytes': 111, 'txBytes': 222};
+        }
+        return null;
+      });
+}
+
+List<VpnState> statesOf(List<EngineEvent> events) =>
+    events.whereType<EngineStateChanged>().map((e) => e.state).toList();
 
 /// Records the walk order into [order] (v4.20 tunnel-order test).
 class _OrderRecordingCore extends _FakeCore {
@@ -821,7 +1096,11 @@ Future<void> emitTunnelEvent(Map<String, Object?> args) async {
 /// A minimal REAL-socket SOCKS5 server: greeting → CONNECT (ATYP=domain) →
 /// serves the cloudflare-trace body. [refuseConnect] makes it answer REP≠0.
 class _FakeSocks5Server {
-  _FakeSocks5Server({this.refuseConnect = false, this.refuseFirstN = 0});
+  _FakeSocks5Server({
+    this.refuseConnect = false,
+    this.refuseFirstN = 0,
+    this.hangFirstConnect = false,
+  });
 
   final bool refuseConnect;
 
@@ -829,6 +1108,11 @@ class _FakeSocks5Server {
   /// stand-in for a chained protocol whose data path comes up LATE
   /// (aether binds the listener before the inner protocol is ready).
   final int refuseFirstN;
+
+  /// v4.26 — delay the FIRST CONNECT reply by 600 ms: the stand-in for a
+  /// resumed session whose data path is slow (the resume-window test
+  /// disconnects while the resume probe is still in flight).
+  final bool hangFirstConnect;
   int _connectsSeen = 0;
   ServerSocket? _server;
   int get port => _server!.port;
@@ -875,6 +1159,9 @@ class _FakeSocks5Server {
       lastConnectTarget = target;
 
       final connectIndex = _connectsSeen++;
+      if (hangFirstConnect && connectIndex == 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+      }
       if (refuseConnect || connectIndex < refuseFirstN) {
         socket.add(const <int>[0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
         await socket.flush();

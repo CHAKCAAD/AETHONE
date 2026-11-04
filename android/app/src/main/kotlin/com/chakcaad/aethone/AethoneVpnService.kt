@@ -3,6 +3,7 @@ package com.chakcaad.aethone
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.VpnService
@@ -56,6 +57,44 @@ class AethoneVpnService : VpnService() {
         @Volatile
         private var instance: AethoneVpnService? = null
 
+        /// v4.26 — the tunnel-session generation bookkeeping. [noteStart]
+        /// records the session the Dart side is STARTING; [requestStop]
+        /// records the stop. A `startForegroundService` delivery can land
+        /// AFTER a `stopService` was already processed (OEM scheduler
+        /// orderings) — that straggler start used to establish a TUN
+        /// nobody owned while the app showed «disconnected» (owner round 4:
+        /// «فقط اتصال هسته اول قطع میشه و همچنان تونل برقراره»). A start
+        /// whose session is ≤ the stop generation now tears itself down.
+        @Volatile
+        private var liveSession = 0
+
+        @Volatile
+        private var stopGeneration = 0
+
+        /// MainActivity.startVpn calls this BEFORE startForegroundService.
+        fun noteStart(session: Int) {
+            liveSession = session
+        }
+
+        /// v4.26 — the hardened stop path (MainActivity.stopVpn):
+        ///  1. bump the stop generation — any start still in flight for a
+        ///     session ≤ it self-terminates in onStartCommand;
+        ///  2. tell the LIVE instance (if any) to tear zeptun + the TUN
+        ///     down right now — `stopService()` alone only asks the system
+        ///     to schedule onDestroy;
+        ///  3. stopService as the belt-and-braces lifecycle call.
+        fun requestStop(context: Context) {
+            if (liveSession > stopGeneration) stopGeneration = liveSession
+            instance?.stopFromUser()
+            try {
+                context.stopService(
+                    Intent(context, AethoneVpnService::class.java),
+                )
+            } catch (t: Throwable) {
+                Log.w(TAG, "stopService threw", t)
+            }
+        }
+
         fun status(): Map<String, Any?> {
             val svc = instance ?: return mapOf("running" to false, "port" to null)
             return mapOf("running" to true, "port" to svc.socksPort)
@@ -89,6 +128,19 @@ class AethoneVpnService : VpnService() {
         val port = intent?.getIntExtra(EXTRA_PORT, 1819) ?: 1819
         socksPort = port
         sessionId = intent?.getIntExtra(EXTRA_SESSION, 0) ?: 0
+        // v4.26 — the straggler gate: this start was superseded by a stop
+        // (a `stopVpn` processed while the start delivery was still in
+        // flight — the lost-cancel window's platform half). Establishing
+        // the TUN here would orphan it: nobody is waiting for `up`.
+        if (sessionId != 0 && sessionId <= stopGeneration) {
+            Log.i(
+                TAG,
+                "stale tunnel start (session $sessionId ≤ stop $stopGeneration) — refusing",
+            )
+            stopTunnel("stale-start")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         // v4.19 (#1 hardening): the tunnel leg is the one place where a
         // thrown Java-level error used to KILL the process mid-connection
         // (an UnsatisfiedLinkError from the JNI bridge, a lifecycle
@@ -112,6 +164,16 @@ class AethoneVpnService : VpnService() {
             return START_NOT_STICKY
         }
         return START_NOT_STICKY
+    }
+
+    /// v4.26 — the synchronous user-stop path (companion [requestStop]):
+    /// zeptun + TUN down immediately, the foreground notification removed,
+    /// the service stopped. `stopService()` remains as the lifecycle call;
+    /// onDestroy's own stopTunnel is idempotent.
+    fun stopFromUser() {
+        stopTunnel("user-stop")
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     /// v4.21 — event maps stamped with THIS instance's session id.

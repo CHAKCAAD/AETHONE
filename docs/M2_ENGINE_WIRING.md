@@ -1,6 +1,7 @@
 # M2 — Engine Wiring (هسته ↔ UI)
 
-**Status:** DELIVERED (v4.18) — device-test round 1 fixes (v4.19, 2026-11-04).
+**Status:** DELIVERED (v4.18) — device-test rounds 1–3 fixes (v4.19–v4.21) +
+the v4.26 connection-logic round (generations, durable job id, bounded logs).
 **Scope:** the Android vertical slice of the implementation prompt (§ M2):
 «برش عمودی Android؛ Aether تعبیه‌شده + zeptun از طریق JNI + VpnService + ماشین
 حالت + ابزار تشخیص». No frozen pin changed (N1/N8) — the cores build from the
@@ -259,6 +260,85 @@ The owner's round-2 reports, root-caused against the pinned sources:
 Note (owner port question): the ports are per-MODE — main WARP bind 1819,
 `--tor-bind` 1820, `--psiphon-bind` 1821 (cli.rs L23/L239/L282). The
 psiphon-over-warp exit lives on **1821**, not 1820.
+
+## Device-test round 4 fixes (v4.26 — the connection-logic round)
+
+The owner's reports: «در حالت تونل وقتی وسط حالت در حال اتصال روی دکمه اتصال
+کلیک میکنی تا اتصال قطع بشه فقط اتصال هسته اول قطع میشه و همچنان تونل برقراره»
++ «توی حالت متصل هم وقتی اتصال رو قطع میکنی همچنان تونل فعاله و باید اپ رو کلا
+بندی تا اتصال تونل قطع بشه» + «حدود ۸۰ مگ داده تو ۱ ساعت استفاده به محل ذخیره
+اضافه شده». Root causes found (all reproduced by code-trace + regression tests):
+
+1. **The lost cancel (the «tunnel stays up» headline).** The walk's cancel
+   detection was a boolean `_disconnecting` that the cancel's own `disconnect()`
+   RESET when it finished — and `connect()` wiped it again. A cancel landing
+   while the walk was parked in its own startup cleanup (or the permission
+   round-trip) found the flag already reset when the walk resumed: it went on to
+   `startVpn` + `coreStart` and CONNECTED ANYWAY, while the store (already
+   `disconnected`) dropped the walk's emissions — a live tunnel with a
+   «disconnected» UI that only a force-close could end. **Fix: monotonic walk
+   GENERATIONS** — every user action bumps the counter; the walk captures it at
+   start and is stale at every checkpoint, permanently. The stretch from the
+   staleness check to `coreStart` is deliberately await-free, so a cancel can
+   never land between them.
+2. **Zombie walks.** The same reset bug let a cancelled walk keep polling for up
+   to its full budget (120 s listener / 360 s tor probe): it "succeeded" against
+   the NEXT session's listener (a premature/fake Connected), emitted late
+   `failed(engineStartTimeout)` minutes after a clean cancel, and its
+   failure-path `_hardCleanup` could STOP the next session's service and cancel
+   its job. Also: `connect()`'s `if (_connecting) return` silently swallowed
+   the reconnect-after-cancel while the store had already entered `starting`
+   (the «hangs on در حال اتصال forever» bug). Both gone with the generations;
+   `connect()` no longer early-returns.
+3. **`starting → disconnecting` was illegal** in the transition table — a tap
+   during the tunnel bring-up failed the machine into `failed(illegalTransition)`
+   and wedged the UI there (the adapter's terminal `disconnected` then hit
+   `failed → disconnected`, also illegal). The table now allows every walk state
+   → `disconnecting`, exactly as the v4.19 cancel design documented.
+4. **The orphaned core after reopening the app (the «force-close» bug).** The
+   Rust job registry is process-scoped but the Dart isolate is not: after the
+   activity/engine was recreated (swipe-away + reopen), the fresh adapter had NO
+   job id — its disconnect cancelled NOTHING. The orphaned core kept the SOCKS
+   port bound and the next connect died on «address already in use» until the
+   app was force-closed. **Fix: a PROCESS-DURABLE job id** — the Kotlin
+   companion remembers it (`setCoreJob`/`getCoreJob`/`clearCoreJob`), the
+   resync ADOPTS it once a live listener proves the core alive, and the resumed
+   session's disconnect actually cancels + frees the job (and its `_tick` now
+   watches the core too).
+5. **The resume window stopped the WRONG holder.** `_resumeSession` set
+   `_activeMode` only AFTER its (up to 20 s) end-to-end probe — a disconnect
+   during the probe ran `_hardCleanup` with the default `proxy` and called
+   `stopCoreHold` instead of `stopVpn`: the VpnService — and with it the TUN —
+   survived. The holder identity is now set BEFORE the probe, the resume is
+   generation-guarded (a user action supersedes it), and a FAILED resume probe
+   tears the zombie session down instead of leaving it for the next connect to
+   fight.
+6. **The late `down: destroy` after a clean disconnect** (the service's
+   asynchronous onDestroy) flipped the UI to `failed(tunnelDown)` a moment
+   after «قطع شد». The adapter now tracks the session it tore down itself and
+   drops that expected event; a genuinely external down/revoked still surfaces.
+7. **Platform hardening (Kotlin):** `stopVpn` is no longer a bare
+   `stopService()` — `AethoneVpnService.requestStop` bumps a stop GENERATION,
+   tells the live instance to tear zeptun + the TUN down synchronously, and
+   then stops the service. A straggler `onStartCommand` (a start delivery that
+   lands AFTER the stop was processed) now REFUSES to establish the TUN
+   (`stale-start`) — the platform half of the lost-cancel bug.
+8. **The ~80 MB/hour storage growth was the core-log capture.** The process
+   stderr (aether `info` + zeptun + the chatty lyrebird/psiphon children) was
+   dup2'd into an append-mode file capped only at ACTIVITY start — a tunnel
+   session that keeps the process alive for hours grew it unbounded (and every
+   activity recreation leaked another fd). **Fix: a pipe + reader thread with
+   rotation** — `core-log.txt` rotates at 1 MiB keeping one previous rotation
+   (≈2 MiB hard ceiling), installed exactly once per process; `readCoreLog`
+   tails across both files; `clearCoreLog` is consumed by the reader (single
+   writer, no sparse offsets).
+
+Regression tests (test/m2_engine_test.dart, `v4.26` group): the lost-cancel
+window, the zombie walk (exactly ONE Connected; no late failure; no stopVpn
+against the new session), the durable-job resume (job 42 cancelled + freed +
+service stopped), the late `down: destroy` filter, and the resume-window holder
+identity — plus the transition-table cancel legality in
+test/connection_state_test.dart.
 
 ## Device-test checklist (owner)
 

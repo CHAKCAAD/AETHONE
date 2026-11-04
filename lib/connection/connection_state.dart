@@ -52,6 +52,12 @@ class VpnStateMachine {
       VpnState.starting => next(to, {
         VpnState.waitingForPermissions,
         VpnState.connecting,
+        // v4.26 — tap-to-cancel must work during the tunnel bring-up too
+        // (owner device-test round 4: «وسط حالت در حال اتصال … کلیک میکنی
+        // تا اتصال قطع بشه»). The store's canceling disconnect applies
+        // exactly this edge; refusing it used to fail the machine into
+        // `failed(illegalTransition)` and wedge the UI there.
+        VpnState.disconnecting,
       }),
       VpnState.waitingForPermissions => next(to, {
         VpnState.connecting,

@@ -142,6 +142,28 @@ void main() {
         );
       }
     });
+
+    test('v4.26 — every walk state can be CANCELLED (→ disconnecting)', () {
+      // Owner device-test round 4: a tap during the tunnel bring-up
+      // («وسط حالت در حال اتصال») must cancel — the table used to refuse
+      // `starting → disconnecting`, wedging the store in
+      // failed(illegalTransition) while the engine cleaned up underneath.
+      const cancelable = [
+        VpnState.starting,
+        VpnState.waitingForPermissions,
+        VpnState.connecting,
+        VpnState.connected,
+        VpnState.reconnecting,
+        VpnState.failed,
+      ];
+      for (final from in cancelable) {
+        expect(
+          VpnStateMachine.isValidTransition(from, VpnState.disconnecting),
+          isTrue,
+          reason: '$from → disconnecting',
+        );
+      }
+    });
   });
 }
 
