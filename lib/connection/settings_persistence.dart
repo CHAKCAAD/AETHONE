@@ -63,6 +63,10 @@ abstract final class SettingsKeys {
 
   /// v4.22 — the background-patterns switch (default ON).
   static const showPatterns = 'aethone.settings.showPatterns';
+
+  /// v4.23 — the first-run wizard («صفحه شروع») completed flag; missing
+  /// means the onboarding still owes the user a run.
+  static const onboardingComplete = 'aethone.onboarding.complete';
 }
 
 /// The store→storage bridge. [restore] + [attach] are the only operations;
@@ -184,6 +188,29 @@ class SettingsPersistence {
       if (prefs.containsKey(SettingsKeys.showPatterns)) {
         store.showPatterns = prefs.getBool(SettingsKeys.showPatterns)!;
       }
+      // v4.23 — the onboarding flag.
+      store.onboardingComplete =
+          prefs.getBool(SettingsKeys.onboardingComplete) ?? false;
+      // v4.23 — the wizard's RECOMMENDED defaults for a fresh install
+      // (the step-4 frame ships تونل selected, اتوماتیک selected and the
+      // widest scan pill — and step 1 ships فارسی pre-picked): applied
+      // ONLY while the wizard has never been completed AND the user has
+      // no explicit persisted pick of their own, so every existing
+      // install keeps its choices untouched.
+      if (!prefs.containsKey(SettingsKeys.onboardingComplete)) {
+        if (!prefs.containsKey(SettingsKeys.appLocale)) {
+          store.appLocale = 'fa';
+        }
+        if (!prefs.containsKey(SettingsKeys.connectionMode)) {
+          store.connectionMode = ConnectionMode.tunnel;
+        }
+        if (!prefs.containsKey(SettingsKeys.protocolModeSmart)) {
+          store.protocolModeSmart = true;
+        }
+        if (!prefs.containsKey(SettingsKeys.scanSpeed)) {
+          store.scanSpeed = 5;
+        }
+      }
       _restored = true;
     } catch (e) {
       // Persistence must never block the app: with a broken storage the
@@ -271,6 +298,13 @@ class SettingsPersistence {
         await prefs.setString(SettingsKeys.appLocale, locale);
       }
       await prefs.setBool(SettingsKeys.showPatterns, store.showPatterns);
+      // v4.23 — the wizard flag rides every snapshot so a completed run
+      // survives restarts (and mid-flow kills resume rather than restart
+      // — the flow re-runs, but each step's persisted picks reload).
+      await prefs.setBool(
+        SettingsKeys.onboardingComplete,
+        store.onboardingComplete,
+      );
     } catch (e) {
       debugPrint('SettingsPersistence.save failed: $e');
     }

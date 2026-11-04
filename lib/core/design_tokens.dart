@@ -81,6 +81,27 @@ abstract final class AethColors {
 
   /// Secondary/muted text (VLM reads `≈#8E8E93`).
   static const Color textSecondary = Color(0xFF8E8E93);
+
+  // ---- v4.23 onboarding («صفحه شروع» frames) ----
+
+  /// The dim stepper state — bars + icons of the INACTIVE steps, measured
+  /// on all four wizard frames (#15553B; the bright state is the accent).
+  static const Color stepDim = Color(0xFF15553B);
+
+  /// The two light-gray tiles (system-language gear, routing «none» ✕) —
+  /// fill #D9D9D9 measured on both frames.
+  static const Color tileGray = Color(0xFFD9D9D9);
+
+  /// Glyph ink on the gray tiles (dark indigo #353051/#363152 measured).
+  static const Color tileGrayInk = Color(0xFF353051);
+
+  /// The amber Shield Star on the selected «اتوماتیک» card (#DFC62F
+  /// measured on the step-4 frame; brighter than [goldAccent]).
+  static const Color autoShieldAmber = Color(0xFFDFC62F);
+
+  /// The edge patterns render at low opacity on the wizard frames (the
+  /// art peaks ≈24% over the background — measured on all five frames).
+  static const double obPatternOpacity = 0.24;
 }
 
 /// Shape & effect tokens (report table 8, Figma CSS + owner CSS v4.11).
@@ -453,4 +474,114 @@ abstract final class AethGeometry {
   static const double protoDescCardRadius = 24;
   static const double protoDescTextSize = 14;
   static const double protoDescTextHeight = 18;
+
+  // -------------------------------------------------------------------
+  // v4.23 — ONBOARDING («صفحه شروع», the four wizard frames + «لودینگ
+  // اسکن»), all measured programmatically on the 402×874 sources:
+  // logo lockup, 4-segment stepper, question headings, the flag/gear
+  // tile grids, the two look previews, the step-4 sections and the
+  // scanning modal. Reference pixels, scaled by screenWidth/402.
+  // -------------------------------------------------------------------
+
+  /// Logo lockup: brand mark 38 (same canvas as the home wordmark mark)
+  /// with a LARGER 17px wordmark; bars start 34 below the lockup.
+  static const double obWordmarkSize = 17;
+  static const double obLockupToStepper = 34;
+
+  /// Stepper: 4 bars 70×7 (r3.5) with 19 gaps spanning the page inset,
+  /// icons 22 centered under each bar 12 below; the ACTIVE step's bar +
+  /// icon render in the accent, the rest in [AethColors.stepDim].
+  static const double obBarW = 70;
+  static const double obBarH = 7;
+  static const double obBarGap = 19;
+  static const double obBarToIcon = 12;
+  static const double obStepIcon = 22;
+
+  /// The question headings («زبان برنامه چی باشه؟» family): 20 w700 white,
+  /// a 22 white glyph at the page's right inset, 8 gap to the text.
+  static const double obHeadingSize = 20;
+  static const double obHeadingIcon = 22;
+  static const double obHeadingIconGap = 8;
+  static const double obHeadingToTiles = 34;
+
+  /// The wizard's flexible vertical rhythm (steps 1–3): the heading+tiles
+  /// block floats between the stepper and the CTA with spacer flexes
+  /// 179:223 (measured on the frames) so every screen height lands close.
+  static const int obFlexAbove = 179;
+  static const int obFlexBelow = 223;
+
+  /// Tiles: 65×65 r20 (flags AND the gray glyphs), selection = a 2.5 accent
+  /// ring 1px off the tile edge (overflow 3.5) + a soft green glow.
+  static const double obTileSize = 65;
+  static const double obTileRadius = 20;
+  static const double obTileGapX = 43;
+  static const double obTileGapY = 30;
+  static const double obRingStroke = 2.5;
+  static const double obRingGap = 1;
+  static const double obRingRadius = 23.5;
+  static const double obGrayGlyph = 26;
+
+  /// Step-2's staggered routing grid: same 3 columns × 95 pitch, the gray
+  /// «none» tile vertically centered in the LEFT column (top 47.5).
+  static const double obRowPitch = 95;
+  static const double obMidTileTop = 47.5;
+
+  /// CTA: full-width 60-tall pill (r30), 18 w700 white label + the white
+  /// Left-2 chevron 20 from the leading (visual left) edge, soft green
+  /// shadow; 39 of glass below it.
+  static const double obCtaH = 60;
+  static const double obCtaRadius = 30;
+  static const double obCtaTextSize = 18;
+  static const double obCtaChevron = 18;
+  static const double obCtaChevronInset = 20;
+  static const double obCtaToBottom = 39;
+
+  /// Step-4 look previews: the look-1 mini FAB column (65×132 r20, 48×48
+  /// r14 green FAB with the dark Off glyph, 3 red chevrons low) and the
+  /// look-2 core button (110×110 squircle r42 + three glow layers), the
+  /// 24×24 r8 Tick-Circle check badge 20 under the SELECTED preview.
+  static const double obPreviewColumnW = 65;
+  static const double obPreviewColumnH = 132;
+  static const double obPreviewFab = 48;
+  static const double obPreviewFabRadius = 14;
+  static const double obPreviewColumnRadius = 20;
+  static const double obPreviewColumnTopInset = 8;
+  static const double obPreviewChevronW = 14;
+  static const double obPreviewChevronH = 5;
+  static const double obCoreButton = 110;
+  static const double obCoreButtonRadius = 42;
+  static const double obCoreIcon = 44;
+  static const double obCheckBadge = 24;
+  static const double obCheckBadgeRadius = 8;
+  static const double obCheckGap = 20;
+
+  /// Step-4 (mode + protocol + scan): 77 below the stepper icons, section
+  /// headings 16 w700 with the 26 badge (the protocol page's own family),
+  /// segments 36 r14 gap 21, option cards 101 r24 gap 12 with a 56-wide
+  /// icon+label column 24 from the card's right edge, body text 12/1.25.
+  static const double obStep4TopGap = 77;
+  static const double obHeadingToSegments = 16;
+  static const double obSegmentsToHeading = 38;
+  static const double obHeadingToCard = 14;
+  static const double obCardGap = 12;
+  static const double obCardToHeading = 28;
+  static const double obHeadingToPills = 17;
+  static const double obCardH = 101;
+  static const double obCardRadius = 24;
+  static const double obCardColumnW = 56;
+  static const double obCardColumnInset = 24;
+  static const double obCardBodyGap = 16;
+  static const double obCardIcon = 26;
+  static const double obCardLabelSize = 12;
+  static const double obCardBodySize = 12;
+  static const double obCardBodyHeight = 1.25;
+
+  /// The scanning modal: 216×133 #0F1511 r16, brand mark 38, 21 gap,
+  /// 16 w600 title — over the blurred step-4 page.
+  static const double obModalW = 216;
+  static const double obModalH = 133;
+  static const double obModalRadius = 16;
+  static const double obModalMark = 38;
+  static const double obModalGap = 21;
+  static const double obModalTextSize = 16;
 }

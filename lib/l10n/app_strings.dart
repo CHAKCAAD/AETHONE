@@ -269,6 +269,44 @@ class AppStrings {
   String get bridgesOffDesc => _v['bridgesOffDesc']!;
   String get torLogLevelLabel => _v['torLogLevelLabel']!;
 
+  // ---- v4.23 onboarding («صفحه شروع» — fa VERBATIM from the four wizard
+  // frames + «لودینگ اسکن», transcribed off 3–5× crops) ----
+  /// «زبان برنامه چی باشه؟»
+  String get obLanguageTitle => _v['obLanguageTitle']!;
+
+  /// «ترافیک کدوم کشور مستقیم باشه؟»
+  String get obRoutingTitle => _v['obRoutingTitle']!;
+
+  /// «ضاهر دکمه اتصال چجوری باشه؟» — the frame's own spelling of ظاهر
+  /// (kept verbatim per the pixel-faithful rule; one-line change if the
+  /// owner prefers the dictionary spelling).
+  String get obLookTitle => _v['obLookTitle']!;
+
+  /// «ادامه بده» — the CTA of steps 1–3.
+  String get obContinue => _v['obContinue']!;
+
+  /// «برو بریم!» — the CTA of step 4.
+  String get obFinish => _v['obFinish']!;
+
+  /// «پروتکل اتوماتیک میخوای؟» — the step-4 section heading.
+  String get obProtocolHeading => _v['obProtocolHeading']!;
+
+  /// «دستی» — the manual option card's label («اتوماتیک» reuses
+  /// [protoAutoSheet]).
+  String get obManualLabel => _v['obManualLabel']!;
+
+  /// The «اتوماتیک» card body (3 lines on the frame).
+  String get obAutoDesc => _v['obAutoDesc']!;
+
+  /// The «دستی» card body (3 lines on the frame).
+  String get obManualDesc => _v['obManualDesc']!;
+
+  /// «در حال پیدا کردن بهترین راه» — the scanning modal's title.
+  String get obLoading => _v['obLoading']!;
+
+  /// The language pages' own-name option for Turkmen (Turkmençe).
+  String get langTurkmen => _v['langTurkmen']!;
+
   /// The SELECTED protocol's display name for the protocol card — the
   /// reference frames show the protocol's own name (e.g. «وارپ»), not the
   /// generic word «پروتکل» (owner prompt §«دکمه انتخاب پروتکل»: هر پروتکلی
@@ -519,6 +557,20 @@ class AppStrings {
       'bridgesOff': 'بدون پل',
       'bridgesOffDesc': 'پل‌ها خاموش می‌شوند (فقط برای شبکه‌های بدون فیلتر Tor)',
       'torLogLevelLabel': 'سطح لاگ Tor',
+      // v4.23 onboarding — verbatim from the «صفحه شروع» frames.
+      'obLanguageTitle': 'زبان برنامه چی باشه؟',
+      'obRoutingTitle': 'ترافیک کدوم کشور مستقیم باشه؟',
+      'obLookTitle': 'ضاهر دکمه اتصال چجوری باشه؟',
+      'obContinue': 'ادامه بده',
+      'obFinish': 'برو بریم!',
+      'obProtocolHeading': 'پروتکل اتوماتیک میخوای؟',
+      'obManualLabel': 'دستی',
+      'obAutoDesc':
+          'برنامه به‌صورت خودکار روش‌های اتصال پشتیبانی‌شده را بررسی می‌کند و بر اساس موفقیت اتصال، سرعت و پایداری شبکه، مناسب‌ترین گزینه را انتخاب می‌کند.',
+      'obManualDesc':
+          'بعد از ورود به صفحه اصلی برنامه میتونی از لیست پروتکل ها به صورت دستی پروتکل مورد نظرت رو انتخاب کنی. برنامه 5 پروتکل اصلی و 6 پروتکل غیراصلی داره.',
+      'obLoading': 'در حال پیدا کردن بهترین راه',
+      'langTurkmen': 'Türkmençe',
     },
     'en': {
       'offline': 'Offline',
@@ -736,6 +788,20 @@ class AppStrings {
       'bridgesOff': 'No bridges',
       'bridgesOffDesc': 'Bridges off (only for networks that do not filter Tor)',
       'torLogLevelLabel': 'Tor log level',
+      // v4.23 onboarding.
+      'obLanguageTitle': 'What should the app language be?',
+      'obRoutingTitle': "Which country's traffic should go direct?",
+      'obLookTitle': 'How should the connect button look?',
+      'obContinue': 'Continue',
+      'obFinish': "Let's go!",
+      'obProtocolHeading': 'Want the automatic protocol?',
+      'obManualLabel': 'Manual',
+      'obAutoDesc':
+          'The app automatically checks the supported connection methods and picks the most suitable one based on connection success, speed and network stability.',
+      'obManualDesc':
+          'Once you reach the home screen you can pick your protocol by hand from the list. The app ships 5 main and 6 secondary protocols.',
+      'obLoading': 'Finding the best route',
+      'langTurkmen': 'Türkmençe',
     },
     'ru': {
       'offline': 'Офлайн',
@@ -950,6 +1016,20 @@ class AppStrings {
       'bridgesOff': 'Без мостов',
       'bridgesOffDesc': 'Мосты выключены (для сетей без фильтрации Tor)',
       'torLogLevelLabel': 'Уровень логов Tor',
+      // v4.23 onboarding.
+      'obLanguageTitle': 'Какой язык приложения?',
+      'obRoutingTitle': 'Трафик какой страны идёт напрямую?',
+      'obLookTitle': 'Каким должен быть вид кнопки подключения?',
+      'obContinue': 'Продолжить',
+      'obFinish': 'Поехали!',
+      'obProtocolHeading': 'Автоматический протокол?',
+      'obManualLabel': 'Вручную',
+      'obAutoDesc':
+          'Программа автоматически проверяет поддерживаемые способы подключения и выбирает самый подходящий — по успешности подключения, скорости и стабильности сети.',
+      'obManualDesc':
+          'Попав на главный экран, вы сможете выбрать протокол вручную из списка. В программе 5 основных и 6 дополнительных протоколов.',
+      'obLoading': 'Ищем лучший маршрут',
+      'langTurkmen': 'Türkmençe',
     },
     'zh': {
       'offline': '离线',
@@ -1163,6 +1243,20 @@ class AppStrings {
       'bridgesOff': '无网桥',
       'bridgesOffDesc': '关闭网桥（仅适合不封锁 Tor 的网络）',
       'torLogLevelLabel': 'Tor 日志级别',
+      // v4.23 onboarding.
+      'obLanguageTitle': '程序用什么语言？',
+      'obRoutingTitle': '哪个国家的流量直连？',
+      'obLookTitle': '连接按钮长什么样？',
+      'obContinue': '继续',
+      'obFinish': '出发！',
+      'obProtocolHeading': '要自动选择协议吗？',
+      'obManualLabel': '手动',
+      'obAutoDesc':
+          '程序会自动检测支持的连接方式，并根据连接成功率、速度与网络稳定性选择最合适的一个。',
+      'obManualDesc':
+          '进入主界面后，你可以从列表中手动选择协议。程序内置 5 个主要协议和 6 个次要协议。',
+      'obLoading': '正在寻找最佳路线',
+      'langTurkmen': 'Türkmençe',
     },
     // tk: pending native review — falls back to English (documented gap).
   };

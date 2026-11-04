@@ -295,11 +295,14 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   }
 
   /// Interface-language override: null = follow the system (default),
-  /// else 'fa' | 'en' | 'ru' | 'zh' — validated, anything else keeps the
-  /// previous value.
+  /// else 'fa' | 'en' | 'ru' | 'zh' | 'tk' — validated, anything else keeps
+  /// the previous value. v4.23: 'tk' joins (the onboarding wizard ships a
+  /// Turkmenistan tile); the SHELL maps it onto the English Material
+  /// locale — AppStrings carries the tk→en fallback (documented gap until
+  /// native Turkmen review + flutter_localizations coverage).
   String? appLocale;
 
-  static const Set<String> supportedLocaleCodes = {'fa', 'en', 'ru', 'zh'};
+  static const Set<String> supportedLocaleCodes = {'fa', 'en', 'ru', 'zh', 'tk'};
 
   void setAppLocale(String? code) {
     final pick = (code == null || supportedLocaleCodes.contains(code))
@@ -317,6 +320,21 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   void setShowPatterns(bool on) {
     if (showPatterns == on) return;
     showPatterns = on;
+    notifyListeners();
+  }
+
+  // ---- v4.23 onboarding («صفحه شروع») ----
+
+  /// True once the first-run wizard has been completed — the shell shows
+  /// [OnboardingFlow] until then, and the flag persists so the wizard
+  /// runs exactly once per install.
+  bool onboardingComplete = false;
+
+  /// Commits the wizard: flips [onboardingComplete] (the debounced save
+  /// writes it) and notifies so the shell can hand over to the home.
+  void completeOnboarding() {
+    if (onboardingComplete) return;
+    onboardingComplete = true;
     notifyListeners();
   }
 

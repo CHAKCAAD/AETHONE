@@ -89,7 +89,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('nav-app-version')), findsOneWidget);
-      expect(find.text('4.22.0'), findsOneWidget); // == appVersion const
+      expect(find.text('4.23.0'), findsOneWidget); // == appVersion const
       expect(find.byKey(const ValueKey('nav-telegram')), findsOneWidget);
       expect(find.byKey(const ValueKey('nav-repository')), findsOneWidget);
     });

@@ -43,6 +43,7 @@ class LanguageSettingsPage extends StatelessWidget {
                 options: [
                   ('system', strings.langSystem),
                   ('fa', 'فارسی'),
+                  ('tk', strings.langTurkmen),
                   ('en', 'English'),
                   ('ru', 'Русский'),
                   ('zh', '中文（简体）'),

@@ -4,10 +4,11 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'connection/connection_store.dart';
 import 'core/design_tokens.dart';
 import 'features/home/home_screen.dart';
+import 'features/onboarding/onboarding_flow.dart';
 
 /// The AETHONE app shell. Locale: device locale when supported, else Persian
-/// (the design language). The onboarding flow (later step) takes over
-/// first-run language selection per the prompt annex §7.
+/// (the design language). The first-run wizard (v4.23, «صفحه شروع»)
+/// takes over until [ConnectionStore.onboardingComplete].
 class AethoneApp extends StatelessWidget {
   AethoneApp({super.key, ConnectionStore? store})
       : store = store ?? ConnectionStore();
@@ -42,7 +43,9 @@ class AethoneApp extends StatelessWidget {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          home: HomeScreen(store: store),
+          home: store.onboardingComplete
+              ? HomeScreen(store: store)
+              : OnboardingFlow(store: store),
         );
       },
     );
@@ -51,11 +54,16 @@ class AethoneApp extends StatelessWidget {
   /// The user override → a supported Locale (zh carries the CN script);
   /// null keeps the device locale (MaterialApp resolves it against
   /// [supportedLocales], else Persian — the design language).
+  /// v4.23 — 'tk' (the wizard's Turkmenistan tile) maps onto the English
+  /// Material locale: flutter_localizations has no Turkmen coverage, and
+  /// AppStrings' tk table is the documented en fallback. The store keeps
+  /// the raw 'tk' so both language pages show the pick as selected.
   Locale? _locale(String? code) => switch (code) {
         'fa' => const Locale('fa'),
         'en' => const Locale('en'),
         'ru' => const Locale('ru'),
         'zh' => const Locale('zh', 'CN'),
+        'tk' => const Locale('en'),
         _ => null,
       };
 

@@ -159,6 +159,28 @@ abstract final class AppAssets {
   static const String iconLeft2 = '$_icons/Left 2.svg';
   static const String iconHome1 = '$_icons/Home 1.svg';
 
+  // --- v4.23 onboarding («صفحه شروع»): every glyph pixel-matched against
+  // the four wizard frames + the scanning frame (owner-swappable table —
+  // names the owner has not blessed yet are one-line edits here):
+  //   language step (globe)     -> Website (iconWebsite, the set's globe
+  //                                 glyph — VLM-matched against Map.svg)
+  //   routing step (curved arr) -> Redo (iconRedo, the routing family)
+  //   look step (palette)       -> Palette (iconPalette)
+  //   type step (sliders)       -> Setting (iconSetting)
+  //   system-language tile      -> Setting (the gear glyph, dark-indigo
+  //                                 [AethColors.tileGrayInk] tint)
+  //   routing «none» tile       -> Close Circle (dark-indigo tint)
+  //   check badge under the
+  //     selected look preview   -> Tick Circle (dark on green)
+  //   «اتوماتیک» card           -> Shield Star ([autoShieldAmber] on the
+  //                                 green card, white on dark)
+  //   «دستی» card               -> Shield 1 (the set's plain shield)
+  //   CTA chevron               -> Left 2 (iconLeft2 above, white)
+  static const String iconTickCircle = '$_icons/Tick Circle.svg';
+  static const String iconCloseCircle = '$_icons/Close Circle.svg';
+  static const String iconShield1 = '$_icons/Shield 1.svg';
+  static const String iconShieldStar = '$_icons/Shield Star.svg';
+
   // --- protocol logos. Tor/Psiphon ship as pre-rendered PNGs (their SVGs
   // embed the artwork in hidden tracing layers + the real vector art,
   // which flutter_svg renders partially) — v4.10.
@@ -259,6 +281,11 @@ abstract final class AppAssets {
         iconMinus,
         iconLeft2,
         iconHome1,
+        // v4.23 — the onboarding set (owner-swappable table above).
+        iconTickCircle,
+        iconCloseCircle,
+        iconShield1,
+        iconShieldStar,
         _protoMasque,
         _protoWireguard,
         _protoGool,
