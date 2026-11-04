@@ -112,6 +112,163 @@ class AppStrings {
   String coreLogSize(int bytes) =>
       _v['coreLogSize']!.replaceAll('@b', '$bytes');
 
+  // ---- v4.22 settings sub-pages (owner round: «تنظیمات جزیی» — every
+  // page real, no placeholder sheets; fa is the design language) ----
+  String get subCoreTitle => _v['subCoreTitle']!;
+  String get expertMode => _v['expertMode']!;
+  String get expertModeDesc => _v['expertModeDesc']!;
+  String get appliesNextConnect => _v['appliesNextConnect']!;
+
+  // fragment
+  String get secFragment => _v['secFragment']!;
+  String get fragOff => _v['fragOff']!;
+  String get fragStandard => _v['fragStandard']!;
+  String get fragBalanced => _v['fragBalanced']!;
+  String get fragAggressive => _v['fragAggressive']!;
+  String get fragCustom => _v['fragCustom']!;
+  String get fragOffDesc => _v['fragOffDesc']!;
+  String get fragStandardDesc => _v['fragStandardDesc']!;
+  String get fragBalancedDesc => _v['fragBalancedDesc']!;
+  String get fragAggressiveDesc => _v['fragAggressiveDesc']!;
+  String get fragCustomDesc => _v['fragCustomDesc']!;
+  String get fragSizeLabel => _v['fragSizeLabel']!;
+  String get fragDelayLabel => _v['fragDelayLabel']!;
+  String get fragSizeHint => _v['fragSizeHint']!;
+  String get fragDelayHint => _v['fragDelayHint']!;
+
+  // TLS
+  String get secTls => _v['secTls']!;
+  String get tlsCustom => _v['tlsCustom']!;
+  String get tlsCustomDesc => _v['tlsCustomDesc']!;
+  String get tlsDisableGrease => _v['tlsDisableGrease']!;
+  String get tlsDisableGreaseDesc => _v['tlsDisableGreaseDesc']!;
+  String get tlsGreaseSigalgs => _v['tlsGreaseSigalgs']!;
+  String get tlsGreaseSigalgsDesc => _v['tlsGreaseSigalgsDesc']!;
+  String get tlsEchGrease => _v['tlsEchGrease']!;
+  String get tlsEchGreaseDesc => _v['tlsEchGreaseDesc']!;
+  String get tlsSessionTicket => _v['tlsSessionTicket']!;
+  String get tlsSessionTicketDesc => _v['tlsSessionTicketDesc']!;
+  String get tlsOcsp => _v['tlsOcsp']!;
+  String get tlsOcspDesc => _v['tlsOcspDesc']!;
+  String get tlsSct => _v['tlsSct']!;
+  String get tlsSctDesc => _v['tlsSctDesc']!;
+  String get tlsExtPerm => _v['tlsExtPerm']!;
+  String get tlsExtPermDesc => _v['tlsExtPermDesc']!;
+  String get tlsVerify => _v['tlsVerify']!;
+  String get tlsVerifyDesc => _v['tlsVerifyDesc']!;
+  String get tlsGroups => _v['tlsGroups']!;
+  String get tlsGroupsHint => _v['tlsGroupsHint']!;
+  String get tlsKeyShares => _v['tlsKeyShares']!;
+  String get tlsKeySharesHint => _v['tlsKeySharesHint']!;
+  String get tlsCiphers12 => _v['tlsCiphers12']!;
+  String get tlsCiphers12Hint => _v['tlsCiphers12Hint']!;
+  String get tlsCiphers13 => _v['tlsCiphers13']!;
+  String get tlsCiphers13Hint => _v['tlsCiphers13Hint']!;
+  String get masqueSni => _v['masqueSni']!;
+  String get masqueSniHint => _v['masqueSniHint']!;
+
+  // transport
+  String get secTransport => _v['secTransport']!;
+  String get h2Transport => _v['h2Transport']!;
+  String get h2TransportDesc => _v['h2TransportDesc']!;
+  String get quicV2 => _v['quicV2']!;
+  String get quicV2Desc => _v['quicV2Desc']!;
+  String get dnsLabel => _v['dnsLabel']!;
+  String get dnsHint => _v['dnsHint']!;
+
+  // engine
+  String get secEngine => _v['secEngine']!;
+  String get noizeLabel => _v['noizeLabel']!;
+  String get noizeDesc => _v['noizeDesc']!;
+  String get noizeDefault => _v['noizeDefault']!;
+  String get noizeOff => _v['noizeOff']!;
+  String get noizeLight => _v['noizeLight']!;
+  String get noizeFirewall => _v['noizeFirewall']!;
+  String get noizeBalanced => _v['noizeBalanced']!;
+  String get noizeGfw => _v['noizeGfw']!;
+  String get noizeAggressive => _v['noizeAggressive']!;
+  String get perfLabel => _v['perfLabel']!;
+  String get perfAuto => _v['perfAuto']!;
+  String get perfLow => _v['perfLow']!;
+  String get perfMedium => _v['perfMedium']!;
+  String get perfHigh => _v['perfHigh']!;
+  String get logLevelLabel => _v['logLevelLabel']!;
+  String get logInfo => _v['logInfo']!;
+  String get logDebug => _v['logDebug']!;
+  String get logTrace => _v['logTrace']!;
+  String get keepaliveLabel => _v['keepaliveLabel']!;
+
+  // routing page
+  String get secRoutes => _v['secRoutes']!;
+  String get routeBlockLabel => _v['routeBlockLabel']!;
+  String get routeBlockHint => _v['routeBlockHint']!;
+  String get routeDirectLabel => _v['routeDirectLabel']!;
+  String get routeDirectHint => _v['routeDirectHint']!;
+  String get routesDesc => _v['routesDesc']!;
+  String get routingNone => _v['routingNone']!;
+
+  // connection page
+  String get secProtocolMode => _v['secProtocolMode']!;
+  String get protoModeSmart => _v['protoModeSmart']!;
+  String get smartNote => _v['smartNote']!;
+  String get coreRowDesc => _v['coreRowDesc']!;
+
+  // general page
+  String get secAbout => _v['secAbout']!;
+  String get appVersionLabel => _v['appVersionLabel']!;
+  String get telegramRow => _v['telegramRow']!;
+  String get githubRow => _v['githubRow']!;
+  String get secNotifications => _v['secNotifications']!;
+  String get notificationsComing => _v['notificationsComing']!;
+
+  // language page
+  String get secAppLanguage => _v['secAppLanguage']!;
+  String get langSystem => _v['langSystem']!;
+  String get langDesc => _v['langDesc']!;
+
+  // appearance page
+  String get secHomeLook => _v['secHomeLook']!;
+  String get lookOne => _v['lookOne']!;
+  String get lookTwo => _v['lookTwo']!;
+  String get secMotion => _v['secMotion']!;
+  String get motionStandard => _v['motionStandard']!;
+  String get motionSmooth => _v['motionSmooth']!;
+  String get motionDynamic => _v['motionDynamic']!;
+  String get secPatterns => _v['secPatterns']!;
+  String get showPatterns => _v['showPatterns']!;
+  String get showPatternsDesc => _v['showPatternsDesc']!;
+
+  // security page
+  String get secKillSwitch => _v['secKillSwitch']!;
+  String get killSwitchDesc => _v['killSwitchDesc']!;
+  String get secDiagnostics => _v['secDiagnostics']!;
+
+  // psiphon page
+  String get secExitLocation => _v['secExitLocation']!;
+  String get psiphonLocationDesc => _v['psiphonLocationDesc']!;
+  String get secFronting => _v['secFronting']!;
+  String get frontingModeLabel => _v['frontingModeLabel']!;
+  String get frontingAuto => _v['frontingAuto']!;
+  String get frontingCdn => _v['frontingCdn']!;
+  String get frontingDirect => _v['frontingDirect']!;
+  String get frontingAutoDesc => _v['frontingAutoDesc']!;
+  String get frontingCdnDesc => _v['frontingCdnDesc']!;
+  String get frontingDirectDesc => _v['frontingDirectDesc']!;
+  String get cdnSniLabel => _v['cdnSniLabel']!;
+  String get cdnSniHint => _v['cdnSniHint']!;
+  String get cdnIpsLabel => _v['cdnIpsLabel']!;
+  String get cdnIpsHint => _v['cdnIpsHint']!;
+
+  // tor page
+  String get torLocationDesc => _v['torLocationDesc']!;
+  String get secTorBridges => _v['secTorBridges']!;
+  String get bridgesLabel => _v['bridgesLabel']!;
+  String get bridgesAuto => _v['bridgesAuto']!;
+  String get bridgesOff => _v['bridgesOff']!;
+  String get bridgesAutoDesc => _v['bridgesAutoDesc']!;
+  String get bridgesOffDesc => _v['bridgesOffDesc']!;
+  String get torLogLevelLabel => _v['torLogLevelLabel']!;
+
   /// The SELECTED protocol's display name for the protocol card — the
   /// reference frames show the protocol's own name (e.g. «وارپ»), not the
   /// generic word «پروتکل» (owner prompt §«دکمه انتخاب پروتکل»: هر پروتکلی
@@ -231,6 +388,137 @@ class AppStrings {
       'coreLogCopied': 'لاگ کپی شد',
       'coreLogEmpty': 'لاگی ثبت نشده است — متصل شوید',
       'coreLogSize': 'حجم لاگ: @b بایت',
+      // ---- v4.22 settings sub-pages ----
+      'subCoreTitle': 'تنظیمات هستهٔ Aether',
+      'expertMode': 'حالت حرفه‌ای',
+      'expertModeDesc': 'نمایش تنظیمات پیشرفتهٔ هسته برای کاربران حرفه‌ای',
+      'appliesNextConnect': 'تغییرات از اتصالِ بعدی اعمال می‌شود',
+      'secFragment': 'فرگمنت TLS',
+      'fragOff': 'خاموش',
+      'fragStandard': 'استاندارد',
+      'fragBalanced': 'متعادل',
+      'fragAggressive': 'تهاجمی',
+      'fragCustom': 'سفارشی',
+      'fragOffDesc': 'ClientHello یکپارچه ارسال می‌شود (پیش‌فرض هسته)',
+      'fragStandardDesc': 'پیش‌فرض خود هسته — برش 8-16 بایتی با وقفهٔ 2-10 میلی‌ثانیه',
+      'fragBalancedDesc': 'برش 40-100 بایتی با وقفهٔ 10-20 میلی‌ثانیه — مناسب اکثر شبکه‌های ایران',
+      'fragAggressiveDesc': 'برش ریز 1-3 بایتی با وقفهٔ 1-3 میلی‌ثانیه — برای سخت‌ترین فیلترها',
+      'fragCustomDesc': 'اندازه و وقفه را خودتان تعیین کنید',
+      'fragSizeLabel': 'اندازهٔ برش (بایت)',
+      'fragDelayLabel': 'وقفهٔ بین برش‌ها (میلی‌ثانیه)',
+      'fragSizeHint': 'مثلاً 40-100',
+      'fragDelayHint': 'مثلاً 10-20',
+      'secTls': 'TLS و اثرانگشت',
+      'tlsCustom': 'شخصی‌سازی TLS',
+      'tlsCustomDesc': 'بدون فعال‌سازی، اثرانگشت خود هسته (شبیه کروم) اعمال می‌شود',
+      'tlsDisableGrease': 'حذف مقادیر GREASE',
+      'tlsDisableGreaseDesc': 'حذف مقادیر GREASE از رمزها، گروه‌ها و افزونه‌ها (RFC 8701)',
+      'tlsGreaseSigalgs': 'GREASE در الگوریتم‌های امضا',
+      'tlsGreaseSigalgsDesc': 'قرار دادن مقدار GREASE در ابتدای signature_algorithms مثل کروم',
+      'tlsEchGrease': 'GREASE برای ECH',
+      'tlsEchGreaseDesc': 'ارسال افزونهٔ ECH ساختگی وقتی کلید ECH ارائه نمی‌شود',
+      'tlsSessionTicket': 'Session Ticket',
+      'tlsSessionTicketDesc': 'درخواست session_ticket مثل کروم',
+      'tlsOcsp': 'OCSP Stapling',
+      'tlsOcspDesc': 'درخواست status_request مثل کروم',
+      'tlsSct': 'SCT',
+      'tlsSctDesc': 'درخواست signed_certificate_timestamps مثل کروم',
+      'tlsExtPerm': 'جایگشت افزونه‌ها',
+      'tlsExtPermDesc': 'تغییر ترتیب افزونه‌ها در هر handshake — خاموش کردن آن ترتیب ثابت BoringSSL را اعمال می‌کند',
+      'tlsVerify': 'تأیید گواهی دروازهٔ MASQUE',
+      'tlsVerifyDesc': 'گواهی MASQUE با پین‌های خود هسته بررسی می‌شود (پیش‌فرض: خاموش)',
+      'tlsGroups': 'گروه‌های TLS',
+      'tlsGroupsHint': 'مثلاً P-256:X25519:P-384',
+      'tlsKeyShares': 'Key Shares',
+      'tlsKeySharesHint': 'مثلاً X25519:P-256',
+      'tlsCiphers12': 'رمزنگارهای TLS 1.2',
+      'tlsCiphers12Hint': 'با : جدا شود — مثلاً ECDHE-RSA-AES128-GCM-SHA256',
+      'tlsCiphers13': 'رمزنگارهای TLS 1.3',
+      'tlsCiphers13Hint': 'مثلاً TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256',
+      'masqueSni': 'SNI دستی MASQUE',
+      'masqueSniHint': 'مثلاً www.cloudflare.com',
+      'secTransport': 'انتقال',
+      'h2Transport': 'انتقال روی HTTP/2 (TCP)',
+      'h2TransportDesc': 'به جای HTTP/3 روی QUIC — برای شبکه‌هایی که UDP را می‌بندند',
+      'quicV2': 'مذاکرهٔ QUIC v2',
+      'quicV2Desc': 'بازکردن مسیر HTTP/3 روی شبکه‌هایی که QUIC v1 را می‌بندند',
+      'dnsLabel': 'DNS داخل تونل',
+      'dnsHint': 'با کاما جدا شود — مثلاً 1.1.1.1,1.0.0.1',
+      'secEngine': 'موتور',
+      'noizeLabel': 'پروفایل اغتشاش (Noize)',
+      'noizeDesc': 'پیش‌فرض: فایروال برای MASQUE و متعادل برای WireGuard و GOOL؛ برای شبکه‌های سخت‌گیر، GFW یا تهاجمی را امتحان کنید',
+      'noizeDefault': 'پیش‌فرض هسته',
+      'noizeOff': 'خاموش',
+      'noizeLight': 'سبک',
+      'noizeFirewall': 'فایروال',
+      'noizeBalanced': 'متعادل',
+      'noizeGfw': 'GFW',
+      'noizeAggressive': 'تهاجمی',
+      'perfLabel': 'پروفایل منابع',
+      'perfAuto': 'خودکار',
+      'perfLow': 'کم',
+      'perfMedium': 'متوسط',
+      'perfHigh': 'زیاد',
+      'logLevelLabel': 'سطح لاگ هسته',
+      'logInfo': 'اطلاعات',
+      'logDebug': 'دیباگ',
+      'logTrace': 'تریس',
+      'keepaliveLabel': 'وقفهٔ Keepalive وایرگارد (ثانیه)',
+      'secRoutes': 'مسیرهای مستقیم و مسدود',
+      'routeBlockLabel': 'دامنه‌های همیشه مسدود',
+      'routeBlockHint': 'با کاما یا خط جدید جدا شود — مثلاً ads.example.com',
+      'routeDirectLabel': 'دامنه‌های همیشه مستقیم (بیرون از تونل)',
+      'routeDirectHint': 'مثلاً bank.example.com',
+      'routesDesc': 'پیشوند full: فقط همان نام دقیق، keyword: هر نامی که شامل آن باشد؛ بدون پیشوند، دامنه و همهٔ زیردامنه‌هایش',
+      'routingNone': 'هیچ‌کدام',
+      'secProtocolMode': 'حالت پروتکل',
+      'protoModeSmart': 'اسمارت',
+      'smartNote': 'حالت SMART هنوز در هستهٔ فعلی پیاده‌سازی نشده است (مشخصات آن در SMART_AUTO_SPEC.md ثبت شده)',
+      'coreRowDesc': 'فرگمنت، TLS، انتقال و موتور',
+      'secAbout': 'دربارهٔ برنامه',
+      'appVersionLabel': 'نسخهٔ برنامه',
+      'telegramRow': 'کانال تلگرام',
+      'githubRow': 'مخزن گیت‌هاب',
+      'secNotifications': 'اعلان و رویداد',
+      'notificationsComing': 'اعلان‌های وضعیت اتصال همراه یکپارچه‌سازی سیستم‌عامل اضافه می‌شود',
+      'secAppLanguage': 'زبان برنامه',
+      'langSystem': 'همراه سیستم',
+      'langDesc': 'زبان رابط کاربری — پیش‌فرض فارسی',
+      'secHomeLook': 'نمای صفحهٔ اصلی',
+      'lookOne': 'نمای ۱',
+      'lookTwo': 'نمای ۲',
+      'secMotion': 'انیمیشن',
+      'motionStandard': 'استاندارد',
+      'motionSmooth': 'نرم',
+      'motionDynamic': 'پویا',
+      'secPatterns': 'الگوهای پس‌زمینه',
+      'showPatterns': 'نمایش الگوهای پس‌زمینه',
+      'showPatternsDesc': 'الگوهای سبز/قرمز دو طرف همهٔ صفحات',
+      'secKillSwitch': 'Kill Switch',
+      'killSwitchDesc': 'جلوگیری از نشت ترافیک هنگام قطع اتصال — یکپارچه‌سازی کامل با سیستم‌عامل در گام بعدی',
+      'secDiagnostics': 'تشخیص خطا',
+      'secExitLocation': 'لوکیشن خروجی',
+      'psiphonLocationDesc': 'برای حالت‌های سایفون‌خروج اعمال می‌شود؛ «خودکار» یعنی انتخاب خودِ هسته',
+      'secFronting': 'فرانتینگ CDN',
+      'frontingModeLabel': 'نحوهٔ فرانتینگ',
+      'frontingAuto': 'خودکار',
+      'frontingAutoDesc': 'هسته خودش انتخاب می‌کند (پیش‌فرض)',
+      'frontingCdn': 'فقط CDN',
+      'frontingCdnDesc': 'فقط از طریق CDN های مِک — برای شبکه‌هایی که بقیهٔ مسیرها را می‌بندند',
+      'frontingDirect': 'مستقیم',
+      'frontingDirectDesc': 'بدون فرانتینگ',
+      'cdnSniLabel': 'SNI سرورهای CDN',
+      'cdnSniHint': 'با کاما جدا شود — مثلاً cdn.example.com',
+      'cdnIpsLabel': 'آدرس‌های CDN',
+      'cdnIpsHint': 'مثلاً 104.16.0.1,104.16.1.1',
+      'torLocationDesc': 'انتخاب شما ذخیره و در صفحهٔ اصلی نمایش داده می‌شود؛ هستهٔ Tor خروجی را از میان گره‌های موجود انتخاب می‌کند',
+      'secTorBridges': 'پل‌های Tor',
+      'bridgesLabel': 'سیاست پل‌ها',
+      'bridgesAuto': 'خودکار',
+      'bridgesAutoDesc': 'هسته خودش از bridgedb پل می‌گیرد و پل‌های مناسب را می‌آزماید',
+      'bridgesOff': 'بدون پل',
+      'bridgesOffDesc': 'پل‌ها خاموش می‌شوند (فقط برای شبکه‌های بدون فیلتر Tor)',
+      'torLogLevelLabel': 'سطح لاگ Tor',
     },
     'en': {
       'offline': 'Offline',
@@ -317,6 +605,137 @@ class AppStrings {
       'coreLogCopied': 'Log copied',
       'coreLogEmpty': 'No log recorded yet — connect first',
       'coreLogSize': 'Log size: @b bytes',
+      // ---- v4.22 settings sub-pages ----
+      'subCoreTitle': 'Aether core settings',
+      'expertMode': 'Expert mode',
+      'expertModeDesc': 'Show the advanced core settings for expert users',
+      'appliesNextConnect': 'Changes apply from the next connect',
+      'secFragment': 'TLS fragmentation',
+      'fragOff': 'Off',
+      'fragStandard': 'Standard',
+      'fragBalanced': 'Balanced',
+      'fragAggressive': 'Aggressive',
+      'fragCustom': 'Custom',
+      'fragOffDesc': 'The ClientHello goes out whole (the core default)',
+      'fragStandardDesc': "The core's own default — 8-16 byte shards, 2-10 ms delay",
+      'fragBalancedDesc': '40-100 byte shards with a 10-20 ms delay — fits most Iranian networks',
+      'fragAggressiveDesc': 'Tiny 1-3 byte shards with a 1-3 ms delay — for the strictest filters',
+      'fragCustomDesc': 'Set the size and delay yourself',
+      'fragSizeLabel': 'Shard size (bytes)',
+      'fragDelayLabel': 'Delay between shards (ms)',
+      'fragSizeHint': 'e.g. 40-100',
+      'fragDelayHint': 'e.g. 10-20',
+      'secTls': 'TLS & fingerprint',
+      'tlsCustom': 'Customize TLS',
+      'tlsCustomDesc': 'Off: the core fingerprint (Chrome-like) applies',
+      'tlsDisableGrease': 'Drop GREASE values',
+      'tlsDisableGreaseDesc': 'Leave out the RFC 8701 GREASE values (as Chrome does)',
+      'tlsGreaseSigalgs': 'GREASE in signature algorithms',
+      'tlsGreaseSigalgsDesc': 'Put a GREASE value first among the sigalgs, as Chrome does',
+      'tlsEchGrease': 'GREASE for ECH',
+      'tlsEchGreaseDesc': 'Send a GREASE ECH extension when no ECH key is offered',
+      'tlsSessionTicket': 'Session Ticket',
+      'tlsSessionTicketDesc': 'Ask for session_ticket, as Chrome does',
+      'tlsOcsp': 'OCSP Stapling',
+      'tlsOcspDesc': 'Ask for status_request, as Chrome does',
+      'tlsSct': 'SCT',
+      'tlsSctDesc': 'Ask for signed_certificate_timestamps, as Chrome does',
+      'tlsExtPerm': 'Extension permutation',
+      'tlsExtPermDesc': 'Reorder the extensions on each handshake — off keeps BoringSSL’s fixed order',
+      'tlsVerify': 'Verify the MASQUE gateway certificate',
+      'tlsVerifyDesc': 'Hold the certificate to the core’s own pins (default: off)',
+      'tlsGroups': 'TLS groups',
+      'tlsGroupsHint': 'e.g. P-256:X25519:P-384',
+      'tlsKeyShares': 'Key shares',
+      'tlsKeySharesHint': 'e.g. X25519:P-256',
+      'tlsCiphers12': 'TLS 1.2 cipher suites',
+      'tlsCiphers12Hint': 'colon-separated — e.g. ECDHE-RSA-AES128-GCM-SHA256',
+      'tlsCiphers13': 'TLS 1.3 cipher suites',
+      'tlsCiphers13Hint': 'e.g. TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256',
+      'masqueSni': 'Manual MASQUE SNI',
+      'masqueSniHint': 'e.g. www.cloudflare.com',
+      'secTransport': 'Transport',
+      'h2Transport': 'HTTP/2 (TCP) transport',
+      'h2TransportDesc': 'Instead of HTTP/3 over QUIC — for networks that block UDP',
+      'quicV2': 'QUIC v2 negotiation',
+      'quicV2Desc': 'Opens a path for HTTP/3 where QUIC v1 is blocked',
+      'dnsLabel': 'DNS inside the tunnel',
+      'dnsHint': 'comma-separated — e.g. 1.1.1.1,1.0.0.1',
+      'secEngine': 'Engine',
+      'noizeLabel': 'Obfuscation profile (Noize)',
+      'noizeDesc': 'Default: firewall for MASQUE, balanced for WireGuard and GOOL; try GFW or Aggressive on strict networks',
+      'noizeDefault': 'Core default',
+      'noizeOff': 'Off',
+      'noizeLight': 'Light',
+      'noizeFirewall': 'Firewall',
+      'noizeBalanced': 'Balanced',
+      'noizeGfw': 'GFW',
+      'noizeAggressive': 'Aggressive',
+      'perfLabel': 'Resource profile',
+      'perfAuto': 'Auto',
+      'perfLow': 'Low',
+      'perfMedium': 'Medium',
+      'perfHigh': 'High',
+      'logLevelLabel': 'Core log level',
+      'logInfo': 'Info',
+      'logDebug': 'Debug',
+      'logTrace': 'Trace',
+      'keepaliveLabel': 'WireGuard keepalive interval (s)',
+      'secRoutes': 'Direct & blocked routes',
+      'routeBlockLabel': 'Always-blocked domains',
+      'routeBlockHint': 'comma or newline separated — e.g. ads.example.com',
+      'routeDirectLabel': 'Always-direct domains (outside the tunnel)',
+      'routeDirectHint': 'e.g. bank.example.com',
+      'routesDesc': 'full: that exact name only, keyword: any name containing it; bare entries cover the domain and every subdomain',
+      'routingNone': 'None',
+      'secProtocolMode': 'Protocol mode',
+      'protoModeSmart': 'SMART',
+      'smartNote': 'SMART is not implemented in the current core yet (spec: SMART_AUTO_SPEC.md)',
+      'coreRowDesc': 'Fragmentation, TLS, transport and engine',
+      'secAbout': 'About the app',
+      'appVersionLabel': 'App version',
+      'telegramRow': 'Telegram channel',
+      'githubRow': 'GitHub repository',
+      'secNotifications': 'Notifications & events',
+      'notificationsComing': 'Connection notifications land with the OS integration step',
+      'secAppLanguage': 'App language',
+      'langSystem': 'Follow system',
+      'langDesc': 'The interface language — Persian by default',
+      'secHomeLook': 'Home screen look',
+      'lookOne': 'Look 1',
+      'lookTwo': 'Look 2',
+      'secMotion': 'Animation',
+      'motionStandard': 'Standard',
+      'motionSmooth': 'Smooth',
+      'motionDynamic': 'Dynamic',
+      'secPatterns': 'Background patterns',
+      'showPatterns': 'Show background patterns',
+      'showPatternsDesc': 'The green/red patterns on every page',
+      'secKillSwitch': 'Kill Switch',
+      'killSwitchDesc': 'Stops traffic leaking when the connection drops — full OS integration lands in the next step',
+      'secDiagnostics': 'Diagnostics',
+      'secExitLocation': 'Exit location',
+      'psiphonLocationDesc': 'Applies to the psiphon-exit modes; Auto means the core’s own choice',
+      'secFronting': 'CDN fronting',
+      'frontingModeLabel': 'Fronting mode',
+      'frontingAuto': 'Auto',
+      'frontingAutoDesc': 'The core picks (default)',
+      'frontingCdn': 'CDN only',
+      'frontingCdnDesc': 'Front only through meek CDNs — for networks that block the rest',
+      'frontingDirect': 'Direct',
+      'frontingDirectDesc': 'No fronting',
+      'cdnSniLabel': 'CDN edge server names (SNI)',
+      'cdnSniHint': 'comma-separated — e.g. cdn.example.com',
+      'cdnIpsLabel': 'CDN edge addresses',
+      'cdnIpsHint': 'e.g. 104.16.0.1,104.16.1.1',
+      'torLocationDesc': 'Your pick is remembered and shown on the home screen; the Tor core picks the exit from the available relays',
+      'secTorBridges': 'Tor bridges',
+      'bridgesLabel': 'Bridge policy',
+      'bridgesAuto': 'Auto',
+      'bridgesAutoDesc': 'The core fetches bridges from bridgedb and tries the suitable ones',
+      'bridgesOff': 'No bridges',
+      'bridgesOffDesc': 'Bridges off (only for networks that do not filter Tor)',
+      'torLogLevelLabel': 'Tor log level',
     },
     'ru': {
       'offline': 'Офлайн',
@@ -400,6 +819,137 @@ class AppStrings {
       'coreLogCopied': 'Лог скопирован',
       'coreLogEmpty': 'Лог пока пуст — сначала подключитесь',
       'coreLogSize': 'Размер лога: @b байт',
+      // ---- v4.22 settings sub-pages ----
+      'subCoreTitle': 'Настройки ядра Aether',
+      'expertMode': 'Экспертный режим',
+      'expertModeDesc': 'Показать расширенные настройки ядра для профессионалов',
+      'appliesNextConnect': 'Изменения применятся со следующего подключения',
+      'secFragment': 'Фрагментация TLS',
+      'fragOff': 'Выкл.',
+      'fragStandard': 'Стандартная',
+      'fragBalanced': 'Сбалансированная',
+      'fragAggressive': 'Агрессивная',
+      'fragCustom': 'Своя',
+      'fragOffDesc': 'ClientHello отправляется целиком (по умолчанию ядра)',
+      'fragStandardDesc': 'Собственное умолчание ядра — куски 8-16 байт, пауза 2-10 мс',
+      'fragBalancedDesc': 'Куски 40-100 байт с паузой 10-20 мс — подходит большинству иранских сетей',
+      'fragAggressiveDesc': 'Мелкие куски 1-3 байта с паузой 1-3 мс — для строжайших фильтров',
+      'fragCustomDesc': 'Задайте размер и паузу вручную',
+      'fragSizeLabel': 'Размер куска (байт)',
+      'fragDelayLabel': 'Пауза между кусками (мс)',
+      'fragSizeHint': 'напр. 40-100',
+      'fragDelayHint': 'напр. 10-20',
+      'secTls': 'TLS и отпечаток',
+      'tlsCustom': 'Настроить TLS',
+      'tlsCustomDesc': 'Выкл.: действует отпечаток ядра (как у Chrome)',
+      'tlsDisableGrease': 'Убрать значения GREASE',
+      'tlsDisableGreaseDesc': 'Не отправлять значения GREASE (RFC 8701)',
+      'tlsGreaseSigalgs': 'GREASE в алгоритмах подписи',
+      'tlsGreaseSigalgsDesc': 'GREASE-значение первым в signature_algorithms, как у Chrome',
+      'tlsEchGrease': 'GREASE для ECH',
+      'tlsEchGreaseDesc': 'Отправлять GREASE-расширение ECH, когда ключ ECH не предлагается',
+      'tlsSessionTicket': 'Session Ticket',
+      'tlsSessionTicketDesc': 'Запрашивать session_ticket, как Chrome',
+      'tlsOcsp': 'OCSP Stapling',
+      'tlsOcspDesc': 'Запрашивать status_request, как Chrome',
+      'tlsSct': 'SCT',
+      'tlsSctDesc': 'Запрашивать signed_certificate_timestamps, как Chrome',
+      'tlsExtPerm': 'Перестановка расширений',
+      'tlsExtPermDesc': 'Менять порядок расширений при каждом handshake — выкл. держит фиксированный порядок BoringSSL',
+      'tlsVerify': 'Проверять сертификат шлюза MASQUE',
+      'tlsVerifyDesc': 'Сверять сертификат с пинами ядра (по умолчанию: выкл.)',
+      'tlsGroups': 'Группы TLS',
+      'tlsGroupsHint': 'напр. P-256:X25519:P-384',
+      'tlsKeyShares': 'Key shares',
+      'tlsKeySharesHint': 'напр. X25519:P-256',
+      'tlsCiphers12': 'Шифры TLS 1.2',
+      'tlsCiphers12Hint': 'через двоеточие — напр. ECDHE-RSA-AES128-GCM-SHA256',
+      'tlsCiphers13': 'Шифры TLS 1.3',
+      'tlsCiphers13Hint': 'напр. TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256',
+      'masqueSni': 'Ручной SNI MASQUE',
+      'masqueSniHint': 'напр. www.cloudflare.com',
+      'secTransport': 'Транспорт',
+      'h2Transport': 'Транспорт HTTP/2 (TCP)',
+      'h2TransportDesc': 'Вместо HTTP/3 на QUIC — для сетей, блокирующих UDP',
+      'quicV2': 'Согласование QUIC v2',
+      'quicV2Desc': 'Открывает путь для HTTP/3 там, где QUIC v1 заблокирован',
+      'dnsLabel': 'DNS внутри туннеля',
+      'dnsHint': 'через запятую — напр. 1.1.1.1,1.0.0.1',
+      'secEngine': 'Движок',
+      'noizeLabel': 'Профиль обфускации (Noize)',
+      'noizeDesc': 'По умолчанию: firewall для MASQUE, balanced для WireGuard и GOOL; на строгих сетях попробуйте GFW или Aggressive',
+      'noizeDefault': 'Как в ядре',
+      'noizeOff': 'Выкл.',
+      'noizeLight': 'Лёгкий',
+      'noizeFirewall': 'Firewall',
+      'noizeBalanced': 'Сбалансированный',
+      'noizeGfw': 'GFW',
+      'noizeAggressive': 'Агрессивный',
+      'perfLabel': 'Профиль ресурсов',
+      'perfAuto': 'Авто',
+      'perfLow': 'Низкий',
+      'perfMedium': 'Средний',
+      'perfHigh': 'Высокий',
+      'logLevelLabel': 'Уровень логов ядра',
+      'logInfo': 'Инфо',
+      'logDebug': 'Отладка',
+      'logTrace': 'Трассировка',
+      'keepaliveLabel': 'Интервал keepalive WireGuard (с)',
+      'secRoutes': 'Прямые и заблокированные маршруты',
+      'routeBlockLabel': 'Всегда блокируемые домены',
+      'routeBlockHint': 'через запятую или с новой строки — напр. ads.example.com',
+      'routeDirectLabel': 'Всегда прямые домены (мимо туннеля)',
+      'routeDirectHint': 'напр. bank.example.com',
+      'routesDesc': 'full: только точное имя, keyword: любое имя с этим словом; без префикса — домен и все поддомены',
+      'routingNone': 'Нет',
+      'secProtocolMode': 'Режим протокола',
+      'protoModeSmart': 'СМАРТ',
+      'smartNote': 'Режим SMART ещё не реализован в текущем ядре (спецификация: SMART_AUTO_SPEC.md)',
+      'coreRowDesc': 'Фрагментация, TLS, транспорт и движок',
+      'secAbout': 'О приложении',
+      'appVersionLabel': 'Версия приложения',
+      'telegramRow': 'Канал Telegram',
+      'githubRow': 'Репозиторий GitHub',
+      'secNotifications': 'Уведомления и события',
+      'notificationsComing': 'Уведомления о подключении появятся вместе с интеграцией с ОС',
+      'secAppLanguage': 'Язык приложения',
+      'langSystem': 'Как в системе',
+      'langDesc': 'Язык интерфейса — по умолчанию персидский',
+      'secHomeLook': 'Вид главного экрана',
+      'lookOne': 'Вид 1',
+      'lookTwo': 'Вид 2',
+      'secMotion': 'Анимация',
+      'motionStandard': 'Стандартная',
+      'motionSmooth': 'Плавная',
+      'motionDynamic': 'Динамичная',
+      'secPatterns': 'Фоновые узоры',
+      'showPatterns': 'Показывать фоновые узоры',
+      'showPatternsDesc': 'Зелёные/красные узоры по краям всех страниц',
+      'secKillSwitch': 'Kill Switch',
+      'killSwitchDesc': 'Не пропускает трафик при разрыве — полная интеграция с ОС в следующем шаге',
+      'secDiagnostics': 'Диагностика',
+      'secExitLocation': 'Локация выхода',
+      'psiphonLocationDesc': 'Действует в режимах выхода через Psiphon; «Авто» — выбор самого ядра',
+      'secFronting': 'CDN-фронтинг',
+      'frontingModeLabel': 'Режим фронтинга',
+      'frontingAuto': 'Авто',
+      'frontingAutoDesc': 'Ядро выбирает само (по умолчанию)',
+      'frontingCdn': 'Только CDN',
+      'frontingCdnDesc': 'Фронтить только через meek-CDN — для сетей, блокирующих остальное',
+      'frontingDirect': 'Напрямую',
+      'frontingDirectDesc': 'Без фронтинга',
+      'cdnSniLabel': 'SNI серверов CDN',
+      'cdnSniHint': 'через запятую — напр. cdn.example.com',
+      'cdnIpsLabel': 'Адреса CDN',
+      'cdnIpsHint': 'напр. 104.16.0.1,104.16.1.1',
+      'torLocationDesc': 'Выбор запоминается и показывается на главном экране; ядро Tor выбирает выход из доступных узлов',
+      'secTorBridges': 'Мосты Tor',
+      'bridgesLabel': 'Политика мостов',
+      'bridgesAuto': 'Авто',
+      'bridgesAutoDesc': 'Ядро получает мосты из bridgedb и пробует подходящие',
+      'bridgesOff': 'Без мостов',
+      'bridgesOffDesc': 'Мосты выключены (для сетей без фильтрации Tor)',
+      'torLogLevelLabel': 'Уровень логов Tor',
     },
     'zh': {
       'offline': '离线',
@@ -482,6 +1032,137 @@ class AppStrings {
       'coreLogCopied': '日志已复制',
       'coreLogEmpty': '暂无日志 — 请先连接',
       'coreLogSize': '日志大小：@b 字节',
+      // ---- v4.22 settings sub-pages ----
+      'subCoreTitle': 'Aether 内核设置',
+      'expertMode': '专家模式',
+      'expertModeDesc': '为专业用户显示内核高级设置',
+      'appliesNextConnect': '更改自下次连接起生效',
+      'secFragment': 'TLS 分片',
+      'fragOff': '关闭',
+      'fragStandard': '标准',
+      'fragBalanced': '均衡',
+      'fragAggressive': '激进',
+      'fragCustom': '自定义',
+      'fragOffDesc': 'ClientHello 完整发送（内核默认）',
+      'fragStandardDesc': '内核自带默认 — 8-16 字节分片，间隔 2-10 毫秒',
+      'fragBalancedDesc': '40-100 字节分片，间隔 10-20 毫秒 — 适合伊朗大多数网络',
+      'fragAggressiveDesc': '1-3 字节微片，间隔 1-3 毫秒 — 面向最严苛的过滤',
+      'fragCustomDesc': '自行设定分片大小与间隔',
+      'fragSizeLabel': '分片大小（字节）',
+      'fragDelayLabel': '分片间隔（毫秒）',
+      'fragSizeHint': '如 40-100',
+      'fragDelayHint': '如 10-20',
+      'secTls': 'TLS 与指纹',
+      'tlsCustom': '自定义 TLS',
+      'tlsCustomDesc': '关闭时应用内核指纹（模拟 Chrome）',
+      'tlsDisableGrease': '去掉 GREASE 值',
+      'tlsDisableGreaseDesc': '不发送 RFC 8701 的 GREASE 值',
+      'tlsGreaseSigalgs': '签名算法中的 GREASE',
+      'tlsGreaseSigalgsDesc': '在 signature_algorithms 开头放入 GREASE 值，如同 Chrome',
+      'tlsEchGrease': 'ECH 的 GREASE',
+      'tlsEchGreaseDesc': '未提供 ECH 密钥时发送 GREASE ECH 扩展',
+      'tlsSessionTicket': 'Session Ticket',
+      'tlsSessionTicketDesc': '请求 session_ticket，如同 Chrome',
+      'tlsOcsp': 'OCSP Stapling',
+      'tlsOcspDesc': '请求 status_request，如同 Chrome',
+      'tlsSct': 'SCT',
+      'tlsSctDesc': '请求 signed_certificate_timestamps，如同 Chrome',
+      'tlsExtPerm': '扩展置换',
+      'tlsExtPermDesc': '每次握手重排扩展顺序 — 关闭时保持 BoringSSL 固定顺序',
+      'tlsVerify': '校验 MASQUE 网关证书',
+      'tlsVerifyDesc': '用内核自带的固定证书校验（默认：关闭）',
+      'tlsGroups': 'TLS groups',
+      'tlsGroupsHint': '如 P-256:X25519:P-384',
+      'tlsKeyShares': 'Key shares',
+      'tlsKeySharesHint': '如 X25519:P-256',
+      'tlsCiphers12': 'TLS 1.2 密码套件',
+      'tlsCiphers12Hint': '冒号分隔 — 如 ECDHE-RSA-AES128-GCM-SHA256',
+      'tlsCiphers13': 'TLS 1.3 密码套件',
+      'tlsCiphers13Hint': '如 TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256',
+      'masqueSni': '手动 MASQUE SNI',
+      'masqueSniHint': '如 www.cloudflare.com',
+      'secTransport': '传输',
+      'h2Transport': 'HTTP/2（TCP）传输',
+      'h2TransportDesc': '代替 HTTP/3 over QUIC — 适合封锁 UDP 的网络',
+      'quicV2': 'QUIC v2 协商',
+      'quicV2Desc': '在封锁 QUIC v1 的网络上打开 HTTP/3 通路',
+      'dnsLabel': '隧道内 DNS',
+      'dnsHint': '逗号分隔 — 如 1.1.1.1,1.0.0.1',
+      'secEngine': '引擎',
+      'noizeLabel': '混淆配置（Noize）',
+      'noizeDesc': '默认：MASQUE 用 firewall，WireGuard/GOOL 用 balanced；严格网络可试 GFW 或激进',
+      'noizeDefault': '内核默认',
+      'noizeOff': '关闭',
+      'noizeLight': '轻度',
+      'noizeFirewall': 'Firewall',
+      'noizeBalanced': '均衡',
+      'noizeGfw': 'GFW',
+      'noizeAggressive': '激进',
+      'perfLabel': '资源档位',
+      'perfAuto': '自动',
+      'perfLow': '低',
+      'perfMedium': '中',
+      'perfHigh': '高',
+      'logLevelLabel': '内核日志级别',
+      'logInfo': '信息',
+      'logDebug': '调试',
+      'logTrace': '跟踪',
+      'keepaliveLabel': 'WireGuard keepalive 间隔（秒）',
+      'secRoutes': '直连与封锁路由',
+      'routeBlockLabel': '始终封锁的域名',
+      'routeBlockHint': '逗号或换行分隔 — 如 ads.example.com',
+      'routeDirectLabel': '始终直连的域名（绕过隧道）',
+      'routeDirectHint': '如 bank.example.com',
+      'routesDesc': 'full: 仅精确名称，keyword: 包含该词的任意名称；无前缀则覆盖该域名及其全部子域名',
+      'routingNone': '无',
+      'secProtocolMode': '协议模式',
+      'protoModeSmart': '智能',
+      'smartNote': 'SMART 尚未在当前内核实现（规范见 SMART_AUTO_SPEC.md）',
+      'coreRowDesc': '分片、TLS、传输与引擎',
+      'secAbout': '关于应用',
+      'appVersionLabel': '应用版本',
+      'telegramRow': 'Telegram 频道',
+      'githubRow': 'GitHub 仓库',
+      'secNotifications': '通知与事件',
+      'notificationsComing': '连接通知将随系统集成步骤加入',
+      'secAppLanguage': '应用语言',
+      'langSystem': '跟随系统',
+      'langDesc': '界面语言 — 默认波斯语',
+      'secHomeLook': '主屏样式',
+      'lookOne': '样式一',
+      'lookTwo': '样式二',
+      'secMotion': '动画',
+      'motionStandard': '标准',
+      'motionSmooth': '平滑',
+      'motionDynamic': '动感',
+      'secPatterns': '背景花纹',
+      'showPatterns': '显示背景花纹',
+      'showPatternsDesc': '所有页面两侧的绿/红花纹',
+      'secKillSwitch': 'Kill Switch',
+      'killSwitchDesc': '断线时防止流量泄漏 — 与操作系统的完整集成在下一步实现',
+      'secDiagnostics': '诊断',
+      'secExitLocation': '出口位置',
+      'psiphonLocationDesc': '作用于 Psiphon 出口模式；「自动」即内核自行选择',
+      'secFronting': 'CDN 前置',
+      'frontingModeLabel': '前置方式',
+      'frontingAuto': '自动',
+      'frontingAutoDesc': '内核自行选择（默认）',
+      'frontingCdn': '仅 CDN',
+      'frontingCdnDesc': '仅通过 meek CDN 前置 — 适合封锁其余路径的网络',
+      'frontingDirect': '直连',
+      'frontingDirectDesc': '不使用前置',
+      'cdnSniLabel': 'CDN 服务器名称（SNI）',
+      'cdnSniHint': '逗号分隔 — 如 cdn.example.com',
+      'cdnIpsLabel': 'CDN 地址',
+      'cdnIpsHint': '如 104.16.0.1,104.16.1.1',
+      'torLocationDesc': '你的选择会被记住并显示在主屏；Tor 内核从可用节点中选择出口',
+      'secTorBridges': 'Tor 网桥',
+      'bridgesLabel': '网桥策略',
+      'bridgesAuto': '自动',
+      'bridgesAutoDesc': '内核从 bridgedb 获取网桥并尝试合适的',
+      'bridgesOff': '无网桥',
+      'bridgesOffDesc': '关闭网桥（仅适合不封锁 Tor 的网络）',
+      'torLogLevelLabel': 'Tor 日志级别',
     },
     // tk: pending native review — falls back to English (documented gap).
   };

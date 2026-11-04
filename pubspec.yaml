@@ -3,7 +3,7 @@ description: >-
   AETHONE — cross-platform VPN client. Flutter UI layer; network engines are
   Aether (Rust, WARP client) and zeptun (Zig, userspace TUN router).
 publish_to: none
-version: 0.1.0+1
+version: 4.22.0+1
 
 environment:
   sdk: ^3.13.0
@@ -126,3 +126,17 @@ flutter:
     - design/آیکون های اپ/Swap 1.svg
     # v4.16 descriptions popup: the × close glyph.
     - design/آیکون های اپ/Close.svg
+    # v4.22 (settings sub-pages): every glyph the sub-pages use — the
+    # owner-swappable icon table lives in lib/core/app_assets.dart.
+    - design/آیکون های اپ/Crop 1.svg
+    - design/آیکون های اپ/Arrow Swap Horizontal.svg
+    - design/آیکون های اپ/Down 1.svg
+    - design/آیکون های اپ/Up 1.svg
+    - design/آیکون های اپ/Watch 1.svg
+    - design/آیکون های اپ/Location.svg
+    - design/آیکون های اپ/Discovery 1.svg
+    - design/آیکون های اپ/Shuffle 1.svg
+    - design/آیکون های اپ/Add.svg
+    - design/آیکون های اپ/Minus.svg
+    - design/آیکون های اپ/Left 2.svg
+    - design/آیکون های اپ/Home 1.svg

@@ -19,6 +19,7 @@ import 'package:flutter/services.dart';
 import '../core/app_assets.dart';
 import '../core/motion.dart';
 import 'connection_state.dart';
+import 'core_settings.dart';
 import 'engine.dart';
 import 'platform_engine_adapter.dart';
 import 'transport_modes.dart';
@@ -142,6 +143,29 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   @override
   String torLocation = LocationWheelPolicy.autoCode;
 
+  /// v4.22 — direct setters for the SETTINGS pages (the Psiphon/Tor pages
+  /// write their own family field regardless of the currently selected
+  /// protocol; [selectLocation] stays the home-wheel path).
+  void setPsiphonLocation(String code) {
+    final pick = LocationWheelPolicy.autoCode == code ||
+            (code.length == 2 && code == code.toLowerCase())
+        ? code
+        : LocationWheelPolicy.autoCode;
+    if (psiphonLocation == pick) return;
+    psiphonLocation = pick;
+    notifyListeners();
+  }
+
+  void setTorLocation(String code) {
+    final pick = LocationWheelPolicy.autoCode == code ||
+            (code.length == 2 && code == code.toLowerCase())
+        ? code
+        : LocationWheelPolicy.autoCode;
+    if (torLocation == pick) return;
+    torLocation = pick;
+    notifyListeners();
+  }
+
   /// v4.21 — ONE commit path for every wheel settle/tap: routes the pick
   /// into the current family's field (psiphon / tor), or the plain wheel
   /// pick for non-family protocols. Never fires while a transition is in
@@ -253,6 +277,48 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
 
   HomeLook homeLook = HomeLook.one;
   MotionStyle animationStyle = MotionStyle.standard;
+
+  // ---- v4.22 settings sub-pages ----
+
+  /// The fine-grained Aether core layer (fragment / TLS / transport /
+  /// engine / family expert knobs) — owned here, mutated through
+  /// [updateCore], consumed by the platform adapter, persisted as one
+  /// JSON blob by the persistence layer.
+  @override
+  CoreSettings coreSettings = CoreSettings();
+
+  /// The single commit path for every sub-page mutation (notify + the
+  /// debounced save); changes apply from the NEXT connect.
+  void updateCore(void Function(CoreSettings) mutate) {
+    mutate(coreSettings);
+    notifyListeners();
+  }
+
+  /// Interface-language override: null = follow the system (default),
+  /// else 'fa' | 'en' | 'ru' | 'zh' — validated, anything else keeps the
+  /// previous value.
+  String? appLocale;
+
+  static const Set<String> supportedLocaleCodes = {'fa', 'en', 'ru', 'zh'};
+
+  void setAppLocale(String? code) {
+    final pick = (code == null || supportedLocaleCodes.contains(code))
+        ? code
+        : appLocale;
+    if (appLocale == pick) return;
+    appLocale = pick;
+    notifyListeners();
+  }
+
+  /// v4.22 — the background patterns on/off switch (appearance page).
+  /// Default ON (the owner's own design); OFF renders the bare bg colour.
+  bool showPatterns = true;
+
+  void setShowPatterns(bool on) {
+    if (showPatterns == on) return;
+    showPatterns = on;
+    notifyListeners();
+  }
 
   /// Effective style after the OS reduce-motion clamp.
   MotionStyle effectiveMotionStyle(BuildContext context) {

@@ -120,6 +120,45 @@ abstract final class AppAssets {
   // v4.16 descriptions popup: the × close glyph (the set's own Close.svg).
   static const String iconClose = '$_icons/Close.svg';
 
+  // --- v4.22 (owner round: «تنظیمات جزیی»): the settings sub-page icons —
+  // every glyph from the app's own icon pack ONLY (owner: «از آیکون های
+  // پوشه آیکون های اپ برای بخش تنظیمات استفاده کن و از آیکون دیگه ای
+  // استفاده نکن»). Names the owner has not personally blessed yet are
+  // stopgaps the owner swaps by editing THIS table (one-line change each,
+  // owner: «اگه نمیدونستی چه آیکونی بزاری یه آیکون رندوم بزار بعدا توی
+  // اصلاح میگم تغیرش بدی»):
+  //   fragment (TLS shard)      -> Crop 1
+  //   TLS / core handshake      -> Shield Tick (iconShieldTick above)
+  //   H2/H3 transport switch    -> Arrow Swap Horizontal
+  //   DNS                       -> Website (iconWebsite, globe glyph)
+  //   log level / diagnostics   -> Activity 4 (iconActivity4 above)
+  //   performance               -> Graph Up (iconGraphUp above)
+  //   keepalive (WG)            -> Watch 1
+  //   expert-section chevron    -> Down 1 / Up 1
+  //   location (family pages)   -> Location
+  //   tor bridges               -> Discovery 1
+  //   psiphon cdn fronting      -> Shuffle 1
+  //   kill-switch row           -> Off (iconOff above)
+  //   stepper +/-               -> Add / Minus
+  static const String iconCrop1 = '$_icons/Crop 1.svg';
+  static const String iconArrowSwapHorizontal =
+      '$_icons/Arrow Swap Horizontal.svg';
+  static const String iconDown1 = '$_icons/Down 1.svg';
+  static const String iconUp1 = '$_icons/Up 1.svg';
+  static const String iconWatch1 = '$_icons/Watch 1.svg';
+  static const String iconLocation = '$_icons/Location.svg';
+  static const String iconDiscovery1 = '$_icons/Discovery 1.svg';
+  static const String iconShuffle1 = '$_icons/Shuffle 1.svg';
+  static const String iconAdd = '$_icons/Add.svg';
+  static const String iconMinus = '$_icons/Minus.svg';
+
+  // v4.22 — the settings sub-page set, second batch: the in-page nav
+  // chevron (Left 2 = the mirror sibling of the back chevron Right 2;
+  // in this RTL app a LEFT-pointing chevron reads “deeper”) and the
+  // home-look section glyph.
+  static const String iconLeft2 = '$_icons/Left 2.svg';
+  static const String iconHome1 = '$_icons/Home 1.svg';
+
   // --- protocol logos. Tor/Psiphon ship as pre-rendered PNGs (their SVGs
   // embed the artwork in hidden tracing layers + the real vector art,
   // which flutter_svg renders partially) — v4.10.
@@ -207,6 +246,19 @@ abstract final class AppAssets {
         iconPassword1,
         iconSwap1,
         iconClose,
+        // v4.22 — the settings sub-page set (owner-swappable table above).
+        iconCrop1,
+        iconArrowSwapHorizontal,
+        iconDown1,
+        iconUp1,
+        iconWatch1,
+        iconLocation,
+        iconDiscovery1,
+        iconShuffle1,
+        iconAdd,
+        iconMinus,
+        iconLeft2,
+        iconHome1,
         _protoMasque,
         _protoWireguard,
         _protoGool,

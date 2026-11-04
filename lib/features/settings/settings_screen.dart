@@ -27,9 +27,14 @@
 ///     pills: Zeptun Tunnel / Aether Core with the owner's own GitHub logo
 ///     SVG, corners r20 (same Rectangle-79 look, v4.15 #3).
 ///
-/// Subpages (the six categories + Psiphon/Tor sheets) are pending the
-/// owner's mockup approval (doc §11.5) — the cards open the same honest
-/// placeholder sheet used across the app until then.
+/// Subpages (v4.22 — the owner's «تنظیمات جزیی» round): every card, pill
+/// and status card opens its REAL page now — the six categories
+/// (routing / general / connection / language / appearance / security),
+/// the Psiphon/Tor family pages, the three status cards (Kill Switch →
+/// security, routing area → routing, protocol → connection) and the
+/// Aether-core entry sits on the connection page (fragment / TLS /
+/// transport / engine — the owner's headline, with the Iran fragment
+/// profiles).
 library;
 
 import 'dart:async';
@@ -46,6 +51,14 @@ import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../../l10n/app_strings.dart';
 import '../home/widgets/pattern_sides.dart';
+import 'appearance_page.dart';
+import 'connection_page.dart';
+import 'general_page.dart';
+import 'language_page.dart';
+import 'psiphon_page.dart';
+import 'routing_page.dart';
+import 'security_page.dart';
+import 'tor_page.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.store});
@@ -93,49 +106,24 @@ class SettingsScreen extends StatelessWidget {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  void _openPlaceholderSheet(BuildContext context, String message) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AethColors.cardDark,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AethColors.textSecondary,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: 'IRANYekanX',
-                fontWeight: FontWeight.w500,
-                fontSize: 15,
-                color: AethColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
+  /// v4.22 — pushes one of the eight sub-pages (the six cards, the two
+  /// family pills, the status cards all land here). Plain MaterialPageRoute:
+  /// the sub-pages' own entrance cascade rides its route animation.
+  void _openSubPage(BuildContext context, Widget page) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => page),
     );
   }
 
   /// v4.21 — opens the core diagnostics page (the captured stderr of both
   /// engines — owner: «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا
-  /// بهتر بتونیم دیباگ کنیم»).
+  /// بهتر بتونیم دیباگ کنیم»). v4.22 — carries the appearance switch so
+  /// the page honors the patterns-off preference too.
   void _openCoreLog(BuildContext context) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const CoreLogPage()),
+      MaterialPageRoute<void>(
+        builder: (_) => CoreLogPage(showPatterns: store.showPatterns),
+      ),
     );
   }
 
@@ -159,14 +147,16 @@ class SettingsScreen extends StatelessWidget {
             // v4.21 — the owner's decree: the settings page carries the
             // HOME screen's patterns, exactly the same, same position
             // («از پترن های صفحه اصلی برای سایر صفحات مثل انتخاب پروتکل و
-            // تنطیمات استفاده کن دقیقا همونا با همون مکان»).
-            Positioned.fill(
-              child: PatternSides(
-                connected: store.isConnected,
-                style: store.animationStyle,
-                stage: PatternStage.home,
+            // تنطیمات استفاده کن دقیقا همونا با همون مکان»). v4.22 —
+            // gated by the appearance switch (bare bg when off).
+            if (store.showPatterns)
+              Positioned.fill(
+                child: PatternSides(
+                  connected: store.isConnected,
+                  style: store.animationStyle,
+                  stage: PatternStage.home,
+                ),
               ),
-            ),
             // v4.10 lesson (main-screen defect): under the fa/RTL locale a
             // plain Row MIRRORS — the settings frame's pixel layout is
             // LTR-locked here (geometry only; Persian text inside renders
@@ -189,23 +179,28 @@ class SettingsScreen extends StatelessWidget {
                         )),
                         SizedBox(height: 22 * s),
                         _enter(context, 1, _SixCardGrid(
-                          onCardTap: (title) => _openPlaceholderSheet(
+                          onCardTap: (i) => _openSubPage(
                             context,
-                            '$title — ${strings.settingsSubpageComingNext}',
+                            switch (i) {
+                              0 => RoutingSettingsPage(store: store),
+                              1 => GeneralSettingsPage(store: store),
+                              2 => ConnectionSettingsPage(store: store),
+                              3 => LanguageSettingsPage(store: store),
+                              4 => AppearanceSettingsPage(store: store),
+                              _ => SecuritySettingsPage(store: store),
+                            },
                           ),
                         )),
                         SizedBox(height: AethGeometry.settingsPillGap * s),
                         _enter(context, 3, _ProtocolPills(
                           textDir: appDir,
-                          onPsiphon: () => _openPlaceholderSheet(
+                          onPsiphon: () => _openSubPage(
                             context,
-                            '${strings.settingsPsiphon} — '
-                            '${strings.settingsSubpageComingNext}',
+                            PsiphonSettingsPage(store: store),
                           ),
-                          onTor: () => _openPlaceholderSheet(
+                          onTor: () => _openSubPage(
                             context,
-                            '${strings.settingsTor} — '
-                            '${strings.settingsSubpageComingNext}',
+                            TorSettingsPage(store: store),
                           ),
                         )),
                         SizedBox(
@@ -218,7 +213,21 @@ class SettingsScreen extends StatelessWidget {
                         SizedBox(
                           height: AethGeometry.settingsHeadingGapToCards * s,
                         ),
-                        _enter(context, 5, _StatusCards(store: store)),
+                        _enter(context, 5, _StatusCards(
+                          store: store,
+                          onKillSwitch: () => _openSubPage(
+                            context,
+                            SecuritySettingsPage(store: store),
+                          ),
+                          onRoutingArea: () => _openSubPage(
+                            context,
+                            RoutingSettingsPage(store: store),
+                          ),
+                          onProtocol: () => _openSubPage(
+                            context,
+                            ConnectionSettingsPage(store: store),
+                          ),
+                        )),
                         SizedBox(
                           height: AethGeometry.settingsHeading2GapToServer * s,
                         ),
@@ -369,7 +378,10 @@ class _TileButton extends StatelessWidget {
 class _SixCardGrid extends StatelessWidget {
   const _SixCardGrid({required this.onCardTap});
 
-  final void Function(String title) onCardTap;
+  /// v4.22 — the card's index (0..5, row-major): the page router in
+  /// [SettingsScreen.build] maps it to its sub-page (NEVER the localized
+  /// title — the index is locale-proof).
+  final void Function(int index) onCardTap;
 
   @override
   Widget build(BuildContext context) {
@@ -414,9 +426,9 @@ class _SixCardGrid extends StatelessWidget {
     ];
     return Column(
       children: [
-        _cardRow(context, row1),
+        _cardRow(context, row1, 0),
         SizedBox(height: AethGeometry.settingsRowGap * s),
-        _cardRow(context, row2),
+        _cardRow(context, row2, 3),
       ],
     );
   }
@@ -424,6 +436,7 @@ class _SixCardGrid extends StatelessWidget {
   Widget _cardRow(
     BuildContext context,
     List<({String asset, String title, String sub})> cards,
+    int baseIndex,
   ) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     return Row(
@@ -435,7 +448,7 @@ class _SixCardGrid extends StatelessWidget {
               asset: c.asset,
               title: c.title,
               subtitle: c.sub,
-              onTap: () => onCardTap(c.title),
+              onTap: () => onCardTap(baseIndex + i),
             ),
           ),
         ],
@@ -741,9 +754,21 @@ class _SectionHeading extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _StatusCards extends StatelessWidget {
-  const _StatusCards({required this.store});
+  const _StatusCards({
+    required this.store,
+    required this.onKillSwitch,
+    required this.onRoutingArea,
+    required this.onProtocol,
+  });
 
   final ConnectionStore store;
+
+  /// v4.22 — the three cards are now TAPPABLE: each opens the page that
+  /// owns its value (the owner: «تنظیمات به درستی توی دسته بندی مناسب
+  /// خودشون قرار بگیرن و به صفحه اصلی تنظیمات متصل باشن»).
+  final VoidCallback onKillSwitch;
+  final VoidCallback onRoutingArea;
+  final VoidCallback onProtocol;
 
   @override
   Widget build(BuildContext context) {
@@ -767,6 +792,7 @@ class _StatusCards extends StatelessWidget {
             subtitleColor: store.killSwitch
                 ? AethColors.accentConnected
                 : AethColors.textSecondary,
+            onTap: onKillSwitch,
           ),
         ),
         SizedBox(width: AethGeometry.settingsCardGap * s),
@@ -776,6 +802,7 @@ class _StatusCards extends StatelessWidget {
             title: strings.settingsRoutingArea,
             subtitle: strings.routingRegionName(store.routingRegion),
             subtitleColor: AethColors.accentConnected,
+            onTap: onRoutingArea,
           ),
         ),
         SizedBox(width: AethGeometry.settingsCardGap * s),
@@ -786,6 +813,7 @@ class _StatusCards extends StatelessWidget {
             title: strings.protocol,
             subtitle: store.protocolModeSmart ? 'SMART' : 'AUTO / SMART',
             subtitleColor: AethColors.accentConnected,
+            onTap: onProtocol,
           ),
         ),
       ],
@@ -946,7 +974,10 @@ class _CoreLogCard extends StatelessWidget {
 /// open, supports copy (share sheet is out of scope — Clipboard + a toast
 /// is honest) and clear.
 class CoreLogPage extends StatefulWidget {
-  const CoreLogPage({super.key});
+  const CoreLogPage({super.key, this.showPatterns = true});
+
+  /// v4.22 — the appearance switch (bare bg when off, like every page).
+  final bool showPatterns;
 
   @override
   State<CoreLogPage> createState() => _CoreLogPageState();
@@ -1005,14 +1036,16 @@ class _CoreLogPageState extends State<CoreLogPage> {
         backgroundColor: AethColors.bgScreen,
         body: Stack(
           children: [
-            // The home patterns behind (v4.21 — same stage as every page).
-            const Positioned.fill(
-              child: PatternSides(
-                connected: false,
-                style: MotionStyle.off,
-                stage: PatternStage.home,
+            // The home patterns behind (v4.21 — same stage as every page;
+            // v4.22 — honors the appearance switch).
+            if (widget.showPatterns)
+              const Positioned.fill(
+                child: PatternSides(
+                  connected: false,
+                  style: MotionStyle.off,
+                  stage: PatternStage.home,
+                ),
               ),
-            ),
             SafeArea(
               child: Column(
                 children: [

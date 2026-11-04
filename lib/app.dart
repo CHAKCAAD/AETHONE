@@ -25,19 +25,39 @@ class AethoneApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'AETHONE',
-      debugShowCheckedModeBanner: false,
-      theme: _theme(),
-      supportedLocales: supportedLocales,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      home: HomeScreen(store: store),
+    // v4.22 — the language sub-page writes store.appLocale; the shell
+    // listens so a change rebuilds MaterialApp with the new locale (null =
+    // follow the system, the default).
+    return AnimatedBuilder(
+      animation: store,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'AETHONE',
+          debugShowCheckedModeBanner: false,
+          theme: _theme(),
+          locale: _locale(store.appLocale),
+          supportedLocales: supportedLocales,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: HomeScreen(store: store),
+        );
+      },
     );
   }
+
+  /// The user override → a supported Locale (zh carries the CN script);
+  /// null keeps the device locale (MaterialApp resolves it against
+  /// [supportedLocales], else Persian — the design language).
+  Locale? _locale(String? code) => switch (code) {
+        'fa' => const Locale('fa'),
+        'en' => const Locale('en'),
+        'ru' => const Locale('ru'),
+        'zh' => const Locale('zh', 'CN'),
+        _ => null,
+      };
 
   ThemeData _theme() {
     const scheme = ColorScheme.dark(

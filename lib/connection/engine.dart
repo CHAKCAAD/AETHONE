@@ -19,6 +19,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/app_assets.dart';
 import 'connection_state.dart';
+import 'core_settings.dart';
 
 /// Minimal `ProxyEndpoint` model (prompt §7): filled only from the real
 /// listener configuration — never guessed.
@@ -114,6 +115,11 @@ abstract class EngineConfigSource {
 
   /// «سرعت اسکن» 1..5 (protocol sheet; feeds the core scan profile).
   int get scanSpeed;
+
+  /// v4.22 — the fine-grained Aether core layer (fragment / TLS /
+  /// transport / engine / family expert knobs). The adapter folds it into
+  /// the arg list + process env of every `aether_core_start`.
+  CoreSettings get coreSettings;
 }
 
 /// The seam the UI talks to. The production implementation (M2) drives the

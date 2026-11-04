@@ -158,14 +158,16 @@ class _ProtocolPageState extends State<ProtocolPage> {
                 // v4.21 — the owner's decree: the OTHER pages carry the
                 // home screen's patterns, exactly the same, same position
                 // («از پترن های صفحه اصلی برای سایر صفحات مثل انتخاب پروتکل
-                // و تنطیمات استفاده کن دقیقا همونا با همون مکان»).
-                Positioned.fill(
-                  child: PatternSides(
-                    connected: widget.store.isConnected,
-                    style: widget.store.animationStyle,
-                    stage: PatternStage.home,
+                // و تنطیمات استفاده کن دقیقا همونا با همون مکان»). v4.22 —
+                // gated by the appearance switch (bare bg when off).
+                if (widget.store.showPatterns)
+                  Positioned.fill(
+                    child: PatternSides(
+                      connected: widget.store.isConnected,
+                      style: widget.store.animationStyle,
+                      stage: PatternStage.home,
+                    ),
                   ),
-                ),
                 SafeArea(
                   child: SingleChildScrollView(
                     child: SizedBox(

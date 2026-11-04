@@ -42,6 +42,7 @@ import '../core/app_assets.dart';
 import 'aether_env.dart';
 import 'aether_ffi.dart';
 import 'connection_state.dart';
+import 'core_settings.dart';
 import 'engine.dart';
 import 'tunnel_probe.dart';
 import 'transport_modes.dart';
@@ -64,6 +65,7 @@ class AetherArguments {
     ProtocolId? chain,
     String? countryCode,
     int scanSpeed = 5,
+    CoreSettings? core,
     required String filesDir,
     required String nativeLibraryDir,
   }) {
@@ -160,7 +162,110 @@ class AetherArguments {
         args.addAll(['--psiphon-region', country.toLowerCase()]);
       }
     }
+
+    // --- v4.22 — the fine-grained core layer (the settings sub-pages).
+    // Folded ONLY when a value differs from the core's built-in default,
+    // so a default-constructed CoreSettings never adds noise to the list.
+    args.addAll(coreArgs(core ?? CoreSettings(), protocol, overlay));
     return args;
+  }
+
+  /// The [CoreSettings] → CLI folding (v4.22). Every entry cites its
+  /// pinned-core arm in docs/CLI_REFERENCE.md; skipped when the value
+  /// equals the core's own default (the evidence-locked arg list stays
+  /// as quiet as before for a fresh CoreSettings).
+  ///
+  /// The tor family's log verbosity has NO CLI flag in the pin
+  /// (AETHER_TOR_LOG, cli.rs L432 — env-only): the adapter injects it
+  /// through the process environment instead.
+  static List<String> coreArgs(
+    CoreSettings core,
+    ProtocolId leg,
+    ProtocolId? overlay,
+  ) {
+    final a = <String>[];
+
+    // -- TLS ClientHello fragmentation (the owner's Iran headline; the
+    // core's own USAGE blesses it for this market: “as Iran's does”).
+    final frag = core.effectiveFragment;
+    if (core.fragmentPreset != FragmentPreset.off) {
+      a.add('--fragment');
+      if (frag.size.isNotEmpty) a.addAll(['--fragment-size', frag.size]);
+      if (frag.delay.isNotEmpty) a.addAll(['--fragment-delay', frag.delay]);
+    }
+
+    // -- transport (#35-37, #40).
+    if (core.h2Transport) a.add('--h2');
+    if (!core.quicV2) a.add('--no-quic-v2');
+    final dns = core.dns.trim();
+    if (dns.isNotEmpty && dns != '1.1.1.1,1.0.0.1') {
+      a.addAll(['--dns', dns]);
+    }
+
+    // -- engine-wide: noize (#34), perf (#111), log level (#113).
+    if (core.noize != NoizeProfile.defaultValue) {
+      a.addAll(['--noize', core.noize.name]);
+    }
+    if (core.perf != PerfProfile.auto) a.addAll(['--perf', core.perf.name]);
+    if (core.logLevel != CoreLogLevel.info) {
+      a.addAll(['--log-level', core.logLevel.name]);
+    }
+
+    // -- WireGuard keepalive (#65) — only while a WG leg actually runs
+    // (the plain WireGuard tile or any chain/reverse family mode).
+    if (core.keepalive != 5 &&
+        (leg == ProtocolId.wireguard || overlay != null)) {
+      a.addAll(['--keepalive', '${core.keepalive}']);
+    }
+
+    // -- custom TLS (#44-64) — ONLY under tlsCustom; off = the core's own
+    // Chrome-mimicking fingerprint, exactly as every build before v4.22.
+    if (core.tlsCustom) {
+      if (core.disableGrease) a.add('--disable-grease');
+      if (core.greaseSigalgs) a.add('--enable-grease-sigalgs');
+      if (core.echGrease) a.add('--enable-ech-grease');
+      if (!core.sessionTicket) a.add('--disable-session-ticket');
+      if (!core.ocsp) a.add('--disable-ocsp-stapling');
+      if (!core.sct) a.add('--disable-sct');
+      if (!core.extPermutation) a.add('--disable-extension-permutation');
+      if (core.tlsVerify) a.add('--tls-verify');
+      final groups = core.tlsGroups.trim();
+      if (groups.isNotEmpty) a.addAll(['--tls-groups', groups]);
+      final shares = core.keyShares.trim();
+      if (shares.isNotEmpty) a.addAll(['--tls-key-shares', shares]);
+      final c12 = core.ciphers12.trim();
+      if (c12.isNotEmpty) a.addAll(['--tls-ciphers', c12]);
+      final c13 = core.ciphers13.trim();
+      if (c13.isNotEmpty) a.addAll(['--tls13-ciphers', c13]);
+      final sni = core.masqueSni.trim();
+      if (sni.isNotEmpty) a.addAll(['--masque-sni', sni]);
+    }
+
+    // -- routing lists (#101-102).
+    final block = core.routeBlock.trim();
+    if (block.isNotEmpty) a.addAll(['--route-block', block]);
+    final direct = core.routeDirect.trim();
+    if (direct.isNotEmpty) a.addAll(['--route-direct', direct]);
+
+    // -- psiphon family (#87-91).
+    if (overlay != null && overlay.isPsiphon) {
+      if (core.psiphonFronting != PsiphonFronting.auto) {
+        a.addAll(['--psiphon-mode', core.psiphonFronting.name]);
+      }
+      final cdnSni = core.cdnSni.trim();
+      if (cdnSni.isNotEmpty) a.addAll(['--psiphon-cdn-sni', cdnSni]);
+      final cdnIps = core.cdnIps.trim();
+      if (cdnIps.isNotEmpty) a.addAll(['--psiphon-cdn-ips', cdnIps]);
+    }
+
+    // -- tor family (#72).
+    if (overlay != null &&
+        overlay.isTor &&
+        core.torBridges == TorBridgePolicy.off) {
+      a.add('--no-tor-bridges');
+    }
+
+    return a;
   }
 
   /// The mode the ENGINE actually runs: the overlay when one is selected,
@@ -467,6 +572,15 @@ class PlatformEngineAdapter implements EngineAdapter {
     // argument list re-sets exactly what this mode needs.
     clearAetherEnvironment();
 
+    // v4.22 — the tor family's log verbosity is ENV-ONLY in the pinned
+    // core (AETHER_TOR_LOG, cli.rs L432): injected AFTER the inventory
+    // cleanup above, exactly like the fresh arg list re-sets its selects.
+    if (overlay != null &&
+        overlay.isTor &&
+        config.coreSettings.torLog != TorLogLevel.info) {
+      setAetherEnvVar('AETHER_TOR_LOG', config.coreSettings.torLog.name);
+    }
+
     final core = _core =
         _coreFactory == null ? AetherCore.open() : _coreFactory();
     final paths = await _paths();
@@ -476,6 +590,7 @@ class PlatformEngineAdapter implements EngineAdapter {
         chain: overlay,
         countryCode: _resolveCountryPick(modeId, config),
         scanSpeed: config.scanSpeed,
+        core: config.coreSettings,
         filesDir: paths.filesDir,
         nativeLibraryDir: paths.nativeLibraryDir,
       ),

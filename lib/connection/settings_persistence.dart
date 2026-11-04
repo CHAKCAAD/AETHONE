@@ -21,6 +21,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,6 +30,7 @@ import '../core/app_assets.dart';
 import '../core/motion.dart';
 import 'connection_state.dart';
 import 'connection_store.dart';
+import 'core_settings.dart';
 import 'transport_modes.dart';
 
 abstract final class SettingsKeys {
@@ -51,6 +53,16 @@ abstract final class SettingsKeys {
   static const killSwitch = 'aethone.settings.killSwitch';
   static const homeLook = 'aethone.settings.homeLook';
   static const motionStyle = 'aethone.settings.motionStyle';
+
+  /// v4.22 — the fine-grained Aether core layer: ONE JSON blob (unknown
+  /// keys / old shapes fall back to the built-in defaults — never crash).
+  static const coreSettings = 'aethone.settings.coreSettings';
+
+  /// v4.22 — interface-language override; missing = follow system (null).
+  static const appLocale = 'aethone.settings.appLocale';
+
+  /// v4.22 — the background-patterns switch (default ON).
+  static const showPatterns = 'aethone.settings.showPatterns';
 }
 
 /// The store→storage bridge. [restore] + [attach] are the only operations;
@@ -146,6 +158,32 @@ class SettingsPersistence {
       } else if (motion == MotionStyle.dynamic.name) {
         store.animationStyle = MotionStyle.dynamic;
       }
+      // v4.22 — the Aether core fine-grained layer (one JSON blob).
+      final coreRaw = prefs.getString(SettingsKeys.coreSettings);
+      if (coreRaw != null) {
+        try {
+          final decoded = jsonDecode(coreRaw);
+          if (decoded != null) {
+            final parsed = CoreSettings.fromJson(decoded);
+            if (parsed != CoreSettings()) {
+              store.coreSettings = parsed;
+            }
+          }
+        } catch (_) {
+          // A malformed blob keeps the defaults — persistence must never
+          // block the app.
+        }
+      }
+      // v4.22 — interface language + the patterns switch.
+      final localeCode = prefs.getString(SettingsKeys.appLocale);
+      if (localeCode == null) {
+        store.appLocale = null;
+      } else if (ConnectionStore.supportedLocaleCodes.contains(localeCode)) {
+        store.appLocale = localeCode;
+      }
+      if (prefs.containsKey(SettingsKeys.showPatterns)) {
+        store.showPatterns = prefs.getBool(SettingsKeys.showPatterns)!;
+      }
       _restored = true;
     } catch (e) {
       // Persistence must never block the app: with a broken storage the
@@ -221,6 +259,18 @@ class SettingsPersistence {
       await prefs.setBool(SettingsKeys.killSwitch, store.killSwitch);
       await prefs.setString(SettingsKeys.homeLook, store.homeLook.name);
       await prefs.setString(SettingsKeys.motionStyle, store.animationStyle.name);
+      // v4.22 — the core layer, the language override, the patterns switch.
+      await prefs.setString(
+        SettingsKeys.coreSettings,
+        store.coreSettings.encode(),
+      );
+      final locale = store.appLocale;
+      if (locale == null) {
+        await prefs.remove(SettingsKeys.appLocale);
+      } else {
+        await prefs.setString(SettingsKeys.appLocale, locale);
+      }
+      await prefs.setBool(SettingsKeys.showPatterns, store.showPatterns);
     } catch (e) {
       debugPrint('SettingsPersistence.save failed: $e');
     }

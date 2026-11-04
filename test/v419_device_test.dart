@@ -12,6 +12,7 @@ import 'dart:async';
 
 import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/connection_store.dart';
+import 'package:aethone/connection/core_settings.dart';
 import 'package:aethone/connection/engine.dart';
 import 'package:aethone/connection/platform_engine_adapter.dart';
 import 'package:aethone/connection/settings_persistence.dart';
@@ -546,4 +547,8 @@ class _Cfg implements EngineConfigSource {
   String get torLocation => 'auto';
   @override
   int get scanSpeed => 5;
+
+  /// v4.22 — the fine-grained core layer (the fake runs the defaults).
+  @override
+  CoreSettings get coreSettings => CoreSettings();
 }

@@ -50,6 +50,11 @@ class CoreLogReader {
       return const CoreLogSnapshot(text: '', totalBytes: 0);
     } on MissingPluginException {
       return const CoreLogSnapshot(text: '', totalBytes: 0);
+    } catch (_) {
+      // v4.22: newer test bindings surface an unmocked channel as
+      // FlutterError, not MissingPluginException — any failure shape is
+      // the honest empty snapshot, never a fabricated log.
+      return const CoreLogSnapshot(text: '', totalBytes: 0);
     }
   }
 
@@ -61,6 +66,8 @@ class CoreLogReader {
       // nothing to clear / no bridge
     } on MissingPluginException {
       // tests/desktop
+    } catch (_) {
+      // v4.22: same as read() — newer bindings throw FlutterError.
     }
   }
 }

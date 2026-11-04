@@ -158,13 +158,16 @@ class HomeScreen extends StatelessWidget {
               // they also DRIFT while the engine walks or the tunnel is up —
               // «بعد از اتصال و حین اتصال پترن های پس زمینه هم انیمیشن
               // داشته باشند»).
-              Positioned.fill(
-                child: PatternSides(
-                  connected: connected,
-                  style: style,
-                  active: connected || showScan,
+              // v4.22 — the appearance switch can turn the patterns off
+              // (the page then renders on the bare bg colour).
+              if (store.showPatterns)
+                Positioned.fill(
+                  child: PatternSides(
+                    connected: connected,
+                    style: style,
+                    active: connected || showScan,
+                  ),
                 ),
-              ),
               SafeArea(
                 child: Column(
                   children: [

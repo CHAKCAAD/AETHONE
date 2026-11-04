@@ -14,6 +14,7 @@ import 'dart:typed_data';
 
 import 'package:aethone/connection/aether_ffi.dart';
 import 'package:aethone/connection/connection_state.dart';
+import 'package:aethone/connection/core_settings.dart';
 import 'package:aethone/connection/engine.dart';
 import 'package:aethone/connection/platform_engine_adapter.dart';
 import 'package:aethone/connection/tunnel_probe.dart';
@@ -979,4 +980,8 @@ class _FixedConfig implements EngineConfigSource {
 
   @override
   int get scanSpeed => 5;
+
+  /// v4.22 — the fine-grained core layer (the fakes run the defaults).
+  @override
+  CoreSettings get coreSettings => CoreSettings();
 }
