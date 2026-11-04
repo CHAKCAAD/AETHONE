@@ -101,6 +101,17 @@ class AppStrings {
   String get failureDetailsTitle => _v['failureDetailsTitle']!;
   String get failureDetailsCopy => _v['failureDetailsCopy']!;
 
+  /// v4.21 — the core-log diagnostics page (owner: «چطوره اون بخش متن خطا
+  /// لاگ کل هسته هارو هم بده تا بهتر بتونیم دیباگ کنیم»).
+  String get coreLogTitle => _v['coreLogTitle']!;
+  String get coreLogOpen => _v['coreLogOpen']!;
+  String get coreLogCopy => _v['coreLogCopy']!;
+  String get coreLogClear => _v['coreLogClear']!;
+  String get coreLogCopied => _v['coreLogCopied']!;
+  String get coreLogEmpty => _v['coreLogEmpty']!;
+  String coreLogSize(int bytes) =>
+      _v['coreLogSize']!.replaceAll('@b', '$bytes');
+
   /// The SELECTED protocol's display name for the protocol card — the
   /// reference frames show the protocol's own name (e.g. «وارپ»), not the
   /// generic word «پروتکل» (owner prompt §«دکمه انتخاب پروتکل»: هر پروتکلی
@@ -212,6 +223,14 @@ class AppStrings {
       'failureDetailsTitle': 'جزئیات خطا',
       'failureDetailsCopy': 'کپی اطلاعات خطا',
       'portNote': 'پورت محلی SOCKS: @p',
+      // ---- v4.21 core-log diagnostics ----
+      'coreLogTitle': 'لاگ هسته‌ها',
+      'coreLogOpen': 'مشاهده',
+      'coreLogCopy': 'کپی لاگ',
+      'coreLogClear': 'پاک کردن',
+      'coreLogCopied': 'لاگ کپی شد',
+      'coreLogEmpty': 'لاگی ثبت نشده است — متصل شوید',
+      'coreLogSize': 'حجم لاگ: @b بایت',
     },
     'en': {
       'offline': 'Offline',
@@ -290,6 +309,14 @@ class AppStrings {
       'failureDetailsTitle': 'Error details',
       'failureDetailsCopy': 'Copy error details',
       'portNote': 'Local SOCKS port: @p',
+      // ---- v4.21 core-log diagnostics ----
+      'coreLogTitle': 'Core logs',
+      'coreLogOpen': 'View',
+      'coreLogCopy': 'Copy log',
+      'coreLogClear': 'Clear',
+      'coreLogCopied': 'Log copied',
+      'coreLogEmpty': 'No log recorded yet — connect first',
+      'coreLogSize': 'Log size: @b bytes',
     },
     'ru': {
       'offline': 'Офлайн',
@@ -365,6 +392,14 @@ class AppStrings {
       'failureDetailsTitle': 'Детали ошибки',
       'failureDetailsCopy': 'Копировать детали ошибки',
       'portNote': 'Локальный порт SOCKS: @p',
+      // ---- v4.21 core-log diagnostics ----
+      'coreLogTitle': 'Логи ядер',
+      'coreLogOpen': 'Открыть',
+      'coreLogCopy': 'Копировать лог',
+      'coreLogClear': 'Очистить',
+      'coreLogCopied': 'Лог скопирован',
+      'coreLogEmpty': 'Лог пока пуст — сначала подключитесь',
+      'coreLogSize': 'Размер лога: @b байт',
     },
     'zh': {
       'offline': '离线',
@@ -439,6 +474,14 @@ class AppStrings {
       'failureDetailsTitle': '错误详情',
       'failureDetailsCopy': '复制错误详情',
       'portNote': '本地 SOCKS 端口：@p',
+      // ---- v4.21 core-log diagnostics ----
+      'coreLogTitle': '核心日志',
+      'coreLogOpen': '查看',
+      'coreLogCopy': '复制日志',
+      'coreLogClear': '清空',
+      'coreLogCopied': '日志已复制',
+      'coreLogEmpty': '暂无日志 — 请先连接',
+      'coreLogSize': '日志大小：@b 字节',
     },
     // tk: pending native review — falls back to English (documented gap).
   };

@@ -58,5 +58,7 @@ void main() {
     expect(countryName('kp'), 'کره شمالی');
     expect(countryName('xk'), 'کوزوو');
     expect(countryName(null), isNull);
+    // v4.21 — the AUTO sentinel of the family location wheels.
+    expect(countryName('auto'), 'خودکار');
   });
 }

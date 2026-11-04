@@ -14,8 +14,22 @@
 ///
 /// Honest gaps (documented, not hidden): SMART auto mode is not implemented
 /// in the pinned core (SMART_AUTO_SPEC.md); the OS kill-switch/always-on
-/// integration and the aether log line forwarding land with the diagnostics
-/// step. Proxy mode serves the local SOCKS listener only.
+/// integration lands with a later step. Proxy mode serves the local SOCKS
+/// listener only. The core's own log lines are captured process-wide by the
+/// Kotlin layer (stderr → filesDir/logs/core-log.txt) and shown by the
+/// settings diagnostics page.
+///
+/// v4.21 lifecycle hardening (owner device-test round 3):
+///  * every coreStart is preceded by a full `AETHER_*` environment cleanup
+///    (aether_env.dart — the in-process core's CLI parser only ever SETS
+///    env vars, so session N+1 inherited session N's mode and died at
+///    startup: engineClosed, state: null);
+///  * the core's REAL exit reason (`result.error` of a done job) is carried
+///    into the failed screen instead of the anonymous "state: null";
+///  * tunnel platform events are SESSION-TAGGED — a stale service
+///    instance's late `down/destroy` can no longer kill the next walk;
+///  * the connect walk waits for the previous session's listener port to
+///    actually come free before starting the new core (bind-race guard).
 library;
 
 import 'dart:async';
@@ -25,6 +39,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../core/app_assets.dart';
+import 'aether_env.dart';
 import 'aether_ffi.dart';
 import 'connection_state.dart';
 import 'engine.dart';
@@ -253,6 +268,19 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// «سایفون وصل نمیشه» — both were this walk bug, not core failures).
   static const Duration _probeRetryInterval = Duration(seconds: 2);
 
+  /// v4.21 — how long the walk waits for the previous session's SOCKS
+  /// port to come free after a cancel (bind-race guard). The job's abort
+  /// is asynchronous on the Rust runtime; 4 s is generous — a listener
+  /// release takes milliseconds once the task is polled.
+  static const Duration _portFreeBudget = Duration(seconds: 4);
+
+  /// v4.21 — how long a DISCONNECT waits for the core job to reach `done`
+  /// after `jobCancel` before freeing the registry entry (the v4.19 code
+  /// waited only 1 s — a slow abort left the job running with its
+  /// listeners bound while the UI already showed `disconnected`, and the
+  /// NEXT connect lost the bind race).
+  static const Duration _cancelGrace = Duration(seconds: 5);
+
   /// The end-to-end ready budget per effective mode, mirroring the core's
   /// own timeouts (psiphon.rs READY_TIMEOUT 180 s; tor.rs DIRECT_PROBE 75 s
   /// + BRIDGE_PROBE 360 s; plain WARP = registration + scan ≈ listener
@@ -271,6 +299,14 @@ class PlatformEngineAdapter implements EngineAdapter {
   final AetherCoreApi Function()? _coreFactory;
   final StreamController<EngineEvent> _controller =
       StreamController<EngineEvent>.broadcast();
+
+  /// v4.21 — monotonic tunnel-session stamp. Every `startVpn` carries a new
+  /// id; the service echoes it on every event it emits, and Dart DROPS
+  /// events from any session other than the current one (a stale service
+  /// instance being torn down after a quick reconnect used to deliver a
+  /// late `down/destroy` that failed the NEW walk: owner device-test
+  /// «در حالت تونل … ارور tunnelStartFailed / destroy»).
+  int _tunnelSession = 0;
 
   EngineConfigSource? _config;
   AetherCoreApi? _core;
@@ -331,18 +367,34 @@ class PlatformEngineAdapter implements EngineAdapter {
     }
 
     // Stale-state hygiene: never start a second core over a live one.
+    // v4.21: this also WAITS for the previous session's listener port to
+    // come free (bind-race guard) — a freed-but-still-aborting job used to
+    // hold 127.0.0.1:1819 for a few scheduler turns and the fresh core
+    // died instantly on "address already in use".
+    final hadPreviousSession = _jobId != null;
     await _hardCleanup();
 
-    // v4.20 — the two selection knobs combine into the mode the engine
-    // runs: the overlay (tor/psiphon family) rides on top of the WARP-leg
-    // protocol tile (owner: «اول وایرگارد وصل شه و بعد سایفون»).
-    final protocol = config.selectedProtocol;
-    final overlay = config.selectedChain;
-    final modeId = AetherArguments.effectiveMode(protocol, overlay);
+    // v4.21 — the v4.20 chain/leg split is REVERTED to the single-knob
+    // selection (owner decree; the WARP leg under a family mode stays the
+    // fixed WireGuard default until the promised dedicated option lands).
+    // The adapter still builds the core args in leg+overlay form — that
+    // seam is exactly where the future "AETHER leg protocol" option will
+    // plug in.
+    final selection = config.selectedProtocol;
+    final overlay = selection.isTor || selection.isPsiphon ? selection : null;
+    final leg = overlay == null ? selection : ProtocolId.wireguard;
+    final modeId = AetherArguments.effectiveMode(leg, overlay);
     final mode = TransportModes.byId(modeId);
     final tunnel = config.connectionMode == ConnectionMode.tunnel;
     _activeMode = config.connectionMode;
     _activePort = mode.socksEndpoint.port;
+
+    // v4.21 — bind-race guard: after a previous session, wait until its
+    // SOCKS port actually refuses connections before the new coreStart
+    // (the old job's abort is asynchronous on the Rust runtime).
+    if (hadPreviousSession) {
+      await _waitForPortFree(_activePort);
+    }
 
     // --- 1. VPN permission (tunnel mode only) — asked BEFORE any core work
     // so a denial wastes no registration. The store is in `starting`.
@@ -368,8 +420,12 @@ class PlatformEngineAdapter implements EngineAdapter {
       _tunnelUp = Completer<bool>();
       _tunnelDownReason = null;
       _tunnelAlive = false;
+      _tunnelSession++; // v4.21 — events from older sessions are dropped
       try {
-        await _channel.invokeMethod<void>('startVpn', {'port': _activePort});
+        await _channel.invokeMethod<void>('startVpn', {
+          'port': _activePort,
+          'session': _tunnelSession,
+        });
       } on PlatformException catch (e) {
         await _hardCleanup();
         _emitFail('vpnStartFailed', '${e.code}: ${e.message}');
@@ -400,14 +456,25 @@ class PlatformEngineAdapter implements EngineAdapter {
 
     // --- 2. Aether in-process (embedded core, architecture B+).
     _emitState(VpnState.connecting);
+
+    // v4.21 — PROCESS-ENVIRONMENT HYGIENE (the engineClosed fix). The
+    // in-process core's CLI parser only ever SETS `AETHER_*` variables
+    // (cli.rs), so without this cleanup session N+1 inherited session N's
+    // mode — e.g. the core's own reverse-mode leftovers AETHER_UPSTREAM +
+    // AETHER_MASQUE_HTTP2 pointing at a dead carrier — and died during
+    // startup (owner: «بعد از خروج از اپ … دیگه اپ وصل نمیشه … ارورش هم
+    // اینه: engineClosed»). Clear the whole inventory first; the fresh
+    // argument list re-sets exactly what this mode needs.
+    clearAetherEnvironment();
+
     final core = _core =
         _coreFactory == null ? AetherCore.open() : _coreFactory();
     final paths = await _paths();
     _jobId = core.coreStart(
       AetherArguments.build(
-        protocol: protocol,
+        protocol: leg,
         chain: overlay,
-        countryCode: config.selectedCountryCode,
+        countryCode: _resolveCountryPick(modeId, config),
         scanSpeed: config.scanSpeed,
         filesDir: paths.filesDir,
         nativeLibraryDir: paths.nativeLibraryDir,
@@ -509,6 +576,76 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// wait ("connection failure comes FROM the core").
   String? _coreFailureDuringStart;
 
+  /// v4.21 — the honest reason a done job ended: a NORMAL stop carries
+  /// `result.state` ("closed"/"stopped"), a FAILED core carries
+  /// `result.error` (ffi.rs `error_value` — the JSON object the old code
+  /// misread as "state: null", swallowing the core's own words: owner
+  /// device test «ارورش هم اینه: engineClosed / the core exited on its own
+  /// (state: null)» — the REAL reason was in the very same reply).
+  static String describeJobOutcome(Map<Object?, Object?> body) {
+    final result = body['result'];
+    if (result is Map) {
+      final inner = result['state'];
+      if (inner is String) {
+        return inner == 'stopped'
+            ? 'the core was stopped (state: $inner)'
+            : 'the core exited on its own (state: $inner)';
+      }
+      final error = result['error'];
+      if (error is String && error.isNotEmpty) {
+        return 'the core failed: $error';
+      }
+    }
+    return 'the core exited on its own (state: null)';
+  }
+
+  /// v4.21 — bind-race guard: waits until [port] no longer accepts SOCKS
+  /// connections (the previous job's abort releasing its listener),
+  /// bounded to [_portFreeBudget]. A refusal/error means the port is free.
+  Future<void> _waitForPortFree(int port) async {
+    final deadline = DateTime.now().add(_portFreeBudget);
+    while (DateTime.now().isBefore(deadline)) {
+      if (_disconnecting) return;
+      try {
+        if (!await TunnelProbe.isListenerReady(port)) return;
+      } catch (_) {
+        return; // refused — already free
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
+  /// v4.21 — per-family location pick (owner device-test round 3:
+  /// «اپ باید انتخاب لوکیشن سایفون و تور رو یادش بمونه» + «برای سایفون
+  /// و تور به انتخاب خودکار هم باید بزاریم»):
+  ///  * psiphon family → the psiphon pick ('auto' = the core's own
+  ///    egress choice — no flag); psiphon-exit modes map to
+  ///    --psiphon-region, psiphonReverse to --exit-loc (warp exit);
+  ///  * tor family → the tor pick for torReverse (--exit-loc — the exit
+  ///    IS a WARP colo); torOnly/torChain get NO pin — the pinned arti
+  ///    has no exit-country control (CLI_REFERENCE: AETHER_TOR_COUNTRY is
+  ///    the BridgeDB request country, not an exit pin). The pick stays a
+  ///    remembered display anchor there;
+  ///  * everything else → the plain wheel pick (null = no pin).
+  String? _resolveCountryPick(ProtocolId modeId, EngineConfigSource config) {
+    switch (modeId) {
+      case ProtocolId.psiphonChain:
+      case ProtocolId.psiphonOnly:
+      case ProtocolId.psiphonReverse:
+        return _nonAuto(config.psiphonLocation);
+      case ProtocolId.torReverse:
+        return _nonAuto(config.torLocation);
+      case ProtocolId.torChain:
+      case ProtocolId.torOnly:
+        return null; // no core pin exists — never a fake flag
+      default:
+        return config.selectedCountryCode;
+    }
+  }
+
+  static String? _nonAuto(String pick) =>
+      pick == LocationWheelPolicy.autoCode ? null : pick;
+
   /// v4.20 — one core-liveness poll. Returns the core's own error when the
   /// job has ended (done/failed/poll-threw), null while it runs. Shared by
   /// the listener wait and the probe-retry loop.
@@ -519,11 +656,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     try {
       final poll = core.jobPoll(jobId);
       if (poll.body['state'] == 'done') {
-        final result = poll.body['result'];
-        final inner = result is Map ? result['state'] : null;
-        return inner == null
-            ? (poll.error ?? 'the core exited on its own')
-            : 'the core exited on its own (state: $inner)';
+        return poll.error ?? describeJobOutcome(poll.body);
       }
       if (!poll.ok) {
         return poll.error;
@@ -601,8 +734,12 @@ class PlatformEngineAdapter implements EngineAdapter {
     if (_disconnecting) return;
     _disconnecting = true;
     // Release anyone still waiting on connect-phase events.
-    _tunnelUp?.complete(false);
-    _permissionAnswer?.complete(false);
+    if (_tunnelUp != null && !_tunnelUp!.isCompleted) {
+      _tunnelUp!.complete(false);
+    }
+    if (_permissionAnswer != null && !_permissionAnswer!.isCompleted) {
+      _permissionAnswer!.complete(false);
+    }
     await _hardCleanup();
     if (!_controller.isClosed) {
       _emitState(VpnState.disconnected);
@@ -679,9 +816,12 @@ class PlatformEngineAdapter implements EngineAdapter {
         if (state == 'done') {
           final result = poll.body['result'];
           final inner = result is Map ? result['state'] : null;
+          final normal = inner is String;
           await _onEngineDied(
-            inner == 'stopped' ? 'engineStopped' : 'engineClosed',
-            'the core exited on its own (state: $inner)',
+            normal && inner == 'stopped' ? 'engineStopped' : 'engineClosed',
+            normal
+                ? 'the core exited on its own (state: $inner)'
+                : describeJobOutcome(poll.body),
           );
           return;
         }
@@ -766,13 +906,20 @@ class PlatformEngineAdapter implements EngineAdapter {
 
   /// Full teardown: zeptun (via the service) + the core-hold service (proxy)
   /// + aether job. Safe to call in any state, twice, or when nothing is
-  /// running.
+  /// running. v4.21: the cancel grace grew from 1 s to [_cancelGrace] — the
+  /// registry entry is only freed after the job actually reached `done`
+  /// (or the grace ran out), so a slow abort can no longer leak a live job
+  /// with bound listeners into the "disconnected" state.
   Future<void> _hardCleanup() async {
     _ticker?.cancel();
     _ticker = null;
-    _tunnelUp?.complete(false);
+    if (_tunnelUp != null && !_tunnelUp!.isCompleted) {
+      _tunnelUp!.complete(false);
+    }
     _tunnelUp = null;
-    _permissionAnswer?.complete(false);
+    if (_permissionAnswer != null && !_permissionAnswer!.isCompleted) {
+      _permissionAnswer!.complete(false);
+    }
     _permissionAnswer = null;
     if (_activeMode == ConnectionMode.tunnel) {
       try {
@@ -799,9 +946,12 @@ class PlatformEngineAdapter implements EngineAdapter {
     if (jobId != null && core != null) {
       try {
         core.jobCancel(jobId);
-        // Cooperative cancel: give the runtime a moment, then free the
-        // registry entry either way (free cancels again by contract).
-        for (var i = 0; i < 10; i++) {
+        // Cooperative cancel: give the runtime the grace to run the abort
+        // cascade (TaskGuard drops → chain children killed → listeners
+        // released), then free the registry entry either way (free cancels
+        // again by contract).
+        final deadline = DateTime.now().add(_cancelGrace);
+        while (DateTime.now().isBefore(deadline)) {
           final poll = core.jobPoll(jobId);
           if (poll.body['state'] == 'done') break;
           await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -819,11 +969,21 @@ class PlatformEngineAdapter implements EngineAdapter {
     switch (call.method) {
       case 'onTunnelEvent':
         final args = (call.arguments as Map?)?.cast<Object?, Object?>();
+        // v4.21 — session filter: events from a service instance of an
+        // OLDER tunnel session are dropped. A stale instance being torn
+        // down after a quick reconnect used to deliver a late
+        // `down/destroy` that failed the NEW walk (owner device-test
+        // «در حالت تونل … tunnelStartFailed / destroy»). Events without a
+        // session stamp (older platform builds) stay accepted.
+        final session = args?['session'];
+        if (session is int && session != _tunnelSession) return;
         final event = args?['event'] as String?;
         switch (event) {
           case 'up':
             _tunnelAlive = true;
-            _tunnelUp?.complete(true);
+            if (_tunnelUp != null && !_tunnelUp!.isCompleted) {
+              _tunnelUp!.complete(true);
+            }
           case 'down':
           case 'revoked':
             // v4.20 — keep the platform's own reason (establish-failed,
@@ -831,20 +991,26 @@ class PlatformEngineAdapter implements EngineAdapter {
             // the leg's liveness for the walk's post-probe honesty check.
             _tunnelAlive = false;
             _tunnelDownReason = (args?['reason'] as String?) ?? event;
-            _tunnelUp?.complete(false);
-            // Revocation while connected is a user-side kill: surface it
+            if (_tunnelUp != null && !_tunnelUp!.isCompleted) {
+              _tunnelUp!.complete(false);
+            }
+            // A tunnel that goes down while connected is surfaced
             // immediately instead of waiting for the next health probe.
             if (!_connecting && !_disconnecting) {
               _ticker?.cancel();
               _ticker = null;
               _jobId = null;
               _emitFail(
-                'tunnelRevoked',
-                'the VPN was revoked (system UI or another VPN took over)',
+                event == 'revoked' ? 'tunnelRevoked' : 'tunnelDown',
+                event == 'revoked'
+                    ? 'the VPN was revoked (system UI or another VPN took over)'
+                    : (_tunnelDownReason ?? 'the VPN service went down'),
               );
             }
           case 'permission':
-            _permissionAnswer?.complete(args?['granted'] == true);
+            if (_permissionAnswer != null && !_permissionAnswer!.isCompleted) {
+              _permissionAnswer!.complete(args?['granted'] == true);
+            }
         }
       default:
         throw MissingPluginException(
@@ -864,6 +1030,10 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// alive); if the listener is gone the session is honestly dead.
   Future<void> _resyncAfterRestart() async {
     if (!Platform.isAndroid) return;
+    // v4.21 — never race a user-initiated walk: bind() can fire while an
+    // activity recreation spins up a fresh engine, and a zombie probe here
+    // used to stop the LIVE session's VPN service mid-walk.
+    if (_connecting || _disconnecting) return;
     try {
       final status =
           await _channel.invokeMethod<Map<Object?, Object?>>('vpnStatus') ??

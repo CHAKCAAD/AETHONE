@@ -197,8 +197,11 @@ abstract final class TransportModes {
 ///  * TOR has NO equivalent: the pinned core has no Tor exit-country
 ///    control at all (`AETHER_TOR_COUNTRY` is the BridgeDB/moat request
 ///    country for OBTAINING BRIDGES, not an exit pin — CLI_REFERENCE
-///    env-table note, bridges.rs L410-448). Tor-exit protocols therefore
-///    get NO country pin and the wheel is a locked display for them.
+///    env-table note, bridges.rs L410-448). The tor family therefore shows
+///    the FULL manifest (auto first) — the pre-connect pick is a remembered
+///    display anchor; after connect the wheel locks on the engine-reported
+///    real exit (owner device-test round 3: «در حالت تور انتخاب لوکیشن
+///    باید فعال باشه»).
 const List<String> psiphonEgressRegions = <String>[
   'at', 'au', 'be', 'bg', 'ca', 'ch', 'cz', 'de', 'dk', 'ee', //
   'es', 'fi', 'fr', 'gb', 'hk', 'hr', 'hu', 'ie', 'il', 'in', //
@@ -206,26 +209,47 @@ const List<String> psiphonEgressRegions = <String>[
   'pt', 'ro', 'rs', 'se', 'sg', 'si', 'sk', 'ua', 'us', 'za',
 ];
 
-/// The per-protocol location-wheel policy (v4.19 #5).
-abstract final class LocationWheelPolicy {
-  /// True when a wheel selection is actually HONORED by the core for this
-  /// protocol: psiphon-exit modes pin --psiphon-region; the reverse modes
-  /// (tor→warp, psiphon→warp) exit through WARP and pin --exit-loc.
-  /// Tor-EXIT modes (torOnly, torChain) cannot pin — the wheel stays a
-  /// display for them (the connect roulette still lands on the real exit).
-  static bool selectable(ProtocolId id) => switch (id) {
-    ProtocolId.psiphonOnly ||
-    ProtocolId.psiphonChain ||
-    ProtocolId.psiphonReverse ||
-    ProtocolId.torReverse => true,
-    _ => false,
-  };
+/// v4.21 — the AUTO wheel entry (owner: «راستی برای سایفون و تور به انتخاب
+/// خودکار هم باید بزاریم … این انتخاب خودکار قابلیت خود هسته هاست و لازم
+/// نیست چیزی اضافه کنیم از قبل خودشون دارن»): 'auto' means NO pin flag is
+/// passed and the core picks its own egress — the built-in capability the
+/// owner named. The wheel renders it as the placeholder globe flag
+/// (design/flags_png/auto.png — a stand-in until the owner's own artwork
+/// lands) with the label «خودکار».
+const String autoWheelCode = 'auto';
 
-  /// The allowed country set for the wheel, or null = the whole manifest.
+/// The per-protocol location-wheel policy (v4.19 #5, revised v4.21).
+abstract final class LocationWheelPolicy {
+  /// The sentinel wheel entry for the core's own auto selection.
+  static const String autoCode = autoWheelCode;
+
+  /// True while the wheel is a real, scrollable SELECTOR for this
+  /// protocol — the whole psiphon + tor families (owner device-test
+  /// round 3: «در حالت تور انتخاب لوکیشن باید فعال باشه، چرا پرچم ها
+  /// نشون داده نمیشن؟»). Everything else keeps the plain display band
+  /// (hidden until connected — the v4.15 #3 rule).
+  static bool selectable(ProtocolId id) => id.isTor || id.isPsiphon;
+
+  /// The allowed wheel entries for a family selector, AUTO FIRST; null =
+  /// the whole flag manifest (plain modes / the post-connect display).
   /// Only the psiphon-EXIT modes are filtered to the Psiphon egress
-  /// regions; everything else shows the full flag set.
+  /// regions; the reverse modes exit through WARP and take the full
+  /// manifest; the tor family shows the full manifest too (no honest
+  /// static filter exists for Tor exits — see psiphonEgressRegions doc).
   static List<String>? allowedCodes(ProtocolId id) => switch (id) {
-    ProtocolId.psiphonOnly || ProtocolId.psiphonChain => psiphonEgressRegions,
+    ProtocolId.psiphonOnly || ProtocolId.psiphonChain =>
+      const [autoCode, ...psiphonEgressRegions],
+    ProtocolId.psiphonReverse ||
+    ProtocolId.torReverse ||
+    ProtocolId.torChain ||
+    ProtocolId.torOnly => null, // full manifest (+ auto, prepended by the wheel)
     _ => null,
   };
+
+  /// True when this protocol's selector runs on the FULL manifest with the
+  /// AUTO entry prepended by the wheel (the tor family + psiphonReverse —
+  /// the WARP-exit reverse mode; the psiphon-exit modes get their exact
+  /// filtered list from [allowedCodes] instead).
+  static bool autoEntry(ProtocolId id) =>
+      id.isTor || id == ProtocolId.psiphonReverse;
 }

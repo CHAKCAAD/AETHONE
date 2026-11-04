@@ -12,10 +12,12 @@
 ///    or hand-edited prefs file can only fall back to the built-in
 ///    defaults, never crash the startup.
 ///
-/// Persisted: protocol (WARP leg), chain overlay (v4.20), connection mode,
-/// scan speed, wheel country, protocol mode (auto/smart), routing region,
-/// kill switch, home look, motion style. Session data (ping, counters,
-/// exit country) is deliberately NOT persisted — it is engine-owned truth.
+/// Persisted: protocol (the single v4.21 knob; the v4.20 chain key is
+/// migrated on read), connection mode, scan speed, wheel country + the
+/// per-family locations (v4.21), protocol mode (auto/smart), routing
+/// region, kill switch, home look, motion style. Session data (ping,
+/// counters, exit country) is deliberately NOT persisted — it is
+/// engine-owned truth.
 library;
 
 import 'dart:async';
@@ -27,13 +29,23 @@ import '../core/app_assets.dart';
 import '../core/motion.dart';
 import 'connection_state.dart';
 import 'connection_store.dart';
+import 'transport_modes.dart';
 
 abstract final class SettingsKeys {
   static const protocol = 'aethone.settings.protocol';
+
+  /// v4.20 legacy — the chain overlay key. Read for migration (a v4.20
+  /// install stored the WARP leg in [protocol] and the family member
+  /// here); written as 'none' to retire it.
   static const chain = 'aethone.settings.chain';
   static const connectionMode = 'aethone.settings.connectionMode';
   static const scanSpeed = 'aethone.settings.scanSpeed';
   static const selectedCountry = 'aethone.settings.selectedCountry';
+
+  /// v4.21 — the per-family location picks (owner: «اپ باید انتخاب لوکیشن
+  /// سایفون و تور رو یادش بمونه»): 'auto' or an ISO-3166 alpha-2 code.
+  static const psiphonLocation = 'aethone.settings.psiphonLocation';
+  static const torLocation = 'aethone.settings.torLocation';
   static const protocolModeSmart = 'aethone.settings.protocolModeSmart';
   static const routingRegion = 'aethone.settings.routingRegion';
   static const killSwitch = 'aethone.settings.killSwitch';
@@ -58,35 +70,31 @@ class SettingsPersistence {
   Future<void> restore(ConnectionStore store) async {
     try {
       final prefs = await _prefsFuture;
+
+      // v4.21 — single-knob protocol restore with the v4.20 migration:
+      // a v4.20 install stored the WARP LEG in `protocol` and the family
+      // member in `chain`; the effective mode was the chain, so the chain
+      // WINS the migration. A v4.19 install stored the mode directly.
+      ProtocolId? restored;
       final protocolName = prefs.getString(SettingsKeys.protocol);
       if (protocolName != null) {
         for (final id in ProtocolId.values) {
           if (id.name == protocolName) {
-            // v4.20 migration: a v4.19 install persisted a family member
-            // (torChain…) as THE protocol — that value now lives in the
-            // chain overlay and the leg keeps its default (WireGuard).
-            if (id.isTor || id.isPsiphon) {
-              store.selectedChain = id;
-            } else {
-              store.selectedProtocol = id;
-            }
+            restored = id;
             break;
           }
         }
       }
       final chainName = prefs.getString(SettingsKeys.chain);
-      if (chainName != null) {
-        if (chainName == 'none') {
-          store.selectedChain = null;
-        } else {
-          for (final id in ProtocolId.values) {
-            if (id.name == chainName && (id.isTor || id.isPsiphon)) {
-              store.selectedChain = id;
-              break;
-            }
+      if (chainName != null && chainName != 'none') {
+        for (final id in ProtocolId.values) {
+          if (id.name == chainName && (id.isTor || id.isPsiphon)) {
+            restored = id; // the v4.20 overlay supersedes the stored leg
+            break;
           }
         }
       }
+      if (restored != null) store.selectedProtocol = restored;
       final modeName = prefs.getString(SettingsKeys.connectionMode);
       if (modeName == ConnectionMode.tunnel.name) {
         store.connectionMode = ConnectionMode.tunnel;
@@ -102,6 +110,15 @@ class SettingsPersistence {
         store.selectedCountryCode = null;
       } else if (country.length == 2 && country == country.toLowerCase()) {
         store.selectedCountryCode = country;
+      }
+      // v4.21 — the per-family location picks.
+      final psiphon = prefs.getString(SettingsKeys.psiphonLocation);
+      if (_isLocationPick(psiphon)) {
+        store.psiphonLocation = psiphon!;
+      }
+      final tor = prefs.getString(SettingsKeys.torLocation);
+      if (_isLocationPick(tor)) {
+        store.torLocation = tor!;
       }
       if (prefs.containsKey(SettingsKeys.protocolModeSmart)) {
         store.protocolModeSmart = prefs.getBool(SettingsKeys.protocolModeSmart)!;
@@ -137,6 +154,13 @@ class SettingsPersistence {
     }
   }
 
+  /// A valid family pick: the AUTO sentinel or an ISO-3166 alpha-2
+  /// lowercase code.
+  static bool _isLocationPick(String? value) =>
+      value != null &&
+      (value == LocationWheelPolicy.autoCode ||
+          (value.length == 2 && value == value.toLowerCase()));
+
   /// Persists every change of [store] (debounced). Call once, after
   /// [restore]; a store that was never restored still saves normally.
   void attach(ConnectionStore store) {
@@ -166,10 +190,8 @@ class SettingsPersistence {
     try {
       final prefs = await _prefsFuture;
       await prefs.setString(SettingsKeys.protocol, store.selectedProtocol.name);
-      await prefs.setString(
-        SettingsKeys.chain,
-        store.selectedChain?.name ?? 'none',
-      );
+      // v4.21 — retire the v4.20 chain key (single-knob model).
+      await prefs.setString(SettingsKeys.chain, 'none');
       await prefs.setString(
         SettingsKeys.connectionMode,
         store.connectionMode.name,
@@ -181,6 +203,11 @@ class SettingsPersistence {
       } else {
         await prefs.setString(SettingsKeys.selectedCountry, country);
       }
+      await prefs.setString(
+        SettingsKeys.psiphonLocation,
+        store.psiphonLocation,
+      );
+      await prefs.setString(SettingsKeys.torLocation, store.torLocation);
       await prefs.setBool(
         SettingsKeys.protocolModeSmart,
         store.protocolModeSmart,

@@ -160,6 +160,10 @@ abstract final class AppAssets {
   /// BLANK on device; only vector ir.svg worked). All flags are therefore
   /// shipped as pre-rendered 256×256 PNGs extracted from the owner's own
   /// embedded artwork (no redesign, byte-faithful to the SVG).
+  ///
+  /// v4.21: `flag('auto')` is the AUTO placeholder globe — a stand-in drawn
+  /// for this build (owner: «فعلا یه پرچم خودت اضافه کن بعدا پرچمش رو طراحی
+  /// و ارسال میکنم»); the owner's own artwork replaces the file in place.
   static String flag(String code) => '$_flags/$code.png';
 
   /// True when the asset is a pre-rendered PNG (rendered via Image.asset);
@@ -217,5 +221,7 @@ abstract final class AppAssets {
         flag('cn'),
         flag('de'),
         flag('us'),
+        // v4.21 — the AUTO placeholder globe (family location selectors).
+        flag('auto'),
       ];
 }

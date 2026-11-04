@@ -13,8 +13,13 @@ library;
 /// Persian display name for a flag code; falls back to the upper-cased code
 /// only for codes that ship without a name (should be none — the test
 /// guards it).
+///
+/// v4.21: the wheel's AUTO sentinel ('auto' — the core's own location
+/// choice, owner: «این انتخاب خودکار قابلیت خود هسته هاست») renders as
+/// «خودکار» instead of a country name.
 String? countryName(String? code) {
   if (code == null) return null;
+  if (code == 'auto') return 'خودکار';
   return _names[code] ?? code.toUpperCase();
 }
 

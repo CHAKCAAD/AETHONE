@@ -202,18 +202,17 @@ void main() {
       find.byKey(const ValueKey('proto-subtile-psiphonChain')),
     );
 
-    // v4.20 — the subtile commits the CHAIN OVERLAY; the WARP leg keeps its
-    // own selection (owner: «اول وایرگارد وصل شه و بعد سایفون»).
-    expect(store.selectedChain, ProtocolId.psiphonChain);
+    // v4.21 — the SINGLE-KNOB commit (owner: the v4.20 leg/overlay split
+    // was reverted, «لطفا به حالت قبل برشگردون»): the subtile IS the
+    // protocol; there is no separate overlay state.
+    expect(store.selectedProtocol, ProtocolId.psiphonChain);
     expect(store.effectiveProtocol, ProtocolId.psiphonChain);
-    // The leg is untouched: the default WireGuard still rides underneath.
-    expect(store.selectedProtocol, ProtocolId.wireguard);
     expect(find.byType(ProtocolPage), findsNothing);
   });
 
   testWidgets(
-      'v4.20 — the leg tile and the overlay are INDEPENDENT: picking a leg '
-      'keeps the overlay; re-tapping the active overlay clears it', (
+      'v4.21 — the single knob REPLACES the previous selection: a plain '
+      'tile after a family member clears the family mode', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(402 * 3, 874 * 3);
@@ -227,30 +226,17 @@ void main() {
       tester,
       find.byKey(const ValueKey('proto-subtile-psiphonChain')),
     );
-    expect(store.selectedChain, ProtocolId.psiphonChain);
+    expect(store.selectedProtocol, ProtocolId.psiphonChain);
     expect(store.effectiveProtocol, ProtocolId.psiphonChain);
 
-    // The home card now names the EFFECTIVE mode (the overlay) — re-open
-    // through it, then change the LEG (row-1 masque tile): the overlay must
-    // survive the leg change.
+    // The home card now names the family mode — re-open through it, then
+    // pick a plain tile: the plain protocol REPLACES the family mode (the
+    // v4.20 "overlay survives a leg change" behavior is gone).
     await tester.tap(find.text('سایفون').first);
     await tester.pump();
     await tester.pumpAndSettle();
     await _tapAndAutoPop(tester, find.byKey(const ValueKey('proto-tile-masque')));
     expect(store.selectedProtocol, ProtocolId.masque);
-    expect(store.selectedChain, ProtocolId.psiphonChain);
-    expect(store.effectiveProtocol, ProtocolId.psiphonChain);
-
-    // Re-open and re-tap the ACTIVE overlay subtile: the overlay clears and
-    // the plain leg (masque) becomes the effective mode.
-    await tester.tap(find.text('سایفون').first);
-    await tester.pump();
-    await tester.pumpAndSettle();
-    await _tapAndAutoPop(
-      tester,
-      find.byKey(const ValueKey('proto-subtile-psiphonChain')),
-    );
-    expect(store.selectedChain, isNull);
     expect(store.effectiveProtocol, ProtocolId.masque);
   });
 

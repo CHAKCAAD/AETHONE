@@ -179,21 +179,24 @@ class HomeScreen extends StatelessWidget {
                     SizedBox(height: AethGeometry.gapTopbarToLocation * s),
                     LocationHeader(
                       connected: connected,
-                      // v4.20 — the band rule follows the EFFECTIVE mode
-                      // (the chain overlay when one is selected).
+                      // v4.21 — the band rule follows the committed mode
+                      // (single-knob selection after the v4.20 revert).
                       protocolIsTorOrPsiphon:
                           store.effectiveProtocol.isTor ||
                           store.effectiveProtocol.isPsiphon,
-                      // v4.19 #5 — the wheel is a real SELECTOR only where
-                      // the core honors the pick, and the psiphon-exit
-                      // protocols FILTER the flags to their egress regions.
+                      // v4.21 — the wheel is a real, scrollable SELECTOR
+                      // for the whole psiphon + tor families while
+                      // DISCONNECTED, and locks on the connected location
+                      // once connected (owner device-test round 3).
                       selectable: store.wheelSelectable,
                       allowedCodes: store.wheelAllowedCodes,
+                      autoEntry: store.wheelAutoEntry,
+                      anchorCode: store.wheelAnchorCode,
                       pingMs: store.pingMs,
                       exitCountryCode: store.exitCountryCode,
-                      // Wheel selection commit — the store keeps it for the
-                      // future core handoff (defects #8/#13).
-                      onCountrySelected: store.selectCountry,
+                      // Wheel selection commit — the store routes the pick
+                      // into the current family's remembered location.
+                      onCountrySelected: store.selectLocation,
                     ),
                     // Hero band: logo (look 1) or center connect button (2).
                     // The flex region is the reference's hero band — the

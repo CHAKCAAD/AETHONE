@@ -11,6 +11,7 @@ import 'package:aethone/features/home/home_screen.dart';
 import 'package:aethone/features/home/widgets/bottom_panel.dart';
 import 'package:aethone/features/home/widgets/glow_pill.dart';
 import 'package:aethone/core/app_assets.dart' show ProtocolId;
+import 'package:aethone/connection/transport_modes.dart' show LocationWheelPolicy;
 
 /// A scripted engine for deterministic UI tests — the same seam the preview
 /// adapter uses, but fully controlled by the test.
@@ -294,11 +295,13 @@ void main() {
         exitCountryCode: 'ir',
       ),
     );
-    // v4.13: the connect ROULETTE spins the wheel for ~2.6 s before it lands
-    // on the exit country; the aura keeps repeating forever — bounded pumps
-    // past BOTH.
-    await tester.pump(const Duration(milliseconds: 2700));
-    await tester.pump(const Duration(milliseconds: 100));
+    // v4.21 — frame-stepped pumps: the connected frame renders first (the
+    // roulette is scheduled at ITS post-frame), then the 2.6 s spin runs
+    // out in ~frame-sized steps (a single huge pump lands the whole
+    // DrivenScrollActivity on one ticker tick — v4.15.1 lesson).
+    for (var i = 0; i < 16; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
 
     final name = tester.getTopLeft(find.text('ایران'));
     final ping = tester.getTopLeft(find.text('146 ms'));
@@ -325,7 +328,6 @@ void main() {
     await useReferenceSurface(tester);
     final engine = ScriptedEngine();
     final store = ConnectionStore(engine: engine);
-    store.selectCountry('ir');
     store.selectedProtocol = ProtocolId.psiphonChain;
     await tester.pumpWidget(_booth(HomeScreen(store: store)));
     await tester.pumpAndSettle();
@@ -335,9 +337,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 100));
     engine.emit(const EngineStateChanged(VpnState.connected));
-    // The roulette is queued (stale target 'ir'). MID-SPIN the real core
-    // reports its exit country — a DIFFERENT one.
-    await tester.pump(const Duration(milliseconds: 800));
+    // The roulette is queued (stale target = the AUTO anchor). MID-SPIN the
+    // real core reports its exit country — a DIFFERENT one.
+    await tester.pump(const Duration(milliseconds: 200));
     engine.emit(
       const EngineStatsUpdated(
         pingMs: 90,
@@ -347,18 +349,20 @@ void main() {
       ),
     );
     // Ride out the re-spun roulette (2.6 s from the retarget) + the aura
-    // (repeats forever) — bounded pumps.
-    await tester.pump(const Duration(milliseconds: 2700));
-    await tester.pump(const Duration(milliseconds: 100));
+    // (repeats forever) — ~frame-sized steps (v4.15.1 lesson).
+    for (var i = 0; i < 16; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
 
     // Landed on the REAL exit country, not the stale target (nl is a
-    // psiphon egress region, so it exists in the v4.19-filtered wheel).
+    // psiphon egress region, so it exists in the filtered wheel).
     expect(find.text('هلند'), findsOneWidget);
     // The user's selector was NEVER overwritten by mid-spin countries —
-    // the epoch protocol's no-op guarantee on superseded spins. v4.19: the
-    // committed pick is the FILTER's re-anchor ('ir' is not a psiphon
-    // egress region → the wheel re-anchored on 'at' and committed it).
-    expect(store.selectedCountryCode, 'at');
+    // the epoch protocol's no-op guarantee on superseded spins. v4.21:
+    // the family pick stays the remembered AUTO (owner: «اپ باید انتخاب
+    // لوکیشن سایفون و تور رو یادش بمونه»).
+    expect(store.psiphonLocation, LocationWheelPolicy.autoCode);
+    expect(store.selectedCountryCode, isNull);
   });
 
   // v4.12: the flag wheel is INFINITE — at any resting position flags exist
@@ -369,16 +373,14 @@ void main() {
     await useReferenceSurface(tester);
     final engine = ScriptedEngine();
     final store = ConnectionStore(engine: engine);
-    store.selectCountry('ir');
     store.selectedProtocol = ProtocolId.psiphonChain;
     await tester.pumpWidget(_booth(HomeScreen(store: store)));
     await tester.pumpAndSettle();
 
-    // v4.19 #5: the psiphon wheel is FILTERED to the egress regions — the
-    // cold 'ir' pick is not one, so the wheel re-anchored on the first
-    // allowed region and committed it.
-    expect(find.text('اتریش'), findsOneWidget); // 'at' = first allowed
-    expect(store.selectedCountryCode, 'at');
+    // v4.21: the psiphon wheel is the AUTO-anchored family selector
+    // (auto first, then the egress regions).
+    expect(find.text('خودکار'), findsOneWidget);
+    expect(store.psiphonLocation, LocationWheelPolicy.autoCode);
 
     // Flags on BOTH edges of the viewport.
     final xs = <double>[];
@@ -403,11 +405,10 @@ void main() {
       reason: 'a flag must exist at the RIGHT edge',
     );
 
-    // Psiphon = selectable: drag one pitch left → the next country centers
+    // Psiphon = selectable: drag one pitch left → the next entry centers
     // and its NAME (not the code) shows in the header. Small stepped moves
     // with pumps keep the release velocity ≈ 0 (no fling past the neighbor).
-    // v4.19: the wheel is the psiphon subset — from 'at' the next region
-    // is 'au'.
+    // v4.21: from AUTO the next entry is 'at' (اتریش).
     final wheelCenter = tester.getCenter(find.byType(PageView).first);
     final drag = await tester.startGesture(wheelCenter);
     for (var i = 0; i < 3; i++) {
@@ -421,7 +422,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await drag.up();
     await tester.pumpAndSettle();
-    expect(find.text('استرالیا'), findsOneWidget); // 'at' + 1 = 'au'
+    expect(find.text('اتریش'), findsOneWidget); // auto + 1 = 'at'
+    expect(store.psiphonLocation, 'at');
 
     // Display-only protocol: MASQUE — v4.15: the band is HIDDEN while
     // disconnected (zero height behind a clip; NeverScrollable), so a drag

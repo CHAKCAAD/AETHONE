@@ -66,6 +66,7 @@ import '../../../core/app_assets.dart';
 import '../../../core/country_names.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
+import '../../../connection/transport_modes.dart' show LocationWheelPolicy;
 import 'custom_icons.dart';
 
 class LocationHeader extends StatefulWidget {
@@ -75,6 +76,8 @@ class LocationHeader extends StatefulWidget {
     required this.protocolIsTorOrPsiphon,
     required this.selectable,
     required this.allowedCodes,
+    required this.autoEntry,
+    required this.anchorCode,
     required this.pingMs,
     required this.exitCountryCode,
     required this.onCountrySelected,
@@ -87,19 +90,33 @@ class LocationHeader extends StatefulWidget {
   /// it only once connected.
   final bool protocolIsTorOrPsiphon;
 
-  /// v4.19 #5 — true only when the core honors a wheel selection for the
-  /// current protocol (see [LocationWheelPolicy]).
+  /// v4.21 — true only for the FAMILY selectors (psiphon + tor): the wheel
+  /// is scrollable BEFORE connect and LOCKED on the connected location
+  /// after it (owner: «در زمان قبل اتصال باید کاربر بتونه اسکرول کنه و
+  /// لوکیشن رو انتخاب کنه ولی در زمان اتصال چون نقش نمایش لوکیشن رو داره
+  /// باید فقط روی لوکیشن اتصال قفل باشه»).
   final bool selectable;
 
-  /// v4.19 #5 — the allowed country set, or null = the whole manifest.
+  /// v4.21 — the allowed country set, or null = the whole flag manifest.
+  /// When non-null it is the EXACT wheel list (auto already included where
+  /// it applies).
   final List<String>? allowedCodes;
+
+  /// v4.21 — prepend the AUTO entry («خودکار» — the core's own choice) in
+  /// front of the full manifest (the tor family + the reverse modes).
+  final bool autoEntry;
+
+  /// v4.21 — the wheel's ANCHOR: the current family's remembered pick
+  /// ('auto' or a country code) while disconnected. A family switch
+  /// re-anchors the wheel here (per-family memory, owner: «اپ باید انتخاب
+  /// لوکیشن سایفون و تور رو یادش بمونه»).
+  final String anchorCode;
 
   final int? pingMs;
   final String? exitCountryCode;
 
-  /// Wheel selection committed (page settle / tap). The store keeps it for
-  /// the future core handoff (per-protocol location rules are re-checked
-  /// when the engine lands).
+  /// Wheel selection committed (page settle / tap). The store routes it
+  /// into the current family's remembered pick.
   final void Function(String code) onCountrySelected;
 
   @override
@@ -143,21 +160,39 @@ class _LocationHeaderState extends State<LocationHeader> {
   @override
   void initState() {
     super.initState();
-    _selected = widget.exitCountryCode ?? defaultCode;
+    _selected = _initialAnchor();
     _loadCodes();
+  }
+
+  /// The wheel's starting selection: while disconnected the family's
+  /// remembered pick; a resumed/connected session anchors on the engine's
+  /// real exit if it is already known.
+  String _initialAnchor() {
+    if (widget.connected && widget.exitCountryCode != null) {
+      return widget.exitCountryCode!;
+    }
+    return widget.anchorCode;
   }
 
   @override
   void didUpdateWidget(covariant LocationHeader old) {
     super.didUpdateWidget(old);
 
-    // v4.19 #5 — the protocol changed the ALLOWED country set: recompute
-    // the wheel list, re-anchor on the nearest allowed flag and commit it
-    // (the old pick may no longer be honorable). Same epoch discipline as
+    // v4.21 — FAMILY SWITCH (anchor change): re-anchor the wheel on the new
+    // family's remembered pick while disconnected. Also covers the allowed
+    // set change (psiphon list ⇄ full manifest). Same epoch discipline as
     // the manifest load: the re-anchor supersedes any in-flight spin.
-    if (!_sameCodeSet(old.allowedCodes, widget.allowedCodes) &&
-        _allCodes.length > 1) {
-      _applyFilter(commit: true);
+    final setChanged =
+        !_sameCodeSet(old.allowedCodes, widget.allowedCodes) ||
+        old.autoEntry != widget.autoEntry;
+    final anchorChanged = old.anchorCode != widget.anchorCode;
+    if ((setChanged || anchorChanged) && !widget.connected) {
+      _applyFilter(commit: anchorChanged);
+      if (!_codes.contains(_selected) || anchorChanged) {
+        _selected = _codes.contains(widget.anchorCode)
+            ? widget.anchorCode
+            : _codes.first;
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         final c = _pageController;
@@ -216,14 +251,22 @@ class _LocationHeaderState extends State<LocationHeader> {
     final codes =
         manifest
             .listAssets()
-            .where((p) => p.startsWith(prefix) && p.endsWith('.png'))
+            .where(
+              (p) =>
+                  p.startsWith(prefix) &&
+                  p.endsWith('.png') &&
+                  // The AUTO placeholder globe shares the folder — it is NOT
+                  // a country (v4.21); it enters the wheel only through the
+                  // auto-entry prepend / the family lists.
+                  p != '${prefix}auto.png',
+            )
             .map((p) => p.substring(prefix.length, p.length - 4))
             .toList()
           ..sort();
     if (!mounted) return;
     _allCodes = codes;
     // commit:true — when the ALLOWED set excludes the current pick (the
-    // psiphon filter vs the cold 'ir' default), the wheel re-anchors and
+    // psiphon filter vs the cold 'auto' default), the wheel re-anchors and
     // the store must mirror what the wheel actually shows.
     _applyFilter(commit: true);
     setState(() {});
@@ -241,21 +284,26 @@ class _LocationHeaderState extends State<LocationHeader> {
     });
   }
 
-  /// v4.19 #5 — intersects the full flag manifest with [widget.allowedCodes]
+  /// v4.21 — intersects the full flag manifest with [widget.allowedCodes]
   /// (manifest order kept) and re-anchors the selection when it fell out of
-  /// the allowed set. [commit] also writes the re-anchored pick to the store
-  /// (a filter CHANGE means the protocol changed — the engine must receive
-  /// the pick that is actually honorable). The commit is POST-FRAME: the
-  /// manifest load often resumes mid-build, and store listeners must never
-  /// be notified during a build phase.
+  /// the allowed set. The AUTO entry is prepended for the family selectors
+  /// that run on the FULL manifest ([widget.autoEntry]). [commit] also
+  /// writes the re-anchored pick to the store (a filter CHANGE means the
+  /// protocol changed — the engine must receive the pick that is actually
+  /// honorable). The commit is POST-FRAME: the manifest load often resumes
+  /// mid-build, and store listeners must never be notified during a build
+  /// phase.
   void _applyFilter({required bool commit}) {
     final allowed = widget.allowedCodes;
-    final filtered = allowed == null
-        ? _allCodes
-        : _allCodes.where(allowed.contains).toList();
+    List<String> filtered = allowed ?? _allCodes;
+    if (allowed == null && widget.autoEntry) {
+      filtered = [LocationWheelPolicy.autoCode, ..._allCodes];
+    }
     _codes = filtered.isEmpty ? _allCodes : filtered;
     if (!_codes.contains(_selected)) {
-      _selected = _codes.first;
+      _selected = _codes.contains(widget.anchorCode)
+          ? widget.anchorCode
+          : _codes.first;
       if (commit) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) widget.onCountrySelected(_selected);
@@ -516,11 +564,13 @@ class _LocationHeaderState extends State<LocationHeader> {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final connected = widget.connected;
 
-    // v4.19 #5 — the lock follows the CORE's pin capability: psiphon-exit +
-    // reverse modes are real selectors; tor-exit modes (and everything
-    // else) render the band as a locked display.
+    // v4.21 — the lock rule (owner device-test round 3): a family selector
+    // is scrollable ONLY while disconnected; once connected the band is a
+    // pure DISPLAY locked on the connected location (the roulette lands
+    // there and no user scroll can move it). Non-family protocols keep the
+    // v4.15 #3 rule (hidden until connected, then the same locked display).
     final selectable = widget.selectable;
-    final locked = !selectable;
+    final locked = widget.connected || !selectable;
 
     // v4.15 #3 — the hide rule: a non-Tor/Psiphon protocol keeps the whole
     // band completely hidden while disconnected; it only exists (revealing

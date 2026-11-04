@@ -88,24 +88,29 @@ class EngineLogLine extends EngineEvent {
 /// consumes (M2). Implemented by the store — these are USER choices; the
 /// engine never writes them.
 abstract class EngineConfigSource {
-  /// Which WARP-leg protocol tile the user committed on the protocol sheet
-  /// (AUTO..MIM). In a chain mode this is the protocol of the WARP tunnel
-  /// the inner exit rides on (v4.20 split).
+  /// The protocol the user committed on the protocol sheet — ONE knob: a
+  /// plain tile (AUTO..MIM) or a family member (torChain…psiphonOnly).
+  /// v4.21: the v4.20 chain/leg SPLIT was reverted per the owner's decree
+  /// («حالت جدید که برای انتخاب پروتکل AETHER در حالت اور وارپ ایجاد کردی
+  /// از لحاظ تجربه کاربری جالب نیست لطفا به حالت قبل برشگردون بعدا یک
+  /// گزینه برای انتخاب پروتکل هسته AETHER در پروتکل های اور وارپ اضافه
+  /// میکنیم») — the WARP leg under a family mode is fixed WireGuard (the
+  /// v4.19 decree) until that dedicated option lands.
   ProtocolId get selectedProtocol;
-
-  /// v4.20 — the overlay family member (torChain…psiphonOnly) committed on
-  /// a family card, or null = plain connection.
-  ProtocolId? get selectedChain;
-
-  /// The mode the engine actually runs: the overlay when set, else the leg
-  /// (AUTO resolves to MASQUE at the adapter).
-  ProtocolId get effectiveProtocol;
 
   /// تونل (whole-device VpnService + zeptun) or پروکسی (local SOCKS only).
   ConnectionMode get connectionMode;
 
   /// Flag-wheel country pick (ISO-3166 alpha-2, lowercase) or null = auto.
   String? get selectedCountryCode;
+
+  /// v4.21 — the per-family location picks (owner: «اپ باید انتخاب لوکیشن
+  /// سایفون و تور رو یادش بمونه» + «برای سایفون و تور به انتخاب خودکار هم
+  /// باید بزاریم»): 'auto' = the core's own choice, else an ISO-3166
+  /// alpha-2 lowercase code. The adapter maps them per mode
+  /// (--psiphon-region / --exit-loc / no pin for tor-exit modes).
+  String get psiphonLocation;
+  String get torLocation;
 
   /// «سرعت اسکن» 1..5 (protocol sheet; feeds the core scan profile).
   int get scanSpeed;

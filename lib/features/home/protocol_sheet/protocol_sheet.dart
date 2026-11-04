@@ -92,24 +92,28 @@ class _ProtocolPageState extends State<ProtocolPage> {
   /// The protocol currently pulsing from a selection tap (auto-pop follows).
   ProtocolId? _pulseId;
 
+  /// v4.21 — the single-knob plain-tile highlight: the committed protocol
+  /// when it is a PLAIN tile, null when a family member is committed (the
+  /// v4.20 "leg tile stays green under a family mode" double-highlight is
+  /// exactly what the owner asked to remove).
+  ProtocolId? get _plainHighlight {
+    final p = widget.store.selectedProtocol;
+    return p.isTor || p.isPsiphon ? null : p;
+  }
+
   void _select(ProtocolId id) {
     if (!mounted) return;
-    // v4.20 — TWO independent knobs (owner: «اول وایرگارد وصل شه و بعد
-    // سایفون نه اینکه کلا وایرگارد به جاش وصل شه»): the six plain tiles
-    // commit the WARP LEG; the family sub-tiles commit the CHAIN OVERLAY
-    // that rides on top of that leg — neither replaces the other.
-    final isFamily = id.isTor || id.isPsiphon;
-    final already = isFamily
-        ? widget.store.selectedChain == id
-        : widget.store.selectedProtocol == id;
+    // v4.21 — SINGLE-KNOB selection, the v4.19 semantics restored (owner
+    // device-test round 3: «حالت جدید که برای انتخاب پروتکل AETHER در حالت
+    // اور وارپ ایجاد کردی از لحاظ تجربه کاربری جالب نیست لطفا به حالت قبل
+    // برشگردون بعدا یک گزینه برای انتخاب پروتکل هسته AETHER در پروتکل های
+    // اور وارپ اضافه میکنیم»): every tile and every family sub-tile commits
+    // THE protocol — one green selection on the whole page. The WARP leg
+    // under a family mode stays the fixed WireGuard default inside the
+    // engine adapter until the promised dedicated option lands.
+    final already = widget.store.selectedProtocol == id;
     setState(() => _pulseId = id);
-    if (isFamily) {
-      // Re-tapping the ACTIVE overlay clears it (back to the plain leg) —
-      // the sheet's only "off" affordance until the deferred redesign.
-      widget.store.selectChain(already ? null : id);
-    } else if (!already) {
-      widget.store.selectProtocol(id);
-    }
+    if (!already) widget.store.selectProtocol(id);
     // Owner v4.16: after choosing a protocol the user is returned to the
     // home page automatically. The 300 ms hold lets the green crossfade +
     // pulse land before the reverse slide.
@@ -151,13 +155,15 @@ class _ProtocolPageState extends State<ProtocolPage> {
                 MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
             return Stack(
               children: [
-                // The settings page's own background (owner: «پس زمینش هم
-                // پترن های صفحه تنظیمات رو باید داشته باشه»).
+                // v4.21 — the owner's decree: the OTHER pages carry the
+                // home screen's patterns, exactly the same, same position
+                // («از پترن های صفحه اصلی برای سایر صفحات مثل انتخاب پروتکل
+                // و تنطیمات استفاده کن دقیقا همونا با همون مکان»).
                 Positioned.fill(
                   child: PatternSides(
                     connected: widget.store.isConnected,
                     style: widget.store.animationStyle,
-                    stage: PatternStage.settings,
+                    stage: PatternStage.home,
                   ),
                 ),
                 SafeArea(
@@ -241,7 +247,10 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                   strings.protocolName(ProtocolId.masque),
                                   strings.protocolName(ProtocolId.wireguard),
                                 ],
-                                selected: widget.store.selectedProtocol,
+                                // v4.21 — the single-knob highlight: a
+                                // family selection means NO plain tile is
+                                // active (the v4.20 double-green is gone).
+                                selected: _plainHighlight,
                                 pulse: _pulseId,
                                 onSelect: _select,
                                 onInfo: _openDesc,
@@ -266,7 +275,8 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                   strings.protocolName(ProtocolId.goolClassic),
                                   strings.protocolName(ProtocolId.mim),
                                 ],
-                                selected: widget.store.selectedProtocol,
+                                // v4.21 — the single-knob highlight.
+                                selected: _plainHighlight,
                                 pulse: _pulseId,
                                 onSelect: _select,
                                 onInfo: _openDesc,
@@ -289,9 +299,10 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 label:
                                     strings.protocolName(ProtocolId.psiphonChain),
                                 logoAsset: AppAssets.protocolPsiphonLogo,
-                                // v4.20 — the family cards bind the CHAIN
-                                // overlay (independent of the leg tiles).
-                                selected: widget.store.selectedChain,
+                                // v4.21 — the single-knob selection: the
+                                // card highlights only when one of ITS
+                                // members is the committed protocol.
+                                selected: widget.store.selectedProtocol,
                                 pulse: _pulseId,
                                 onSelect: _select,
                                 onInfo: _openDesc,
@@ -315,9 +326,8 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 label:
                                     strings.protocolName(ProtocolId.torChain),
                                 logoAsset: AppAssets.protocolTorLogo,
-                                // v4.20 — the family cards bind the CHAIN
-                                // overlay (independent of the leg tiles).
-                                selected: widget.store.selectedChain,
+                                // v4.21 — the single-knob selection.
+                                selected: widget.store.selectedProtocol,
                                 pulse: _pulseId,
                                 onSelect: _select,
                                 onInfo: _openDesc,
@@ -661,7 +671,10 @@ class _TileRow extends StatelessWidget {
 
   final List<ProtocolId> ids;
   final List<String> labels;
-  final ProtocolId selected;
+
+  /// v4.21 — nullable: the single-knob highlight shows NO plain tile when
+  /// a family member is committed.
+  final ProtocolId? selected;
   final ProtocolId? pulse;
   final void Function(ProtocolId) onSelect;
   final void Function(ProtocolId) onInfo;

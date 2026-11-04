@@ -32,13 +32,18 @@
 /// placeholder sheet used across the app until then.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../connection/connection_store.dart';
+import '../../connection/core_log.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
+import '../../core/motion.dart';
 import '../../l10n/app_strings.dart';
 import '../home/widgets/pattern_sides.dart';
 
@@ -125,6 +130,15 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  /// v4.21 — opens the core diagnostics page (the captured stderr of both
+  /// engines — owner: «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا
+  /// بهتر بتونیم دیباگ کنیم»).
+  void _openCoreLog(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const CoreLogPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
@@ -142,13 +156,15 @@ class SettingsScreen extends StatelessWidget {
         backgroundColor: AethColors.bgScreen,
         body: Stack(
           children: [
-            // Same dark stage + edge patterns as the home screen (the design
-            // frame carries the faint geometric patterns in the corners).
+            // v4.21 — the owner's decree: the settings page carries the
+            // HOME screen's patterns, exactly the same, same position
+            // («از پترن های صفحه اصلی برای سایر صفحات مثل انتخاب پروتکل و
+            // تنطیمات استفاده کن دقیقا همونا با همون مکان»).
             Positioned.fill(
               child: PatternSides(
                 connected: store.isConnected,
                 style: store.animationStyle,
-                stage: PatternStage.settings,
+                stage: PatternStage.home,
               ),
             ),
             // v4.10 lesson (main-screen defect): under the fa/RTL locale a
@@ -214,6 +230,14 @@ class SettingsScreen extends StatelessWidget {
                           height: AethGeometry.settingsHeadingGapToCards * s,
                         ),
                         _enter(context, 7, const _ServerPills()),
+                        SizedBox(height: 22 * s),
+                        // v4.21 — the core diagnostics entry (owner:
+                        // «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا
+                        // بهتر بتونیم دیباگ کنیم») — the full captured
+                        // stderr of the engines, tailed live.
+                        _enter(context, 8, _CoreLogCard(
+                          onTap: () => _openCoreLog(context),
+                        )),
                         SizedBox(height: 30 * s),
                       ],
                     ),
@@ -837,6 +861,303 @@ class _ServerPills extends StatelessWidget {
         SizedBox(width: AethGeometry.settingsPillGap * s),
         pill('Aether Core'),
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// v4.21 — the core diagnostics entry + page (owner device-test round 3:
+// «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا بهتر بتونیم دیباگ
+// کنیم»). The Kotlin layer redirects the process stderr (aether's
+// env_logger + the zeptun JNI) into filesDir/logs/core-log.txt; this page
+// tails that capture live. Same visual language as the rest of the app
+// (dark card, IRANYekanX, the home patterns behind).
+// ---------------------------------------------------------------------------
+
+class _CoreLogCard extends StatelessWidget {
+  const _CoreLogCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    return Semantics(
+      button: true,
+      label: strings.coreLogTitle,
+      child: GestureDetector(
+        key: const ValueKey('settings-core-log-card'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          height: 58 * s,
+          decoration: BoxDecoration(
+            color: AethColors.cardDark,
+            borderRadius:
+                BorderRadius.circular(AethGeometry.settingsPillRadius * s),
+          ),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: Row(
+              children: [
+                const SizedBox(width: 16),
+                SvgPicture.asset(
+                  AppAssets.iconInformationCircle,
+                  width: 22 * s,
+                  height: 22 * s,
+                  colorFilter: const ColorFilter.mode(
+                    AethColors.accentConnected,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    strings.coreLogTitle,
+                    style: TextStyle(
+                      fontFamily: 'IRANYekanX',
+                      fontWeight: FontWeight.w500,
+                      fontSize: AethGeometry.settingsPillTitleSize * s,
+                      color: AethColors.textPrimary,
+                    ),
+                  ),
+                ),
+                Text(
+                  strings.coreLogOpen,
+                  style: TextStyle(
+                    fontFamily: 'IRANYekanX',
+                    fontWeight: FontWeight.w400,
+                    fontSize: 12 * s,
+                    color: AethColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The full-screen core log viewer: tails the capture every 2 s while
+/// open, supports copy (share sheet is out of scope — Clipboard + a toast
+/// is honest) and clear.
+class CoreLogPage extends StatefulWidget {
+  const CoreLogPage({super.key});
+
+  @override
+  State<CoreLogPage> createState() => _CoreLogPageState();
+}
+
+class _CoreLogPageState extends State<CoreLogPage> {
+  final CoreLogReader _reader = CoreLogReader();
+  CoreLogSnapshot _snapshot = const CoreLogSnapshot(text: '', totalBytes: 0);
+  bool _loading = true;
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+    _poll = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    final snapshot = await _reader.read();
+    if (!mounted) return;
+    setState(() {
+      _snapshot = snapshot;
+      _loading = false;
+    });
+  }
+
+  Future<void> _clear() async {
+    await _reader.clear();
+    await _refresh();
+  }
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: _snapshot.text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(AppStrings.of(context).coreLogCopied),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: AethColors.bgScreen,
+        body: Stack(
+          children: [
+            // The home patterns behind (v4.21 — same stage as every page).
+            const Positioned.fill(
+              child: PatternSides(
+                connected: false,
+                style: MotionStyle.off,
+                stage: PatternStage.home,
+              ),
+            ),
+            SafeArea(
+              child: Column(
+                children: [
+                  // Header row: back · title · copy · clear
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          key: const ValueKey('core-log-back'),
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          icon: SvgPicture.asset(
+                            AppAssets.iconRight2,
+                            width: 22,
+                            height: 22,
+                            colorFilter: const ColorFilter.mode(
+                              AethColors.textPrimary,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            strings.coreLogTitle,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontFamily: 'IRANYekanX',
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                              color: AethColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          key: const ValueKey('core-log-copy'),
+                          tooltip: strings.coreLogCopy,
+                          onPressed: _snapshot.isEmpty ? null : _copy,
+                          icon: SvgPicture.asset(
+                            AppAssets.iconSend,
+                            width: 20,
+                            height: 20,
+                            colorFilter: ColorFilter.mode(
+                              _snapshot.isEmpty
+                                  ? AethColors.textSecondary
+                                  : AethColors.accentConnected,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          key: const ValueKey('core-log-clear'),
+                          tooltip: strings.coreLogClear,
+                          onPressed: _snapshot.isEmpty ? null : _clear,
+                          icon: SvgPicture.asset(
+                            AppAssets.iconClose,
+                            width: 20,
+                            height: 20,
+                            colorFilter: ColorFilter.mode(
+                              _snapshot.isEmpty
+                                  ? AethColors.textSecondary
+                                  : AethColors.textPrimary,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        strings.coreLogSize(_snapshot.totalBytes),
+                        style: const TextStyle(
+                          fontFamily: 'IRANYekanX',
+                          fontWeight: FontWeight.w400,
+                          fontSize: 11,
+                          color: AethColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: Container(
+                      key: const ValueKey('core-log-body'),
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      decoration: BoxDecoration(
+                        color: AethColors.cardDark,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: _loading
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                color: AethColors.accentConnected,
+                              ),
+                            )
+                          : _snapshot.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    strings.coreLogEmpty,
+                                    style: const TextStyle(
+                                      fontFamily: 'IRANYekanX',
+                                      fontWeight: FontWeight.w400,
+                                      fontSize: 13,
+                                      color: AethColors.textSecondary,
+                                    ),
+                                  ),
+                                )
+                          : Scrollbar(
+                              child: SingleChildScrollView(
+                                // The core's own lines are LTR (English +
+                                // timestamps); one line per log record.
+                                child: Directionality(
+                                  textDirection: TextDirection.ltr,
+                                  child: SelectionArea(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Text(
+                                        _snapshot.text,
+                                        key: const ValueKey(
+                                          'core-log-text',
+                                        ),
+                                        style: const TextStyle(
+                                          fontFamily: 'IRANYekanX',
+                                          fontWeight: FontWeight.w400,
+                                          fontSize: 11,
+                                          height: 1.5,
+                                          color: AethColors.textPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -439,6 +439,98 @@ void main() {
       expect(statesOf(events).last, VpnState.disconnected);
     });
 
+    test(
+      'v4.21 per-family location: a psiphon pick pins --psiphon-region; '
+      'AUTO passes no flag (the core\'s own choice)', () async {
+      mockChannel();
+      final listener = await _FakeSocks5Server().startOn(1821);
+      try {
+        final core = _FakeCore();
+        final adapter = PlatformEngineAdapter(coreFactory: () => core);
+        final events = <EngineEvent>[];
+        adapter.events.listen(events.add);
+        adapter.bind(
+          _FixedConfig(
+            selectedProtocol: ProtocolId.psiphonChain,
+            connectionMode: ConnectionMode.proxy,
+            psiphonLocation: 'de',
+          ),
+        );
+        await adapter.connect();
+        await pumpEventQueue();
+        expect(statesOf(events).last, VpnState.connected);
+        expect(
+          core.startedArgs.single,
+          containsAllInOrder(['--psiphon-region', 'de']),
+        );
+        await adapter.disconnect();
+        await pumpEventQueue();
+
+        // AUTO: no region flag at all — the core picks its own egress
+        // (owner: «این انتخاب خودکار قابلیت خود هسته هاست»).
+        final core2 = _FakeCore();
+        final adapter2 = PlatformEngineAdapter(coreFactory: () => core2);
+        adapter2.events.listen(events.add);
+        adapter2.bind(
+          _FixedConfig(
+            selectedProtocol: ProtocolId.psiphonChain,
+            connectionMode: ConnectionMode.proxy,
+            psiphonLocation: 'auto',
+          ),
+        );
+        await adapter2.connect();
+        await pumpEventQueue();
+        expect(core2.startedArgs.single, isNot(contains('--psiphon-region')));
+        await adapter2.disconnect();
+        await pumpEventQueue();
+      } finally {
+        await listener.dispose();
+      }
+    });
+
+    test(
+      'v4.21 per-family location: a tor pick pins --exit-loc on torReverse; '
+      'tor-exit modes never carry a country pin', () async {
+      mockChannel();
+      // Reuses the group's setUp listener on 1819 (torReverse serves the
+      // main --bind listener).
+      final core = _FakeCore();
+      final adapter = PlatformEngineAdapter(coreFactory: () => core);
+      final events = <EngineEvent>[];
+      adapter.events.listen(events.add);
+      adapter.bind(
+        _FixedConfig(
+          selectedProtocol: ProtocolId.torReverse,
+          connectionMode: ConnectionMode.proxy,
+          torLocation: 'nl',
+        ),
+      );
+      await adapter.connect();
+      await pumpEventQueue();
+      expect(statesOf(events).last, VpnState.connected);
+      // torReverse exits through WARP → the pick lands on --exit-loc.
+      expect(
+        core.startedArgs.single,
+        containsAllInOrder(['--exit-loc', 'NL']),
+      );
+      await adapter.disconnect();
+      await pumpEventQueue();
+
+      // torChain/torOnly: no pin exists in the core — the pick stays a UI
+      // memory and NEVER reaches the command line (asserted at the pure
+      // builder level).
+      expect(
+        AetherArguments.build(
+          protocol: ProtocolId.wireguard,
+          chain: ProtocolId.torChain,
+          countryCode: 'de',
+          filesDir: '/data/test/files',
+          nativeLibraryDir: '/data/test/lib',
+        ),
+        isNot(contains('--exit-loc')),
+      );
+    });
+
     test('tunnel mode: permission → VpnService → zeptun counters in stats', () async {
       var stopped = false;
       final startedPorts = <int>[];
@@ -578,8 +670,7 @@ void main() {
         adapter.events.listen(events.add);
         adapter.bind(
           _FixedConfig(
-            selectedProtocol: ProtocolId.wireguard,
-            selectedChain: ProtocolId.psiphonChain,
+            selectedProtocol: ProtocolId.psiphonChain,
             connectionMode: ConnectionMode.proxy,
           ),
         );
@@ -590,9 +681,9 @@ void main() {
         expect(statesOf(events), [VpnState.connecting, VpnState.connected]);
         final stats = events.whereType<EngineStatsUpdated>().first;
         expect(stats.exitCountryCode, 'de');
-        // The core got the v4.20 chain args: the WireGuard LEG first, the
-        // psiphon overlay on top of it (owner: «اول وایرگارد وصل شه و بعد
-        // سایفون»).
+        // v4.21 — the single-knob selection with the FIXED WireGuard leg
+        // under the family mode: `--protocol wg --psiphon` (the adapter's
+        // leg+overlay seam stays ready for the promised AETHER-leg option).
         expect(core.startedArgs.single, containsAllInOrder(['--protocol', 'wg']));
         expect(core.startedArgs.single, contains('--psiphon'));
         expect(core.startedArgs.single, containsAllInOrder([
@@ -616,8 +707,7 @@ void main() {
         adapter.events.listen(events.add);
         adapter.bind(
           _FixedConfig(
-            selectedProtocol: ProtocolId.wireguard,
-            selectedChain: ProtocolId.psiphonChain,
+            selectedProtocol: ProtocolId.psiphonChain,
             connectionMode: ConnectionMode.proxy,
           ),
         );
@@ -864,25 +954,28 @@ class _FakeCore implements AetherCoreApi {
 class _FixedConfig implements EngineConfigSource {
   _FixedConfig({
     ProtocolId? selectedProtocol,
-    this.selectedChain,
     ConnectionMode? connectionMode,
     this.selectedCountryCode,
+    this.psiphonLocation = 'auto',
+    this.torLocation = 'auto',
   }) : selectedProtocol = selectedProtocol ?? ProtocolId.masque,
        connectionMode = connectionMode ?? ConnectionMode.proxy;
 
+  /// v4.21 — the single-knob committed mode (a plain tile or a family
+  /// member; the v4.20 chain split was reverted by the owner's decree).
   @override
   final ProtocolId selectedProtocol;
 
-  /// v4.20 — the overlay family member (null = plain).
-  @override
-  final ProtocolId? selectedChain;
-
-  @override
-  ProtocolId get effectiveProtocol => selectedChain ?? selectedProtocol;
   @override
   final ConnectionMode connectionMode;
   @override
   final String? selectedCountryCode;
+
+  /// v4.21 — the per-family location picks ('auto' or an ISO code).
+  @override
+  final String psiphonLocation;
+  @override
+  final String torLocation;
 
   @override
   int get scanSpeed => 5;

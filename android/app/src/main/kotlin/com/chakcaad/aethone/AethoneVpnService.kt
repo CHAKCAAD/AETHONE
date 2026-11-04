@@ -36,6 +36,13 @@ class AethoneVpnService : VpnService() {
 
     companion object {
         const val EXTRA_PORT = "port"
+
+        /// v4.21 — the Dart-side tunnel-session stamp (see MainActivity's
+        /// startVpn): every event THIS instance emits carries it back so the
+        /// adapter can drop the stale instance's late `down/destroy` events
+        /// (owner device-test: «در حالت تونل … tunnelStartFailed / destroy»
+        /// from a service that was already being torn down).
+        const val EXTRA_SESSION = "session"
         private const val TAG = "AethoneVpn"
         private const val CHANNEL_ID = "aethone_vpn"
         private const val NOTIFICATION_ID = 1
@@ -68,6 +75,10 @@ class AethoneVpnService : VpnService() {
     private var socksPort: Int = 1819
     private var zeptunUp = false
 
+    /// v4.21 — the session stamp from the start intent (0 when absent,
+    /// e.g. an external start); echoed on EVERY event this instance emits.
+    private var sessionId: Int = 0
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -77,6 +88,7 @@ class AethoneVpnService : VpnService() {
         startForegroundCompat()
         val port = intent?.getIntExtra(EXTRA_PORT, 1819) ?: 1819
         socksPort = port
+        sessionId = intent?.getIntExtra(EXTRA_SESSION, 0) ?: 0
         // v4.19 (#1 hardening): the tunnel leg is the one place where a
         // thrown Java-level error used to KILL the process mid-connection
         // (an UnsatisfiedLinkError from the JNI bridge, a lifecycle
@@ -88,19 +100,26 @@ class AethoneVpnService : VpnService() {
         // seam and adb logcat remains the native-truth source.
         try {
             if (!startTunnel(port)) {
-                EngineBridge.emit(mapOf("event" to "down", "reason" to "establish-failed"))
+                EngineBridge.emit(downEvent("establish-failed"))
                 stopSelf()
                 return START_NOT_STICKY
             }
         } catch (t: Throwable) {
             Log.e(TAG, "tunnel start threw", t)
-            EngineBridge.emit(mapOf("event" to "down", "reason" to "start-threw:${t.javaClass.simpleName}"))
+            EngineBridge.emit(downEvent("start-threw:${t.javaClass.simpleName}"))
             stopTunnel("start-threw")
             stopSelf()
             return START_NOT_STICKY
         }
         return START_NOT_STICKY
     }
+
+    /// v4.21 — event maps stamped with THIS instance's session id.
+    private fun upEvent(port: Int): Map<String, Any?> =
+        mapOf("event" to "up", "port" to port, "session" to sessionId)
+
+    private fun downEvent(reason: String): Map<String, Any?> =
+        mapOf("event" to "down", "reason" to reason, "session" to sessionId)
 
     private fun startTunnel(port: Int): Boolean {
         if (zeptunUp) {
@@ -113,7 +132,7 @@ class AethoneVpnService : VpnService() {
                 Log.i(TAG, "socks target changed $socksPort -> $port; restarting zeptun")
                 stopTunnel("port-change")
             } else {
-                EngineBridge.emit(mapOf("event" to "up", "port" to port))
+                EngineBridge.emit(upEvent(port))
                 return true
             }
         }
@@ -160,7 +179,7 @@ class AethoneVpnService : VpnService() {
         }
         zeptunUp = true
         Log.i(TAG, "zeptun up on socks 127.0.0.1:$port (protect callback installed)")
-        EngineBridge.emit(mapOf("event" to "up", "port" to port))
+        EngineBridge.emit(upEvent(port))
         return true
     }
 
@@ -183,14 +202,16 @@ class AethoneVpnService : VpnService() {
     /// on a dead descriptor.
     override fun onRevoke() {
         stopTunnel("revoked")
-        EngineBridge.emit(mapOf("event" to "revoked"))
+        EngineBridge.emit(
+            mapOf("event" to "revoked", "session" to sessionId),
+        )
         stopSelf()
         super.onRevoke()
     }
 
     override fun onDestroy() {
         stopTunnel("destroy")
-        EngineBridge.emit(mapOf("event" to "down", "reason" to "destroy"))
+        EngineBridge.emit(downEvent("destroy"))
         instance = null
         super.onDestroy()
     }

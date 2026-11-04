@@ -130,18 +130,71 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   @override
   String? selectedCountryCode;
 
-  /// v4.20 — the wheel policy follows the EFFECTIVE mode (the overlay when
-  /// one is selected, else the leg tile): the psiphon family filters the
-  /// flags to its egress regions, everything else shows the full manifest.
+  /// v4.21 — per-family location picks (owner device-test round 3: «اپ
+  /// باید انتخاب لوکیشن سایفون و تور رو یادش بمونه» + «برای سایفون و تور
+  /// به انتخاب خودکار هم باید بزاریم … از قبل خودشون دارن»):
+  /// 'auto' = the core's own choice (the built-in capability the owner
+  /// named — no flag passed), else an ISO-3166 alpha-2 lowercase pick.
+  /// Remembered per family and persisted.
+  @override
+  String psiphonLocation = LocationWheelPolicy.autoCode;
+
+  @override
+  String torLocation = LocationWheelPolicy.autoCode;
+
+  /// v4.21 — ONE commit path for every wheel settle/tap: routes the pick
+  /// into the current family's field (psiphon / tor), or the plain wheel
+  /// pick for non-family protocols. Never fires while a transition is in
+  /// flight (the selector is locked then anyway).
+  void selectLocation(String code) {
+    if (_operationInFlight) return;
+    final effective = effectiveProtocol;
+    if (effective.isPsiphon) {
+      if (psiphonLocation == code) return;
+      psiphonLocation = code;
+      notifyListeners();
+    } else if (effective.isTor) {
+      if (torLocation == code) return;
+      torLocation = code;
+      notifyListeners();
+    } else {
+      selectCountry(code);
+    }
+  }
+
+  /// The pick the wheel should ANCHOR on for the current protocol (the
+  /// family pick, or the plain selection for non-family protocols — the
+  /// plain family's band is a post-connect display, so its cold anchor is
+  /// the classic ایران default, never the AUTO sentinel).
+  String get wheelAnchorCode {
+    final effective = effectiveProtocol;
+    if (effective.isPsiphon) return psiphonLocation;
+    if (effective.isTor) return torLocation;
+    return selectedCountryCode ?? 'ir';
+  }
+
+  /// v4.21 — the wheel policy follows the EFFECTIVE mode: the psiphon and
+  /// tor families are real selectors (owner: «در حالت تور انتخاب لوکیشن
+  /// باید فعال باشه»), everything else keeps the plain display band
+  /// (v4.15 #3 hide rule).
   bool get wheelSelectable =>
       LocationWheelPolicy.selectable(effectiveProtocol);
 
-  /// null = the whole flag manifest (design/flags_png).
+  /// The allowed wheel entries for the current protocol — family modes
+  /// carry the AUTO entry first; null = the whole flag manifest (plain
+  /// modes, post-connect display).
   List<String>? get wheelAllowedCodes =>
       LocationWheelPolicy.allowedCodes(effectiveProtocol);
 
-  /// Wheel selection commit (flag snap / tap). Ignored while an operation
-  /// is in flight so the selector can never fight a running transition.
+  /// v4.21 — true when the wheel runs on the FULL manifest with the AUTO
+  /// entry prepended (the tor family + the reverse modes).
+  bool get wheelAutoEntry =>
+      LocationWheelPolicy.autoEntry(effectiveProtocol);
+
+  /// Wheel selection commit for the PLAIN family (flag snap / tap).
+  /// Ignored while an operation is in flight so the selector can never
+  /// fight a running transition. Family modes commit through
+  /// [selectLocation] instead.
   void selectCountry(String code) {
     if (_operationInFlight) return;
     if (selectedCountryCode == code) return;
@@ -149,46 +202,29 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
-  /// v4.19 — the app's DEFAULT WARP-leg protocol is WireGuard (owner
-  /// device-test decree #4: «حالا که هنوز بخش تنظیمات رو طراحی نکردیم حالت
-  /// دیفالت تور اور وارپ رو بزار روی پروتکل وایرگارد»). The sheet's AUTO
-  /// tile still selects the core's own default (MASQUE) explicitly — only
-  /// the cold default changed.
+  /// v4.19 — the app's DEFAULT protocol is WireGuard (owner device-test
+  /// decree #4: «حالا که هنوز بخش تنظیمات رو طراحی نکردیم حالت دیفالت تور
+  /// اور وارپ رو بزار روی پروتکل وایرگارد»). The sheet's AUTO tile still
+  /// selects the core's own default (MASQUE) explicitly — only the cold
+  /// default changed.
   ///
-  /// v4.20 — this is now the WARP-LEG knob ONLY (owner: «اول وایرگارد وصل
-  /// شه و بعد سایفون»): a chain selection ([selectedChain]) rides on top
-  /// of this leg instead of replacing it. The engine combines both
-  /// (`--protocol wg --psiphon` = WireGuard WARP first, Psiphon over it).
+  /// v4.21 — SINGLE KNOB again (owner: the v4.20 chain/leg split was not
+  /// good UX — «لطفا به حالت قبل برشگردون»): the field holds the committed
+  /// mode directly — a plain tile OR a family member. The WARP leg under a
+  /// family mode is the fixed WireGuard default (v4.19 decree) until the
+  /// promised "AETHER core protocol" option lands.
   @override
   ProtocolId selectedProtocol = ProtocolId.wireguard;
 
-  /// v4.20 — the overlay family member (torChain…psiphonOnly) committed on
-  /// a protocol-sheet family card, or null = plain connection. Independent
-  /// of [selectedProtocol]: picking «سایفون روی وارپ» keeps the WireGuard
-  /// leg selected underneath it.
-  @override
-  ProtocolId? selectedChain;
+  /// The mode the engine runs and the UI shows — with the single-knob
+  /// revert this is simply the committed selection.
+  ProtocolId get effectiveProtocol => selectedProtocol;
 
-  /// The mode the ENGINE runs and the UI shows: the overlay when one is
-  /// selected, else the leg tile.
-  @override
-  ProtocolId get effectiveProtocol => selectedChain ?? selectedProtocol;
-
-  /// v4.16 — protocol (leg) selection with notify (the sheet binds here;
-  /// tapping a tile commits the leg and auto-pops back to the home — the
-  /// chain selection is deliberately untouched).
+  /// v4.16 — protocol selection with notify (the sheet binds here; tapping
+  /// a tile commits the protocol and auto-pops back to the home).
   void selectProtocol(ProtocolId id) {
     if (selectedProtocol == id) return;
     selectedProtocol = id;
-    notifyListeners();
-  }
-
-  /// v4.20 — overlay (chain) selection with notify. Tapping the ACTIVE
-  /// sub-tile again clears the overlay (back to the plain leg) — that is
-  /// the sheet's only "off" affordance until the deferred page redesign.
-  void selectChain(ProtocolId? id) {
-    if (selectedChain == id) return;
-    selectedChain = id;
     notifyListeners();
   }
 
