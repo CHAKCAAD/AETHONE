@@ -448,8 +448,8 @@ class _CoreButtonPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final core = AethGeometry.obCoreButton;
-    final r = AethGeometry.obCoreButtonRadius;
+    const core = AethGeometry.obCoreButton;
+    const r = AethGeometry.obCoreButtonRadius;
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -459,26 +459,26 @@ class _CoreButtonPreview extends StatelessWidget {
           layers: [
             // The frame's three halo steps + the wide soft glow, radii
             // kept at the core's 42/110 squircle proportion.
-            LayerSpec(
+            const LayerSpec(
               width: core * 1.42,
               height: core * 1.42,
               radius: r * 1.42,
               opacity: 0.30,
               blurSigma: 16,
             ),
-            LayerSpec(
+            const LayerSpec(
               width: core * 1.25,
               height: core * 1.25,
               radius: r * 1.25,
               opacity: 0.18,
             ),
-            LayerSpec(
+            const LayerSpec(
               width: core * 1.12,
               height: core * 1.12,
               radius: r * 1.12,
               opacity: 0.35,
             ),
-            LayerSpec(width: core, height: core, radius: r, opacity: 1.0),
+            const LayerSpec(width: core, height: core, radius: r, opacity: 1.0),
           ],
         ),
         SvgPicture.asset(

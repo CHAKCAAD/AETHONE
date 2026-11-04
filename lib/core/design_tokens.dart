@@ -102,6 +102,46 @@ abstract final class AethColors {
   /// The edge patterns render at low opacity on the wizard frames (the
   /// art peaks ≈24% over the background — measured on all five frames).
   static const double obPatternOpacity = 0.24;
+
+  // ---- v4.24 speed test («صفحه تست سرعت») — measured programmatically on
+  // the three committed frames (قبل از شروع / در حال تست سرعت / اتمام
+  // تست سرعت): tile-box corner grids + polar midline sampling. ----
+
+  /// The gauge track at rest — a shade DARKER than the bg (#0A0F0B read at
+  /// all 19 midline angles on the idle + done frames).
+  static const Color speedTrack = Color(0xFF0A0F0B);
+
+  /// The gauge track while a phase runs (#16543B on the running frame —
+  /// the step-dim green family).
+  static const Color speedTrackLive = Color(0xFF16543B);
+
+  /// The progress fill's tail at the 180° end (#0C7650, running frame).
+  static const Color speedFillTail = Color(0xFF0C7650);
+
+  /// The progress fill's head at the leading edge (#1ACE8D, running frame;
+  /// within JPEG drift of [accentConnected] — kept distinct, evidence rule).
+  static const Color speedFillHead = Color(0xFF1ACE8D);
+
+  /// The rest-state core of the page's start button (#0A0C09 — darker than
+  /// [topTile]; it flips to [accentConnected] while running — the frame
+  /// measures #1AD994 there).
+  static const Color speedCoreRest = Color(0xFF0A0C09);
+
+  /// Jitter tile bg (#0A394B); its icon #008FD5.
+  static const Color speedTileJitter = Color(0xFF0A394B);
+  static const Color speedIconJitter = Color(0xFF008FD5);
+
+  /// Ping tile bg (#3A3C17); its icon #E6D83A.
+  static const Color speedTilePing = Color(0xFF3A3C17);
+  static const Color speedIconPing = Color(0xFFE6D83A);
+
+  /// The DOWN tile bg is the home panel's own [statDownBg] (#0A4F33 —
+  /// measured EXACT on the frame); its icon #01D589.
+  static const Color speedIconDown = Color(0xFF01D589);
+
+  /// The UP tile bg is the home panel's own [statUpBg] (#3A1C1C — measured
+  /// EXACT); its icon #E83946.
+  static const Color speedIconUp = Color(0xFFE83946);
 }
 
 /// Shape & effect tokens (report table 8, Figma CSS + owner CSS v4.11).
@@ -584,4 +624,81 @@ abstract final class AethGeometry {
   static const double obModalMark = 38;
   static const double obModalGap = 21;
   static const double obModalTextSize = 16;
+
+  // -------------------------------------------------------------------
+  // v4.24 — SPEED TEST («صفحه تست سرعت»), measured programmatically on the
+  // three committed frames (402×874 ref px): run-extraction of the dial
+  // band (center (200,376), outer r108 / inner r87 — stroke 21 — 180° top
+  // semicircle with round caps), the 12-o'clock tick (x197.5–207.5,
+  // y308–360, gradient fading down), the value block («0.0» x183–221
+  // y365–384 + «Mbs» x228–253 y366–378, baseline-aligned — the NUMBER's
+  // right edge is pinned at x221 and the unit hangs at x228 in BOTH the
+  // idle («0.0») and running («50.4») frames, i.e. the number grows
+  // LEFTWARD), the «دانلود» phase label (x174–234, ink y415–438 — running
+  // only), the 2×2 stat grid (cards 160 wide at x33/210 with the page's
+  // own 33 inset, rows y510/588; 48px r14 tiles at 8 inset, label 12 over
+  // value 14, the frame's own glyphs 26px inside the tiles) and the button
+  // group (the home Group 11: glow 96 σ24 / halo 74 / mid 62 / core 44
+  // r17, the label «شروع» 16px w500, ink y787–801).
+  //
+  // v4.24.1 — the second measurement round (status-bar inset 24 simulated
+  // in the shots test, every element re-probed): the title is the frame's
+  // 26px/24-ink («تست سرعت» x116–259), the badge is the hexagon+wave BRAND
+  // glyph at 24 (x273–296, gap 14 after the text), the phase label 25
+  // (61 wide), the card row gap 16 (row2 y588 − row1 y510 − card 62), the
+  // button glow box top at y692 (cards bottom 650 + 42) and the label
+  // under the group.
+  // -------------------------------------------------------------------
+
+  /// Title row + dial rhythm (all ref px, frame coords).
+  static const double speedTitleSize = 28;
+  static const double speedTitleBadge = 27;
+  static const double speedTitleBadgeGap = 14; // text x259 → badge x273
+  static const double speedGapTopbarToTitle = 52; // tile bottom y86 → title ink y146
+  static const double speedGapTitleToDial = 89; // title row → dial zone top y267
+
+  /// The dial itself (the painter box is 216×118.5, center (108,108)).
+  static const double speedDialOuterR = 108;
+  static const double speedDialInnerR = 87;
+  static const double speedTickW = 10;
+  static const double speedTickTop = 40; // y308 — 40 below the arc top
+  static const double speedTickH = 52; // → y360, faded out
+
+  /// The whole dial zone: the arc + the value slot + the phase-label slot
+  /// as ONE FIXED 176 box — the cards below never move between states.
+  static const double speedDialZoneH = 176;
+  static const double speedValueSize = 28; // «0.0» / «50.4» (ink 20 tall, 40/55 wide)
+  static const double speedUnitSize = 14; // «Mbs» (25 wide, 10 tall on the frame)
+  static const double speedValueRightInset = 117; // group right x252 (zone x369−252)
+  static const double speedValueGap = 3.5; // number right x221 → unit x228
+  static const double speedPhaseLabelSize = 25; // «دانلود» 61 wide, ink 24 tall
+  static const double speedGapDialToCards = 67; // zone bottom y443 → cards y510
+
+  /// The 2×2 stat grid.
+  static const double speedCardH = 62;
+  static const double speedCardGapX = 17;
+  static const double speedCardGapY = 16; // row1 y510+62 → row2 y588
+  static const double speedTileSize = 48; // == statIconBoxSize
+  static const double speedTileRadius = 14;
+  static const double speedTileInset = 8;
+  static const double speedTileGap = 9; // tile → label run (measured)
+  static const double speedCardLabelSize = 12;
+  static const double speedCardValueSize = 14;
+
+  /// The frame's own tile glyphs — per-icon sizes (the graphs' rounded
+  /// square is 26px on the frames; the SVG's square is 25/30 of its box).
+  static const double speedIconJitterSize = 22;
+  static const double speedIconPingSize = 22;
+  static const double speedIconGraphSize = 31; // 26px square at 25/30 fill
+
+  /// The button + its label zone.
+  static const double speedGapCardsToButton = 41; // cards y650 → glow box y692
+  static const double speedButtonIcon = 25; // the hexagon+wave brand glyph
+  static const double speedButtonLabelSize = 16; // «شروع» ink y787–801
+  static const double speedGapButtonToLabel = -6; // glow bottom y785 → ink y787
+
+  /// The edge patterns behind the page render at a fraction of the home
+  /// strength here — the frames' own wash peaks ΔL≈8–14 over the bg (the
+  /// home composition at full strength peaks ΔL≈33–40).
+  static const double speedPatternOpacity = 0.2;
 }

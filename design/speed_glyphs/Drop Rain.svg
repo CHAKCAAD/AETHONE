@@ -1,0 +1,10 @@
+<svg width="20" height="24" viewBox="0 0 20 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!-- The jitter card's own glyph — traced from the committed design frames:
+     a drop outline with three small staggered rain dashes falling below it
+     (the pack's Drop.svg is the same drop WITHOUT the dashes; this is the
+     frame's exact glyph). -->
+<path d="M10 1.2 C8.8 2.7 2 9.3 2 12.3 C2 15.9 5.6 18.2 10 18.2 C14.4 18.2 18 15.9 18 12.3 C18 9.3 11.2 2.7 10 1.2 Z" stroke-width="1.6" stroke-linejoin="round" stroke="#2D264B"/>
+<path d="M6 20 V23" stroke-width="1.6" stroke-linecap="round" stroke="#2D264B"/>
+<path d="M9.5 19.6 V21.8" stroke-width="1.6" stroke-linecap="round" stroke="#2D264B"/>
+<path d="M13 18.4 V21.2" stroke-width="1.6" stroke-linecap="round" stroke="#2D264B"/>
+</svg>

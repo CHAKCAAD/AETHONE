@@ -5,7 +5,7 @@ library;
 
 /// Mirrors pubspec.yaml's `version` (the `+N` build number is dropped from
 /// the UI). Kept in sync by test/app_meta_test.dart.
-const String appVersion = '4.23.0';
+const String appVersion = '4.24.0';
 
 /// The Telegram channel (same URL as the top-bar info tiles).
 const String telegramChannelUrl = 'https://t.me/AETHONE';

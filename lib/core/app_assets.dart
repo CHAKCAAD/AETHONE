@@ -179,7 +179,22 @@ abstract final class AppAssets {
   static const String iconTickCircle = '$_icons/Tick Circle.svg';
   static const String iconCloseCircle = '$_icons/Close Circle.svg';
   static const String iconShield1 = '$_icons/Shield 1.svg';
-  static const String iconShieldStar = '$_icons/Shield Star.svg';
+  // (iconShieldStar already declared in the settings section above — the
+  // v4.23 re-declaration was a duplicate_definition analyze error.)
+
+  // --- v4.24 speed test («صفحه تست سرعت»): the stat-card glyphs. The ping
+  // arcs and the DOWN/UP trend squares come from the app's own pack
+  // (iconGraphDown/iconGraphUp are declared above; owner-swappable table,
+  // the page's doc lists the mapping). Two glyphs are NOT in the pack and
+  // are traced as vectors from the committed design frames themselves
+  // (the patterns_png precedent — the design package is the source of
+  // truth):
+  //   jitter (drop + rain)  -> Drop Rain (design/speed_glyphs)
+  //   badge + button core   -> Hex Wave (the brand hexagon+wave mark)
+  static const String iconWifi = '$_icons/Wifi.svg';
+  static const String _speedGlyphs = 'design/speed_glyphs';
+  static const String iconDropRain = '$_speedGlyphs/Drop Rain.svg';
+  static const String iconHexWave = '$_speedGlyphs/Hex Wave.svg';
 
   // --- protocol logos. Tor/Psiphon ship as pre-rendered PNGs (their SVGs
   // embed the artwork in hidden tracing layers + the real vector art,
@@ -302,5 +317,9 @@ abstract final class AppAssets {
         flag('us'),
         // v4.21 — the AUTO placeholder globe (family location selectors).
         flag('auto'),
+        // v4.24 — the speed-test stat-card glyphs.
+        iconWifi,
+        iconDropRain,
+        iconHexWave,
       ];
 }

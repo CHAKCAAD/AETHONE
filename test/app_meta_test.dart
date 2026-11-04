@@ -154,6 +154,14 @@ void main() {
       s.bridgesAutoDesc;
       s.bridgesOffDesc;
       s.torLogLevelLabel;
+      // v4.24 getters — the speed test page.
+      s.speedTestTitle;
+      s.speedPhasePing;
+      s.speedPhaseDownload;
+      s.speedPhaseUpload;
+      s.speedStart;
+      s.speedStarted;
+      s.speedRestart;
     }
   });
 }

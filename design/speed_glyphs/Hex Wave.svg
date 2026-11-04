@@ -1,0 +1,11 @@
+<svg width="24" height="27" viewBox="0 0 24 27" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!-- The brand hexagon+wave glyph of the speed-test frames — traced from the
+     three committed design frames (the badge beside «تست سرعت» and the core
+     glyph of the start button are the SAME mark: a pointy-top hexagon with
+     rounded corners carrying a two-arm speed wave — an upper arm sweeping
+     from the top-right down toward the bottom-middle, and a lower arm
+     riding from the mid-left down to the bottom-left). -->
+<path d="M12 1.2 L22.2 6.6 L22.2 19.4 L12 24.8 L1.8 19.4 L1.8 6.6 Z" stroke-width="1.9" stroke-linejoin="round" stroke="#2D264B"/>
+<path d="M18.8 8.8 C17.2 9.7 15.6 10.8 14.7 12.2 C13.9 13.5 13.5 14.7 13.4 15.9" stroke-width="1.9" stroke-linecap="round" stroke="#2D264B"/>
+<path d="M11.6 11.6 C10.4 12.8 9.4 14.2 8.8 16.2" stroke-width="1.9" stroke-linecap="round" stroke="#2D264B"/>
+</svg>

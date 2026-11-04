@@ -307,6 +307,32 @@ class AppStrings {
   /// The language pages' own-name option for Turkmen (Turkmençe).
   String get langTurkmen => _v['langTurkmen']!;
 
+  // ---- v4.24 speed test («صفحه تست سرعت») — fa VERBATIM from the three
+  // committed frames; the Latin card labels (Ping:/Jiter:/DOWN:/UP:) and
+  // the «Mbs»/«...» slots stay page constants like the bottom panel's
+  // DOWN:/UP: (identical in every locale on the frames). ----
+  /// «تست سرعت» — the page's title row.
+  String get speedTestTitle => _v['speedTestTitle']!;
+
+  /// «پینگ» — the phase label while the ping phase runs.
+  String get speedPhasePing => _v['speedPhasePing']!;
+
+  /// «دانلود» — the phase label on the running frame.
+  String get speedPhaseDownload => _v['speedPhaseDownload']!;
+
+  /// «آپلود» — the upload phase label (the frames only carry دانلود; this
+  /// completes the pair).
+  String get speedPhaseUpload => _v['speedPhaseUpload']!;
+
+  /// «شروع» — the idle button label.
+  String get speedStart => _v['speedStart']!;
+
+  /// «شروع شده...» — the running button label (frame verbatim).
+  String get speedStarted => _v['speedStarted']!;
+
+  /// «شروع دوباره» — the done button label.
+  String get speedRestart => _v['speedRestart']!;
+
   /// The SELECTED protocol's display name for the protocol card — the
   /// reference frames show the protocol's own name (e.g. «وارپ»), not the
   /// generic word «پروتکل» (owner prompt §«دکمه انتخاب پروتکل»: هر پروتکلی
@@ -571,6 +597,13 @@ class AppStrings {
           'بعد از ورود به صفحه اصلی برنامه میتونی از لیست پروتکل ها به صورت دستی پروتکل مورد نظرت رو انتخاب کنی. برنامه 5 پروتکل اصلی و 6 پروتکل غیراصلی داره.',
       'obLoading': 'در حال پیدا کردن بهترین راه',
       'langTurkmen': 'Türkmençe',
+      'speedTestTitle': 'تست سرعت',
+      'speedPhasePing': 'پینگ',
+      'speedPhaseDownload': 'دانلود',
+      'speedPhaseUpload': 'آپلود',
+      'speedStart': 'شروع',
+      'speedStarted': 'شروع شده...',
+      'speedRestart': 'شروع دوباره',
     },
     'en': {
       'offline': 'Offline',
@@ -802,6 +835,13 @@ class AppStrings {
           'Once you reach the home screen you can pick your protocol by hand from the list. The app ships 5 main and 6 secondary protocols.',
       'obLoading': 'Finding the best route',
       'langTurkmen': 'Türkmençe',
+      'speedTestTitle': 'Speed Test',
+      'speedPhasePing': 'Ping',
+      'speedPhaseDownload': 'Download',
+      'speedPhaseUpload': 'Upload',
+      'speedStart': 'Start',
+      'speedStarted': 'Started...',
+      'speedRestart': 'Start again',
     },
     'ru': {
       'offline': 'Офлайн',
@@ -1030,6 +1070,13 @@ class AppStrings {
           'Попав на главный экран, вы сможете выбрать протокол вручную из списка. В программе 5 основных и 6 дополнительных протоколов.',
       'obLoading': 'Ищем лучший маршрут',
       'langTurkmen': 'Türkmençe',
+      'speedTestTitle': 'Тест скорости',
+      'speedPhasePing': 'Пинг',
+      'speedPhaseDownload': 'Загрузка',
+      'speedPhaseUpload': 'Отдача',
+      'speedStart': 'Старт',
+      'speedStarted': 'Начато...',
+      'speedRestart': 'Начать заново',
     },
     'zh': {
       'offline': '离线',
@@ -1257,6 +1304,13 @@ class AppStrings {
           '进入主界面后，你可以从列表中手动选择协议。程序内置 5 个主要协议和 6 个次要协议。',
       'obLoading': '正在寻找最佳路线',
       'langTurkmen': 'Türkmençe',
+      'speedTestTitle': '速度测试',
+      'speedPhasePing': 'Ping',
+      'speedPhaseDownload': '下载',
+      'speedPhaseUpload': '上传',
+      'speedStart': '开始',
+      'speedStarted': '已开始...',
+      'speedRestart': '重新开始',
     },
     // tk: pending native review — falls back to English (documented gap).
   };

@@ -3,7 +3,7 @@ description: >-
   AETHONE — cross-platform VPN client. Flutter UI layer; network engines are
   Aether (Rust, WARP client) and zeptun (Zig, userspace TUN router).
 publish_to: none
-version: 4.23.0+1
+version: 4.24.0+1
 
 environment:
   sdk: ^3.13.0
@@ -99,6 +99,13 @@ flutter:
     - design/آیکون های اپ/Off.svg
     - design/آیکون های اپ/Activity 4.svg
     - design/آیکون های اپ/Right 2.svg
+    # --- v4.24 speed test («صفحه تست سرعت»): the stat-card glyphs —
+    # the set's own Wifi.svg (ping); the jitter drop-with-rain and the
+    # badge/button hexagon+wave brand glyph are traced from the committed
+    # design frames (design/speed_glyphs — the patterns_png precedent). ---
+    - design/آیکون های اپ/Wifi.svg
+    - design/speed_glyphs/Drop Rain.svg
+    - design/speed_glyphs/Hex Wave.svg
     # --- step 2 (settings main page): the set's own line icons for the six
     # cards + status cards + section headings, plus the owner's GitHub logo
     # for the server cards (all pixel-matched against the design frame) ---

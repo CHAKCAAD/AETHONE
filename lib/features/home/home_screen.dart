@@ -20,6 +20,7 @@ import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../../l10n/app_strings.dart';
 import '../settings/settings_screen.dart';
+import '../speedtest/speed_test_page.dart';
 import 'protocol_sheet/protocol_sheet.dart';
 import 'widgets/bottom_panel.dart';
 import 'widgets/glow_pill.dart';
@@ -33,39 +34,13 @@ class HomeScreen extends StatelessWidget {
 
   final ConnectionStore store;
 
-  void _openPlaceholderSheet(BuildContext context, String message) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AethColors.cardDark,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AethColors.textSecondary,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: 'IRANYekanX',
-                fontWeight: FontWeight.w500,
-                fontSize: 15,
-                color: AethColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
+  /// v4.24 — the REAL speed test page (promoted from the v4.14
+  /// placeholder sheet; pixel-faithful to the three committed frames).
+  void _openSpeedTest(BuildContext context) {
+    Navigator.of(context).push(
+      speedTestPageRoute(
+        store: store,
+        style: store.effectiveMotionStyle(context),
       ),
     );
   }
@@ -281,13 +256,12 @@ class HomeScreen extends StatelessWidget {
                     // Speed Test entry — connected only, animated. Its slot
                     // stays reserved when hidden so the hero never moves
                     // (both reference frames pin the logo at y≈293).
+                    // v4.24 — the tap opens the REAL page (was: the
+                    // v4.14 placeholder sheet).
                     SpeedTestButton(
                       visible: connected,
                       style: style,
-                      onTap: () => _openPlaceholderSheet(
-                        context,
-                        strings.speedTestComingNext,
-                      ),
+                      onTap: () => _openSpeedTest(context),
                     ),
                     SizedBox(height: AethGeometry.gapSpeedToPill * s),
                     StatusPill(state: store.state, style: style),

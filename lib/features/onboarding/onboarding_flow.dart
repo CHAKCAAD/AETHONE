@@ -181,49 +181,49 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     switch (_step) {
       case ObStep.language:
         return ObPage(
-          key: ValueKey('ob-step-language'),
+          key: const ValueKey('ob-step-language'),
           store: store,
           step: ObStep.language,
           style: style,
           ctaLabel: strings.obContinue,
           onCta: _advance,
+          body: ObLanguageTiles(store: store),
           child: ObQuestionHeading(
             icon: AppAssets.iconWebsite,
             text: strings.obLanguageTitle,
           ),
-          body: ObLanguageTiles(store: store),
         );
       case ObStep.routing:
         return ObPage(
-          key: ValueKey('ob-step-routing'),
+          key: const ValueKey('ob-step-routing'),
           store: store,
           step: ObStep.routing,
           style: style,
           ctaLabel: strings.obContinue,
           onCta: _advance,
+          body: ObRoutingTiles(store: store),
           child: ObQuestionHeading(
             icon: AppAssets.iconRedo,
             text: strings.obRoutingTitle,
           ),
-          body: ObRoutingTiles(store: store),
         );
       case ObStep.look:
         return ObPage(
-          key: ValueKey('ob-step-look'),
+          key: const ValueKey('ob-step-look'),
           store: store,
           step: ObStep.look,
           style: style,
           ctaLabel: strings.obContinue,
           onCta: _advance,
+          body: ObLookPreviews(store: store),
           child: ObQuestionHeading(
             icon: AppAssets.iconPalette,
             text: strings.obLookTitle,
           ),
-          body: ObLookPreviews(store: store),
         );
       case ObStep.protocol:
         return ObPage(
-          key: ValueKey('ob-step-protocol'),
+          key: const ValueKey('ob-step-protocol'),
           store: store,
           step: ObStep.protocol,
           style: style,
@@ -252,7 +252,7 @@ class ObPage extends StatelessWidget {
     required this.ctaLabel,
     required this.onCta,
     required this.child,
-    required this.body,
+    this.body,
     this.flexCenter = true,
   });
 
@@ -292,7 +292,7 @@ class ObPage extends StatelessWidget {
                 const Spacer(flex: AethGeometry.obFlexAbove),
                 child,
                 SizedBox(height: AethGeometry.obHeadingToTiles * s),
-                body!,
+                body ?? const SizedBox.shrink(),
                 const Spacer(flex: AethGeometry.obFlexBelow),
               ] else ...[
                 Expanded(
