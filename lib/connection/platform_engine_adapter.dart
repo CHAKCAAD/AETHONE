@@ -1285,9 +1285,7 @@ class PlatformEngineAdapter implements EngineAdapter {
       // The core handle: tests inject a factory; production re-opens the
       // (process-global) library. A failure here keeps the id adopted —
       // the next connect's port-free wait still honors the live listener.
-      if (_core == null) {
-        _core = _coreFactory == null ? AetherCore.open() : _coreFactory!();
-      }
+      _core ??= _coreFactory == null ? AetherCore.open() : _coreFactory();
     } on PlatformException {
       // older platform — nothing to adopt
     } on MissingPluginException {
