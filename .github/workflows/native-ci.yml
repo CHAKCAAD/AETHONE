@@ -1853,6 +1853,34 @@ jobs:
             || { echo "::error::appops ACTIVATE_VPN grant failed"; exit 1; }
           adb shell appops get com.chakcaad.aethone ACTIVATE_VPN | tee runtime-evidence/appops.txt
 
+      - name: Elevate adbd to root (the pinned google_apis image is userdebug)
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          # AethoneVpnService is exported=false + BIND_VPN_SERVICE-guarded —
+          # correct for production, but it also means the SHELL uid may not
+          # cold-start it directly (runs #51/#52: «Error: Requires permission
+          # not exported from uid 10213», exit 255 BEFORE the 120 s assert
+          # loop ever ran). The pinned google_apis_ps16k image is a userdebug
+          # build, so adbd can elevate to root, and uid 0 bypasses the
+          # component-permission check in ActivityManager. The app, its
+          # manifest and its security posture stay UNTOUCHED — only the test
+          # harness rises, never the shipped APK.
+          adb root || { echo "::error::adb root rejected by this image"; exit 1; }
+          # adbd restarts on elevation; wait for it to come back as uid 0.
+          adb wait-for-device
+          elevated=0
+          for i in $(seq 1 30); do
+            uid="$(adb shell id -u 2>/dev/null | tr -d '\r' || true)"
+            if [ "$uid" = "0" ]; then elevated=1; break; fi
+            sleep 2
+          done
+          if [ "$elevated" -ne 1 ]; then
+            echo "::error::adbd did not elevate to root within 60s (not a userdebug image?)"
+            exit 1
+          fi
+          echo "adbd is root: $(adb shell id | tr -d '\r')"
+
       - name: Cold-start AethoneVpnService and assert the packaged zeptun load
         run: |
           set -euo pipefail
