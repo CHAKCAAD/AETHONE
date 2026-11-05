@@ -78,6 +78,16 @@ class EngineStatsUpdated extends EngineEvent {
   final String? exitCountryCode;
 }
 
+/// v4.28 — the LIVE psiphon egress regions the core just reported (the
+/// network's own `AvailableEgressRegions` notice, harvested from the
+/// captured core log after a psiphon-family connect — see
+/// EgressLocations.parsePsiphonEgressRegions). State-independent: the
+/// wheel may show the fresh set whenever it arrives.
+class EngineEgressRegions extends EngineEvent {
+  const EngineEgressRegions(this.regions);
+  final List<String> regions;
+}
+
 /// Structured log line (level + message; secrets already stripped upstream).
 class EngineLogLine extends EngineEvent {
   const EngineLogLine(this.level, this.message);

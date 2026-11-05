@@ -12,6 +12,7 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import java.io.File
 
 import dev.zeptun.Zeptun
 
@@ -141,6 +142,33 @@ class AethoneVpnService : VpnService() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // v4.28 — the zeptun PRE-FLIGHT (owner round 5: «tunnel start
+        // failed start-threw:NoClassDefFoundError»). NoClassDefFoundError is
+        // the RETRY face of an earlier, swallowed class-init failure: the
+        // first System.loadLibrary("zeptun-jni") threw (an
+        // UnsatisfiedLinkError — a missing .so, a missing symbol, a rejected
+        // alignment…), the object's <clinit> stays failed for the REST of
+        // the process, and every later touch degrades to a bare
+        // NoClassDefFoundError that names NOTHING. The old
+        // start-threw:<simpleName> surfaced exactly that anonymous retry
+        // face. The pre-flight forces the load HERE — before any TUN
+        // exists — and reports the FULL cause chain plus the on-disk
+        // nativeLibraryDir listing, so the next device report names the
+        // real missing piece instead of a bare retry symptom.
+        try {
+            Zeptun.nativeVersion()
+        } catch (t: Throwable) {
+            val dir = applicationInfo.nativeLibraryDir
+            Log.e(
+                TAG,
+                "zeptun bridge load failed (nativeLibraryDir=$dir: " +
+                    "${File(dir).list()?.joinToString(prefix = "[", separator = ", ", postfix = "]")})",
+                t,
+            )
+            EngineBridge.emit(downEvent("zeptun-load-failed:${describeChain(t)}"))
+            stopSelf()
+            return START_NOT_STICKY
+        }
         // v4.19 (#1 hardening): the tunnel leg is the one place where a
         // thrown Java-level error used to KILL the process mid-connection
         // (an UnsatisfiedLinkError from the JNI bridge, a lifecycle
@@ -158,12 +186,31 @@ class AethoneVpnService : VpnService() {
             }
         } catch (t: Throwable) {
             Log.e(TAG, "tunnel start threw", t)
-            EngineBridge.emit(downEvent("start-threw:${t.javaClass.simpleName}"))
+            EngineBridge.emit(downEvent("start-threw:${describeChain(t)}"))
             stopTunnel("start-threw")
             stopSelf()
             return START_NOT_STICKY
         }
         return START_NOT_STICKY
+    }
+
+    /// v4.28 — the full throwable chain for the emitted reason:
+    /// `NoClassDefFoundError: … caused by UnsatisfiedLinkError: dlopen
+    /// failed: …`. The bare simpleName hid everything the diagnosis needs;
+    /// the chain is bounded so a UI reason line never becomes a dump.
+    private fun describeChain(t: Throwable): String {
+        val sb = StringBuilder(t.javaClass.simpleName)
+        t.message?.takeIf { it.isNotBlank() }?.let { sb.append(": ").append(it) }
+        var cause = t.cause
+        var budget = 300
+        while (cause != null && budget > 0) {
+            val part =
+                " caused by ${cause.javaClass.simpleName}: ${cause.message ?: ""}"
+            sb.append(part)
+            budget -= part.length
+            cause = cause.cause
+        }
+        return sb.toString().take(500)
     }
 
     /// v4.26 — the synchronous user-stop path (companion [requestStop]):

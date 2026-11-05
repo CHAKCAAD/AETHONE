@@ -60,7 +60,9 @@ import '../core/app_assets.dart';
 import 'aether_env.dart';
 import 'aether_ffi.dart';
 import 'connection_state.dart';
+import 'core_log.dart';
 import 'core_settings.dart';
+import 'egress_locations.dart';
 import 'engine.dart';
 import 'tunnel_probe.dart';
 import 'transport_modes.dart';
@@ -789,6 +791,12 @@ class PlatformEngineAdapter implements EngineAdapter {
     _emit(stats);
     _emitState(VpnState.connected);
 
+    // v4.28 — harvest the psiphon egress regions the core reported during
+    // the walk (the network's own `AvailableEgressRegions` notice lands in
+    // the captured core log). Fire-and-forget both times: the wheel gets
+    // the fresh set whenever the read completes, walk or no walk.
+    unawaited(_harvestPsiphonEgressRegions());
+
     // --- 5. Steady state: stats + health (§6 health probe ⇒ reconnecting).
     _startTicker(gen);
   }
@@ -993,8 +1001,44 @@ class PlatformEngineAdapter implements EngineAdapter {
   void _emitState(VpnState state) =>
       _emit(EngineStateChanged(state));
 
-  void _emitFail(String code, String? message) =>
-      _emit(EngineStateChanged(VpnState.failed, errorCode: code, message: message));
+  void _emitFail(String code, String? message) {
+    // v4.28 — even a failed psiphon walk may have already received the
+    // network's egress-region notice (it fires before establishment); a
+    // failed connect must not lose the freshest real list we have.
+    unawaited(_harvestPsiphonEgressRegions());
+    _emit(EngineStateChanged(VpnState.failed, errorCode: code, message: message));
+  }
+
+  /// v4.28 — reads the captured core log and extracts the LAST
+  /// `[*] psiphon can leave from: …` line (the pinned core's rendering of
+  /// the Psiphon network's `AvailableEgressRegions` notice — one per
+  /// session, psiphon.rs note()). Found ⇒ emit [EngineEgressRegions] +
+  /// cache it. Never throws: a missing bridge/parse miss is a no-op (the
+  /// wheel keeps the seed / the last cached set).
+  Future<void> _harvestPsiphonEgressRegions() async {
+    if (_egressHarvestBusy) return; // one read in flight is enough
+    _egressHarvestBusy = true;
+    try {
+      final snapshot = await _coreLog.read(tailBytes: 96 * 1024);
+      final regions = EgressLocations.parsePsiphonEgressRegions(
+        snapshot.text,
+      );
+      if (regions == null || regions.isEmpty) return;
+      await EgressLocations.savePsiphonEgress(regions);
+      _emit(EngineEgressRegions(regions));
+    } catch (_) {
+      // no platform bridge (tests) / read failure — nothing to harvest
+    } finally {
+      _egressHarvestBusy = false;
+    }
+  }
+
+  /// Guards [_harvestPsiphonEgressRegions] against overlapping reads
+  /// (connected-emission + a failed-walk emission can race).
+  bool _egressHarvestBusy = false;
+
+  /// v4.28 — the captured-core-log reader the egress harvest tails.
+  final CoreLogReader _coreLog = CoreLogReader();
 
   Future<_PlatformPaths> _paths() async {
     final raw = await _channel.invokeMethod<Map<Object?, Object?>>('paths');

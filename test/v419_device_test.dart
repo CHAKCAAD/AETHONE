@@ -336,8 +336,9 @@ void main() {
       expect(LocationWheelPolicy.selectable(ProtocolId.masque), isFalse);
     });
 
-    test('only the psiphon-EXIT modes filter to the egress regions (+auto)', () {
-      // v4.21 — the exact list carries the AUTO entry FIRST.
+    test('the psiphon-EXIT and tor-EXIT modes filter to their REAL sets (+auto)', () {
+      // v4.21 — the exact list carries the AUTO entry FIRST;
+      // v4.28 — both family sets are live-replaceable.
       final psiphonChain =
           LocationWheelPolicy.allowedCodes(ProtocolId.psiphonChain)!;
       expect(psiphonChain.first, LocationWheelPolicy.autoCode);
@@ -345,13 +346,40 @@ void main() {
       expect(psiphonChain.length, psiphonEgressRegions.length + 1);
       expect(
         LocationWheelPolicy.allowedCodes(ProtocolId.psiphonOnly),
-        same(psiphonChain),
+        psiphonChain,
       );
-      // The reverse modes + the tor family run on the FULL manifest with
-      // the auto entry prepended by the wheel.
+      // v4.28 — the tor-EXIT modes run on the REAL exit-country set
+      // (Onionoo live / snapshot), NOT the full flag manifest anymore.
+      final torChain = LocationWheelPolicy.allowedCodes(ProtocolId.torChain)!;
+      expect(torChain.first, LocationWheelPolicy.autoCode);
+      expect(torChain, containsAll(torExitCountrySnapshot));
+      expect(torChain.length, torExitCountrySnapshot.length + 1);
+      expect(
+        LocationWheelPolicy.allowedCodes(ProtocolId.torOnly),
+        torChain,
+      );
+      // Live sets override the seeds verbatim (the network's own truth).
+      expect(
+        LocationWheelPolicy.allowedCodes(
+          ProtocolId.psiphonChain,
+          psiphonRegions: const ['de', 'nl'],
+        ),
+        const [LocationWheelPolicy.autoCode, 'de', 'nl'],
+      );
+      expect(
+        LocationWheelPolicy.allowedCodes(
+          ProtocolId.torChain,
+          torExits: const ['se'],
+        ),
+        const [LocationWheelPolicy.autoCode, 'se'],
+      );
+      // The REVERSE modes exit through WARP: full manifest + wheel-prepended
+      // auto (the only autoEntry modes left, v4.28).
       expect(LocationWheelPolicy.allowedCodes(ProtocolId.psiphonReverse), isNull);
-      expect(LocationWheelPolicy.allowedCodes(ProtocolId.torChain), isNull);
-      expect(LocationWheelPolicy.autoEntry(ProtocolId.torChain), isTrue);
+      expect(LocationWheelPolicy.allowedCodes(ProtocolId.torReverse), isNull);
+      expect(LocationWheelPolicy.autoEntry(ProtocolId.torChain), isFalse);
+      expect(LocationWheelPolicy.autoEntry(ProtocolId.torOnly), isFalse);
+      expect(LocationWheelPolicy.autoEntry(ProtocolId.torReverse), isTrue);
       expect(LocationWheelPolicy.autoEntry(ProtocolId.psiphonReverse), isTrue);
       expect(LocationWheelPolicy.autoEntry(ProtocolId.psiphonChain), isFalse);
       expect(LocationWheelPolicy.autoEntry(ProtocolId.wireguard), isFalse);
@@ -370,6 +398,21 @@ void main() {
       }
     });
 
+    test('v4.28 — the Tor exit snapshot is sane: lowercase 2-letter, no Iran',
+        () {
+      for (final c in torExitCountrySnapshot) {
+        expect(c.length, 2, reason: c);
+        expect(c, c.toLowerCase(), reason: c);
+      }
+      expect(torExitCountrySnapshot.contains('ir'), isFalse);
+      // Long-standing Tor exit anchors are present (the 2026-11-05 Onionoo
+      // set: 51 countries / 2686 running exit relays).
+      for (final anchor in ['us', 'de', 'nl', 'fr', 'se', 'ro', 'sg']) {
+        expect(torExitCountrySnapshot.contains(anchor), isTrue, reason: anchor);
+      }
+      expect(torExitCountrySnapshot.length, 51);
+    });
+
     test('store getters follow the selected protocol', () {
       final store = ConnectionStore(engine: _ParkedEngine());
       expect(store.wheelSelectable, isFalse); // wireguard default
@@ -380,8 +423,23 @@ void main() {
       expect(store.wheelAutoEntry, isFalse); // the list carries auto itself
       store.selectProtocol(ProtocolId.torChain);
       expect(store.wheelSelectable, isTrue); // v4.21: tor is a selector too
-      expect(store.wheelAllowedCodes, isNull); // full manifest
-      expect(store.wheelAutoEntry, isTrue); // auto prepended by the wheel
+      // v4.28 — the tor wheel runs on the REAL exit-country set (+auto),
+      // not the full flag manifest.
+      expect(store.wheelAllowedCodes?.first, LocationWheelPolicy.autoCode);
+      expect(store.wheelAllowedCodes, containsAll(torExitCountrySnapshot));
+      expect(store.wheelAutoEntry, isFalse); // the list carries auto itself
+      // v4.28 — a live Onionoo set replaces the snapshot in the wheel.
+      store.applyTorExitCountries(const ['se', 'de']);
+      expect(
+        store.wheelAllowedCodes,
+        const [LocationWheelPolicy.autoCode, 'de', 'se'],
+      );
+      store.applyPsiphonEgressRegions(const ['nl']);
+      store.selectProtocol(ProtocolId.psiphonChain);
+      expect(
+        store.wheelAllowedCodes,
+        const [LocationWheelPolicy.autoCode, 'nl'],
+      );
       // The per-family anchors (v4.21).
       expect(store.wheelAnchorCode, LocationWheelPolicy.autoCode);
       store.psiphonLocation = 'de';

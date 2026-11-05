@@ -177,9 +177,9 @@ abstract final class TransportModes {
   static TransportMode byId(ProtocolId id) => all.firstWhere((m) => m.id == id);
 }
 
-/// v4.19 (#5) — the countries the PSIPHON family can offer as its exit
-/// («در حالت تور و سایفون باید فقط پرچم کشورهایی رو نشون بده که سایفون و
-/// تور ساپورت میکنن»).
+/// v4.19 (#5) — the SEED set of countries the Psiphon network has been
+/// offering as its egress («در حالت تور و سایفون باید فقط پرچم کشورهایی رو
+/// نشون بده که سایفون و تور ساپورت میکنن»).
 ///
 /// Evidence status, honestly recorded:
 ///  * the core passes the pick through as `EgressRegion` in the
@@ -190,23 +190,41 @@ abstract final class TransportModes {
 ///    (psiphon.rs L716-718, notice.go L475-484); no static list exists in
 ///    the pinned sources;
 ///  * this table therefore mirrors the Psiphon network's standing egress
-///    regions (its public network documentation and the region pickers of
-///    the official clients). Picking a region the network no longer offers
-///    fails the psiphon connect HONESTLY (no server matches) — the core
-///    never fakes an exit.
-///  * TOR has NO equivalent: the pinned core has no Tor exit-country
-///    control at all (`AETHER_TOR_COUNTRY` is the BridgeDB/moat request
-///    country for OBTAINING BRIDGES, not an exit pin — CLI_REFERENCE
-///    env-table note, bridges.rs L410-448). The tor family therefore shows
-///    the FULL manifest (auto first) — the pre-connect pick is a remembered
-///    display anchor; after connect the wheel locks on the engine-reported
-///    real exit (owner device-test round 3: «در حالت تور انتخاب لوکیشن
-///    باید فعال باشه»).
+///    regions as the OFFLINE SEED ONLY. v4.28 adds the live capture: every
+///    psiphon-family connect harvests the core's own
+///    `[*] psiphon can leave from: …` line from the captured core log
+///    (EgressLocations.parsePsiphonEgressRegions) and the store swaps this
+///    seed for the network's real, current offer.
+///  * Picking a region the network no longer offers fails the psiphon
+///    connect HONESTLY (no server matches) — the core never fakes an exit.
 const List<String> psiphonEgressRegions = <String>[
   'at', 'au', 'be', 'bg', 'ca', 'ch', 'cz', 'de', 'dk', 'ee', //
   'es', 'fi', 'fr', 'gb', 'hk', 'hr', 'hu', 'ie', 'il', 'in', //
   'it', 'jp', 'lt', 'lv', 'mk', 'my', 'nl', 'no', 'nz', 'pl', //
   'pt', 'ro', 'rs', 'se', 'sg', 'si', 'sk', 'ua', 'us', 'za',
+];
+
+/// v4.28 — the SEED set of countries where the Tor network currently has
+/// RUNNING exit relays, recorded 2026-11-05 from the network's own metrics
+/// API (Onionoo — the verified query in egress_locations.dart returned
+/// 2686 running exit relays across exactly these 51 countries). At app
+/// start `EgressLocations.refreshTorExits` replaces it with the live set
+/// (24 h TTL, disk-cached; offline keeps this snapshot or the last cache).
+///
+/// The pinned core still has NO Tor exit-country pin (`AETHER_TOR_COUNTRY`
+/// is the BridgeDB/moat request country for OBTAINING BRIDGES, not an exit
+/// pin — CLI_REFERENCE env-table note, bridges.rs L410-448), so a tor-exit
+/// pick stays a remembered display anchor; after connect the wheel locks
+/// on the engine-reported real exit (owner device-test round 3: «در حالت
+/// تور انتخاب لوکیشن باید فعال باشه»). The list below is what the wheel
+/// OFFERS — the countries Tor can really leave from, not every flag.
+const List<String> torExitCountrySnapshot = <String>[
+  'ae', 'at', 'au', 'az', 'be', 'bg', 'ca', 'ch', 'cl', 'cr', //
+  'cy', 'cz', 'de', 'dk', 'ee', 'es', 'fi', 'fr', 'gb', 'hk', //
+  'hr', 'hu', 'id', 'il', 'is', 'it', 'jp', 'kr', 'kz', 'lt', //
+  'lu', 'md', 'mx', 'my', 'nl', 'no', 'nz', 'pe', 'pl', 'pt', //
+  'ro', 'rs', 'sc', 'se', 'sg', 'tr', 'tw', 'ua', 'us', 'vn', //
+  'za',
 ];
 
 /// v4.21 — the AUTO wheel entry (owner: «راستی برای سایفون و تور به انتخاب
@@ -232,24 +250,35 @@ abstract final class LocationWheelPolicy {
 
   /// The allowed wheel entries for a family selector, AUTO FIRST; null =
   /// the whole flag manifest (plain modes / the post-connect display).
-  /// Only the psiphon-EXIT modes are filtered to the Psiphon egress
-  /// regions; the reverse modes exit through WARP and take the full
-  /// manifest; the tor family shows the full manifest too (no honest
-  /// static filter exists for Tor exits — see psiphonEgressRegions doc).
-  static List<String>? allowedCodes(ProtocolId id) => switch (id) {
-    ProtocolId.psiphonOnly || ProtocolId.psiphonChain =>
-      const [autoCode, ...psiphonEgressRegions],
-    ProtocolId.psiphonReverse ||
-    ProtocolId.torReverse ||
-    ProtocolId.torChain ||
-    ProtocolId.torOnly => null, // full manifest (+ auto, prepended by the wheel)
-    _ => null,
-  };
+  /// v4.28: both REAL sets are live-replaceable —
+  ///  * psiphon-exit modes → the psiphon set ([psiphonRegions]: the
+  ///    core's own `AvailableEgressRegions` report once one has arrived,
+  ///    else the standing seed [psiphonEgressRegions]);
+  ///  * tor-exit modes → the Tor exit-country set ([torExits]: the live
+  ///    Onionoo set / last cache, else the [torExitCountrySnapshot]) —
+  ///    NOT the full flag manifest anymore (owner round 5: «لوکیشن های
+  ///    واقعی، نه فیک»);
+  ///  * the reverse modes exit through WARP and keep the full manifest
+  ///    (+ auto, prepended by the wheel).
+  static List<String>? allowedCodes(
+    ProtocolId id, {
+    List<String>? psiphonRegions,
+    List<String>? torExits,
+  }) => switch (id) {
+        ProtocolId.psiphonOnly || ProtocolId.psiphonChain =>
+          [autoCode, ...(psiphonRegions ?? psiphonEgressRegions)],
+        ProtocolId.torChain ||
+        ProtocolId.torOnly =>
+          [autoCode, ...(torExits ?? torExitCountrySnapshot)],
+        ProtocolId.psiphonReverse || ProtocolId.torReverse => null,
+        _ => null,
+      };
 
   /// True when this protocol's selector runs on the FULL manifest with the
-  /// AUTO entry prepended by the wheel (the tor family + psiphonReverse —
-  /// the WARP-exit reverse mode; the psiphon-exit modes get their exact
-  /// filtered list from [allowedCodes] instead).
+  /// AUTO entry prepended by the wheel (v4.28: only the WARP-exit REVERSE
+  /// modes — the psiphon-exit modes get their filtered list from
+  /// [allowedCodes] and so do the tor-exit modes now, both already carrying
+  /// the auto entry themselves).
   static bool autoEntry(ProtocolId id) =>
-      id.isTor || id == ProtocolId.psiphonReverse;
+      id == ProtocolId.torReverse || id == ProtocolId.psiphonReverse;
 }

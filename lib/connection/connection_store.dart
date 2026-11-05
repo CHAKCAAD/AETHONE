@@ -20,6 +20,7 @@ import '../core/app_assets.dart';
 import '../core/motion.dart';
 import 'connection_state.dart';
 import 'core_settings.dart';
+import 'egress_locations.dart';
 import 'engine.dart';
 import 'platform_engine_adapter.dart';
 import 'transport_modes.dart';
@@ -143,6 +144,39 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   @override
   String torLocation = LocationWheelPolicy.autoCode;
 
+  /// v4.28 — the LIVE psiphon egress set: the network's own
+  /// `AvailableEgressRegions` report harvested from the core log after a
+  /// psiphon-family connect (owner round 5: «لوکیشن های واقعی، نه فیک»).
+  /// null until the first report arrives — the wheel falls back to the
+  /// standing seed. NOT a user choice: engine truth, never persisted as a
+  /// preference (it is cached by [EgressLocations] instead).
+  List<String>? livePsiphonRegions;
+
+  /// v4.28 — the LIVE Tor exit-country set (Onionoo — running exit relays
+  /// per country). null until the first fetch/cache-load; the wheel falls
+  /// back to the bundled snapshot.
+  List<String>? liveTorExitCountries;
+
+  /// v4.28 — consumes the adapter's [EngineEgressRegions] event (or the
+  /// app-start Onionoo refresh): swaps in a sanitized live set and saves
+  /// the cache. A no-change swap does not wake the listeners.
+  void applyPsiphonEgressRegions(List<String> regions) {
+    final clean = EgressLocations.sanitizeCodes(regions);
+    if (clean == null) return; // garbage is not a live set — keep the seed
+    if (listEquals(clean, livePsiphonRegions)) return;
+    livePsiphonRegions = clean;
+    notifyListeners();
+  }
+
+  /// v4.28 — the Tor exit-country counterpart of the above.
+  void applyTorExitCountries(List<String> codes) {
+    final clean = EgressLocations.sanitizeCodes(codes);
+    if (clean == null) return;
+    if (listEquals(clean, liveTorExitCountries)) return;
+    liveTorExitCountries = clean;
+    notifyListeners();
+  }
+
   /// v4.22 — direct setters for the SETTINGS pages (the Psiphon/Tor pages
   /// write their own family field regardless of the currently selected
   /// protocol; [selectLocation] stays the home-wheel path).
@@ -207,8 +241,18 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   /// The allowed wheel entries for the current protocol — family modes
   /// carry the AUTO entry first; null = the whole flag manifest (plain
   /// modes, post-connect display).
+  ///
+  /// v4.28 — the family sets are the LIVE truth when one exists: the
+  /// psiphon set the core itself reported ([livePsiphonRegions]) and the
+  /// Tor exit countries from Onionoo ([liveTorExitCountries]); the
+  /// policy falls back to the standing seeds (psiphonEgressRegions /
+  /// torExitCountrySnapshot) when no live set has arrived yet.
   List<String>? get wheelAllowedCodes =>
-      LocationWheelPolicy.allowedCodes(effectiveProtocol);
+      LocationWheelPolicy.allowedCodes(
+        effectiveProtocol,
+        psiphonRegions: livePsiphonRegions,
+        torExits: liveTorExitCountries,
+      );
 
   /// v4.21 — true when the wheel runs on the FULL manifest with the AUTO
   /// entry prepended (the tor family + the reverse modes).
@@ -496,6 +540,8 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         this.downBytes = downBytes;
         this.upBytes = upBytes;
         this.exitCountryCode = exitCountryCode;
+      case EngineEgressRegions(:final regions):
+        applyPsiphonEgressRegions(regions);
       case EngineLogLine():
         break; // structured logging lands with the diagnostics page
     }

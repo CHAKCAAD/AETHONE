@@ -1692,14 +1692,246 @@ jobs:
           if-no-files-found: error
 
   # =========================================================================
+  # v4.28 — Job apk-smoke: the APK-LEVEL gate the pipeline never had.
+  # The owner's round-5 device report («tunnel start failed
+  # start-threw:NoClassDefFoundError») exposed a blind spot: every prior
+  # gate proves the engines from out/<abi> trees pushed to
+  # /data/local/tmp — NO CI leg ever INSTALLED the built APK and loaded
+  # its packaged libzeptun-jni.so inside a real app process. The
+  # APK-internal load path (extracted nativeLibraryDir + dex class init +
+  # JNI_OnLoad + RegisterNatives) is exactly where the owner's failure
+  # lived, so a green pipeline could still ship an app whose tunnel leg
+  # cannot start.
+  #
+  # This leg closes it: install the universal RELEASE APK (x86_64 libs
+  # included) on the same pinned 16KB emulator, grant the VpnService
+  # consent via appops (ACTIVATE_VPN — the documented no-UI grant), and
+  # COLD-START AethoneVpnService via `am start-foreground-service`. The
+  # service walks the REAL packaged path: zeptun pre-flight probe →
+  # Builder.establish() → Zeptun.nativeStart → "zeptun up on socks".
+  #
+  # Fail-closed assertions (logcat, 120 s budget):
+  #   * "zeptun up on socks" MUST appear — the packaged engine loads and
+  #     the TUN establishes inside the app process;
+  #   * "zeptun-load-failed" / "start-threw:" / "FATAL EXCEPTION" must
+  #     NOT (the exact failure faces of the owner's report);
+  #   * "establish-failed" is a GATE-INFRA failure (the appops grant did
+  #     not take on this image) — reported distinctly, not as an engine
+  #     failure.
+  # Boundary (N2): this leg proves the APK packaging + the zeptun load +
+  # TUN establish ONLY — the Aether core, the walk order and the
+  # end-to-end probe stay the runtime-smoke leg's scope.
+  # =========================================================================
+  apk-smoke:
+    name: APK cold-start smoke (release APK, zeptun-jni in-app load proof)
+    needs: android-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SDK_ROOT: /usr/local/lib/android/sdk
+      EMU_VERSION: "37.2.13"
+      SYSIMG_PKG: "system-images;android-36;google_apis_ps16k;x86_64"
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Download the APK artifact (single, NO merge)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: apk-dist
+          pattern: aethone-apk-*
+
+      - name: Locate the release APK (fail-closed)
+        run: |
+          set -euo pipefail
+          APK="$(find apk-dist -name 'aethone-ui-*-release.apk' -type f | head -1)"
+          [ -n "$APK" ] || { echo "::error::no aethone-ui-*-release.apk inside the aethone-apk-* artifact"; find apk-dist -type f | head -20; exit 1; }
+          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
+          ls -la "$APK"
+
+      - name: Verify KVM and SDK prerequisites
+        run: |
+          set -euo pipefail
+          if [ ! -e /dev/kvm ]; then
+            echo "::error::/dev/kvm unavailable on runner — hardware acceleration required"
+            exit 1
+          fi
+          if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+              | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+            sleep 2
+          fi
+          if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
+            echo "::error::/dev/kvm still not accessible after the udev fix:"
+            ls -l /dev/kvm
+            exit 1
+          fi
+          echo "KVM OK: $(ls -l /dev/kvm)"
+          if [ ! -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "::error::sdkmanager not found under $SDK_ROOT/cmdline-tools/latest/bin"
+            exit 1
+          fi
+
+      - name: Install pinned emulator + 16KB system image (stable channel)
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --install "emulator" "platform-tools" "${SYSIMG_PKG}" | tail -3
+          if ! ldconfig -p 2>/dev/null | grep -q "libpulse.so.0"; then
+            sudo apt-get update -qq >/dev/null 2>&1 || true
+            sudo apt-get install -y -qq libpulse0 >/dev/null 2>&1 || {
+              echo "::error::failed to install libpulse0 (required by the emulator qemu binary)"
+              exit 1
+            }
+          fi
+          "$SDK_ROOT/emulator/emulator" -version | head -2
+          if ! "$SDK_ROOT/emulator/emulator" -version | grep -q "37\.2\.13"; then
+            echo "::error::EMULATOR VERSION DRIFT: expected the 37.2.13 pin (N8)"
+            exit 1
+          fi
+          echo "EMULATOR PIN VERIFIED: 37.2.13"
+
+      - name: Create AVD and boot the 16KB emulator
+        env:
+          ANDROID_AVD_HOME: ${{ github.workspace }}/.avd
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$PATH"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | avdmanager create avd -n aethone-apk-smoke -k "${SYSIMG_PKG}"
+          adb start-server
+          emulator -avd aethone-apk-smoke \
+            -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics \
+            -accel on -gpu swiftshader_indirect -memory 4096 -cores 4 \
+            > emulator-boot.log 2>&1 &
+          echo $! > emulator.pid
+          sleep 30
+          booted=0
+          i=0
+          while [ "$i" -lt 90 ]; do
+            b="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+            if [ "$b" = "1" ]; then booted=1; break; fi
+            if ! kill -0 "$(cat emulator.pid)" 2>/dev/null; then
+              echo "::error::emulator process exited during the boot wait (iteration $i)"
+              tail -60 emulator-boot.log || true
+              exit 1
+            fi
+            i=$((i + 1))
+            sleep 10
+          done
+          if [ "$booted" -ne 1 ]; then
+            echo "::error::emulator did not boot within 900s"
+            tail -60 emulator-boot.log || true
+            exit 1
+          fi
+          echo "emulator booted after ~$((i * 10))s"
+
+      - name: Install the release APK + grant the VPN consent (appops)
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          mkdir -p runtime-evidence
+          {
+            echo "=== AETHONE apk-smoke — environment evidence ==="
+            echo "run_id=${{ github.run_id }}"
+            echo "head_sha=${{ github.sha }}"
+            echo "apk=${APK_PATH}"
+            echo "ro.build.version.sdk=$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
+            echo "ro.product.cpu.abi=$(adb shell getprop ro.product.cpu.abi | tr -d '\r')"
+            echo "PAGESIZE=$(adb shell getconf PAGESIZE | tr -d '\r')"
+          } | tee runtime-evidence/env.txt
+          adb install -r "$APK_PATH" 2>&1 | tee runtime-evidence/install.txt
+          # The documented no-UI VpnService consent grant (the same appop
+          # CTS uses): without it Builder.establish() honestly returns
+          # null and the gate would fail as infra, not engine.
+          adb shell appops set com.chakcaad.aethone ACTIVATE_VPN allow \
+            || { echo "::error::appops ACTIVATE_VPN grant failed"; exit 1; }
+          adb shell appops get com.chakcaad.aethone ACTIVATE_VPN | tee runtime-evidence/appops.txt
+
+      - name: Cold-start AethoneVpnService and assert the packaged zeptun load
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          adb logcat -c
+          # session 7 (> the 0 stop-generation floor) keeps the v4.26
+          # straggler gate honest; port 1819 is the standard first-hop
+          # listener target (nothing serves it — zeptun still establishes
+          # the TUN; the relay just has no peer, which this gate does NOT
+          # depend on).
+          adb shell am start-foreground-service \
+            -n com.chakcaad.aethone/.AethoneVpnService \
+            --ei port 1819 --ei session 7
+          up=0; infra=0; engine_fail=0
+          for i in $(seq 1 60); do
+            sleep 2
+            LOG="$(adb logcat -d -s AethoneVpn 2>/dev/null || true)"
+            echo "$LOG" > runtime-evidence/service-logcat.txt
+            if echo "$LOG" | grep -q "zeptun up on socks"; then up=1; break; fi
+            if echo "$LOG" | grep -qE "zeptun-load-failed|start-threw:|FATAL EXCEPTION"; then engine_fail=1; break; fi
+            if echo "$LOG" | grep -q "establish-failed"; then infra=1; break; fi
+          done
+          cat runtime-evidence/service-logcat.txt || true
+          if [ "$engine_fail" -eq 1 ]; then
+            echo "::error::the PACKAGED engine failed to load/start inside the app process (the exact owner round-5 failure class) — see service-logcat.txt above"
+            exit 1
+          fi
+          if [ "$infra" -eq 1 ]; then
+            echo "::error::Builder.establish() failed — GATE INFRA problem (the appops ACTIVATE_VPN grant did not take on this image?), not an engine failure; see service-logcat.txt"
+            exit 1
+          fi
+          if [ "$up" -ne 1 ]; then
+            echo "::error::zeptun did not report up within 120s (no failure line either) — see service-logcat.txt"
+            exit 1
+          fi
+          echo "PACKAGED ZEPTUN LOAD + TUN ESTABLISH: PASS"
+
+      - name: Stop the service + record the honest teardown
+        if: always()
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          adb shell am stop-service com.chakcaad.aethone/.AethoneVpnService || true
+          sleep 3
+          adb logcat -d -s AethoneVpn > runtime-evidence/teardown-logcat.txt 2>/dev/null || true
+          grep -E "tunnel down|zeptun" runtime-evidence/teardown-logcat.txt | tail -5 || true
+          adb emu kill >/dev/null 2>&1 || true
+          sleep 5
+          echo "emulator shutdown requested"
+
+      - name: Write the leg status file
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p status
+          if [ "${{ job.status }}" = "success" ]; then st="success"; else st="failure"; fi
+          echo "status=$st" > "status/build-status-apk-smoke.txt"
+          cat "status/build-status-apk-smoke.txt"
+
+      - name: Upload apk-smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: apk-smoke-evidence
+          path: |
+            runtime-evidence/
+            status/
+          if-no-files-found: warn
+
+  # =========================================================================
   # Job 9 — status summary with the REAL results of this run (employer
   # directive 6): per-ABI build outcomes from the uploaded status files and
   # the actual needs.*.result values. FAILED and NOT RUN are explicit.
   # CI results and real-device results stay SEPARATE (decision N2).
+  # v4.28: the new apk-smoke leg joins the needs list (11 legs total).
   # =========================================================================
   status-summary:
     name: Status summary (real CI results vs NOT TESTED)
-    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui, android-apk]
+    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui, android-apk, apk-smoke]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -1741,6 +1973,7 @@ jobs:
           zt="${{ needs.zig-test.result }}"
           fu="${{ needs.flutter-ui.result }}"
           aa="${{ needs.android-apk.result }}"
+          as="${{ needs.apk-smoke.result }}"
           echo "native-build : $nb"
           echo "elf-inspect  : $ei"
           echo "runtime-smoke: $rs"
@@ -1749,6 +1982,7 @@ jobs:
           echo "zig-test     : $zt"
           echo "flutter-ui   : $fu"
           echo "android-apk  : $aa"
+          echo "apk-smoke    : $as"
           case "$nb" in
             success) echo "  -> native build: PASS (all three legs; see per-ABI below)" ;;
             failure|cancelled) echo "  -> native build: FAILED" ;;
@@ -1766,6 +2000,12 @@ jobs:
             failure|cancelled) echo "  -> runtime smoke: FAILED (see runtime-smoke-x86_64 artifact)" ;;
             skipped) echo "  -> runtime smoke: NOT RUN (NOT TESTED)" ;;
             *) echo "  -> runtime smoke: $rs (NOT TESTED)" ;;
+          esac
+          case "$as" in
+            success) echo "  -> apk smoke: PASS (release APK installed on the emulator; libzeptun-jni loaded IN-APP; AethoneVpnService cold-start; TUN established — the v4.28 gate for the owner's start-threw:NoClassDefFoundError class)" ;;
+            failure|cancelled) echo "  -> apk smoke: FAILED (the packaged tunnel leg would not start in-app — see apk-smoke-evidence artifact)" ;;
+            skipped) echo "  -> apk smoke: NOT RUN (NOT TESTED)" ;;
+            *) echo "  -> apk smoke: $as (NOT TESTED)" ;;
           esac
           case "$ct" in
             success) echo "  -> cargo test: PASS (aether crate unit tests, host x86_64-unknown-linux-gnu, --features tor)" ;;
@@ -1935,8 +2175,9 @@ jobs:
           zt="${{ needs.zig-test.result }}"
           fu="${{ needs.flutter-ui.result }}"
           aa="${{ needs.android-apk.result }}"
-          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ] || [ "$zt" != "success" ] || [ "$fu" != "success" ] || [ "$aa" != "success" ]; then
-            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt zig-test=$zt flutter-ui=$fu android-apk=$aa"
+          as="${{ needs.apk-smoke.result }}"
+          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ] || [ "$zt" != "success" ] || [ "$fu" != "success" ] || [ "$aa" != "success" ] || [ "$as" != "success" ]; then
+            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt zig-test=$zt flutter-ui=$fu android-apk=$aa apk-smoke=$as"
             exit 1
           fi
-          echo "PIPELINE GREEN (10/10: 3 build legs + elf-inspect + runtime-smoke + cargo-test + go-test + zig-test + flutter-ui + android-apk)"
+          echo "PIPELINE GREEN (11/11: 3 build legs + elf-inspect + runtime-smoke + cargo-test + go-test + zig-test + flutter-ui + android-apk + apk-smoke)"

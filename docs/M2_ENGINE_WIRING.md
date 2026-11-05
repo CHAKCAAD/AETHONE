@@ -353,3 +353,79 @@ test/connection_state_test.dart.
    shows zeptun up / protect; disconnect revokes cleanly.
 5. Psiphon/Tor tiles: expect longer connect times (bridge/ready timeouts are
    the core's own).
+
+## Owner device-test round 5 — v4.28 «لوکیشن‌های واقعی و زنجیرهٔ خطا»
+
+Three reports, three fixes (all landed in v4.28):
+
+1. **«لوکیشن های سایفون و تور باید واقعی باشن نه فیک» — the REAL
+   egress-location sets.** The wheel no longer invents lists:
+   * **Psiphon** — the network announces its current egress set at connect
+     time (`AvailableEgressRegions`); the pinned core renders it into the
+     captured core log as `[*] psiphon can leave from: AT BE …`
+     (psiphon.rs `note()`). The adapter harvests that line after every
+     psiphon-family connect (and even after a failed one — the notice fires
+     before establishment) and the store swaps the seed list for the
+     network's own truth (`EngineEgressRegions` event → `livePsiphonRegions`,
+     disk-cached across runs). The 40-country standing list remains the
+     offline SEED only (Psiphon publishes no static list — verified against
+     the tunnel-core sources).
+   * **Tor** — the honest set is the countries with RUNNING exit relays:
+     the Tor network's own metrics API (Onionoo) answers exactly that. The
+     verified query (`details?type=relay&flag=exit&fields=country&running=true`,
+     checked 2026-11-05: 2686 exit relays / 51 countries) is fetched
+     fire-and-forget at app start (24 h TTL, disk-cached, silent failure
+     keeps the cache/snapshot). The 51-country snapshot from that query is
+     the offline seed; the tor-exit wheel now shows `[خودکار, …real
+     countries]` — the FULL flag manifest is gone from the tor-exit modes.
+     (The reverse modes still exit through WARP → full manifest + auto.)
+   * **AUTO** — the whole pick chain (wheel → store → persistence →
+     `_resolveCountryPick` → arg list) was re-audited end-to-end: `auto`
+     correctly maps to NO pin flag (`--psiphon-region`/`--exit-loc` simply
+     not passed; the env inventory is cleaned before every start), so the
+     core's own egress choice runs. If auto failed on-device, the failure
+     is in the engine/tunnel layer — which round 5's other fixes make
+     visible instead of anonymous.
+
+2. **«tunnel start failed start-threw:NoClassDefFoundError» — the anonymous
+   retry face.** `NoClassDefFoundError` is what a POISONED class init looks
+   like on the SECOND touch: the first `System.loadLibrary("zeptun-jni")`
+   failure (an UnsatisfiedLinkError naming the real missing piece) was
+   wrapped as `ExceptionInInitializerError`, and every retry after that
+   degrades to a bare `NoClassDefFoundError` that names NOTHING. The APK
+   itself was verified structurally sound (libzeptun-jni.so present for all
+   ABIs, `dev/zeptun/Zeptun` in the dex, unobfuscated, 16 KB-aligned,
+   DT_NEEDED = system libs only) — but the IN-APP load path was never
+   exercised by CI (every prior gate runs the engines from /data/local/tmp).
+   **Fixes:**
+   * a **zeptun PRE-FLIGHT probe** (`Zeptun.nativeVersion()` before any TUN
+     exists) with its own `zeptun-load-failed:` reason carrying the FULL
+     throwable chain (`Class: message caused by Root: message`) plus the
+     on-disk `nativeLibraryDir` listing in logcat — the next device report
+     names the real missing piece;
+   * `start-threw:` reasons now carry the full chain too (was: bare
+     simpleName);
+   * a **new CI leg `apk-smoke`**: installs the release APK on the pinned
+     16 KB emulator, grants the VPN consent via `appops ACTIVATE_VPN`,
+     cold-starts `AethoneVpnService` via `am start-foreground-service`, and
+     asserts `zeptun up on socks` in logcat (fail-closed on
+     `zeptun-load-failed` / `start-threw:` / `FATAL EXCEPTION`, with
+     `establish-failed` reported as gate-infra, not engine). The blind spot
+     is closed at the pipeline level — 11 legs total now.
+
+3. **hevtun note (owner question: «اگه هسته زپتون استاندارد نیست با hevtun
+   جایگزینش کنیم؟»)** — researched: hevtun = `heiher/hev-socks5-tunnel`
+   (C, 2.1k stars, MIT, active) — the de-facto standard Android tun2socks
+   (used by the v2rayNG family). It fills EXACTLY the role zeptun plays
+   here (TUN ↔ SOCKS5 relay + fake-IP DNS + VpnService protect). Verdict:
+   keep zeptun for now — the round-5 failure class is the load/diagnostic
+   path, now gated in CI, not an engine defect — and record hev-socks5-
+   tunnel as the designated drop-in replacement if device tests keep
+   implicating the zeptun layer (its C ABI maps 1:1 onto the existing JNI
+   seam).
+
+Regression tests: test/egress_locations_test.dart (the psiphon-line parse
+in five shapes incl. the word-boundary garbage case, the Onionoo document
+parse incl. malformed documents, the sanitizer) + the v4.28 updates in
+test/v419_device_test.dart (the tor-exit REAL set, live-set overrides,
+autoEntry now reverse-only) and the store live-set application paths.

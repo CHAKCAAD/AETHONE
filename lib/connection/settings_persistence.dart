@@ -201,6 +201,19 @@ class SettingsPersistence {
       // v4.23 — the onboarding flag.
       store.onboardingComplete =
           prefs.getBool(SettingsKeys.onboardingComplete) ?? false;
+      // v4.28 — seed the LIVE egress sets from their cache (engine truth,
+      // NOT user preferences — the keys are owned by EgressLocations and
+      // the saves happen at harvest/refresh time, never in attach()).
+      // A missing cache keeps the built-in seeds (the standing psiphon
+      // set / the bundled Tor snapshot).
+      final psiphonLive = await EgressLocations.loadCachedPsiphonEgress();
+      if (psiphonLive != null) {
+        store.applyPsiphonEgressRegions(psiphonLive);
+      }
+      final torLive = await EgressLocations.loadCachedTorExits();
+      if (torLive != null) {
+        store.applyTorExitCountries(torLive);
+      }
       // v4.23 — the wizard's RECOMMENDED defaults for a fresh install
       // (the step-4 frame ships تونل selected, اتوماتیک selected and the
       // widest scan pill — and step 1 ships فارسی pre-picked): applied
