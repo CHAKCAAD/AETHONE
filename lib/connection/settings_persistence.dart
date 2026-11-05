@@ -31,6 +31,7 @@ import '../core/motion.dart';
 import 'connection_state.dart';
 import 'connection_store.dart';
 import 'core_settings.dart';
+import 'egress_locations.dart';
 import 'transport_modes.dart';
 
 abstract final class SettingsKeys {

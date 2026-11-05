@@ -102,7 +102,8 @@ abstract final class EgressLocations {
   static List<String>? sanitizeCodes(List<String> codes) {
     final valid = <String>{
       for (final c in codes)
-        if (c.length == 2 && _alpha2.matches(c)) c.toLowerCase(),
+        if (c.length == 2 && _alpha2.hasMatch(c.toLowerCase()))
+          c.toLowerCase(),
     };
     if (valid.isEmpty) return null;
     return valid.toList()..sort();
@@ -143,9 +144,10 @@ abstract final class EgressLocations {
       if (raw == null || raw.isEmpty) return null;
       final doc = jsonDecode(raw);
       if (doc is! List) return null;
-      return sanitizeCodes(
-        [for (final e in doc if (e is String)) e],
-      );
+      return sanitizeCodes([
+        for (final e in doc)
+          if (e is String) e,
+      ]);
     } catch (_) {
       return null;
     }
