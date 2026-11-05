@@ -241,7 +241,15 @@ void main() {
         () async {
       _mockChannel();
       final core = _FakeCore(pollState: 'done'); // dies immediately
-      final adapter = PlatformEngineAdapter(coreFactory: () => core);
+      final adapter = PlatformEngineAdapter(
+        coreFactory: () => core,
+        // v4.34 — cross-file port hygiene: the suite runs files in
+        // parallel isolates of ONE process, and another file's fake
+        // listener on a pinned port let this walk CONNECT instead of
+        // failing with the core's own death (CI run #61). The offset
+        // parks the walk on a port NOTHING in the suite ever binds.
+        portOffset: 40000,
+      );
       final events = <EngineEvent>[];
       adapter.events.listen(events.add);
       adapter.bind(_Cfg());
@@ -261,7 +269,15 @@ void main() {
         () async {
       _mockChannel();
       final core = _FakeCore(pollState: 'error', pollError: 'warp registration failed');
-      final adapter = PlatformEngineAdapter(coreFactory: () => core);
+      final adapter = PlatformEngineAdapter(
+        coreFactory: () => core,
+        // v4.34 — cross-file port hygiene: the suite runs files in
+        // parallel isolates of ONE process, and another file's fake
+        // listener on a pinned port let this walk CONNECT instead of
+        // failing with the core's own death (CI run #61). The offset
+        // parks the walk on a port NOTHING in the suite ever binds.
+        portOffset: 40000,
+      );
       final events = <EngineEvent>[];
       adapter.events.listen(events.add);
       // v4.21: the single-knob selection — torChain carries the fixed
@@ -292,7 +308,15 @@ void main() {
         () async {
       _mockChannel();
       final core = _FakeCore(); // healthy core, but nothing listens on 1819
-      final adapter = PlatformEngineAdapter(coreFactory: () => core);
+      final adapter = PlatformEngineAdapter(
+        coreFactory: () => core,
+        // v4.34 — cross-file port hygiene: the suite runs files in
+        // parallel isolates of ONE process, and another file's fake
+        // listener on a pinned port let this walk CONNECT instead of
+        // failing with the core's own death (CI run #61). The offset
+        // parks the walk on a port NOTHING in the suite ever binds.
+        portOffset: 40000,
+      );
       final events = <EngineEvent>[];
       adapter.events.listen(events.add);
       adapter.bind(_Cfg());

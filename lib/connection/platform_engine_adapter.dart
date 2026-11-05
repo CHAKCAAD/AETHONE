@@ -469,8 +469,19 @@ class PlatformEngineAdapter implements EngineAdapter {
     Duration? statsInterval,
     this._coreFactory,
     SmartScorecard? scorecard,
+    this.portOffset = 0,
   })  : _statsInterval = statsInterval ?? const Duration(seconds: 5),
         _scorecard = scorecard ?? SmartScorecard();
+
+  /// TEST-ONLY port displacement (production is ALWAYS 0 — the
+  /// evidence-locked 1819/1820/1821 map). `flutter test` runs every file
+  /// in its own isolate but ONE process: the suite's fake SOCKS servers
+  /// and the cross-file adapter walks share the very ports the real app
+  /// pins. A test that needs a port DEAD (a core-failure walk) or a port
+  /// EXCLUSIVE (a deterministic connect schedule) displaces its walk off
+  /// the pinned map; nothing else in the suite ever binds the displaced
+  /// numbers, so no parallel-file listener or stray probe can poison it.
+  final int portOffset;
 
   /// v4.32 — the SMART scorecard: engine-owned truth (attempts, failure
   /// streaks, EWMA probe ping) ordering the plain-Aether candidates. The
@@ -1025,7 +1036,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     final mode = TransportModes.byId(modeId);
     final tunnel = config.connectionMode == ConnectionMode.tunnel;
     _activeMode = config.connectionMode;
-    _activePort = mode.socksEndpoint.port;
+    _activePort = mode.socksEndpoint.port + portOffset;
 
     // v4.21 — bind-race guard: after a previous session, wait until its
     // SOCKS port actually refuses connections before the new coreStart

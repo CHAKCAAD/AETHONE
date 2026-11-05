@@ -28,6 +28,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 const _channelName = 'aethone/engine';
 
+/// v4.34 — the displaced port the SMART TOUR test binds exclusively
+/// (1819 + 41000; nothing else in the suite ever binds 42819).
+const int _tourPortOffset = 41000;
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -1382,13 +1386,18 @@ void main() {
           250, 250, 250, // #13-15 gool-classic
           0, // #16 the winner's own reconnect probe
         ],
-      ).startOn(1819);
+      ).startOn(1819 + _tourPortOffset);
       try {
         final core = _FlakySmartCore(failFirstN: 1);
         final scorecard = SmartScorecard();
+        // v4.34 — cross-file port hygiene: the tour's delay schedule is
+        // only deterministic on a port NOTHING else in the (parallel,
+        // one-process) suite can touch — the pinned 1819 could be probed
+        // by another file's walk mid-tour (CI run #61 flipped the winner).
         final adapter = PlatformEngineAdapter(
           coreFactory: () => core,
           scorecard: scorecard,
+          portOffset: _tourPortOffset,
         );
         final events = <EngineEvent>[];
         adapter.events.listen(events.add);
