@@ -504,3 +504,23 @@ Regressions: home_screen_test (tap-commit, out-of-set exit shows its
 real flag not AUTO, disconnect-edge re-anchor) + settings_subpages_test
 (the strips mirror the LIVE sets — asserted on the widget's own codes,
 no lazy-build vacuity).
+
+### v4.30.1 — the recenter recursion (found by the round-6 tor regression)
+
+Run #55's tor out-of-set regression exposed a LATENT recursion in the
+wheel: `_recenterIfFar`'s `jumpToPage` dispatches a synchronous
+ScrollEndNotification from inside jumpTo→goIdle while the pixels are
+still the OLD ones (setPixels has not run yet) — the notification-driven
+`_recenterIfFar` in onPageSettled then computed the SAME far drift,
+jumped again, and ping-ponged to a StackOverflowError. It never fired
+before because the raw page never left the lap/2 corridor; the
+display-union insert changes `_cycle` mid-session, which shifts
+`_lapBase` (= _cycle × 100000) by 100000 while a recenter jump moves
+only `_cycle × 1000` — landing the page beyond the corridor for the
+first time. Fix: programmatic settles never re-center — the
+`!_programmatic` guard now covers BOTH the store commit and the
+recenter; the one legitimate programmatic recenter (after `_spinToPage`
+completes, outside the flag window) still runs, and every jump's own
+notifications are swallowed by its flag window. The remaining
+jump-per-settle sequence converges (each jump is whole-cycle and
+pixel-identical).

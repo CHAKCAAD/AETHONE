@@ -663,8 +663,26 @@ class _LocationHeaderState extends State<LocationHeader> {
       onPageSettled: (page) {
         // User-driven settle: commit the selection; programmatic settles
         // (roulette / engine follow) never touch the store.
-        if (!_programmatic) _select(_codeAt(page));
-        _recenterIfFar();
+        //
+        // v4.30.1 — AND NEVER RE-CENTER FROM A PROGRAMMATIC SETTLE. A
+        // recenter jump dispatches a synchronous ScrollEndNotification
+        // from inside jumpTo→goIdle while the pixels are STILL the OLD
+        // ones (setPixels has not run yet) — so a notification-driven
+        // `_recenterIfFar` here computed the SAME far drift again, jumped
+        // again, and ping-ponged until the stack died (the round-6 tor
+        // regression: the display-union insert shifts `_lapBase`
+        // mid-session, which parked the raw landing page beyond the
+        // lap/2 corridor for the first time). Every programmatic jump
+        // (the recenter's own, the anchor/disconnect/load re-anchors)
+        // holds `_programmatic = true` across its synchronous window, so
+        // THIS guard cuts the recursion at its first nesting; the
+        // explicit `_recenterIfFar()` after a completed `_spinToPage`
+        // (outside the flag window) is the one legitimate programmatic
+        // recenter and still runs.
+        if (!_programmatic) {
+          _select(_codeAt(page));
+          _recenterIfFar();
+        }
       },
       onPageChanged: (page) {
         final code = _codeAt(page);
