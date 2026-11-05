@@ -1769,8 +1769,12 @@ jobs:
       - name: Locate the release APK (fail-closed)
         run: |
           set -euo pipefail
-          APK="$(find apk-dist -name 'aethone-ui-*-release.apk' -type f | head -1)"
-          [ -n "$APK" ] || { echo "::error::no aethone-ui-*-release.apk inside the aethone-apk-* artifact"; find apk-dist -type f | head -20; exit 1; }
+          # v4.35 — the universal release APK was renamed to
+          # aethone-ui-rN-release-universal.apk (the per-ABI beta decree);
+          # the smoke leg still proves the PACKAGED x86_64 load path on the
+          # universal APK exactly as before.
+          APK="$(find apk-dist -name 'aethone-ui-*-release-universal.apk' -type f | head -1)"
+          [ -n "$APK" ] || { echo "::error::no aethone-ui-*-release-universal.apk inside the aethone-apk-* artifact"; find apk-dist -type f | head -20; exit 1; }
           echo "APK_PATH=$APK" >> "$GITHUB_ENV"
           ls -la "$APK"
 
