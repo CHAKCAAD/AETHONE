@@ -23,6 +23,7 @@ import 'core_settings.dart';
 import 'egress_locations.dart';
 import 'engine.dart';
 import 'platform_engine_adapter.dart';
+import 'smart_scorecard.dart';
 import 'transport_modes.dart';
 
 /// The two selectable home-screen looks (owner: identical logic, different
@@ -30,13 +31,26 @@ import 'transport_modes.dart';
 enum HomeLook { one, two }
 
 class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
-  ConnectionStore({EngineAdapter? engine})
-    : _engine = engine ?? _defaultEngine() {
+  /// v4.32 — [scorecard] defaults ONCE (the redirecting constructor) so the
+  /// store and its platform adapter always share the SAME live instance —
+  /// the async disk restore later merges into it in place.
+  ConnectionStore({EngineAdapter? engine, SmartScorecard? scorecard})
+    : this._with(engine, scorecard ?? SmartScorecard());
+
+  ConnectionStore._with(EngineAdapter? engine, SmartScorecard scorecard)
+    : smartScorecard = scorecard,
+      _engine = engine ?? _defaultEngine(scorecard) {
     // The platform adapter reads the user's live configuration through this
     // read-only view (M2 seam — see [EngineConfigSource]).
     _engine.bind(this);
     _subscription = _engine.events.listen(_onEvent);
   }
+
+  /// v4.32 — the SMART scorecard the adapter orders its candidates by
+  /// (ENGINE TRUTH, not a user preference: restored from its own prefs
+  /// key before the first frame via [SmartScorecard.loadFrom] — the
+  /// in-place merge keeps this instance the live one the adapter holds).
+  final SmartScorecard smartScorecard;
 
   /// Engine selection order (M2):
   ///  1. PREVIEW_MODE (debug CI builds only) → the honest simulator;
@@ -44,9 +58,11 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   ///     zeptun via the VpnService JNI bridge);
   ///  3. everything else (desktop, tests, web) → fails honestly with
   ///     `engineNotWired` instead of ever pretending to be connected.
-  static EngineAdapter _defaultEngine() {
+  static EngineAdapter _defaultEngine(SmartScorecard scorecard) {
     if (PreviewEngineAdapter.allowed) return PreviewEngineAdapter();
-    if (!kIsWeb && Platform.isAndroid) return PlatformEngineAdapter();
+    if (!kIsWeb && Platform.isAndroid) {
+      return PlatformEngineAdapter(scorecard: scorecard);
+    }
     return EngineNotWiredAdapter();
   }
 
@@ -90,14 +106,32 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   int upBytes = 0;
   String? exitCountryCode; // null ⇒ unknown; no flag shown
 
+  /// v4.32 — the protocol the SMART walk actually CONNECTED with (null =
+  /// not a live SMART session). The bottom panel shows it in place of the
+  /// generic AUTO while connected; cleared on every disconnect/failed
+  /// transition alongside the other session data.
+  ProtocolId? smartResolvedProtocol;
+
+  /// v4.32 — the in-flight SMART candidate (attempt i of n), surfaced by
+  /// the connecting status card as the explicit fallback chain (spec
+  /// §7.2). Null when the walk is not in a SMART attempt.
+  ({ProtocolId candidate, int attempt, int total})? smartAttempt;
+
+  /// v4.32 — the protocol the bottom panel shows: the SMART-resolved
+  /// protocol while a SMART session is live, else the committed tile.
+  ProtocolId get smartDisplayProtocol =>
+      smartResolvedProtocol ?? effectiveProtocol;
+
   // ---- user preferences (settings main page, step 2) ----
   // These are USER-CHOSEN values rendered by the settings status cards
   // («هر سه کارت وضعیت به دادهٔ واقعی نگاشت شدند» — phase-1 report D2).
   // M2 feeds them to the cores; the engine never writes them.
 
   /// Protocol selection mode — AUTO (default) or SMART
-  /// (SMART_AUTO_SPEC.md: SPEC REQUIRED / NOT IMPLEMENTED in the pinned
-  /// core; the UI setting exists, the core handoff is M2).
+  /// (SMART_AUTO_SPEC.md: the app-layer selector landed in v4.32 — the
+  /// adapter runs the scorecard-ordered candidate chain while the
+  /// committed tile is AUTO; a manual tile is never rewritten, §7.6).
+  @override
   bool protocolModeSmart = false;
 
   /// Routing-rules country: 'ir' (default, design shows «Iran»), 'tm',
@@ -556,6 +590,23 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         if (_machine.current == VpnState.connected) {
           exitCountryCode = code;
         }
+      case EngineSmartAttempt(
+          :final candidate,
+          :final attempt,
+          :final total,
+        ):
+        // v4.32 — the explicit, observable SMART chain (spec §7.2): the
+        // connecting card shows which candidate is being tried.
+        smartAttempt = (candidate: candidate, attempt: attempt, total: total);
+      case EngineSmartResolved(:final protocol):
+        // v4.32 — a candidate's walk reached Connected: the session runs
+        // THIS protocol (the status card shows it instead of the generic
+        // AUTO). Applies only while connected — a late event from a
+        // superseded walk never parks a stale resolution.
+        if (_machine.current == VpnState.connected) {
+          smartResolvedProtocol = protocol;
+          smartAttempt = null;
+        }
       case EngineLogLine():
         break; // structured logging lands with the diagnostics page
     }
@@ -579,6 +630,9 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
       exitCountryCode = null;
       downBytes = 0;
       upBytes = 0;
+      // v4.32 — the SMART session residue clears with everything else.
+      smartResolvedProtocol = null;
+      if (next == VpnState.disconnected) smartAttempt = null;
     }
     _machine.transition(next);
     if (next == VpnState.connected) {

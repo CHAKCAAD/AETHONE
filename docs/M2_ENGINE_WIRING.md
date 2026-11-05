@@ -634,3 +634,69 @@ numbering) and folds ONLY when it differs from the core's own default:
   gives up on a core it is still giving time to).
 * **Psiphon fronting sets** (`--psiphon-cdn-sets`, #91) and **ورودی‌های
   سرور** (`--psiphon-server-entries`, #94).
+
+## v4.31b — the establish-failed masquerade (owner round 8)
+
+«در پروتکل های سایفون و تور حالا ارور establish-failed میده بلافاصله بعد
+از اتصال» — and ONLY those two families, while every plain Aether mode kept
+connecting. The v4.31 UDP-blackhole fix put `udp = "disabled"` into the
+zeptun TOML — the wrong VALUE FORM: the config-DOCUMENT schema
+(config_json.zig L59) declares `handler.socks5.udp` as a **bool** and its
+TOML parser accepts ONLY the bare words `true`/`false` for it; the
+`enabled`/`disabled` enum tags exist on the in-process Config struct and the
+CLI flags, never in a document. `zeptun_create_from_toml` answered
+ConfigError → `nativeStart` rc≠0 → `startTunnel` returned false → the
+service emitted `down: establish-failed` — the VPN-consent/establish
+message, on a config-parse failure. tcpOnly modes (tor + psiphon) carry the
+line, plain modes omit it: exactly the observed split.
+
+Fix, three layers:
+
+* the TOML line is `udp = false` now (Kotlin `AethoneVpnService` + Dart
+  `ZeptunConfigToml.build`, kept byte-identical as the single source);
+* `startTunnel` returns a REASON string, not a boolean — `onStartCommand`
+  emits `zeptun-start-failed:rc=N` for a nativeStart failure and reserves
+  `establish-failed` for the consent/establish stages, so the next
+  masquerade cannot hide behind a borrowed name;
+* the m2 test asserts the bool form AND `isNot(contains('"disabled"'))`.
+
+## v4.31c — the family legs move home (owner round 8)
+
+«قسمت پایه حالت های ترکیبی باید توی زیرمجموعه تنطیمات تور و سایفون قرار
+بگیره» — the combined-mode base left the connection page and gained a
+PER-FAMILY home: `CoreSettings.torLegProtocol` + `psiphonLegProtocol`
+(was the single `aetherLegProtocol`), each family's own settings page
+carries its own picker (same pill row, same `aetherLegName` labels, the
+same 24 %-of-size flag-free pill look the connection page used), and the
+walk resolves the leg by overlay family. Migration: an old blob's
+`aetherLegProtocol` seeds BOTH families; per-family values win over the
+legacy key; the legacy key is dropped from `toJson`.
+
+## v4.32 — SMART AUTO ships (the app-layer selector)
+
+`protocolModeSmart` was a UI-only flag since v4.22; the spec
+(SMART_AUTO_SPEC.md) placed the algorithm entirely at the app layer, and
+v4.32 implements it:
+
+* **`SmartScorecard`** (`lib/connection/smart_scorecard.dart`) — engine
+  truth persisted under its own prefs key (the EgressLocations pattern):
+  per-candidate attempts / successes / consecutiveFailures (§4.2, §4.5) +
+  an EWMA (α=0.2) of the walk probe's ping (§4.3) + a 24 h trust window.
+  Ranking: trusted tier (recent success) by streak-then-ping, the
+  never-tried tier in the sheet ladder, the failed tier by streak.
+* **`_smartConnect`** — runs only when `protocolModeSmart &&` the tile is
+  `AUTO` (§7.6: a manual pick is never rewritten; §6.7: family modes are
+  excluded): each candidate gets a FULL walk (its own hard cleanup, §7.4)
+  preceded by an `EngineSmartAttempt` (§7.2 — the home panel shows
+  «اسمارت: ماسک (۱ از ۵)»), failures route to the loop instead of the
+  UI, and the inter-attempt `_waitForPortFree` closes the bind-race gap
+  the failure path's `_jobId`-nulling would otherwise open
+  («address already in use», the v4.21 reconnect bug's SMART twin).
+  Exhaustion ⇒ `failed(smartExhausted)` naming the last candidate's
+  reason (§7.5 — never a hidden fallback).
+* **The store/UI seam** — `EngineSmartResolved` parks the connected
+  protocol in `smartResolvedProtocol` (only while connected; cleared with
+  the other session residue), and the bottom panel names the protocol
+  that actually carries the session instead of the generic AUTO.
+* Deferred to v4.4 (see the spec's new status block): HTTP TTFB (§4.4),
+  per-mode ranking separation (§6.6), post-connect health re-ranking.

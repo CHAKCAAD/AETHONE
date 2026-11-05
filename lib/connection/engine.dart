@@ -101,6 +101,27 @@ class EngineExitCountryResolved extends EngineEvent {
   final String code;
 }
 
+/// v4.32 — SMART AUTO (app-layer, SMART_AUTO_SPEC.md): the walk is trying
+/// this candidate now (attempt [attempt] of [total]). Emitted BEFORE each
+/// per-candidate walk so the status card can show the explicit, observable
+/// fallback chain (spec §7.2). Only ever sent while the committed tile is
+/// AUTO and the user opted into SMART.
+class EngineSmartAttempt extends EngineEvent {
+  const EngineSmartAttempt(this.candidate, this.attempt, this.total);
+  final ProtocolId candidate;
+  final int attempt;
+  final int total;
+}
+
+/// v4.32 — SMART AUTO resolved: a candidate's walk REACHED Connected —
+/// the live session runs [protocol] (the UI shows it in place of the
+/// generic AUTO). Emitted once per successful smart connect, right after
+/// the Connected state.
+class EngineSmartResolved extends EngineEvent {
+  const EngineSmartResolved(this.protocol);
+  final ProtocolId protocol;
+}
+
 /// Structured log line (level + message; secrets already stripped upstream).
 class EngineLogLine extends EngineEvent {
   const EngineLogLine(this.level, this.message);
@@ -138,6 +159,13 @@ abstract class EngineConfigSource {
 
   /// «سرعت اسکن» 1..5 (protocol sheet; feeds the core scan profile).
   int get scanSpeed;
+
+  /// v4.32 — the AUTO/SMART protocol-mode pill (connection page +
+  /// onboarding). SMART is the APP-LAYER selector (SMART_AUTO_SPEC.md §3:
+  /// the pinned core has no auto-ranking); AUTO keeps the core's own
+  /// default resolution (masque). Only meaningful together with the AUTO
+  /// tile — a manual protocol pick is never rewritten (spec §7.6).
+  bool get protocolModeSmart;
 
   /// v4.22 — the fine-grained Aether core layer (fragment / TLS /
   /// transport / engine / family expert knobs). The adapter folds it into

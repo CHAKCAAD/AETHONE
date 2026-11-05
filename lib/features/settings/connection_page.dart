@@ -3,6 +3,11 @@
 /// protocol mode (AUTO/SMART — the status card's own source; SMART stays
 /// an honest not-yet-in-the-core note), and the entry row into the Aether
 /// core page (the owner's fragment/TLS layer).
+///
+/// v4.31c — the family-leg section MOVED OUT (owner round 8: «قسمت پایه
+/// حالت های ترکیبی باید توی زیرمجموعه تنطیمات تور و سایفون قرار بگیره»):
+/// the base of the combined modes lives on the TOR and PSIPHON pages now,
+/// one pick per family — where the modes it configures actually live.
 library;
 
 import 'package:flutter/material.dart';
@@ -66,47 +71,6 @@ class ConnectionSettingsPage extends StatelessWidget {
               ),
               const SubSectionDivider(),
               SettingInfoText(strings.smartNote),
-            ],
-          ),
-        ),
-
-        // ---- Section: the Aether core protocol under the family modes
-        // (v4.31 — owner round 7: «انتخاب پروتکل هسته ایتر برای حالت های
-        // ترکیبی اور وارپ و …»; the option the v4.21 decree deferred) ----
-        SizedBox(height: 24 * s),
-        SubSectionHeading(
-          icon: AppAssets.iconSwap1,
-          title: strings.secAetherLeg,
-        ),
-        const SubSectionGap.headingToCard(),
-        SubSectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SettingLabel(strings.aetherLegLabel),
-              const SizedBox(height: 10),
-              SettingPills<AetherLegProtocol>(
-                keyId: 'aether-leg',
-                options: [
-                  // The same order + labels as the protocol page's own
-                  // tiles (strings.aetherLegName reuses their names).
-                  (AetherLegProtocol.wireguard, strings.aetherLegName(
-                      AetherLegProtocol.wireguard)),
-                  (AetherLegProtocol.masque, strings.aetherLegName(
-                      AetherLegProtocol.masque)),
-                  (AetherLegProtocol.gool, strings.aetherLegName(
-                      AetherLegProtocol.gool)),
-                  (AetherLegProtocol.goolClassic, strings.aetherLegName(
-                      AetherLegProtocol.goolClassic)),
-                  (AetherLegProtocol.mim, strings.aetherLegName(
-                      AetherLegProtocol.mim)),
-                ],
-                selected: core.aetherLegProtocol,
-                onSelect: (v) =>
-                    store.updateCore((c) => c.aetherLegProtocol = v),
-              ),
-              const SubSectionDivider(),
-              SettingInfoText(strings.aetherLegDesc),
             ],
           ),
         ),

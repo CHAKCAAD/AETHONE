@@ -64,6 +64,7 @@ import 'core_log.dart';
 import 'core_settings.dart';
 import 'egress_locations.dart';
 import 'engine.dart';
+import 'smart_scorecard.dart';
 import 'tunnel_probe.dart';
 import 'transport_modes.dart';
 
@@ -416,7 +417,7 @@ class AetherArguments {
 /// preset mobile + socks5 handler + fake-IP DNS = remote resolution through
 /// the core; the fd is injected by the JNI bridge itself).
 ///
-/// v4.31 — [tcpOnly] adds `handler.socks5.udp = "disabled"` for the
+/// v4.31 — [tcpOnly] adds `handler.socks5.udp = false` for the
 /// tor/psiphon family modes: zeptun then refuses every UDP flow at open
 /// and answers ICMP port-unreachable (src/stack/udp.zig →
 /// icmp.sendUnreachable), the honest "this network has no UDP" that apps
@@ -424,6 +425,18 @@ class AetherArguments {
 /// drop-everything UDP relay (socks.rs accepts the ASSOCIATE, drops all
 /// non-DNS datagrams). Fake-IP DNS keeps working: zeptun answers it
 /// locally in front of the handler (src/stack/dns.zig).
+///
+/// v4.31b — the VALUE FORM is the document schema's bool, not the enum
+/// tag: the TOML/JSON document layer (config_json.zig L59) declares
+/// `udp: ?bool` and maps it `if (u) .enabled else .disabled`; the parser
+/// (config_toml.zig scalar) accepts ONLY the bare words `true`/`false`
+/// for it. v4.31 shipped `udp = "disabled"` — a quoted string — so
+/// `zeptun_create_from_toml` failed with ConfigError and nativeStart's
+/// rc≠0 surfaced as «establish-failed» on EVERY tcpOnly mode (owner
+/// round 8: psiphon/tor fail immediately, aether modes fine — they omit
+/// the line). The `enabled`/`disabled` enum tags exist only on the
+/// in-process Config struct and the CLI flags (--socks5-no-udp), never
+/// in a config document.
 class ZeptunConfigToml {
   static String build({required int socksPort, required bool tcpOnly}) =>
       '''
@@ -434,7 +447,7 @@ kind = "socks5"
 
 [handler.socks5]
 server = "127.0.0.1:$socksPort"
-${tcpOnly ? 'udp = "disabled"' : ''}
+${tcpOnly ? 'udp = false' : ''}
 
 [dns]
 fake_ip = true
@@ -446,8 +459,18 @@ fake_ip = true
 /// over dart:ffi. One active connection at a time; disconnect always cleans
 /// BOTH engines even if connect failed halfway.
 class PlatformEngineAdapter implements EngineAdapter {
-  PlatformEngineAdapter({Duration? statsInterval, this._coreFactory})
-    : _statsInterval = statsInterval ?? const Duration(seconds: 5);
+  PlatformEngineAdapter({
+    Duration? statsInterval,
+    this._coreFactory,
+    SmartScorecard? scorecard,
+  })  : _statsInterval = statsInterval ?? const Duration(seconds: 5),
+        _scorecard = scorecard ?? SmartScorecard();
+
+  /// v4.32 — the SMART scorecard: engine-owned truth (attempts, failure
+  /// streaks, EWMA probe ping) ordering the plain-Aether candidates. The
+  /// store hands the SAME instance it later restores from disk (an
+  /// in-place [SmartScorecard.loadFrom] keeps the reference live).
+  final SmartScorecard _scorecard;
 
   static const MethodChannel _channel = MethodChannel('aethone/engine');
 
@@ -609,7 +632,20 @@ class PlatformEngineAdapter implements EngineAdapter {
     _probeStrikes = 0;
     _coreFailureDuringStart = null;
     try {
-      await _connectInner(gen);
+      // v4.32 — SMART AUTO (app-layer, SMART_AUTO_SPEC.md): when the user
+      // opted into SMART and the committed tile is AUTO, the candidates
+      // run one-by-one (scorecard-ordered) instead of the core's fixed
+      // default resolution. Everything else — a manual tile (spec §7.6:
+      // never rewritten), a family mode (§6.7: excluded from the
+      // auto-set), AUTO without the SMART opt-in — takes the plain walk.
+      final config = _config;
+      if (config != null &&
+          config.protocolModeSmart &&
+          config.selectedProtocol == ProtocolId.auto) {
+        await _smartConnect(gen, config);
+      } else {
+        await _connectInner(gen);
+      }
     } on AetherFfiException catch (e) {
       if (!_stale(gen)) _emitFail(e.code, e.message);
     } catch (e) {
@@ -622,11 +658,98 @@ class PlatformEngineAdapter implements EngineAdapter {
     }
   }
 
-  Future<void> _connectInner(int gen) async {
+  /// v4.32 — the SMART walk: run the plain-Aether candidates in
+  /// scorecard order until one CONNECTS (spec §4 factors / §7
+  /// guarantees). Each attempt is a FULL walk — its own hard cleanup
+  /// first (§7.4: full stop of the previous session before any protocol
+  /// change), its own tunnel session stamp, its own probe; the chain is
+  /// explicit and observable (§7.2: an [EngineSmartAttempt] precedes
+  /// every candidate). Exhaustion fails honestly with the last reason
+  /// (§7.5: never a hidden fallback — direct or otherwise).
+  Future<void> _smartConnect(int gen, EngineConfigSource config) async {
+    final candidates = _scorecard.rank();
+    var lastCode = 'smartExhausted';
+    var lastMsg = 'no candidate was ever attempted';
+    var lastPingMs = 0;
+    for (var i = 0; i < candidates.length; i++) {
+      if (_stale(gen)) return; // cancelled / superseded — silent
+      final candidate = candidates[i];
+      _controller.add(
+        EngineSmartAttempt(candidate, i + 1, candidates.length),
+      );
+      var failed = false;
+      final ok = await _connectInner(
+        gen,
+        legOverride: candidate,
+        onCandidateFail: (code, msg) {
+          lastCode = code;
+          lastMsg = msg;
+          failed = true;
+        },
+        onProbePing: (ping) => lastPingMs = ping,
+      );
+      if (_stale(gen)) return; // cancelled mid-attempt — silent
+      _scorecard.record(
+        candidate,
+        ok,
+        ok && lastPingMs > 0 ? lastPingMs : null,
+      );
+      unawaited(saveScorecard(_scorecard));
+      if (ok) {
+        _controller.add(EngineSmartResolved(candidate));
+        return;
+      }
+      if (!failed) {
+        // The walk returned without failing or connecting — a stale-path
+        // return that already stayed silent; the loop stays silent too.
+        return;
+      }
+      // v4.32 — the inter-attempt bind-race guard: the failed candidate's
+      // job was cancelled (its listener aborts asynchronously on the Rust
+      // runtime), and the failure path's own _hardCleanup already nulled
+      // _jobId — so the NEXT attempt's `hadPreviousSession` is false and
+      // the walk's built-in `_waitForPortFree` would be SKIPPED. Wait for
+      // the dying listener HERE (bounded by _portFreeBudget): the next
+      // candidate's core must not race it on the same port («address
+      // already in use» — the exact v4.21 reconnect bug).
+      await _waitForPortFree(gen, _activePort);
+      if (_stale(gen)) return;
+      // The honest next candidate.
+    }
+    _emitFail(
+      'smartExhausted',
+      'SMART tried ${candidates.length} candidates; the last failure was '
+      '$lastCode — $lastMsg',
+    );
+  }
+
+  /// Runs ONE connect attempt. v4.32: returns whether the walk REACHED
+  /// Connected (every other path is a failure or a silent stale return).
+  /// [legOverride] pins the protocol tile (the SMART candidates);
+  /// [onCandidateFail] reroutes the failure emissions to the SMART loop
+  /// (which tries the next candidate instead of failing the session) —
+  /// EXCEPT permission denials, which no candidate can cure. [onProbePing]
+  /// hands the successful walk's probe latency to the scorecard.
+  Future<bool> _connectInner(
+    int gen, {
+    ProtocolId? legOverride,
+    void Function(String code, String message)? onCandidateFail,
+    void Function(int pingMs)? onProbePing,
+  }) async {
     final config = _config;
     if (config == null) {
       _emitFail('notBound', 'the adapter was never bound to a config source');
-      return;
+      return false;
+    }
+
+    /// The failure seam: the SMART loop swallows per-candidate failures
+    /// (it owns the terminal exhaustion event); everything else emits.
+    void fail(String code, String msg) {
+      if (onCandidateFail != null && code != 'vpnPermissionDenied') {
+        onCandidateFail(code, msg);
+      } else {
+        _emitFail(code, msg);
+      }
     }
 
     // Stale-state hygiene: never start a second core over a live one.
@@ -641,7 +764,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     // has already bumped the generation; the walk dies HERE, before any
     // startVpn/coreStart — the old boolean flag was already reset by then
     // and the walk went on to establish a tunnel nobody owned.
-    if (_stale(gen)) return;
+    if (_stale(gen)) return false;
 
     // v4.21 — the v4.20 chain/leg split is REVERTED to the single-knob
     // selection (owner decree). The adapter still builds the core args in
@@ -649,14 +772,26 @@ class PlatformEngineAdapter implements EngineAdapter {
     // promised LANDED in v4.31 (see the leg line below).
     final selection = config.selectedProtocol;
     final overlay = selection.isTor || selection.isPsiphon ? selection : null;
+    // v4.32 — a SMART candidate PINNS the plain tile (legOverride); the
+    // walk's every mode/port/arg decision then reads the candidate.
+    final overridden = legOverride != null && overlay == null;
     // v4.31 — the WARP leg under a family mode is the OWNER'S choice now
     // (round 7: «انتخاب پروتکل هسته ایتر برای حالت های ترکیبی اور وارپ»;
     // v4.21 deferred exactly this). Default stays the v4.19 fixed
     // WireGuard leg; protocolArgs still forces MASQUE where the core
     // refuses UDP-to-WARP legs on the TCP-only reverse modes.
-    final leg = overlay == null
+    // v4.31c — the leg is PER FAMILY (owner round 8: «قسمت پایه حالت های
+    // ترکیبی باید توی زیرمجموعه تنطیمات تور و سایفون قرار بگیره»): the
+    // tor family reads torLegProtocol, the psiphon family its own.
+    final leg = overridden
+        ? legOverride
+        : overlay == null
         ? selection
-        : AetherArguments.legProtocolId(config.coreSettings.aetherLegProtocol);
+        : AetherArguments.legProtocolId(
+            overlay.isTor
+                ? config.coreSettings.torLegProtocol
+                : config.coreSettings.psiphonLegProtocol,
+          );
     final modeId = AetherArguments.effectiveMode(leg, overlay);
     final mode = TransportModes.byId(modeId);
     final tunnel = config.connectionMode == ConnectionMode.tunnel;
@@ -668,21 +803,21 @@ class PlatformEngineAdapter implements EngineAdapter {
     // (the old job's abort is asynchronous on the Rust runtime).
     if (hadPreviousSession) {
       await _waitForPortFree(gen, _activePort);
-      if (_stale(gen)) return;
+      if (_stale(gen)) return false;
     }
 
     // --- 1. VPN permission (tunnel mode only) — asked BEFORE any core work
     // so a denial wastes no registration. The store is in `starting`.
     if (tunnel && !await _ensureVpnPermission(gen)) {
-      if (_stale(gen)) return; // cancelled mid-dialog — cancel owns the end
+      if (_stale(gen)) return false; // cancelled mid-dialog — cancel owns the end
       if (!_disconnecting) {
-        _emitFail('vpnPermissionDenied', 'the VPN permission was not granted');
+        fail('vpnPermissionDenied', 'the VPN permission was not granted');
       } else {
         _emitState(VpnState.disconnected);
       }
-      return;
+      return false;
     }
-    if (_stale(gen)) return;
+    if (_stale(gen)) return false;
 
     // --- 1b. v4.20 (tunnel mode): the VpnService comes up FIRST, before the
     // core work. A foreground-service start is only legal while the app is
@@ -722,39 +857,39 @@ class PlatformEngineAdapter implements EngineAdapter {
       } on PlatformException catch (e) {
         if (!_stale(gen)) {
           await _hardCleanup();
-          _emitFail('vpnStartFailed', '${e.code}: ${e.message}');
+          fail('vpnStartFailed', '${e.code}: ${e.message}');
         }
-        return;
+        return false;
       } on MissingPluginException {
         if (!_stale(gen)) {
           await _hardCleanup();
-          _emitFail(
+          fail(
             'platformBridgeMissing',
             'the aethone/engine platform channel is not available in this build',
           );
         }
-        return;
+        return false;
       }
-      if (_stale(gen)) return; // cancelled mid-start — straggler-safe (Kotlin gate)
+      if (_stale(gen)) return false; // cancelled mid-start — straggler-safe (Kotlin gate)
       final up = await tunnelUp.future.timeout(_tunnelUpBudget, onTimeout: () {
         return false;
       });
       _tunnelUp = null;
       _tunnelAlive = up;
       if (!up) {
-        if (_stale(gen)) return; // cancelled mid-tunnel (#3)
+        if (_stale(gen)) return false; // cancelled mid-tunnel (#3)
         await _hardCleanup();
-        _emitFail(
+        fail(
           'tunnelStartFailed',
           _tunnelDownReason ?? 'zeptun did not come up',
         );
-        return;
+        return false;
       }
-      if (_stale(gen)) return;
+      if (_stale(gen)) return false;
     }
 
     // --- 2. Aether in-process (embedded core, architecture B+).
-    if (_stale(gen)) return; // a cancel must never hear `connecting`
+    if (_stale(gen)) return false; // a cancel must never hear `connecting`
     _emitState(VpnState.connecting);
 
     // v4.21 — PROCESS-ENVIRONMENT HYGIENE (the engineClosed fix). The
@@ -814,7 +949,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     // staleness check and the job spawn — a walk that goes stale after the
     // check but before coreStart would start a core that no cleanup ever
     // cancels (the job id lands in the field only AFTER the spawn).
-    if (_stale(gen)) return;
+    if (_stale(gen)) return false;
     _jobId = core.coreStart(
       AetherArguments.build(
         protocol: leg,
@@ -831,7 +966,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     // this id on resync and actually cancel the core on disconnect (the
     // orphaned-core bug: «باید اپ رو کلا بندی تا اتصال تونل قطع بشه»).
     await _recordCoreJob();
-    if (_stale(gen)) return;
+    if (_stale(gen)) return false;
 
     // --- 2b. v4.19 (#7): proxy mode has no VpnService to hold the process,
     // so swiping the app away used to kill the in-process core. A tiny
@@ -850,7 +985,7 @@ class PlatformEngineAdapter implements EngineAdapter {
       } on MissingPluginException {
         // no platform (tests) — nothing to hold
       }
-      if (_stale(gen)) return;
+      if (_stale(gen)) return false;
     }
 
     // --- 3. Wait for the SOCKS listener of the SELECTED mode (no fallback,
@@ -871,19 +1006,19 @@ class PlatformEngineAdapter implements EngineAdapter {
     // zombie used to keep polling, "succeed" against the NEXT session's
     // listener, emit a premature Connected, and on its own timeout run a
     // _hardCleanup that KILLED the next session's service and job.
-    if (_stale(gen)) return;
+    if (_stale(gen)) return false;
     if (!ready) {
       await _hardCleanup();
       if (_coreFailureDuringStart != null) {
-        _emitFail('coreExited', _coreFailureDuringStart);
+        fail('coreExited', _coreFailureDuringStart!);
       } else {
-        _emitFail(
+        fail(
           'engineStartTimeout',
           'the core did not serve 127.0.0.1:$_activePort within '
           '$_listenerBudget',
         );
       }
-      return;
+      return false;
     }
     _coreFailureDuringStart = null;
 
@@ -899,13 +1034,13 @@ class PlatformEngineAdapter implements EngineAdapter {
       _activePort,
       budget: readyBudget(modeId, core: config.coreSettings),
     );
-    if (_stale(gen)) return; // cancelled during the probe (#3)
+    if (_stale(gen)) return false; // cancelled during the probe (#3)
     if (probe == null) {
       await _hardCleanup();
       if (_coreFailureDuringStart != null) {
-        _emitFail('coreExited', _coreFailureDuringStart);
+        fail('coreExited', _coreFailureDuringStart!);
       } else {
-        _emitFail(
+        fail(
           'endToEndProbeFailed',
           'the ${mode.label} data path did not answer through '
           '127.0.0.1:$_activePort within ${readyBudget(modeId).inSeconds} s '
@@ -913,21 +1048,28 @@ class PlatformEngineAdapter implements EngineAdapter {
           'bootstrap)',
         );
       }
-      return;
+      return false;
     }
     // v4.20 — the probe only ever tests the LOCAL SOCKS listener; a tunnel
     // leg that died between 'up' and here must never be papered over with
     // a fake Connected.
     if (tunnel && !_tunnelAlive) {
       await _hardCleanup();
-      _emitFail(
+      fail(
         'tunnelDiedDuringWalk',
         _tunnelDownReason ?? 'the VPN service went down mid-connection',
       );
-      return;
+      return false;
     }
     _emit(statsEvent(probe));
     _emitState(VpnState.connected);
+
+    // v4.32 — hand the walk's measured latency to the SMART scorecard
+    // (spec §4.3: the SOCKS5 CONNECT + trace round-trip of the LIVE
+    // session — the same number the stats card shows).
+    if (onProbePing != null) {
+      onProbePing(probe.pingMs);
+    }
 
     // v4.31 — a pseudo-country exit (loc=T1 — the Tor network, no flag,
     // no name; owner round 7 «اسمش رو هم T1 نوشته بود»): resolve the REAL
@@ -946,6 +1088,7 @@ class PlatformEngineAdapter implements EngineAdapter {
 
     // --- 5. Steady state: stats + health (§6 health probe ⇒ reconnecting).
     _startTicker(gen);
+    return true;
   }
 
   /// v4.19 (#2) — the core's last words when it died during the listener

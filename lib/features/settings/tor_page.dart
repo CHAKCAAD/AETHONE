@@ -6,7 +6,10 @@
 /// env-only tor log level). v4.31 (owner round 7: «وارد کردن دستی پل های
 /// تور») adds the MANUAL bridge lines (one `--tor-bridge` per line) and
 /// the tor connection budgets (the env-only AETHER_TOR_DIRECT_SECS /
-/// AETHER_TOR_BRIDGE_SECS).
+/// AETHER_TOR_BRIDGE_SECS). v4.31c (owner round 8: «قسمت پایه حالت های
+/// ترکیبی باید توی زیرمجموعه تنطیمات تور و سایفون قرار بگیره») moves the
+/// COMBINED-MODE BASE here: the Aether protocol under the tor family's
+/// chain/reverse modes, this family's own pick.
 library;
 
 import 'package:flutter/material.dart';
@@ -68,6 +71,47 @@ class TorSettingsPage extends StatelessWidget {
               ),
               const SubSectionDivider(),
               SettingInfoText(strings.torLocationDesc),
+            ],
+          ),
+        ),
+
+        // ---- Section: the combined-mode base (v4.31c — moved from the
+        // connection page by the round-8 decree; the tor family's own
+        // leg pick, writing CoreSettings.torLegProtocol) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSwap1,
+          title: strings.secFamilyLeg,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingLabel(strings.aetherLegLabel),
+              const SizedBox(height: 10),
+              SettingPills<AetherLegProtocol>(
+                keyId: 'tor-leg',
+                options: [
+                  // The same order + labels as the protocol page's own
+                  // tiles (strings.aetherLegName reuses their names).
+                  (AetherLegProtocol.wireguard, strings.aetherLegName(
+                      AetherLegProtocol.wireguard)),
+                  (AetherLegProtocol.masque, strings.aetherLegName(
+                      AetherLegProtocol.masque)),
+                  (AetherLegProtocol.gool, strings.aetherLegName(
+                      AetherLegProtocol.gool)),
+                  (AetherLegProtocol.goolClassic, strings.aetherLegName(
+                      AetherLegProtocol.goolClassic)),
+                  (AetherLegProtocol.mim, strings.aetherLegName(
+                      AetherLegProtocol.mim)),
+                ],
+                selected: core.torLegProtocol,
+                onSelect: (v) =>
+                    store.updateCore((c) => c.torLegProtocol = v),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.torLegDesc),
             ],
           ),
         ),

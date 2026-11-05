@@ -67,6 +67,12 @@ enum TorBridgePolicy { auto, off, custom }
 /// v4.19 fixed leg: WireGuard. The adapter maps it through
 /// `protocolArgs`, which still forces MASQUE for the UDP-needing legs on
 /// the TCP-only reverse modes (the core's own refusal, lib.rs L203-244).
+///
+/// v4.31c — the leg is PER FAMILY now (owner round 8: «قسمت پایه حالت های
+/// ترکیبی باید توی زیرمجموعه تنطیمات تور و سایفون قرار بگیره»): the
+/// tor family's combined modes and the psiphon family's each pick their
+/// own base on their own settings page. The old single-field
+/// `aetherLegProtocol` is migrated into BOTH on load (see [fromJson]).
 enum AetherLegProtocol { wireguard, masque, gool, goolClassic, mim }
 
 /// v4.31 — the IP version the core dials with (`-4` default / `-6` /
@@ -131,7 +137,8 @@ class CoreSettings {
     this.torDirectSecs = 75,
     this.torBridgeSecs = 360,
     this.torLog = TorLogLevel.info,
-    this.aetherLegProtocol = AetherLegProtocol.wireguard,
+    this.torLegProtocol = AetherLegProtocol.wireguard,
+    this.psiphonLegProtocol = AetherLegProtocol.wireguard,
     this.ipVersion = IpVersion.v4,
     this.upstreamProxy = '',
     this.echMode = EchMode.off,
@@ -220,12 +227,17 @@ class CoreSettings {
 
   TorLogLevel torLog; // ≠ info ⇒ env `AETHER_TOR_LOG` (env-only in the pin)
 
-  // ---- v4.31: the family-mode WARP leg + the dial layer ----
+  // ---- v4.31: the family-mode WARP legs + the dial layer ----
 
-  /// The Aether protocol under a tor/psiphon family mode (the owner's
-  /// deferred «انتخاب پروتکل هسته ایتر» option; default = the v4.19
-  /// fixed WireGuard leg).
-  AetherLegProtocol aetherLegProtocol;
+  /// v4.31c — the Aether protocol under the TOR family's combined modes
+  /// (chain + reverse; the owner's deferred «انتخاب پروتکل هسته ایتر»
+  /// option, per family since round 8). Default = the v4.19 fixed
+  /// WireGuard leg.
+  AetherLegProtocol torLegProtocol;
+
+  /// v4.31c — the Aether protocol under the PSIPHON family's combined
+  /// modes. Default = the v4.19 fixed WireGuard leg.
+  AetherLegProtocol psiphonLegProtocol;
 
   /// The IP version of the dial (`-4`/`-6`/`--dual`); default = the
   /// core's own v4.
@@ -318,7 +330,8 @@ class CoreSettings {
         'torDirectSecs': torDirectSecs,
         'torBridgeSecs': torBridgeSecs,
         'torLog': torLog.name,
-        'aetherLegProtocol': aetherLegProtocol.name,
+        'torLegProtocol': torLegProtocol.name,
+        'psiphonLegProtocol': psiphonLegProtocol.name,
         'ipVersion': ipVersion.name,
         'upstreamProxy': upstreamProxy,
         'echMode': echMode.name,
@@ -392,9 +405,19 @@ class CoreSettings {
       s.torBridgeSecs = m['torBridgeSecs'];
     }
     s.torLog = pickEnum(TorLogLevel.values, m['torLog']) ?? s.torLog;
-    s.aetherLegProtocol =
-        pickEnum(AetherLegProtocol.values, m['aetherLegProtocol']) ??
-            s.aetherLegProtocol;
+    // v4.31c — the per-family legs, with the v4.31 single-field migration:
+    // an old blob's aetherLegProtocol seeds BOTH families (the value the
+    // user picked once applies to each family's own page from now on).
+    final legacyLeg =
+        pickEnum(AetherLegProtocol.values, m['aetherLegProtocol']);
+    s.torLegProtocol =
+        pickEnum(AetherLegProtocol.values, m['torLegProtocol']) ??
+        legacyLeg ??
+        s.torLegProtocol;
+    s.psiphonLegProtocol =
+        pickEnum(AetherLegProtocol.values, m['psiphonLegProtocol']) ??
+        legacyLeg ??
+        s.psiphonLegProtocol;
     s.ipVersion = pickEnum(IpVersion.values, m['ipVersion']) ?? s.ipVersion;
     if (m['upstreamProxy'] is String) s.upstreamProxy = m['upstreamProxy'];
     s.echMode = pickEnum(EchMode.values, m['echMode']) ?? s.echMode;

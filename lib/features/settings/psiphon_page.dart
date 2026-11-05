@@ -4,7 +4,10 @@
 /// (--psiphon-mode / --psiphon-cdn-sni / --psiphon-cdn-ips). v4.31 (owner
 /// round 7: «تننیمات بیشتر») adds the fronting SETS, the ready budget
 /// (the env-only AETHER_PSIPHON_READY_SECS) and the pasted server
-/// entries.
+/// entries. v4.31c (owner round 8: «قسمت پایه حالت های ترکیبی باید توی
+/// زیرمجموعه تنطیمات تور و سایفون قرار بگیره») moves the COMBINED-MODE
+/// BASE here: the Aether protocol under the psiphon family's
+/// chain/reverse modes, this family's own pick.
 library;
 
 import 'package:flutter/material.dart';
@@ -64,6 +67,47 @@ class PsiphonSettingsPage extends StatelessWidget {
               ),
               const SubSectionDivider(),
               SettingInfoText(strings.psiphonLocationDesc),
+            ],
+          ),
+        ),
+
+        // ---- Section: the combined-mode base (v4.31c — moved from the
+        // connection page by the round-8 decree; the psiphon family's own
+        // leg pick, writing CoreSettings.psiphonLegProtocol) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSwap1,
+          title: strings.secFamilyLeg,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingLabel(strings.aetherLegLabel),
+              const SizedBox(height: 10),
+              SettingPills<AetherLegProtocol>(
+                keyId: 'psiphon-leg',
+                options: [
+                  // The same order + labels as the protocol page's own
+                  // tiles (strings.aetherLegName reuses their names).
+                  (AetherLegProtocol.wireguard, strings.aetherLegName(
+                      AetherLegProtocol.wireguard)),
+                  (AetherLegProtocol.masque, strings.aetherLegName(
+                      AetherLegProtocol.masque)),
+                  (AetherLegProtocol.gool, strings.aetherLegName(
+                      AetherLegProtocol.gool)),
+                  (AetherLegProtocol.goolClassic, strings.aetherLegName(
+                      AetherLegProtocol.goolClassic)),
+                  (AetherLegProtocol.mim, strings.aetherLegName(
+                      AetherLegProtocol.mim)),
+                ],
+                selected: core.psiphonLegProtocol,
+                onSelect: (v) =>
+                    store.updateCore((c) => c.psiphonLegProtocol = v),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.psiphonLegDesc),
             ],
           ),
         ),

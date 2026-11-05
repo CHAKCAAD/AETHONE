@@ -212,6 +212,14 @@ class AppStrings {
   String get secProtocolMode => _v['secProtocolMode']!;
   String get protoModeSmart => _v['protoModeSmart']!;
   String get smartNote => _v['smartNote']!;
+
+  /// v4.32 — the SMART attempt line («اسمارت: ماسک (۱ از ۵)") — the
+  /// explicit, observable fallback chain (SMART_AUTO_SPEC §7.2).
+  String smartAttemptLabel(String name, int attempt, int total) =>
+      _v['smartAttemptLabel']!
+          .replaceAll('{name}', name)
+          .replaceAll('{i}', '$attempt')
+          .replaceAll('{n}', '$total');
   String get coreRowDesc => _v['coreRowDesc']!;
 
   // general page
@@ -295,9 +303,10 @@ class AppStrings {
   String get serverEntriesLabel => _v['serverEntriesLabel']!;
   String get serverEntriesHint => _v['serverEntriesHint']!;
   String get serverEntriesDesc => _v['serverEntriesDesc']!;
-  String get secAetherLeg => _v['secAetherLeg']!;
+  String get secFamilyLeg => _v['secFamilyLeg']!;
   String get aetherLegLabel => _v['aetherLegLabel']!;
-  String get aetherLegDesc => _v['aetherLegDesc']!;
+  String get torLegDesc => _v['torLegDesc']!;
+  String get psiphonLegDesc => _v['psiphonLegDesc']!;
   String get secIpVersion => _v['secIpVersion']!;
   String get ipV4 => _v['ipV4']!;
   String get ipV6 => _v['ipV6']!;
@@ -600,7 +609,8 @@ class AppStrings {
       'routingNone': 'هیچ‌کدام',
       'secProtocolMode': 'حالت پروتکل',
       'protoModeSmart': 'اسمارت',
-      'smartNote': 'حالت SMART هنوز در هستهٔ فعلی پیاده‌سازی نشده است (مشخصات آن در SMART_AUTO_SPEC.md ثبت شده)',
+      'smartNote': 'در حالت اسمارت، خود اپ به‌جای پیش‌فرض هسته پروتکل را انتخاب می‌کند: نامزدها (ماسک، وایرگارد، گول، میم، گول کلاسیک) به ترتیب موفقیت و تأخیر اندازه‌گیری‌شدهٔ قبلی امتحان می‌شوند تا یکی وصل شود. ترتیب تلاش‌ها در صفحهٔ اصلی نمایش داده می‌شود، تأخیر اندازه‌گیری‌شده یادآوری می‌شود و انتخاب دستی شما هرگز بازنویسی نمی‌شود. فقط روی کاشی «اتوماتیک» فعال است.',
+      'smartAttemptLabel': 'اسمارت: {name} ({i} از {n})',
       'coreRowDesc': 'فرگمنت، TLS، انتقال و موتور',
       'secAbout': 'دربارهٔ برنامه',
       'appVersionLabel': 'نسخهٔ برنامه',
@@ -667,9 +677,10 @@ class AppStrings {
       'serverEntriesLabel': 'ورودی‌های سرور',
       'serverEntriesHint': 'متن JSON ورودی‌های سرور از کلاینت رسمی سایفون',
       'serverEntriesDesc': 'خالی یعنی کشف خودکار داخلی سایفون',
-      'secAetherLeg': 'پروتکل هستهٔ Aether',
+      'secFamilyLeg': 'پایهٔ حالت‌های ترکیبی',
       'aetherLegLabel': 'پایهٔ حالت‌های ترکیبی',
-      'aetherLegDesc': 'در حالت‌های ترکیبی (تور/سایفون روی وارپ)، تونل Aether زیرین با این پروتکل برقرار می‌شود. در حالت‌های معکوس، پایه‌های نیازمند UDP خودکار به ماسک تغییر می‌کنند (محدودیت خود هسته)',
+      'torLegDesc': 'در حالت‌های ترکیبی تور (زنجیره و معکوس)، تونل Aether زیرین با این پروتکل برقرار می‌شود. در حالت معکوس، پایه‌های نیازمند UDP خودکار به ماسک تغییر می‌کنند (محدودیت خود هسته)',
+      'psiphonLegDesc': 'در حالت‌های ترکیبی سایفون (زنجیره و معکوس)، تونل Aether زیرین با این پروتکل برقرار می‌شود. در حالت معکوس، پایه‌های نیازمند UDP خودکار به ماسک تغییر می‌کنند (محدودیت خود هسته)',
       'secIpVersion': 'نسخهٔ IP',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -884,7 +895,8 @@ class AppStrings {
       'routingNone': 'None',
       'secProtocolMode': 'Protocol mode',
       'protoModeSmart': 'SMART',
-      'smartNote': 'SMART is not implemented in the current core yet (spec: SMART_AUTO_SPEC.md)',
+      'smartNote': 'In SMART mode the app itself picks the protocol instead of the core default: the candidates (masque, wireguard, gool, mim, gool-classic) are tried in the order of their measured success and latency until one connects. The attempt chain is shown on the home screen, the measured latency is remembered, and your manual pick is never rewritten. Active only with the AUTO tile.',
+      'smartAttemptLabel': 'SMART: {name} ({i} of {n})',
       'coreRowDesc': 'Fragmentation, TLS, transport and engine',
       'secAbout': 'About the app',
       'appVersionLabel': 'App version',
@@ -951,9 +963,10 @@ class AppStrings {
       'serverEntriesLabel': 'Server entries',
       'serverEntriesHint': 'the server-entries JSON from the official psiphon client',
       'serverEntriesDesc': 'Empty means the built-in psiphon discovery',
-      'secAetherLeg': 'Aether core protocol',
+      'secFamilyLeg': 'Base of the combined modes',
       'aetherLegLabel': 'Base of the combined modes',
-      'aetherLegDesc': 'In combined modes (tor/psiphon over WARP) the underlying Aether tunnel runs this protocol. On the reverse modes the UDP-needing legs map to MASQUE automatically (a core limit)',
+      'torLegDesc': 'In the combined tor modes (chain and reverse) the underlying Aether tunnel runs this protocol. On the reverse mode the UDP-needing legs map to MASQUE automatically (a core limit)',
+      'psiphonLegDesc': 'In the combined psiphon modes (chain and reverse) the underlying Aether tunnel runs this protocol. On the reverse mode the UDP-needing legs map to MASQUE automatically (a core limit)',
       'secIpVersion': 'IP version',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -1165,7 +1178,8 @@ class AppStrings {
       'routingNone': 'Нет',
       'secProtocolMode': 'Режим протокола',
       'protoModeSmart': 'СМАРТ',
-      'smartNote': 'Режим SMART ещё не реализован в текущем ядре (спецификация: SMART_AUTO_SPEC.md)',
+      'smartNote': 'В режиме SMART приложение само выбирает протокол вместо значения ядра по умолчанию: кандидаты (masque, wireguard, gool, mim, gool-classic) пробуются в порядке измеренных успехов и задержек, пока один не подключится. Цепочка попыток видна на главном экране, измеренная задержка запоминается, а ваш ручной выбор никогда не перезаписывается. Активен только с плиткой AUTO.',
+      'smartAttemptLabel': 'SMART: {name} ({i} из {n})',
       'coreRowDesc': 'Фрагментация, TLS, транспорт и движок',
       'secAbout': 'О приложении',
       'appVersionLabel': 'Версия приложения',
@@ -1232,9 +1246,10 @@ class AppStrings {
       'serverEntriesLabel': 'Записи серверов',
       'serverEntriesHint': 'JSON записей серверов из официального клиента psiphon',
       'serverEntriesDesc': 'Пусто — встроенное обнаружение psiphon',
-      'secAetherLeg': 'Протокол ядра Aether',
+      'secFamilyLeg': 'Основа комбинированных режимов',
       'aetherLegLabel': 'Основа комбинированных режимов',
-      'aetherLegDesc': 'В комбинированных режимах (tor/psiphon поверх WARP) туннель Aether работает по этому протоколу. В обратных режимах ветки с UDP автоматически переходят на MASQUE (ограничение ядра)',
+      'torLegDesc': 'В комбинированных режимах tor (цепочка и обратный) туннель Aether работает по этому протоколу. В обратном режиме ветки с UDP автоматически переходят на MASQUE (ограничение ядра)',
+      'psiphonLegDesc': 'В комбинированных режимах psiphon (цепочка и обратный) туннель Aether работает по этому протоколу. В обратном режиме ветки с UDP автоматически переходят на MASQUE (ограничение ядра)',
       'secIpVersion': 'Версия IP',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -1445,7 +1460,8 @@ class AppStrings {
       'routingNone': '无',
       'secProtocolMode': '协议模式',
       'protoModeSmart': '智能',
-      'smartNote': 'SMART 尚未在当前内核实现（规范见 SMART_AUTO_SPEC.md）',
+      'smartNote': '在 SMART 模式下，应用自行选择协议而非内核默认值：候选协议（masque、wireguard、gool、mim、gool-classic）按既往实测成功率与延迟依次尝试，直到其中一个连通。尝试链路会在主屏幕显示，实测延迟会被记住，您的手动选择永不被改写。仅在选中 AUTO 卡时生效。',
+      'smartAttemptLabel': 'SMART：{name}（第 {i}/{n} 次）',
       'coreRowDesc': '分片、TLS、传输与引擎',
       'secAbout': '关于应用',
       'appVersionLabel': '应用版本',
@@ -1512,9 +1528,10 @@ class AppStrings {
       'serverEntriesLabel': '服务器条目',
       'serverEntriesHint': '来自 psiphon 官方客户端的服务器条目 JSON',
       'serverEntriesDesc': '留空表示使用 psiphon 内置发现',
-      'secAetherLeg': 'Aether 核心协议',
+      'secFamilyLeg': '组合模式的底层',
       'aetherLegLabel': '组合模式的底层',
-      'aetherLegDesc': '在组合模式（WARP 上的 tor/psiphon）中，底层 Aether 隧道使用此协议。反向模式下需要 UDP 的分支会自动映射为 MASQUE（内核自身的限制）',
+      'torLegDesc': '在 Tor 组合模式（链式与反向）中，底层 Aether 隧道使用此协议。反向模式下需要 UDP 的分支会自动映射为 MASQUE（内核自身的限制）',
+      'psiphonLegDesc': '在 Psiphon 组合模式（链式与反向）中，底层 Aether 隧道使用此协议。反向模式下需要 UDP 的分支会自动映射为 MASQUE（内核自身的限制）',
       'secIpVersion': 'IP 版本',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',

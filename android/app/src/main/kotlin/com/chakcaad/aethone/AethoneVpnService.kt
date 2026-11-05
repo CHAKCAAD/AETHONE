@@ -202,8 +202,16 @@ class AethoneVpnService : VpnService() {
         // uncaught-exception breadcrumb in MainActivity covers the Java
         // seam and adb logcat remains the native-truth source.
         try {
-            if (!startTunnel(port, tcpOnly)) {
-                EngineBridge.emit(downEvent("establish-failed"))
+            // v4.31b — the reason STRING (was a bare boolean): a zeptun
+            // config/start failure used to surface as «establish-failed",
+            // the VPN-consent/establish message — exactly the masquerade
+            // that hid v4.31's TOML type error for a whole device round.
+            // Each stage now names itself: consent/establish failures stay
+            // "establish-failed", a nativeStart rc≠0 is
+            // "zeptun-start-failed:rc=N".
+            val failReason = startTunnel(port, tcpOnly)
+            if (failReason != null) {
+                EngineBridge.emit(downEvent(failReason))
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -253,7 +261,9 @@ class AethoneVpnService : VpnService() {
     private fun downEvent(reason: String): Map<String, Any?> =
         mapOf("event" to "down", "reason" to reason, "session" to sessionId)
 
-    private fun startTunnel(port: Int, tcpOnly: Boolean): Boolean {
+    /// v4.31b — returns null on success, the failure REASON otherwise (the
+    /// stage-named string Dart's tunnelStartFailed shows verbatim).
+    private fun startTunnel(port: Int, tcpOnly: Boolean): String? {
         if (zeptunUp) {
             // v4.20: a mode switch (e.g. 1819 → 1820) between connects used
             // to keep serving the OLD port — zeptun would relay into a
@@ -271,7 +281,7 @@ class AethoneVpnService : VpnService() {
                 stopTunnel("port-change")
             } else {
                 EngineBridge.emit(upEvent(port))
-                return true
+                return null
             }
         }
         // v4.29 — the cold-start adoption (run #53 on the apk-smoke gate:
@@ -292,7 +302,7 @@ class AethoneVpnService : VpnService() {
         // current prepared package → prepare returns true → null intent).
         if (VpnService.prepare(this) != null) {
             Log.e(TAG, "consent missing (prepare returned an intent) — refusing to establish")
-            return false
+            return "establish-failed"
         }
         val builder = Builder()
             .setSession("AETHONE")
@@ -309,19 +319,29 @@ class AethoneVpnService : VpnService() {
         }
         val fd: ParcelFileDescriptor = builder.establish() ?: run {
             Log.e(TAG, "Builder.establish() returned null (revoked or no permission)")
-            return false
+            return "establish-failed"
         }
         descriptor = fd
 
         // Must match ZeptunConfigToml.build on the Dart side (single source
         // of truth: the zeptun config keys at the frozen pin). v4.31 — the
-        // `udp = "disabled"` line for TCP-only modes: zeptun then refuses
+        // `udp = false` line for TCP-only modes: zeptun then refuses
         // every UDP flow at open and answers the device with ICMP
         // port-unreachable (src/stack/udp.zig → icmp.sendUnreachable), so
         // QUIC-happy apps fall back to TCP immediately instead of
         // blackholing into the core's drop-everything UDP relay. The
         // fake-IP DNS keeps working — zeptun answers it locally before
         // any flow reaches the handler (src/stack/dns.zig).
+        //
+        // v4.31b — the VALUE is the document schema's bool `false`, NOT
+        // the enum tag "disabled": the config-document layer (zeptun
+        // config_json.zig) declares handler.socks5.udp as ?bool and maps
+        // false → .disabled; its TOML parser accepts ONLY the bare words
+        // true/false there. v4.31's `udp = "disabled"` (a quoted string)
+        // made zeptun_create_from_toml fail with ConfigError, so
+        // nativeStart returned rc≠0 and surfaced as «establish-failed»
+        // on every tcpOnly mode (owner round 8: psiphon/tor failed
+        // immediately; aether modes — no udp line — were fine).
         val toml = """
             preset = "mobile"
 
@@ -330,7 +350,7 @@ class AethoneVpnService : VpnService() {
 
             [handler.socks5]
             server = "127.0.0.1:$port"
-            ${if (tcpOnly) "udp = \"disabled\"" else ""}
+            ${if (tcpOnly) "udp = false" else ""}
 
             [dns]
             fake_ip = true
@@ -341,7 +361,7 @@ class AethoneVpnService : VpnService() {
             Log.e(TAG, "zeptun nativeStart failed rc=$rc (port=$port)")
             fd.close()
             descriptor = null
-            return false
+            return "zeptun-start-failed:rc=$rc"
         }
         zeptunUp = true
         socksTcpOnly = tcpOnly
@@ -351,7 +371,7 @@ class AethoneVpnService : VpnService() {
                 "(protect callback installed)",
         )
         EngineBridge.emit(upEvent(port))
-        return true
+        return null
     }
 
     private fun stopTunnel(reason: String) {

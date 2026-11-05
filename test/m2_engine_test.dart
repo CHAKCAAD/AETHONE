@@ -20,6 +20,7 @@ import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/core_settings.dart';
 import 'package:aethone/connection/engine.dart';
 import 'package:aethone/connection/platform_engine_adapter.dart';
+import 'package:aethone/connection/smart_scorecard.dart';
 import 'package:aethone/connection/tunnel_probe.dart';
 import 'package:aethone/core/app_assets.dart';
 import 'package:flutter/services.dart';
@@ -443,7 +444,8 @@ void main() {
         ..cdnSets = 'vercel'
         ..psiphonReadySecs = 240
         ..psiphonServerEntries = '[]'
-        ..aetherLegProtocol = AetherLegProtocol.gool
+        ..torLegProtocol = AetherLegProtocol.gool
+        ..psiphonLegProtocol = AetherLegProtocol.masque
         ..ipVersion = IpVersion.dual
         ..upstreamProxy = 'socks5://h:1'
         ..echMode = EchMode.auto
@@ -454,6 +456,35 @@ void main() {
         (jsonDecode(jsonEncode(s.toJson())) as Map).cast<String, dynamic>(),
       );
       expect(back.encode(), s.encode());
+    });
+
+    // v4.31c — the v4.31 single-field migration: an old blob's
+    // aetherLegProtocol seeds BOTH family legs; a new blob's per-family
+    // values win over the legacy key.
+    test('CoreSettings migrates the legacy aetherLegProtocol into both '
+        'families', () {
+      final migrated = CoreSettings.fromJson({
+        'v': 1,
+        'aetherLegProtocol': 'gool',
+      });
+      expect(migrated.torLegProtocol, AetherLegProtocol.gool);
+      expect(migrated.psiphonLegProtocol, AetherLegProtocol.gool);
+      // The legacy field no longer round-trips (dropped from toJson).
+      expect(migrated.toJson().containsKey('aetherLegProtocol'), isFalse);
+
+      // Per-family values beat the legacy key when both are present.
+      final perFamily = CoreSettings.fromJson({
+        'v': 1,
+        'aetherLegProtocol': 'gool',
+        'torLegProtocol': 'mim',
+        'psiphonLegProtocol': 'masque',
+      });
+      expect(perFamily.torLegProtocol, AetherLegProtocol.mim);
+      expect(perFamily.psiphonLegProtocol, AetherLegProtocol.masque);
+      // A no-legacy, no-new-keys blob keeps the WireGuard default.
+      final bare = CoreSettings.fromJson({'v': 1});
+      expect(bare.torLegProtocol, AetherLegProtocol.wireguard);
+      expect(bare.psiphonLegProtocol, AetherLegProtocol.wireguard);
     });
   });
 
@@ -471,11 +502,19 @@ void main() {
     // v4.31 — the TCP-only modes (every tor/psiphon family member): zeptun
     // REFUSES UDP flows (ICMP port-unreachable) instead of relaying them
     // into the core's silent drop-everything UDP relay.
-    test('tcpOnly adds handler.socks5.udp = "disabled"', () {
+    // v4.31b — the document schema's form: `udp` is a ?bool in zeptun's
+    // config-document layer (config_json.zig), so the ONLY accepted values
+    // are the bare words true/false. v4.31's `udp = "disabled"` (a quoted
+    // string) failed zeptun_create_from_toml with ConfigError →
+    // nativeStart rc≠0 → «establish-failed» on every tcpOnly connect.
+    test('tcpOnly adds handler.socks5.udp = false (bool, not the enum tag)', () {
       final toml = ZeptunConfigToml.build(socksPort: 1821, tcpOnly: true);
       expect(toml, contains('preset = "mobile"'));
       expect(toml, contains('server = "127.0.0.1:1821"'));
-      expect(toml, contains('udp = "disabled"'));
+      expect(toml, contains('udp = false'));
+      // The quoted enum tag is REJECTED by the pinned parser (config_toml
+      // scalar: a bool field accepts only the words true/false).
+      expect(toml, isNot(contains('"disabled"')));
       expect(toml, contains('fake_ip = true'));
     });
   });
@@ -679,6 +718,86 @@ void main() {
         await listener.dispose();
       }
     });
+
+    test(
+      'v4.31c per-family legs: torChain rides torLegProtocol, psiphonChain '
+      'its own — never the other family\'s pick', () async {
+        mockChannel();
+        // torChain serves 1820; psiphonChain serves 1821.
+        final torListener = await _FakeSocks5Server().startOn(1820);
+        final psiphonListener = await _FakeSocks5Server().startOn(1821);
+        try {
+          // TOR family: gool under tor (torLegProtocol = gool).
+          final core = _FakeCore();
+          final adapter = PlatformEngineAdapter(coreFactory: () => core);
+          final events = <EngineEvent>[];
+          adapter.events.listen(events.add);
+          adapter.bind(
+            _FixedConfig(
+              selectedProtocol: ProtocolId.torChain,
+              connectionMode: ConnectionMode.proxy,
+              coreSettings: CoreSettings()
+                ..torLegProtocol = AetherLegProtocol.gool
+                ..psiphonLegProtocol = AetherLegProtocol.mim,
+            ),
+          );
+          await adapter.connect();
+          await pumpEventQueue();
+          expect(statesOf(events).last, VpnState.connected);
+          expect(
+            core.startedArgs.single,
+            containsAllInOrder(['--protocol', 'gool', '--tor']),
+          );
+          await adapter.disconnect();
+          await pumpEventQueue();
+
+          // PSIPHON family on the SAME settings: mim under psiphon — the
+          // psiphon leg, not the tor pick.
+          final core2 = _FakeCore();
+          final adapter2 = PlatformEngineAdapter(coreFactory: () => core2);
+          adapter2.events.listen(events.add);
+          adapter2.bind(
+            _FixedConfig(
+              selectedProtocol: ProtocolId.psiphonChain,
+              connectionMode: ConnectionMode.proxy,
+              coreSettings: CoreSettings()
+                ..torLegProtocol = AetherLegProtocol.gool
+                ..psiphonLegProtocol = AetherLegProtocol.mim,
+            ),
+          );
+          await adapter2.connect();
+          await pumpEventQueue();
+          expect(
+            core2.startedArgs.single,
+            containsAllInOrder(['--protocol', 'mim', '--psiphon']),
+          );
+          await adapter2.disconnect();
+          await pumpEventQueue();
+
+          // Defaults stay the v4.19 fixed WireGuard leg per family.
+          final core3 = _FakeCore();
+          final adapter3 = PlatformEngineAdapter(coreFactory: () => core3);
+          adapter3.events.listen(events.add);
+          adapter3.bind(
+            _FixedConfig(
+              selectedProtocol: ProtocolId.psiphonChain,
+              connectionMode: ConnectionMode.proxy,
+            ),
+          );
+          await adapter3.connect();
+          await pumpEventQueue();
+          expect(
+            core3.startedArgs.single,
+            containsAllInOrder(['--protocol', 'wg', '--psiphon']),
+          );
+          await adapter3.disconnect();
+          await pumpEventQueue();
+        } finally {
+          await torListener.dispose();
+          await psiphonListener.dispose();
+        }
+      },
+    );
 
     test(
       'v4.21 per-family location: a tor pick pins --exit-loc on torReverse; '
@@ -1172,6 +1291,216 @@ void main() {
     });
   });
 
+  group('v4.32 SMART AUTO (scorecard + the candidate walk)', () {
+    test('scorecard: fresh card explores in sheet order; tiers order the '
+        'rest', () {
+      final card = SmartScorecard();
+      // Fresh: never-tried tier, the exploration ladder order.
+      expect(
+        card.rank(),
+        smartCandidates,
+        reason: 'a fresh card keeps the protocol sheet ladder',
+      );
+
+      // One candidate trusted (recent success + measured ping), one with a
+      // failure streak, three untouched.
+      final now = DateTime(2026, 11, 5, 12);
+      card
+        ..record(ProtocolId.wireguard, true, 90, now: now)
+        ..record(ProtocolId.masque, false, null, now: now)
+        ..record(ProtocolId.masque, false, null, now: now);
+      final ranked = card.rank(now: now);
+      expect(ranked.first, ProtocolId.wireguard,
+          reason: 'the trusted candidate leads');
+      expect(ranked.indexOf(ProtocolId.masque) > ranked.indexOf(ProtocolId.gool),
+          isTrue,
+          reason: 'the failed streak sits behind the untouched tier');
+      // All five candidates present, no duplicates.
+      expect(ranked.toSet().length, smartCandidates.length);
+    });
+
+    test('scorecard: failure streaks downgrade, EWMA smooths, roundtrips', () {
+      final card = SmartScorecard();
+      final now = DateTime(2026, 11, 5, 12);
+      // wireguard: 2 successes with pings 100 and 200 → EWMA 120.
+      card
+        ..record(ProtocolId.wireguard, true, 100, now: now)
+        ..record(ProtocolId.wireguard, true, 200, now: now);
+      expect(card.scoreOf(ProtocolId.wireguard).ewmaPingMs, 120);
+      // masque: a success then a failure streak — the streak is what
+      // counts now, and successes stay recorded.
+      card
+        ..record(ProtocolId.masque, true, 50, now: now)
+        ..record(ProtocolId.masque, false, null, now: now)
+        ..record(ProtocolId.masque, false, null, now: now);
+      final s = card.scoreOf(ProtocolId.masque);
+      expect(s.consecutiveFailures, 2);
+      expect(s.successes, 1);
+      expect(s.attempts, 3);
+
+      // Persistence roundtrip (the exact disk shape).
+      final back = SmartScorecard.fromJson(
+        (jsonDecode(card.encode()) as Map).cast<String, dynamic>(),
+      );
+      expect(back.encode(), card.encode());
+    });
+
+    test('the SMART walk: first candidate fails fast, second connects, the '
+        'resolution is reported + recorded', () async {
+      mockChannel();
+      // The shared listener on 1819: the FIRST probe CONNECT is refused
+      // (candidate 1's data path is dead), then it serves normally.
+      final listener = await _FakeSocks5Server(refuseFirstN: 1).startOn(1819);
+      try {
+        final core = _FlakySmartCore(failFirstN: 1);
+        final scorecard = SmartScorecard();
+        final adapter = PlatformEngineAdapter(
+          coreFactory: () => core,
+          scorecard: scorecard,
+        );
+        final events = <EngineEvent>[];
+        adapter.events.listen(events.add);
+        adapter.bind(
+          _FixedConfig(
+            selectedProtocol: ProtocolId.auto,
+            connectionMode: ConnectionMode.proxy,
+            protocolModeSmart: true,
+          ),
+        );
+
+        await adapter.connect();
+        await pumpEventQueue();
+
+        // Connected, via the SECOND candidate (sheet order: masque first,
+        // wireguard second).
+        expect(statesOf(events).last, VpnState.connected);
+        final attempts = events.whereType<EngineSmartAttempt>().toList();
+        expect(attempts.length, 2, reason: 'masque failed, wireguard landed');
+        expect(attempts.first.candidate, ProtocolId.masque);
+        expect(attempts.first.attempt, 1);
+        expect(attempts[1].candidate, ProtocolId.wireguard);
+        final resolved = events.whereType<EngineSmartResolved>().single;
+        expect(resolved.protocol, ProtocolId.wireguard);
+
+        // The failing walk's args were the masque pair; the landing walk's
+        // the wireguard pair — each candidate really ran its own protocol.
+        expect(
+          core.startedArgs.first,
+          containsAllInOrder(['--protocol', 'masque']),
+        );
+        expect(
+          core.startedArgs.last,
+          containsAllInOrder(['--protocol', 'wg']),
+        );
+
+        // The scorecard recorded both outcomes.
+        expect(scorecard.scoreOf(ProtocolId.masque).consecutiveFailures, 1);
+        expect(scorecard.scoreOf(ProtocolId.wireguard).successes, 1);
+
+        await adapter.disconnect();
+        await pumpEventQueue();
+      } finally {
+        await listener.dispose();
+      }
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    test('the SMART walk: exhaustion fails honestly with the last reason',
+        () async {
+      mockChannel();
+      // Every CONNECT refused + every core start instantly 'done' — no
+      // candidate can ever leave the ground.
+      final listener = await _FakeSocks5Server(refuseConnect: true).startOn(
+        1819,
+      );
+      try {
+        final core = _FlakySmartCore(failFirstN: 99);
+        final adapter = PlatformEngineAdapter(coreFactory: () => core);
+        final events = <EngineEvent>[];
+        adapter.events.listen(events.add);
+        adapter.bind(
+          _FixedConfig(
+            selectedProtocol: ProtocolId.auto,
+            connectionMode: ConnectionMode.proxy,
+            protocolModeSmart: true,
+          ),
+        );
+
+        await adapter.connect();
+        await pumpEventQueue();
+
+        // ALL five candidates attempted (spec §7.2), then the honest
+        // exhaustion failure — no hidden fallback, no fake connected.
+        expect(
+          events.whereType<EngineSmartAttempt>().length,
+          smartCandidates.length,
+        );
+        expect(statesOf(events).last, VpnState.failed);
+        final fail = events.whereType<EngineStateChanged>().last;
+        expect(fail.errorCode, 'smartExhausted');
+        expect(fail.message, contains('coreExited'));
+        expect(core.startedArgs.length, smartCandidates.length);
+      } finally {
+        await listener.dispose();
+      }
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    test('SMART is dormant on a MANUAL tile and on AUTO without the opt-in',
+        () async {
+      mockChannel();
+      final listener = await _FakeSocks5Server().startOn(1819);
+      try {
+        // Manual wireguard tile + SMART on: the plain single walk.
+        var core = _FlakySmartCore(failFirstN: 0);
+        var adapter = PlatformEngineAdapter(coreFactory: () => core);
+        var events = <EngineEvent>[];
+        adapter.events.listen(events.add);
+        adapter.bind(
+          _FixedConfig(
+            selectedProtocol: ProtocolId.wireguard,
+            connectionMode: ConnectionMode.proxy,
+            protocolModeSmart: true,
+          ),
+        );
+        await adapter.connect();
+        await pumpEventQueue();
+        expect(statesOf(events).last, VpnState.connected);
+        expect(events.whereType<EngineSmartAttempt>(), isEmpty,
+            reason: 'a manual pick is never rewritten (§7.6)');
+        expect(
+          core.startedArgs.single,
+          containsAllInOrder(['--protocol', 'wg']),
+        );
+        await adapter.disconnect();
+        await pumpEventQueue();
+
+        // AUTO tile, SMART off: the core's own default (masque), one walk.
+        core = _FlakySmartCore(failFirstN: 0);
+        adapter = PlatformEngineAdapter(coreFactory: () => core);
+        events = <EngineEvent>[];
+        adapter.events.listen(events.add);
+        adapter.bind(
+          _FixedConfig(
+            selectedProtocol: ProtocolId.auto,
+            connectionMode: ConnectionMode.proxy,
+            protocolModeSmart: false,
+          ),
+        );
+        await adapter.connect();
+        await pumpEventQueue();
+        expect(statesOf(events).last, VpnState.connected);
+        expect(events.whereType<EngineSmartAttempt>(), isEmpty);
+        expect(
+          core.startedArgs.single,
+          containsAllInOrder(['--protocol', 'masque']),
+        );
+        await adapter.disconnect();
+        await pumpEventQueue();
+      } finally {
+        await listener.dispose();
+      }
+    });
+  });
+
   group('v4.26 device-test round 4 — the resume window (own listeners)', () {
     test(
       'a disconnect DURING the resume probe stops the VPN service — not the '
@@ -1308,6 +1637,48 @@ class _OrderRecordingCore extends _FakeCore {
   int coreStart(List<String> args) {
     order.add('core');
     return super.coreStart(args);
+  }
+}
+
+/// v4.32 — the SMART-walk fake: the FIRST [failFirstN] core starts exit
+/// instantly (pollState 'done' — the walk's coreExited path), every later
+/// start runs. Paired with a listener that refuses the matching probes,
+/// this shapes per-candidate failure without any timing magic.
+class _FlakySmartCore implements AetherCoreApi {
+  _FlakySmartCore({required this.failFirstN});
+
+  final int failFirstN;
+  List<List<String>> startedArgs = [];
+  final List<int> cancelled = [];
+  final List<int> freed = [];
+  bool _done = false;
+
+  @override
+  int coreStart(List<String> args) {
+    startedArgs.add(args);
+    _done = startedArgs.length <= failFirstN;
+    return 42;
+  }
+
+  @override
+  AetherReply jobPoll(int id) => _done
+      ? AetherReply(true, const {
+          'state': 'done',
+          'result': {'state': 'closed'},
+        })
+      : AetherReply(true, const {'state': 'running'});
+
+  @override
+  bool jobCancel(int id) {
+    cancelled.add(id);
+    _done = true; // cooperative cancel lands (the walk's grace poll ends)
+    return true;
+  }
+
+  @override
+  bool jobFree(int id) {
+    freed.add(id);
+    return true;
   }
 }
 
@@ -1476,8 +1847,11 @@ class _FixedConfig implements EngineConfigSource {
     this.selectedCountryCode,
     this.psiphonLocation = 'auto',
     this.torLocation = 'auto',
+    this.protocolModeSmart = false,
+    CoreSettings? coreSettings,
   }) : selectedProtocol = selectedProtocol ?? ProtocolId.masque,
-       connectionMode = connectionMode ?? ConnectionMode.proxy;
+       connectionMode = connectionMode ?? ConnectionMode.proxy,
+       coreSettings = coreSettings ?? CoreSettings();
 
   /// v4.21 — the single-knob committed mode (a plain tile or a family
   /// member; the v4.20 chain split was reverted by the owner's decree).
@@ -1498,7 +1872,13 @@ class _FixedConfig implements EngineConfigSource {
   @override
   int get scanSpeed => 5;
 
-  /// v4.22 — the fine-grained core layer (the fakes run the defaults).
+  /// v4.32 — the SMART opt-in (the SMART walk tests flip it on with the
+  /// AUTO tile).
   @override
-  CoreSettings get coreSettings => CoreSettings();
+  final bool protocolModeSmart;
+
+  /// v4.22 — the fine-grained core layer (the fakes run the defaults;
+  /// walk tests may inject their own — e.g. the v4.31c per-family legs).
+  @override
+  final CoreSettings coreSettings;
 }

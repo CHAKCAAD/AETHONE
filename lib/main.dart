@@ -6,6 +6,7 @@ import 'app.dart';
 import 'connection/connection_store.dart';
 import 'connection/egress_locations.dart';
 import 'connection/settings_persistence.dart';
+import 'connection/smart_scorecard.dart';
 
 Future<void> main() async {
   // The ConnectionStore is constructed with the (first) app widget and its
@@ -21,6 +22,16 @@ Future<void> main() async {
   final persistence = SettingsPersistence();
   await persistence.restore(store);
   persistence.attach(store);
+
+  // v4.32 — the SMART scorecard (engine truth, its own prefs key — the
+  // EgressLocations pattern): merge the persisted standings INTO the live
+  // instance the adapter already holds, so the first SMART connect orders
+  // its candidates by everything the device has ever measured. Fire-safe:
+  // a missing/malformed cache keeps the fresh scorecard.
+  final cachedScorecard = await loadCachedScorecard();
+  if (cachedScorecard != null) {
+    store.smartScorecard.loadFrom(cachedScorecard.toJson());
+  }
 
   // v4.28 — REAL egress locations (owner round 5: «لوکیشن های واقعی، نه
   // فیک»): refresh the Tor exit-country set from the network's own

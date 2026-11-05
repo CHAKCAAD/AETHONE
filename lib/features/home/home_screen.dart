@@ -298,12 +298,25 @@ class HomeScreen extends StatelessWidget {
                       child: BottomPanel(
                         connected: connected,
                         style: style,
+                        // v4.32 — the SMART session's own display: while a
+                        // SMART walk resolved (connected), the panel names
+                        // the protocol that actually CARRIES the session
+                        // (not the generic AUTO tile); while the walk is
+                        // mid-chain, it names the in-flight candidate +
+                        // its attempt count — the explicit, observable
+                        // fallback chain (SMART_AUTO_SPEC §7.2).
                         selectedProtocolIcon: AppAssets.protocolIcon(
-                          store.effectiveProtocol,
+                          store.smartDisplayProtocol,
                         ),
-                        protocolLabel: strings.protocolName(
-                          store.effectiveProtocol,
-                        ),
+                        protocolLabel: store.smartAttempt != null && showScan
+                            ? strings.smartAttemptLabel(
+                                strings.protocolName(
+                                  store.smartAttempt!.candidate,
+                                ),
+                                store.smartAttempt!.attempt,
+                                store.smartAttempt!.total,
+                              )
+                            : strings.protocolName(store.smartDisplayProtocol),
                         downBytes: store.downBytes,
                         upBytes: store.upBytes,
                         showConnectButton: isLookOne,

@@ -377,12 +377,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.torLocation, 'at');
 
-      // Bridges: auto → off; the tor log level pills commit too.
-      await tester.tap(find.text('بدون پل'));
+      // Bridges: auto → off; the tor log level pills commit too. (v4.31c —
+      // the combined-mode base section moved onto this page, so the
+      // bridges card now sits further down: bring each pill into view
+      // before tapping it.)
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('pill-bridges-بدون پل')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pill-bridges-بدون پل')));
       await tester.pumpAndSettle();
       expect(store.coreSettings.torBridges, TorBridgePolicy.off);
 
-      await tester.tap(find.text('دیباگ'));
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('pill-tor-log-دیباگ')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pill-tor-log-دیباگ')));
       await tester.pumpAndSettle();
       expect(store.coreSettings.torLog, TorLogLevel.debug);
     });
@@ -729,25 +740,17 @@ void main() {
       expect(store.coreSettings.psiphonReadySecs, 181);
     });
 
-    testWidgets('connection page: the family-leg protocol + IP version '
-        'commit', (tester) async {
+    testWidgets('connection page: the IP version commits (the family-leg '
+        'section moved to the tor/psiphon pages — v4.31c)', (tester) async {
       await _useReferenceSurface(tester);
       final store = makeStore();
       await tester.pumpWidget(_booth(ConnectionSettingsPage(store: store)));
       await tester.pumpAndSettle();
 
-      // The default leg stays the v4.19 fixed WireGuard.
-      expect(
-        store.coreSettings.aetherLegProtocol,
-        AetherLegProtocol.wireguard,
-      );
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('pill-aether-leg-ماسک')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('pill-aether-leg-ماسک')));
-      await tester.pumpAndSettle();
-      expect(store.coreSettings.aetherLegProtocol, AetherLegProtocol.masque);
+      // v4.31c — the leg section is GONE from this page (owner round 8:
+      // «قسمت پایه حالت های ترکیبی باید توی زیرمجموعه تنطیمات تور و سایفون
+      // قرار بگیره»).
+      expect(find.byKey(const ValueKey('pill-aether-leg-ماسک')), findsNothing);
 
       await tester.ensureVisible(
         find.byKey(const ValueKey('pill-ip-version-IPv6')),
@@ -756,6 +759,56 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('pill-ip-version-IPv6')));
       await tester.pumpAndSettle();
       expect(store.coreSettings.ipVersion, IpVersion.v6);
+    });
+
+    // v4.31c — the per-family legs (owner round 8): each family page owns
+    // its own base pick, and the two are INDEPENDENT.
+    testWidgets('tor page: the family-leg pills commit torLegProtocol only',
+        (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(TorSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      expect(
+        store.coreSettings.torLegProtocol,
+        AetherLegProtocol.wireguard,
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('pill-tor-leg-ماسک')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pill-tor-leg-ماسک')));
+      await tester.pumpAndSettle();
+      expect(store.coreSettings.torLegProtocol, AetherLegProtocol.masque);
+      // The OTHER family's leg is untouched — per family, not shared.
+      expect(
+        store.coreSettings.psiphonLegProtocol,
+        AetherLegProtocol.wireguard,
+      );
+    });
+
+    testWidgets('psiphon page: the family-leg pills commit '
+        'psiphonLegProtocol only', (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(PsiphonSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('pill-psiphon-leg-ماسک')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pill-psiphon-leg-ماسک')));
+      await tester.pumpAndSettle();
+      expect(
+        store.coreSettings.psiphonLegProtocol,
+        AetherLegProtocol.masque,
+      );
+      expect(
+        store.coreSettings.torLegProtocol,
+        AetherLegProtocol.wireguard,
+      );
     });
 
     testWidgets('core page: the expert ECH pills commit', (tester) async {

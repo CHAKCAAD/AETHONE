@@ -606,6 +606,11 @@ class _Cfg implements EngineConfigSource {
   @override
   int get scanSpeed => 5;
 
+  /// v4.32 — SMART stays off in these walks (the plain single-protocol
+  /// paths this suite pins).
+  @override
+  bool get protocolModeSmart => false;
+
   /// v4.22 — the fine-grained core layer (the fake runs the defaults).
   @override
   CoreSettings get coreSettings => CoreSettings();

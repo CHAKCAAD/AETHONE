@@ -1,20 +1,46 @@
 # AETHONE — SMART AUTO: Official Specification Registration (v4.3)
 
-**Document status:** requirements registration only (employer directive, post-v4.2
+**Document status:** requirements registration (employer directive, post-v4.2
 review — boundary correction against the pinned Aether source).
-**Implementation status (unchanged):**
+**Implementation status (v4.32, 2026-11-05):**
 
 ```
-SMART AUTO — SPECIFICATION REQUIRED / NOT IMPLEMENTED / NOT TESTED
+SMART AUTO — IMPLEMENTED AT THE APP LAYER / UNIT-TESTED / NOT DEVICE-TESTED
 ```
 
-- **SPECIFICATION REQUIRED** — the algorithm must be designed in the NEXT phase on top
-  of the factors and guarantees fixed here; nothing in this document is final
-  algorithm design.
-- **NOT IMPLEMENTED** — no code exists for SMART AUTO in any component: not in the
-  AETHONE app, not in Aether core, Zeptun, or psiphon-tunnel-core. No implementation
-  is permitted in this phase.
-- **NOT TESTED** — no behavior to test; static analysis is impossible by definition.
+- **IMPLEMENTED AT THE APP LAYER** (v4.32) — exactly where §3 places it: the
+  pinned Aether core is untouched, and `lib/connection/smart_scorecard.dart` +
+  the candidate loop in `PlatformEngineAdapter._smartConnect` implement the
+  selection. Trigger: `protocolModeSmart == true` AND the committed tile is
+  `AUTO` (§7.6 — a manual tile is never rewritten; §6.7 — Tor/Psiphon family
+  modes are excluded from the auto-selectable set, so SMART is dormant there).
+- **UNIT-TESTED** — scorecard tiers/EWMA/roundtrip + the walk (fallback lands,
+  honest exhaustion, dormancy on manual tiles) in `test/m2_engine_test.dart`.
+- **NOT DEVICE-TESTED** — pending the owner's next device round.
+
+### What v4.32 implements, clause by clause
+
+| Spec clause | Implementation |
+|---|---|
+| §4.2 success/failure per profile | `SmartScorecard.record` per candidate attempt |
+| §4.3 SOCKS5 CONNECT latency | the walk's end-to-end probe ping (EWMA, α=0.2) |
+| §4.5 failure streaks downgrade | `consecutiveFailures` in the ranking tier sort |
+| §4.1/§5 usable-only candidates | the fixed plain-Aether set (masque…gool-classic); reverse-family compatibility cannot arise (SMART never runs under a family mode) |
+| §6.1/§6.7 Tor/Psiphon excluded | SMART is dormant unless the tile is `AUTO` |
+| §7.2 explicit, observable chain | `EngineSmartAttempt` before every candidate; the home panel shows «اسمارت: ماسک (۱ از ۵)» |
+| §7.3/§7.4 full stop before change | each attempt is a full walk (`_hardCleanup` first, its own tunnel session stamp, inter-attempt `_waitForPortFree`) |
+| §7.5 no hidden fallback | exhaustion ⇒ `failed(smartExhausted)` with the last candidate's reason |
+| §7.6 manual selection preserved | SMART only ever runs on the AUTO tile |
+| §7.7 Connected only after E2E | unchanged — the per-candidate walk's probe is the only path to Connected |
+
+### Deferred (v4.4 candidates, not yet specified)
+
+- §4.4 HTTP TTFB from the same session (the probe currently carries one
+  latency number; TTFB needs a second measurement through the live session).
+- §6.6 per-mode ranking separation (proxy vs tunnel) — the scorecard is
+  currently mode-blind; the spec requires separately-defined evaluation.
+- Candidate re-ranking on consecutive post-connect health failures (the
+  §4.5 streak only counts connect-time failures today).
 
 SMART AUTO (automatic selection of the best usable protocol for the current network
 conditions) is a **binding core requirement of AETHONE for Android**. It must not be
