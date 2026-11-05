@@ -458,3 +458,49 @@ Two independent fixes, both proven by the gate itself:
    granted it is a silent system-side adoption and returns null (no
    dialog); when consent is genuinely missing it returns the dialog
    intent and the service refuses to establish honestly.
+
+## Owner device-test round 6 — v4.30 «همگام‌سازی لوکیشن» (the sync round)
+
+Owner report: «لوکیشن رو آمریکا انتخاب میکنی … بعد از اتصال لوکیشن میره روی
+پرچم صربستان و به صربستان وصل میشه … در پروتکل‌های تور … بعد از اتصال
+لوکیشن رو آیکونی که برای انتخاب خودکار لوکیشن در نظر گرفتیم نشون میده …
+قسمت انتخاب لوکیشن در صفحه اصلی و قسمت انتخاب لوکیشن در تنظیمات تور و
+سایفون باهم همگام نیستن» — and the decree: the two pickers must be ONE,
+functionally AND visually (same flags, same corner rounding).
+
+Root cause 1 — THE DEAD TAP COMMIT. The wheel's tap path delegated the
+store write to the settle: `if (!_programmatic) _select(...)`. But the
+ScrollEndNotification is dispatched synchronously inside the scroll
+activity's end — while `_programmatic` is still true (the animateToPage
+continuation that clears it runs a microtask later) — so a TAP never
+committed. The wheel DISPLAYED the tapped flag while the store kept the
+previous pick: a psiphon tap on آمریکا pinned the settings-era pick
+(صربستان), and every later tap silently failed too («هرچقدر تغیر بدی
+لوکیشن رو تغیر نمیده»). Fix: the tap handler commits
+`_select(_codeAt(page))` directly — deterministic, ordering-free; the
+320 ms spin is pure visual.
+
+Root cause 2 — THE INDEX-0 FALLBACK. When the engine-reported exit was
+not in the wheel's offered set (a Tor exit relay in a country outside
+the snapshot when the live Onionoo refresh could not reach the network),
+`_indexOf` fell back to defaultCode ('ir'), itself absent from the
+family lists, clamped to index 0 — the AUTO globe. Fix: the connected
+DISPLAY UNION — the reported exit joins `_codes` (sorted in) so the
+roulette lands on the real flag; it never enters the store, and the new
+DISCONNECT EDGE re-derives `_codes` from the offered set, re-anchors on
+the remembered pick and re-centers unconditionally (what the wheel shows
+while disconnected is ALWAYS what the next connect pins).
+
+Root cause 3 — THE SETTINGS STRIPS. The psiphon strip offered the
+standing SEED (not the live AvailableEgressRegions set) and the tor
+strip offered the FULL flag manifest (countries Tor cannot exit from —
+'ir' included). Both now render the exact lists the home wheel offers:
+`[auto, ...livePsiphonRegions ?? seed]` and
+`[auto, ...liveTorExitCountries ?? snapshot]`, with the home wheel's
+flag look (the same 24 %-of-size ClipRRect and cover crop; the
+selection ring follows the flag's rounding).
+
+Regressions: home_screen_test (tap-commit, out-of-set exit shows its
+real flag not AUTO, disconnect-edge re-anchor) + settings_subpages_test
+(the strips mirror the LIVE sets — asserted on the widget's own codes,
+no lazy-build vacuity).

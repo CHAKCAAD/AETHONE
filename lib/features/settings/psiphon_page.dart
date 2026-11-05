@@ -47,9 +47,15 @@ class PsiphonSettingsPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               FlagPickStrip(
-                codes: const [
+                // v4.30 — the SAME list the home wheel offers (owner round
+                // 6: the two pickers are ONE — «نه تنها از لحاظ عملکرد
+                // بک‌اند بلکه از لحاظ ظاهری هم باید همگامسازی بشن»): the
+                // LIVE psiphon egress set once the core itself reported
+                // one, else the standing seed. A pick here and a pick on
+                // the home wheel write the SAME store field.
+                codes: [
                   LocationWheelPolicy.autoCode,
-                  ...psiphonEgressRegions,
+                  ...(store.livePsiphonRegions ?? psiphonEgressRegions),
                 ],
                 selected: store.psiphonLocation,
                 onSelect: store.setPsiphonLocation,

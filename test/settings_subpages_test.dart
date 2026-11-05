@@ -17,6 +17,7 @@ import 'package:aethone/connection/core_settings.dart';
 import 'package:aethone/connection/engine.dart';
 import 'package:aethone/connection/platform_engine_adapter.dart';
 import 'package:aethone/connection/settings_persistence.dart';
+import 'package:aethone/connection/transport_modes.dart';
 import 'package:aethone/core/app_assets.dart';
 import 'package:aethone/core/motion.dart';
 import 'package:aethone/features/settings/appearance_page.dart';
@@ -321,10 +322,35 @@ void main() {
         PsiphonFronting.cdn,
       );
     });
+
+    // v4.30 — owner round 6, the sync round: «از همون پرچم کشور ها که
+    // در صفحه اصلی استفاده کردیم باید در تنظیمات هم استفاده کنیم».
+    testWidgets('the strip mirrors the home wheel\'s LIVE egress set '
+        '(round 6 sync)', (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      // The network's own AvailableEgressRegions report — what the home
+      // wheel offers after it arrives.
+      store.applyPsiphonEgressRegions(const ['us', 'de']);
+      await tester.pumpWidget(_booth(PsiphonSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      // The widget's OWN codes — no lazy-build vacuity: the strip list IS
+      // the live set (auto first, sorted), the exact list the home wheel
+      // offers for a psiphon-exit mode.
+      final strip = tester.widget<FlagPickStrip>(find.byType(FlagPickStrip));
+      expect(strip.codes, const [
+        LocationWheelPolicy.autoCode,
+        'de',
+        'us',
+      ]);
+      // A seed-only region is honestly GONE until the network offers it.
+      expect(strip.codes, isNot(contains('at')));
+    });
   });
 
   group('tor page', () {
-    testWidgets('the full-manifest strip + bridges pills commit', (
+    testWidgets('the exit-country strip + bridges pills commit', (
       tester,
     ) async {
       await _useReferenceSurface(tester);
@@ -332,11 +358,9 @@ void main() {
       await tester.pumpWidget(_booth(TorSettingsPage(store: store)));
       await tester.pumpAndSettle();
 
-      // The manifest loads asynchronously — wait for the strip.
-      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('flag-pick-auto')), findsOneWidget);
       // The strip builds lazily — scroll 'at' into view (early in the
-      // sorted manifest), then tap it. RTL list: forward (later items)
+      // sorted snapshot), then tap it. RTL list: forward (later items)
       // is a RIGHTWARD finger drag.
       await tester.dragUntilVisible(
         find.byKey(const ValueKey('flag-pick-at')),
@@ -358,6 +382,40 @@ void main() {
       await tester.tap(find.text('دیباگ'));
       await tester.pumpAndSettle();
       expect(store.coreSettings.torLog, TorLogLevel.debug);
+    });
+
+    // v4.30 — owner round 6: the settings tor picker must offer the REAL
+    // Tor exit countries (the same live/snapshot list the home wheel
+    // offers), never the full flag manifest again.
+    testWidgets('the strip offers the REAL exit countries, never the full '
+        'manifest (round 6)', (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(TorSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      // The widget's OWN codes — no lazy-build vacuity: the strip list IS
+      // the snapshot (auto first), never the full flag manifest ('ir' has
+      // no Tor exit relay — the old strip offered it dishonestly).
+      var strip = tester.widget<FlagPickStrip>(find.byType(FlagPickStrip));
+      expect(
+        strip.codes,
+        const [LocationWheelPolicy.autoCode, ...torExitCountrySnapshot],
+      );
+      expect(strip.codes, isNot(contains('ir')));
+
+      // The live Onionoo swap mirrors into the strip — same source as the
+      // home wheel (round 6 sync).
+      store.applyTorExitCountries(const ['de', 'nl']);
+      await tester.pumpAndSettle();
+      strip = tester.widget<FlagPickStrip>(find.byType(FlagPickStrip));
+      expect(strip.codes, const [
+        LocationWheelPolicy.autoCode,
+        'de',
+        'nl',
+      ]);
+      // Snapshot-only countries are gone once the LIVE truth lands.
+      expect(strip.codes, isNot(contains('jp')));
     });
   });
 

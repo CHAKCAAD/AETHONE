@@ -648,6 +648,19 @@ class FlagPickStrip extends StatelessWidget {
             final isSel = code == selected;
             // v4.25 — the selection ring snaps in the ambient style.
             final recipe = MotionScope.of(context).recipe;
+            // v4.30 — the home wheel's EXACT flag look (owner round 6:
+            // «از همون پرچم کشور ها که در صفحه اصلی استفاده کردیم باید
+            // در تنظیمات هم استفاده کنیم با همون ظاهر و همون میزان گردی
+            // گوشه ها»): the same 24 %-of-size corner radius and the same
+            // cover crop as the wheel's _FlagItem; the selection ring
+            // FOLLOWS the flag's rounding (radius + the 3 px padding)
+            // instead of the old flat 12.
+            final size =
+                (isSel
+                    ? AethGeometry.flagSizeSelected
+                    : AethGeometry.flagSize) *
+                s;
+            final flagRadius = BorderRadius.circular(size * 0.24);
             return GestureDetector(
               key: ValueKey('flag-pick-$code'),
               behavior: HitTestBehavior.opaque,
@@ -658,7 +671,7 @@ class FlagPickStrip extends StatelessWidget {
                   curve: recipe.controlCurve,
                   padding: EdgeInsets.all(3 * s),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12 * s),
+                    borderRadius: BorderRadius.circular(size * 0.24 + 3 * s),
                     border: Border.all(
                       width: 2,
                       color: isSel
@@ -666,17 +679,14 @@ class FlagPickStrip extends StatelessWidget {
                           : Colors.transparent,
                     ),
                   ),
-                  child: Image.asset(
-                    AppAssets.flag(code),
-                    width: (isSel
-                            ? AethGeometry.flagSizeSelected
-                            : AethGeometry.flagSize) *
-                        s,
-                    height: (isSel
-                            ? AethGeometry.flagSizeSelected
-                            : AethGeometry.flagSize) *
-                        s,
-                    fit: BoxFit.contain,
+                  child: ClipRRect(
+                    borderRadius: flagRadius,
+                    child: Image.asset(
+                      AppAssets.flag(code),
+                      width: size,
+                      height: size,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
               ),

@@ -206,12 +206,44 @@ class _LocationHeaderState extends State<LocationHeader> {
       return;
     }
 
+    // v4.30 — DISCONNECT EDGE (owner round 6, the sync round): after a
+    // session the wheel used to stay parked on the engine's last exit —
+    // for a tor exit outside the offered set that flag is not even
+    // PICKABLE — while the store held the remembered pick. Re-anchor on
+    // the family's pick the moment the session ends: what the wheel shows
+    // while disconnected is ALWAYS what the next connect will pin.
+    if (old.connected && !widget.connected) {
+      _applyFilter(commit: false);
+      _selected = _codes.contains(widget.anchorCode)
+          ? widget.anchorCode
+          : _codes.first;
+      // The jump is UNCONDITIONAL: even when `_selected` is already the
+      // pick, the controller can still be parked on the session's last
+      // exit page (the display union's insert may have shifted page
+      // indices too). A same-page jump is a visual no-op.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final c = _pageController;
+        if (c != null && c.hasClients) {
+          _epoch++; // supersede any in-flight spin
+          _programmatic = true;
+          c.jumpToPage(_lapBase + _indexOf(_selected));
+          _programmatic = false;
+        }
+      });
+      return;
+    }
+
     // CONNECT EDGE → roulette: spin through the countries, land on the
     // engine-reported (or currently selected) location. Fires on EVERY path
     // into `connected` — preview adapter AND the real core. Scheduled
     // POST-FRAME: scroll commands are never issued mid-build (a rebuild
     // window can transiently hold two scroll positions).
     if (!old.connected && widget.connected) {
+      // v4.30 — the engine's exit may be a country this selector never
+      // OFFERED (see _ensureDisplayCode): union it in BEFORE the roulette
+      // targets it, so the spin lands on its real flag.
+      _ensureDisplayCode(widget.exitCountryCode);
       _rouletteTarget = widget.exitCountryCode ?? _selected;
       _rouletteQueued = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -231,6 +263,11 @@ class _LocationHeaderState extends State<LocationHeader> {
         widget.exitCountryCode != old.exitCountryCode) {
       final code = widget.exitCountryCode!;
       if (_rouletteRunning && _rouletteTarget == code) return;
+      // v4.30 — an out-of-set exit joins the display set (was: the spin
+      // fell into the _indexOf fallback → index 0 → the AUTO globe:
+      // owner round 6 «بعد از اتصال لوکیشن رو آیکونی که برای انتخاب
+      // خودکار لوکیشن در نظر گرفتیم نشون میده»).
+      _ensureDisplayCode(code);
       _select(code, notify: false);
       _rouletteTarget = code;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -310,6 +347,22 @@ class _LocationHeaderState extends State<LocationHeader> {
         });
       }
     }
+  }
+
+  /// v4.30 — the connected DISPLAY union: the engine-reported exit may
+  /// be a country the selector never OFFERED (a Tor exit relay in a
+  /// country outside the snapshot when the live Onionoo refresh failed,
+  /// a fresh Psiphon egress after the seed was baked). The engine truth
+  /// is never fake: while CONNECTED the reported exit JOINS the display
+  /// set (sorted in), so the roulette lands on its real flag instead of
+  /// the old `_indexOf` fallback — index 0, the AUTO globe. Display-only:
+  /// the union never enters the store, and the disconnect edge re-derives
+  /// `_codes` from the offered set and re-anchors on the remembered pick.
+  void _ensureDisplayCode(String? code) {
+    if (code == null || code.length != 2) return;
+    if (_codes.contains(code)) return;
+    final next = [..._codes, code]..sort();
+    setState(() => _codes = next);
   }
 
   static bool _sameCodeSet(List<String>? a, List<String>? b) {
@@ -586,9 +639,19 @@ class _LocationHeaderState extends State<LocationHeader> {
       onTapFlag: locked
           ? null
           : (page) {
-              // Epoch seam: a tap supersedes any in-flight roulette — the
-              // roulette's completion becomes a no-op and the tapped page's
-              // settle commits the selection to the store.
+              // v4.30 — THE TAP COMMIT (owner round 6: «هرچقدر تغیر بدی
+              // لوکیشن رو تغیر نمیده»). The old path delegated the commit
+              // to the settle — and that commit was DEAD CODE for taps: the
+              // ScrollEndNotification is dispatched synchronously inside
+              // the scroll activity's end, while `_programmatic` is still
+              // true (the animateToPage continuation that clears it runs a
+              // microtask LATER), so `if (!_programmatic) _select(...)`
+              // never fired. The wheel DISPLAYED the tapped flag while the
+              // store kept the previous pick — a psiphon tap on آمریکا
+              // left the pin at the settings pick (صربستان) and a tor tap
+              // never left 'auto'. Commit HERE, deterministic and
+              // ordering-free; the spin below is pure visual.
+              _select(_codeAt(page));
               unawaited(
                 _spinToPage(
                   page,

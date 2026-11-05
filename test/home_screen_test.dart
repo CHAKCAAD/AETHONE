@@ -505,4 +505,119 @@ void main() {
     // The centre flag is full colour — the greyscale filter is gone.
     expect(find.byType(ColorFiltered), findsNothing);
   });
+
+  // -------------------------------------------------------------------
+  // v4.30 — owner device-test round 6, the SYNC round:
+  // «قسمت انتخاب لوکیشن در صفحه اصلی و قسمت انتخاب لوکیشن در تنظیمات تور
+  // و سایفون باهم همگام نیستن … هرچقدر تغیر بدی لوکیشن رو تغیر نمیده».
+  // -------------------------------------------------------------------
+  group('v4.30 round 6 — the location sync regressions', () {
+    testWidgets('a TAP on a side flag COMMITS the pick (was: display-only '
+        '— آمریکا tap connected صربستان)', (tester) async {
+      await useReferenceSurface(tester);
+      final engine = ScriptedEngine();
+      final store = ConnectionStore(engine: engine);
+      store.selectedProtocol = ProtocolId.psiphonChain;
+      await tester.pumpWidget(_booth(HomeScreen(store: store)));
+      await tester.pumpAndSettle();
+
+      // The wheel anchors on AUTO; 'at' (اتریش) sits one pitch away —
+      // visible and tappable.
+      await tester.tap(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Image &&
+              (w.image as AssetImage).assetName ==
+                  'design/flags_png/at.png',
+        ),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+
+      // THE regression: the tap's settle-commit was dead code (the
+      // ScrollEndNotification fires while the tap's own spin still holds
+      // `_programmatic`), so the store kept the previous pick — the
+      // connect pinned the OLD region and the wheel followed the ENGINE's
+      // exit instead (owner: picked آمریکا, got صربستان).
+      expect(store.psiphonLocation, 'at');
+      expect(find.text('اتریش'), findsOneWidget);
+    });
+
+    testWidgets('a tor exit OUTSIDE the offered set shows its real flag '
+        '(was: the AUTO globe)', (tester) async {
+      await useReferenceSurface(tester);
+      final engine = ScriptedEngine();
+      final store = ConnectionStore(engine: engine);
+      store.selectedProtocol = ProtocolId.torOnly;
+      await tester.pumpWidget(_booth(HomeScreen(store: store)));
+      await tester.pumpAndSettle();
+
+      await store.connect();
+      engine.emit(const EngineStateChanged(VpnState.connecting));
+      await tester.pump(const Duration(milliseconds: 300));
+      engine.emit(const EngineStateChanged(VpnState.connected));
+      await tester.pump(const Duration(milliseconds: 200));
+      // A running exit relay in a country the offered set does NOT
+      // contain ('ru' is not in torExitCountrySnapshot) — the engine
+      // truth is never fake, the display must follow it.
+      engine.emit(
+        const EngineStatsUpdated(
+          pingMs: 120,
+          downBytes: 0,
+          upBytes: 0,
+          exitCountryCode: 'ru',
+        ),
+      );
+      for (var i = 0; i < 16; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+
+      // The header shows the REAL exit — NOT the AUTO globe (the old
+      // _indexOf fallback parked the wheel on index 0).
+      expect(find.text('روسیه'), findsOneWidget);
+      expect(find.text('خودکار'), findsNothing);
+      // The remembered pick is never touched by the display follow.
+      expect(store.torLocation, LocationWheelPolicy.autoCode);
+    });
+
+    testWidgets('after a session the wheel re-anchors on the remembered '
+        'pick (the disconnect edge)', (tester) async {
+      await useReferenceSurface(tester);
+      final engine = ScriptedEngine();
+      final store = ConnectionStore(engine: engine);
+      store.selectedProtocol = ProtocolId.psiphonChain;
+      store.setPsiphonLocation('de'); // the settings-path pick (آلمان)
+      await tester.pumpWidget(_booth(HomeScreen(store: store)));
+      await tester.pumpAndSettle();
+      expect(find.text('آلمان'), findsOneWidget);
+
+      // A session whose REAL exit was somewhere else entirely.
+      await store.connect();
+      engine.emit(const EngineStateChanged(VpnState.connecting));
+      await tester.pump(const Duration(milliseconds: 300));
+      engine.emit(const EngineStateChanged(VpnState.connected));
+      engine.emit(
+        const EngineStatsUpdated(
+          pingMs: 90,
+          downBytes: 0,
+          upBytes: 0,
+          exitCountryCode: 'nl',
+        ),
+      );
+      for (var i = 0; i < 16; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      expect(find.text('هلند'), findsOneWidget); // followed the exit
+
+      // Disconnect: the walk goes disconnecting → disconnected (the real
+      // adapter order — connected → disconnected is an illegal jump in the
+      // state machine). The wheel returns to the PICK, so what it shows
+      // while disconnected is what the next connect will pin.
+      await store.disconnect();
+      engine.emit(const EngineStateChanged(VpnState.disconnected));
+      await tester.pumpAndSettle();
+      expect(find.text('آلمان'), findsOneWidget);
+      expect(store.psiphonLocation, 'de');
+    });
+  });
 }

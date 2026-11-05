@@ -1,11 +1,12 @@
-/// «تور» — the Tor sub-page (v4.22): the exit-location pick (the FULL flag
-/// manifest like the home wheel's tor band, AUTO first; the honest caption
-/// says the Tor core picks the exit from the available relays) and the
-/// bridges panel (--no-tor-bridges + the env-only tor log level).
+/// «تور» — the Tor sub-page (v4.22): the exit-location pick (v4.30: the
+/// REAL Tor exit-country list — the live Onionoo set / the bundled
+/// snapshot — exactly the list the home wheel's tor band offers, AUTO
+/// first; the honest caption says the Tor core picks the exit from the
+/// available relays) and the bridges panel (--no-tor-bridges + the
+/// env-only tor log level).
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../connection/connection_store.dart';
 import '../../../connection/core_settings.dart';
@@ -20,25 +21,6 @@ class TorSettingsPage extends StatelessWidget {
   const TorSettingsPage({super.key, required this.store});
 
   final ConnectionStore store;
-
-  /// The full flag manifest (the home wheel's tor band runs on the same
-  /// list): every committed flags_png artwork, 'auto' excluded — the
-  /// strip prepends it itself.
-  static Future<List<String>> _loadManifest() async {
-    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-    const prefix = 'design/flags_png/';
-    return manifest
-        .listAssets()
-        .where(
-          (p) =>
-              p.startsWith(prefix) &&
-              p.endsWith('.png') &&
-              p != '${prefix}auto.png',
-        )
-        .map((p) => p.substring(prefix.length, p.length - 4))
-        .toList()
-      ..sort();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,24 +47,20 @@ class TorSettingsPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              FutureBuilder<List<String>>(
-                future: _loadManifest(),
-                builder: (context, snap) {
-                  if (!snap.hasData) {
-                    return const SizedBox(
-                      height: 72,
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  return FlagPickStrip(
-                    codes: [
-                      LocationWheelPolicy.autoCode,
-                      ...snap.data!,
-                    ],
-                    selected: store.torLocation,
-                    onSelect: store.setTorLocation,
-                  );
-                },
+              // v4.30 — the SAME list the home wheel's tor band offers
+              // (owner round 6: «قسمت انتخاب لوکیشن در صفحه اصلی و قسمت
+              // انتخاب لوکیشن در تنظیمات تور و سایفون باهم همگام باشن»):
+              // the REAL Tor exit countries — the live Onionoo set once a
+              // refresh/cache-load has arrived, else the bundled snapshot —
+              // never the full flag manifest again (the old strip offered
+              // countries Tor cannot exit from).
+              FlagPickStrip(
+                codes: [
+                  LocationWheelPolicy.autoCode,
+                  ...(store.liveTorExitCountries ?? torExitCountrySnapshot),
+                ],
+                selected: store.torLocation,
+                onSelect: store.setTorLocation,
               ),
               const SubSectionDivider(),
               SettingInfoText(strings.torLocationDesc),
