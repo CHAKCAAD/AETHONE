@@ -1000,6 +1000,11 @@ void main() {
         expect(core.startedArgs.single, containsAllInOrder([
           '--psiphon-bin', '/data/test/lib/libpsiphon.so',
         ]));
+
+        // v4.34 — teardown: end CONNECTED no more (the leaked ticker kept
+        // probing 1821 past this test's lifetime).
+        await adapter.disconnect();
+        await pumpEventQueue();
       } finally {
         await slow.dispose();
       }
@@ -1061,6 +1066,14 @@ void main() {
 
       expect(order, ['vpn', 'core']); // FGS first, core second
       expect(statesOf(events), [VpnState.connecting, VpnState.connected]);
+
+      // v4.34 — teardown: this test used to end CONNECTED, leaving its
+      // health ticker probing port 1819 for the rest of the FILE run —
+      // the SMART TOUR test's fake server on 1819 then served the phantom
+      // traces and its deterministic delay schedule shifted (the tour
+      // picked goolClassic instead of wireguard under file-wide load).
+      await adapter.disconnect();
+      await pumpEventQueue();
     });
 
     test('v4.20 readyBudget mirrors the core\'s own timeouts per mode', () {
@@ -1198,6 +1211,11 @@ void main() {
         );
         // cancel(1) + the reconnect's startup hygiene(1) — nothing after.
         expect(stopVpnCalls, 2);
+
+        // v4.34 — teardown: the second session used to stay CONNECTED
+        // (its ticker probing 1820 past this test's lifetime).
+        await adapter.disconnect();
+        await pumpEventQueue();
       } finally {
         await listener.dispose();
       }
@@ -1345,12 +1363,26 @@ void main() {
       expect(back.encode(), card.encode());
     });
 
-    test('the SMART walk: first candidate fails fast, second connects, the '
-        'resolution is reported + recorded', () async {
+    test('the SMART TOUR (v4.34): short windows skip the dead candidate, '
+        'every connector is quality-measured, the best one wins the final '
+        'session', () async {
       mockChannel();
-      // The shared listener on 1819: the FIRST probe CONNECT is refused
-      // (candidate 1's data path is dead), then it serves normally.
-      final listener = await _FakeSocks5Server(refuseFirstN: 1).startOn(1819);
+      // Connect #0 is refused (candidate 1's data path is dead) and every
+      // NON-wireguard connect answers 250 ms slower — the tour's
+      // measurement phase then picks wireguard deterministically instead
+      // of a wall-clock coin flip (a 30 ms margin flaked under CI load).
+      final listener = await _FakeSocks5Server(
+        refuseFirstN: 1,
+        connectDelaysMs: const [
+          0, // #0 masque-H2 probe — REFUSED
+          250, 250, 250, // #1-3 masque-H3 (probe + 2 quality)
+          0, 0, 0, // #4-6 wireguard
+          250, 250, 250, // #7-9 gool
+          250, 250, 250, // #10-12 mim
+          250, 250, 250, // #13-15 gool-classic
+          0, // #16 the winner's own reconnect probe
+        ],
+      ).startOn(1819);
       try {
         final core = _FlakySmartCore(failFirstN: 1);
         final scorecard = SmartScorecard();
@@ -1371,31 +1403,62 @@ void main() {
         await adapter.connect();
         await pumpEventQueue();
 
-        // Connected, via the SECOND candidate (sheet order: masque first,
-        // wireguard second).
+        // Connected — ONCE, at the end of the tour (the measurement
+        // attempts never flash a Connected).
         expect(statesOf(events).last, VpnState.connected);
+        expect(
+          statesOf(events).where((s) => s == VpnState.connected).length,
+          1,
+          reason: 'only the winner emits Connected',
+        );
+
+        // The plan: masque ×2 (the app-default H2 first, then H3) + the
+        // other four candidates — six tour entries.
         final attempts = events.whereType<EngineSmartAttempt>().toList();
-        expect(attempts.length, 2, reason: 'masque failed, wireguard landed');
-        expect(attempts.first.candidate, ProtocolId.masque);
-        expect(attempts.first.attempt, 1);
-        expect(attempts[1].candidate, ProtocolId.wireguard);
+        final entries = attempts.where((e) => !e.measuring).toList();
+        final measuring = attempts.where((e) => e.measuring).toList();
+        expect(entries.length, 6, reason: 'the six-entry tour');
+        expect(entries.first.candidate, ProtocolId.masque);
+        expect(entries.first.attempt, 1);
+        expect(entries.first.total, 6);
+        // masque-H2 died with its core — no measurement for IT; every
+        // later connector (masque-H3 included) was measured.
+        expect(measuring.length, 5);
+        expect(measuring.first.candidate, ProtocolId.masque);
+
+        // THE PICK — wireguard (its measurement probes answered 0 ms;
+        // everyone else's 250 ms).
         final resolved = events.whereType<EngineSmartResolved>().single;
         expect(resolved.protocol, ProtocolId.wireguard);
 
-        // The failing walk's args were the masque pair; the landing walk's
-        // the wireguard pair — each candidate really ran its own protocol.
+        // Every candidate really ran its own protocol: masque H2 first
+        // (the app default carries --h2), masque H3 second (no --h2),
+        // wireguard third, and the winner's reconnect is the 7th start.
         expect(
           core.startedArgs.first,
           containsAllInOrder(['--protocol', 'masque']),
         );
+        expect(core.startedArgs.first, contains('--h2'));
         expect(
-          core.startedArgs.last,
+          core.startedArgs[1],
+          containsAllInOrder(['--protocol', 'masque']),
+        );
+        expect(core.startedArgs[1].contains('--h2'), isFalse);
+        expect(
+          core.startedArgs[2],
           containsAllInOrder(['--protocol', 'wg']),
         );
+        expect(core.startedArgs.last, containsAllInOrder(['--protocol', 'wg']),
+            reason: 'the winner reconnects as the real session');
 
-        // The scorecard recorded both outcomes.
-        expect(scorecard.scoreOf(ProtocolId.masque).consecutiveFailures, 1);
+        // The scorecard recorded both masque stories (an H2 failure + an
+        // H3 success) and every connector's success.
+        final m = scorecard.scoreOf(ProtocolId.masque);
+        expect(m.attempts, 2);
+        expect(m.successes, 1);
+        expect(m.consecutiveFailures, 0);
         expect(scorecard.scoreOf(ProtocolId.wireguard).successes, 1);
+        expect(scorecard.scoreOf(ProtocolId.gool).successes, 1);
 
         await adapter.disconnect();
         await pumpEventQueue();
@@ -1404,7 +1467,7 @@ void main() {
       }
     }, timeout: const Timeout(Duration(minutes: 2)));
 
-    test('the SMART walk: exhaustion fails honestly with the last reason',
+    test('the SMART TOUR: exhaustion fails honestly with the last reason',
         () async {
       mockChannel();
       // Every CONNECT refused + every core start instantly 'done' — no
@@ -1428,17 +1491,21 @@ void main() {
         await adapter.connect();
         await pumpEventQueue();
 
-        // ALL five candidates attempted (spec §7.2), then the honest
-        // exhaustion failure — no hidden fallback, no fake connected.
+        // ALL six tour entries attempted (masque ×2 + the other four —
+        // spec §7.2), then the honest exhaustion failure — no hidden
+        // fallback, no fake connected.
+        final attempts = events.whereType<EngineSmartAttempt>().toList();
         expect(
-          events.whereType<EngineSmartAttempt>().length,
-          smartCandidates.length,
+          attempts.where((e) => !e.measuring).length,
+          6,
         );
+        expect(attempts.where((e) => e.measuring), isEmpty,
+            reason: 'nothing ever connected');
         expect(statesOf(events).last, VpnState.failed);
         final fail = events.whereType<EngineStateChanged>().last;
         expect(fail.errorCode, 'smartExhausted');
         expect(fail.message, contains('coreExited'));
-        expect(core.startedArgs.length, smartCandidates.length);
+        expect(core.startedArgs.length, 6);
       } finally {
         await listener.dispose();
       }
@@ -1701,6 +1768,7 @@ class _FakeSocks5Server {
     this.refuseConnect = false,
     this.refuseFirstN = 0,
     this.hangFirstConnect = false,
+    this.connectDelaysMs = const [],
   });
 
   final bool refuseConnect;
@@ -1714,6 +1782,13 @@ class _FakeSocks5Server {
   /// resumed session whose data path is slow (the resume-window test
   /// disconnects while the resume probe is still in flight).
   final bool hangFirstConnect;
+
+  /// v4.34 — per-CONNECT response delay (ms, indexed by connect number,
+  /// 0 beyond the list): the SMART TOUR test makes wireguard's
+  /// measurement probes measurably the fastest, so the tour's pick is
+  /// deterministic instead of a wall-clock coin flip.
+  final List<int> connectDelaysMs;
+
   int _connectsSeen = 0;
   ServerSocket? _server;
   int get port => _server!.port;
@@ -1778,6 +1853,14 @@ class _FakeSocks5Server {
         http.add(reader.current);
         final text = ascii.decode(http.toBytes(), allowInvalid: true);
         if (text.contains('\r\n\r\n') || text.length > 4096) break;
+      }
+      // v4.34 — the per-connect delay lands INSIDE the probe's ping
+      // window (request written → first response byte).
+      final delay = connectDelaysMs.length > connectIndex
+          ? connectDelaysMs[connectIndex]
+          : 0;
+      if (delay > 0) {
+        await Future<void>.delayed(Duration(milliseconds: delay));
       }
       socket.add(
         ascii.encode(

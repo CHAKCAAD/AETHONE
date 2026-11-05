@@ -143,6 +143,7 @@ class HomeScreen extends StatelessWidget {
                     SizedBox(height: AethGeometry.topSafeExtraGap * s),
                     HomeTopBar(
                       onSettings: () => _openSettings(context),
+                      store: store,
                     ),
                     SizedBox(height: AethGeometry.gapTopbarToLocation * s),
                     LocationHeader(
@@ -313,13 +314,19 @@ class HomeScreen extends StatelessWidget {
                           store.smartDisplayProtocol,
                         ),
                         protocolLabel: store.smartAttempt != null && showScan
-                            ? strings.smartAttemptLabel(
-                                strings.protocolName(
-                                  store.smartAttempt!.candidate,
-                                ),
-                                store.smartAttempt!.attempt,
-                                store.smartAttempt!.total,
-                              )
+                            ? (store.smartAttempt!.measuring
+                                  ? strings.smartMeasuringLabel(
+                                      strings.protocolName(
+                                        store.smartAttempt!.candidate,
+                                      ),
+                                    )
+                                  : strings.smartAttemptLabel(
+                                      strings.protocolName(
+                                        store.smartAttempt!.candidate,
+                                      ),
+                                      store.smartAttempt!.attempt,
+                                      store.smartAttempt!.total,
+                                    ))
                             : strings.protocolName(store.smartDisplayProtocol),
                         downBytes: store.downBytes,
                         upBytes: store.upBytes,
@@ -379,7 +386,7 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 24),
             Text(
               strings.failureDetailsTitle,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'IRANYekanX',
                 fontWeight: FontWeight.w600,
                 fontSize: 16,
@@ -401,7 +408,7 @@ class HomeScreen extends StatelessWidget {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'IRANYekanX',
                   fontWeight: FontWeight.w400,
                   fontSize: 12,

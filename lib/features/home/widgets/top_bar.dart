@@ -1,6 +1,6 @@
 /// Home top bar: settings icon tile (START side — visual right in RTL), the
 /// AETHONE wordmark centered with the real brand mark (آیکون اپ/2.svg)
-/// BEHIND it, info icon tile (END side — visual left in RTL).
+/// BEHIND it, theme-toggle tile (END side — visual left in RTL).
 ///
 /// v4.11 (owner defect reports #7 + #14):
 ///   * #7 — both top icons sit on the owner Figma «Rectangle 9» tile:
@@ -9,32 +9,28 @@
 ///     with its own gradients (the previous flat bright-green painter is
 ///     gone; the owner rejected the flat green color).
 ///
-/// Behavior: settings icon → Settings; info icon → Telegram channel
-/// t.me/AETHONE.
+/// v4.34 — the info tile is now the NIGHT ⇄ LIGHT switch (owner round 10:
+/// «آیکون علامت تعجب بالای همه صفحه هارو … تغیر حالت بین دارک مود و لایت
+/// مود رو به این بخش میدیم»); the Telegram channel link lives on in the
+/// settings pages' rows.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../../../connection/connection_store.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
+import '../../shared/theme_toggle_tile.dart';
 
 class HomeTopBar extends StatelessWidget {
-  const HomeTopBar({super.key, required this.onSettings});
+  const HomeTopBar({super.key, required this.onSettings, required this.store});
 
   final VoidCallback onSettings;
 
-  static const String telegramChannelUrl = 'https://t.me/AETHONE';
-
-  Future<void> _openTelegram() async {
-    final uri = Uri.parse(telegramChannelUrl);
-    // External browser/app — never an in-app webview.
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      // Opening failed (no handler). Honest no-op; diagnostics page (later
-      // step) will surface such errors.
-    }
-  }
+  /// v4.34 — the theme toggle reads/writes the store's [ConnectionStore.
+  /// themeMode].
+  final ConnectionStore store;
 
   @override
   Widget build(BuildContext context) {
@@ -56,12 +52,11 @@ class HomeTopBar extends StatelessWidget {
             const Spacer(),
             const _Wordmark(),
             const Spacer(),
-            _IconTile(
-              asset: AppAssets.iconInformationCircle,
+            ThemeToggleTile(
+              store: store,
               size: tile,
               iconSize: AethGeometry.topTileIcon * s,
-              semanticLabel: 'Telegram channel',
-              onTap: _openTelegram,
+              tileKey: const ValueKey('home-theme-toggle'),
             ),
           ],
         ),
@@ -115,7 +110,7 @@ class _IconTile extends StatelessWidget {
               asset,
               width: iconSize,
               height: iconSize,
-              colorFilter: const ColorFilter.mode(
+              colorFilter: ColorFilter.mode(
                 AethColors.textPrimary,
                 BlendMode.srcIn,
               ),

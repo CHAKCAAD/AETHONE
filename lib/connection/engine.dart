@@ -106,11 +106,18 @@ class EngineExitCountryResolved extends EngineEvent {
 /// per-candidate walk so the status card can show the explicit, observable
 /// fallback chain (spec §7.2). Only ever sent while the committed tile is
 /// AUTO and the user opted into SMART.
+///
+/// v4.34 — the tour got a MEASUREMENT phase (owner round 10: a candidate
+/// that connects is quality-probed, not settled on): [measuring] is true
+/// while the live candidate's ping samples are being taken — the status
+/// card says «سنجش کیفیت …» instead of «در حال اتصال …».
 class EngineSmartAttempt extends EngineEvent {
-  const EngineSmartAttempt(this.candidate, this.attempt, this.total);
+  const EngineSmartAttempt(this.candidate, this.attempt, this.total,
+      {this.measuring = false});
   final ProtocolId candidate;
   final int attempt;
   final int total;
+  final bool measuring;
 }
 
 /// v4.32 — SMART AUTO resolved: a candidate's walk REACHED Connected —

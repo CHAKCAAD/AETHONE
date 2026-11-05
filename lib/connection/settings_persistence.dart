@@ -27,6 +27,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/app_assets.dart';
+import '../core/app_theme.dart';
 import '../core/motion.dart';
 import 'connection_state.dart';
 import 'connection_store.dart';
@@ -67,6 +68,9 @@ abstract final class SettingsKeys {
 
   /// v4.25 — the master animation kill-switch (default ON).
   static const animationsEnabled = 'aethone.settings.animationsEnabled';
+
+  /// v4.34 — the app theme ('night' | 'light'; default night).
+  static const themeMode = 'aethone.settings.themeMode';
 
   /// v4.23 — the first-run wizard («صفحه شروع») completed flag; missing
   /// means the onboarding still owes the user a run.
@@ -199,6 +203,13 @@ class SettingsPersistence {
       if (prefs.containsKey(SettingsKeys.animationsEnabled)) {
         store.animationsEnabled = prefs.getBool(SettingsKeys.animationsEnabled)!;
       }
+      // v4.34 — the app theme (light mode, owner round 10).
+      final themeName = prefs.getString(SettingsKeys.themeMode);
+      if (themeName == AethThemeMode.night.name) {
+        store.themeMode = AethThemeMode.night;
+      } else if (themeName == AethThemeMode.light.name) {
+        store.themeMode = AethThemeMode.light;
+      }
       // v4.23 — the onboarding flag.
       store.onboardingComplete =
           prefs.getBool(SettingsKeys.onboardingComplete) ?? false;
@@ -326,6 +337,11 @@ class SettingsPersistence {
       await prefs.setBool(
         SettingsKeys.animationsEnabled,
         store.animationsEnabled,
+      );
+      // v4.34 — the app theme rides every snapshot.
+      await prefs.setString(
+        SettingsKeys.themeMode,
+        store.themeMode.name,
       );
       // v4.23 — the wizard flag rides every snapshot so a completed run
       // survives restarts (and mid-flow kills resume rather than restart

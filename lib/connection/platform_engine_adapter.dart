@@ -51,6 +51,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform, SocketException;
 
 import 'package:flutter/foundation.dart';
@@ -185,9 +186,14 @@ class AetherArguments {
     }
 
     // --- v4.22 — the fine-grained core layer (the settings sub-pages).
-    // Folded ONLY when a value differs from the core's built-in default,
-    // so a default-constructed CoreSettings never adds noise to the list.
-    args.addAll(coreArgs(core ?? CoreSettings(), protocol, overlay));
+    // Folded ONLY when a layer was handed in: a null core means the CORE's
+    // OWN defaults, arg-silent (v4.34 — the `?? CoreSettings()` fallback is
+    // gone: a fresh CoreSettings now deliberately carries the APP defaults
+    // — `--h2` + `--noize balanced`, owner round 10 — which must never leak
+    // into a null-core build; the adapter always passes the store's layer).
+    if (core != null) {
+      args.addAll(coreArgs(core, protocol, overlay));
+    }
     return args;
   }
 
@@ -508,6 +514,52 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// NEXT connect lost the bind race).
   static const Duration _cancelGrace = Duration(seconds: 5);
 
+  // ---- v4.34 — the SMART TOUR budgets (owner round 10:
+  // «برای یک پروتکل تلاش کنه اگه در مدت کوتاهی وصل نشد بره سراغ بعدی،
+  // … کیفیت اتصال اونی که وصل میشه رو بسنجه و در نهایت بهترین پروتکل رو
+  // انتخاب کنه») --------------------------------------------------------
+  //
+  // The design follows the Happy-Eyeballs v2 shape (RFC 8305 §5: a SHORT
+  // per-candidate attempt window instead of one long blocking try, then
+  // move on — its "Connection Attempt Delay" idea, scaled from 250 ms
+  // socket connects to full VPN sessions) plus the standard auto-protocol
+  // practice of ranking by measured latency and keeping the winner
+  // remembered (our scorecard).
+
+  /// One candidate's whole connect window (listener wait + end-to-end
+  /// probe). The old walk let a failing plain candidate sit on
+  /// «در حال اتصال» for up to ~4 minutes (120 s listener + 120 s probe
+  /// budget); 25 s is enough for a healthy plain Aether leg (WARP
+  /// registration + scan ≈ 5–15 s) and short enough to tour all five
+  /// candidates inside a couple of minutes (owner: «اگه در مدت کوتاهی
+  /// وصل نشد بره سراغ بعدی»).
+  static const Duration _smartAttemptWindow = Duration(seconds: 25);
+
+  /// How many EXTRA probes the measurement phase fires at a connected
+  /// candidate (the connecting probe itself is sample #1).
+  static const int _smartQualityExtraProbes = 2;
+
+  /// Per-probe timeout + the whole measurement phase's budget (a slow
+  /// candidate must not stall the tour; its connecting ping already
+  /// counts).
+  static const Duration _smartQualityProbeTimeout = Duration(seconds: 8);
+  static const Duration _smartQualityBudget = Duration(seconds: 12);
+
+  /// v4.34 — a trace failure over a LIVE listener is DEGRADED, not dead
+  /// (tor circuits legitimately exceed the 20 s trace budget while real
+  /// traffic flows — owner round 10: «روی حالت تور اپ میره روی اتصال مجدد
+  /// ولی اتصال برقراره و دیتا داره جا به جا میشه»). This many
+  /// CONTINUOUS degraded ticks (~5 s each) still declare the session
+  /// unhealthy — a tunnel that cannot complete a single trace for a
+  /// minute is genuinely unusable, whatever the listener says.
+  static const int _degradedTicksBudget = 12;
+
+  /// v4.34 — how many times the Tor exit-country resolution may retry
+  /// from the stats tick (the walk-time fetch races the circuit build;
+  /// owner round 10: Tor showed «انتخاب خودکار» while the exit was
+  /// actually the Netherlands).
+  static const int _exitResolveMaxTries = 4;
+
   /// The end-to-end ready budget per effective mode, mirroring the core's
   /// own timeouts (psiphon.rs READY_TIMEOUT 180 s; tor.rs DIRECT_PROBE 75 s
   /// + BRIDGE_PROBE 360 s; plain WARP = registration + scan ≈ listener
@@ -581,6 +633,14 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// v4.26 — re-entrancy guard for the 5 s stats ticker (a 20 s probe used
   /// to stack up to four concurrent probes on one core).
   bool _ticking = false;
+
+  /// v4.34 — CONTINUOUS degraded-health ticks (trace failing while the
+  /// SOCKS listener still answers). See [_degradedTicksBudget].
+  int _degradedTicks = 0;
+
+  /// v4.34 — Tor exit-country resolution attempts this session (the
+  /// tick-driven retries; see [_exitResolveMaxTries]).
+  int _exitResolveTries = 0;
 
   /// The generation the current ticker belongs to (dropped with its walk).
   int? _tickerGeneration;
@@ -658,47 +718,100 @@ class PlatformEngineAdapter implements EngineAdapter {
     }
   }
 
-  /// v4.32 — the SMART walk: run the plain-Aether candidates in
-  /// scorecard order until one CONNECTS (spec §4 factors / §7
-  /// guarantees). Each attempt is a FULL walk — its own hard cleanup
-  /// first (§7.4: full stop of the previous session before any protocol
-  /// change), its own tunnel session stamp, its own probe; the chain is
-  /// explicit and observable (§7.2: an [EngineSmartAttempt] precedes
-  /// every candidate). Exhaustion fails honestly with the last reason
-  /// (§7.5: never a hidden fallback — direct or otherwise).
+  /// v4.32 — the SMART walk (REWORKED v4.34 into a full TOUR, owner round
+  /// 10: «اگه متصل نشه همینجوری روی حالت در حال اتصال برای مدت خیلی زیادی
+  /// میمونه … برای یک پروتکل تلاش کنه اگه در مدت کوتاهی وصل نشد بره سراغ
+  /// بعدی … کیفیت اتصال اونی که وصل میشه رو بسنجه … در نهایت بهترین
+  /// پروتکل رو انتخاب کنه»):
+  ///
+  ///  1. THE PLAN — the scorecard-ordered candidates, with MASQUE
+  ///     expanded into TWO profile variants (HTTP/2 and HTTP/3 — owner:
+  ///     «با ماسک میتونه هم با حالت HTTP3 و هم HTTP2 اتصال رو تست کنه»);
+  ///     the user's own transport order goes first. Other fragment/TLS
+  ///     profile fan-outs are deliberately NOT toured — every variant
+  ///     costs a full connect cycle, and a 5×N matrix would hold the user
+  ///     on «در حال اتصال» for many minutes.
+  ///  2. THE TOUR — each entry gets ONE short window
+  ///     ([_smartAttemptWindow]): a candidate that cannot connect inside
+  ///     it is SKIPPED (Happy-Eyeballs-shaped, RFC 8305 §5). A candidate
+  ///     that connects is NOT settled on: the walk measures its quality
+  ///     (up to 3 fresh probes, best ping wins), records it, tears the
+  ///     measurement session down and moves on.
+  ///  3. THE PICK — the connector with the BEST measured ping wins (ties
+  ///     keep the tour order, which is the scorecard's own ranking); the
+  ///     winner is reconnected with the FULL budgets as the real session
+  ///     (it just connected moments ago — and if that reconnect dies, the
+  ///     next-best connector takes its place).
+  ///  4. Exhaustion fails honestly with the last reason (§7.5: never a
+  ///     hidden fallback).
+  ///
+  /// Each attempt is a FULL walk — its own hard cleanup first (§7.4), its
+  /// own tunnel session stamp, its own probe; the chain stays explicit
+  /// and observable (§7.2: an [EngineSmartAttempt] precedes every
+  /// candidate, and one more with `measuring: true` marks the quality
+  /// phase).
   Future<void> _smartConnect(int gen, EngineConfigSource config) async {
-    final candidates = _scorecard.rank();
+    final plan = _smartPlan(config);
     var lastCode = 'smartExhausted';
     var lastMsg = 'no candidate was ever attempted';
-    var lastPingMs = 0;
-    for (var i = 0; i < candidates.length; i++) {
+    final connectors = <_SmartConnector>[];
+
+    for (var i = 0; i < plan.length; i++) {
       if (_stale(gen)) return; // cancelled / superseded — silent
-      final candidate = candidates[i];
+      final entry = plan[i];
       _controller.add(
-        EngineSmartAttempt(candidate, i + 1, candidates.length),
+        EngineSmartAttempt(entry.candidate, i + 1, plan.length),
       );
+      var connectPingMs = 0;
       var failed = false;
       final ok = await _connectInner(
         gen,
-        legOverride: candidate,
+        legOverride: entry.candidate,
+        coreOverride: entry.settings,
+        attemptWindow: _smartAttemptWindow,
+        smartMeasure: true,
         onCandidateFail: (code, msg) {
           lastCode = code;
           lastMsg = msg;
           failed = true;
         },
-        onProbePing: (ping) => lastPingMs = ping,
+        onProbePing: (ping) => connectPingMs = ping,
       );
       if (_stale(gen)) return; // cancelled mid-attempt — silent
-      _scorecard.record(
-        candidate,
-        ok,
-        ok && lastPingMs > 0 ? lastPingMs : null,
-      );
-      unawaited(saveScorecard(_scorecard));
+
       if (ok) {
-        _controller.add(EngineSmartResolved(candidate));
-        return;
+        // Connected inside the window — MEASURE, don't settle (the store
+        // stays in `connecting` the whole tour: no fake Connected flash).
+        _controller.add(
+          EngineSmartAttempt(entry.candidate, i + 1, plan.length,
+              measuring: true),
+        );
+        final qualityMs = await _measureSmartQuality(gen, connectPingMs);
+        if (_stale(gen)) return;
+        _scorecard.record(
+          entry.candidate,
+          true,
+          qualityMs > 0 ? qualityMs : null,
+        );
+        unawaited(saveScorecard(_scorecard));
+        connectors.add(
+          _SmartConnector(
+            candidate: entry.candidate,
+            settings: entry.settings,
+            qualityMs: qualityMs > 0 ? qualityMs : connectPingMs,
+            tourIndex: i,
+          ),
+        );
+        // Tear the measurement session down so the next candidate (and
+        // the final winner) starts from a clean port.
+        await _hardCleanup();
+        await _waitForPortFree(gen, _activePort);
+        if (_stale(gen)) return;
+        continue;
       }
+
+      _scorecard.record(entry.candidate, false, null);
+      unawaited(saveScorecard(_scorecard));
       if (!failed) {
         // The walk returned without failing or connecting — a stale-path
         // return that already stayed silent; the loop stays silent too.
@@ -716,16 +829,129 @@ class PlatformEngineAdapter implements EngineAdapter {
       if (_stale(gen)) return;
       // The honest next candidate.
     }
+
+    if (connectors.isEmpty) {
+      _emitFail(
+        'smartExhausted',
+        'SMART tried ${plan.length} candidates; the last failure was '
+        '$lastCode — $lastMsg',
+      );
+      return;
+    }
+
+    // THE PICK — best measured quality first (ties keep the tour order,
+    // which is the scorecard's own ranking).
+    connectors.sort(
+      (a, b) {
+        final byQuality = a.qualityMs.compareTo(b.qualityMs);
+        if (byQuality != 0) return byQuality;
+        return a.tourIndex.compareTo(b.tourIndex);
+      },
+    );
+    for (final winner in connectors) {
+      if (_stale(gen)) return;
+      final landed = await _connectInner(
+        gen,
+        legOverride: winner.candidate,
+        coreOverride: winner.settings,
+      );
+      if (_stale(gen)) return;
+      if (landed) {
+        _controller.add(EngineSmartResolved(winner.candidate));
+        return;
+      }
+      // The winner's network shifted mid-tour — try the next-best
+      // connector with the full budgets (its own failure already spoke).
+      await _waitForPortFree(gen, _activePort);
+      if (_stale(gen)) return;
+    }
     _emitFail(
       'smartExhausted',
-      'SMART tried ${candidates.length} candidates; the last failure was '
-      '$lastCode — $lastMsg',
+      'SMART measured ${connectors.length} working candidate(s) but none '
+      'could hold a session on reconnect',
     );
+  }
+
+  /// One plan entry: the candidate tile + (for masque) the exact
+  /// per-attempt core settings that variant runs with.
+  ({ProtocolId candidate, CoreSettings? settings}) _smartPlanEntry(
+    ProtocolId candidate,
+    CoreSettings? settings,
+  ) => (candidate: candidate, settings: settings);
+
+  /// v4.34 — the tour plan: scorecard-ranked candidates, masque EXPANDED
+  /// into its two transports (the user's own pick first — the new default
+  /// is HTTP/2, owner round 10: «راستی حالت دیفالت مسک رو بزار روی HTTP2»).
+  List<({ProtocolId candidate, CoreSettings? settings})> _smartPlan(
+    EngineConfigSource config,
+  ) {
+    CoreSettings? masqueVariant(bool h2) {
+      if (config.coreSettings.h2Transport == h2) return null; // the default
+      return CoreSettings.fromJson(
+        (jsonDecode(jsonEncode(config.coreSettings.toJson()))
+            as Map).cast<String, dynamic>(),
+      )..h2Transport = h2;
+    }
+
+    final plan = <({ProtocolId candidate, CoreSettings? settings})>[];
+    for (final candidate in _scorecard.rank()) {
+      if (candidate == ProtocolId.masque) {
+        plan.add(_smartPlanEntry(
+          candidate,
+          masqueVariant(config.coreSettings.h2Transport),
+        ));
+        plan.add(_smartPlanEntry(
+          candidate,
+          masqueVariant(!config.coreSettings.h2Transport),
+        ));
+      } else {
+        plan.add(_smartPlanEntry(candidate, null));
+      }
+    }
+    return plan;
+  }
+
+  /// v4.34 — the measurement phase: up to [_smartQualityExtraProbes] fresh
+  /// traces at the LIVE candidate (each bounded by
+  /// [_smartQualityProbeTimeout], the whole phase by [_smartQualityBudget]);
+  /// the BEST ping wins (min-of-N — the standard robust latency estimator:
+  /// a single jitter spike must not cost a candidate the tour). A probe
+  /// that fails outright keeps the connecting ping and ends the phase —
+  /// a flaky-but-working candidate keeps its place, a stalled one was
+  /// already caught by the window.
+  Future<int> _measureSmartQuality(int gen, int connectPingMs) async {
+    var best = connectPingMs;
+    final deadline = DateTime.now().add(_smartQualityBudget);
+    for (var i = 0; i < _smartQualityExtraProbes; i++) {
+      if (_stale(gen)) return best > 0 ? best : connectPingMs;
+      if (!DateTime.now().isBefore(deadline)) break;
+      try {
+        final r = await TunnelProbe().trace(
+          port: _activePort,
+          timeout: _smartQualityProbeTimeout,
+        );
+        if (r.pingMs > 0 && (best <= 0 || r.pingMs < best)) best = r.pingMs;
+      } catch (_) {
+        break; // the connecting probe already spoke for this candidate
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    }
+    return best > 0 ? best : connectPingMs;
   }
 
   /// Runs ONE connect attempt. v4.32: returns whether the walk REACHED
   /// Connected (every other path is a failure or a silent stale return).
   /// [legOverride] pins the protocol tile (the SMART candidates);
+  /// v4.34 adds:
+  ///  * [coreOverride] — the SMART plan's per-variant core settings (the
+  ///    masque HTTP/2 vs HTTP/3 tour); null = the user's own settings;
+  ///  * [attemptWindow] — the SMART tour's SHORT per-candidate budget
+  ///    (listener wait + end-to-end probe share it via a common deadline);
+  ///    null = the full walk budgets;
+  ///  * [smartMeasure] — the tour's measurement attempts: the walk returns
+  ///    true right after the probe WITHOUT emitting Connected, starting
+  ///    the ticker or resolving the exit country (the tour owns the
+  ///    teardown; the user sees ONE Connected — the winner's);
   /// [onCandidateFail] reroutes the failure emissions to the SMART loop
   /// (which tries the next candidate instead of failing the session) —
   /// EXCEPT permission denials, which no candidate can cure. [onProbePing]
@@ -733,6 +959,9 @@ class PlatformEngineAdapter implements EngineAdapter {
   Future<bool> _connectInner(
     int gen, {
     ProtocolId? legOverride,
+    CoreSettings? coreOverride,
+    Duration? attemptWindow,
+    bool smartMeasure = false,
     void Function(String code, String message)? onCandidateFail,
     void Function(int pingMs)? onProbePing,
   }) async {
@@ -818,6 +1047,13 @@ class PlatformEngineAdapter implements EngineAdapter {
       return false;
     }
     if (_stale(gen)) return false;
+
+    // v4.34 — the SMART tour's SHORT window: the clock starts AFTER the
+    // permission round-trip (a user dialog is not the candidate's fault)
+    // and bounds the tunnel-up + listener wait + end-to-end probe alike.
+    final DateTime? windowEnd = attemptWindow == null
+        ? null
+        : DateTime.now().add(attemptWindow);
 
     // --- 1b. v4.20 (tunnel mode): the VpnService comes up FIRST, before the
     // core work. A foreground-service start is only legal while the app is
@@ -944,6 +1180,9 @@ class PlatformEngineAdapter implements EngineAdapter {
     final core = _core =
         _coreFactory == null ? AetherCore.open() : _coreFactory();
     final paths = await _paths();
+    // v4.34 — the SMART tour's variant settings (masque HTTP/2 vs HTTP/3)
+    // replace the user's own for THIS attempt only.
+    final effectiveCore = coreOverride ?? config.coreSettings;
     // v4.26 — CRITICAL ordering: everything from here to coreStart below
     // is SYNCHRONOUS (no await), so a cancel can never land between this
     // staleness check and the job spawn — a walk that goes stale after the
@@ -956,7 +1195,7 @@ class PlatformEngineAdapter implements EngineAdapter {
         chain: overlay,
         countryCode: _resolveCountryPick(modeId, config),
         scanSpeed: config.scanSpeed,
-        core: config.coreSettings,
+        core: effectiveCore,
         filesDir: paths.filesDir,
         nativeLibraryDir: paths.nativeLibraryDir,
       ),
@@ -998,7 +1237,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     final ready = await _waitForListenerFollowingCore(
       gen,
       _activePort,
-      timeout: _listenerBudget,
+      timeout: _remainingUntil(windowEnd) ?? _listenerBudget,
     );
     // v4.26 — a stale walk (cancelled or superseded by a newer connect)
     // stays SILENT from here on: the cancel owns the terminal state, and a
@@ -1032,7 +1271,9 @@ class PlatformEngineAdapter implements EngineAdapter {
     final probe = await _probeUntilReadyFollowingCore(
       gen,
       _activePort,
-      budget: readyBudget(modeId, core: config.coreSettings),
+      budget: _remainingUntil(windowEnd) ??
+          readyBudget(modeId, core: config.coreSettings),
+      deadline: windowEnd,
     );
     if (_stale(gen)) return false; // cancelled during the probe (#3)
     if (probe == null) {
@@ -1062,14 +1303,22 @@ class PlatformEngineAdapter implements EngineAdapter {
       return false;
     }
     _emit(statsEvent(probe));
-    _emitState(VpnState.connected);
 
-    // v4.32 — hand the walk's measured latency to the SMART scorecard
-    // (spec §4.3: the SOCKS5 CONNECT + trace round-trip of the LIVE
-    // session — the same number the stats card shows).
+    // v4.34 — the SMART tour's measurement attempt stops HERE: the walk
+    // proved the candidate connects inside its window and measured its
+    // ping; the tour tears the session down and moves on. No Connected
+    // emission, no ticker — the user sees ONE Connected (the winner's).
     if (onProbePing != null) {
       onProbePing(probe.pingMs);
     }
+    if (smartMeasure) {
+      return true;
+    }
+    _emitState(VpnState.connected);
+
+    // v4.34 — the session-scoped retry counters start clean.
+    _exitResolveTries = 0;
+    _degradedTicks = 0;
 
     // v4.31 — a pseudo-country exit (loc=T1 — the Tor network, no flag,
     // no name; owner round 7 «اسمش رو هم T1 نوشته بود»): resolve the REAL
@@ -1166,6 +1415,16 @@ class PlatformEngineAdapter implements EngineAdapter {
   static String? _nonAuto(String pick) =>
       pick == LocationWheelPolicy.autoCode ? null : pick;
 
+  /// v4.34 — the time left until the SMART window's deadline (null when
+  /// no window is set, or a floor of 1 s so a nearly-spent window still
+  /// gives the stage one honest poll instead of a zero-duration timeout).
+  Duration? _remainingUntil(DateTime? deadline) {
+    if (deadline == null) return null;
+    final left = deadline.difference(DateTime.now());
+    if (left <= Duration.zero) return const Duration(seconds: 1);
+    return left;
+  }
+
   /// v4.20 — one core-liveness poll. Returns the core's own error when the
   /// job has ended (done/failed/poll-threw), null while it runs. Shared by
   /// the listener wait and the probe-retry loop.
@@ -1259,14 +1518,24 @@ class PlatformEngineAdapter implements EngineAdapter {
     int gen,
     int port, {
     required Duration budget,
+    DateTime? deadline,
   }) async {
-    final deadline = DateTime.now().add(budget);
+    final hardEnd = deadline ?? DateTime.now().add(budget);
     while (true) {
       if (_stale(gen)) return null;
+      // v4.34 — the SMART window bounds each ATTEMPT too: a 20 s probe
+      // timeout inside a 3 s remainder would blow the whole window on one
+      // hung connect.
+      final left = hardEnd.difference(DateTime.now());
+      final attemptTimeout = deadline == null || left > _probeTimeout
+          ? _probeTimeout
+          : (left <= Duration.zero
+                ? const Duration(milliseconds: 200)
+                : left);
       try {
         final result = await TunnelProbe().trace(
           port: port,
-          timeout: _probeTimeout,
+          timeout: attemptTimeout,
         );
         if (_stale(gen)) return null;
         return result;
@@ -1277,7 +1546,7 @@ class PlatformEngineAdapter implements EngineAdapter {
           _coreFailureDuringStart = failure;
           return null;
         }
-        if (DateTime.now().isBefore(deadline)) {
+        if (DateTime.now().isBefore(hardEnd)) {
           await Future<void>.delayed(_probeRetryInterval);
           continue;
         }
@@ -1482,6 +1751,7 @@ class PlatformEngineAdapter implements EngineAdapter {
         timeout: _probeTimeout,
       );
       _probeStrikes = 0;
+      _degradedTicks = 0;
       // v4.31 — the tick strips pseudo-countries (loc=T1) to null so it
       // can never overwrite the resolved real exit with the raw «T1».
       _emit(
@@ -1495,11 +1765,50 @@ class PlatformEngineAdapter implements EngineAdapter {
               (rxBytes ?? 0) < 0 ? 0 : rxBytes ?? 0, // TUN rx = upload
         ),
       );
+      // v4.34 — the walk-time Tor exit-country fetch races the circuit
+      // build and often loses («تور مکان اتصال رو … انتخاب خودکار نشون
+      // میده در صورتی که لوکیشن هلند هست»): every pseudo-country report
+      // is one more retry, spread a tick apart, until the real country
+      // lands (EngineExitCountryResolved) or the budget runs out.
+      if (result.countryIsPseudo &&
+          result.exitIp != null &&
+          _exitResolveTries < _exitResolveMaxTries) {
+        _exitResolveTries++;
+        unawaited(
+          _resolveExitCountry(_tickerGeneration!, _activePort, result.exitIp!),
+        );
+      }
     } catch (_) {
-      _probeStrikes++;
-      if (_probeStrikes >= 2) {
+      // v4.34 — GRADED health (owner round 10: «روی حالت تور اپ میره روی
+      // اتصال مجدد ولی اتصال برقراره و دیتا داره جا به جا میشه»): a tor
+      // circuit can simply be slower than the 20 s trace while REAL
+      // traffic flows, so a trace failure alone must not flip the app to
+      // «در حال اتصال مجدد»:
+      //  * the SOCKS listener REFUSES → the tunnel is truly down — the
+      //    old 2-strike rule (fast, decisive);
+      //  * the listener still ANSWERS → DEGRADED, not dead: the strike
+      //    counters reset (no reconnecting flap) and a separate
+      //    minute-long continuous-degradation budget decides instead.
+      var listenerAlive = false;
+      try {
+        listenerAlive = await TunnelProbe.isListenerReady(_activePort);
+      } catch (_) {
+        listenerAlive = false;
+      }
+      if (!listenerAlive) {
+        _probeStrikes++;
+        _degradedTicks = 0;
+        if (_probeStrikes >= 2) {
+          _probeStrikes = 0;
+          _emit(const EngineHealthProbeFailed());
+        }
+      } else {
         _probeStrikes = 0;
-        _emit(const EngineHealthProbeFailed());
+        _degradedTicks++;
+        if (_degradedTicks >= _degradedTicksBudget) {
+          _degradedTicks = 0;
+          _emit(const EngineHealthProbeFailed());
+        }
       }
     }
   }
@@ -1854,4 +2163,21 @@ class _PlatformPaths {
 
   final String filesDir;
   final String nativeLibraryDir;
+}
+
+/// v4.34 — a connected candidate of the SMART tour: which tile ran, which
+/// per-variant settings it ran with, the measured quality (best ping of
+/// the phase, ms) and where in the tour it landed (the tie-breaker).
+class _SmartConnector {
+  const _SmartConnector({
+    required this.candidate,
+    required this.settings,
+    required this.qualityMs,
+    required this.tourIndex,
+  });
+
+  final ProtocolId candidate;
+  final CoreSettings? settings;
+  final int qualityMs;
+  final int tourIndex;
 }

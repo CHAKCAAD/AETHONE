@@ -42,7 +42,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../connection/connection_store.dart';
 import '../../connection/core_log.dart';
@@ -51,6 +50,7 @@ import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../../l10n/app_strings.dart';
 import '../home/widgets/pattern_sides.dart';
+import '../shared/theme_toggle_tile.dart';
 import 'appearance_page.dart';
 import 'connection_page.dart';
 import 'general_page.dart';
@@ -64,8 +64,6 @@ class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.store});
 
   final ConnectionStore store;
-
-  static const String telegramChannelUrl = 'https://t.me/AETHONE';
 
   /// v4.17 — owner settings round #4: «به صفحه و کارت ها انیمیشن ورود و
   /// خروج اضافه کن». Every page block enters on its own slice of the
@@ -82,12 +80,6 @@ class SettingsScreen extends StatelessWidget {
     Widget child,
   ) =>
       motionCascade(context, style, block, child);
-
-  Future<void> _openTelegram() async {
-    final uri = Uri.parse(telegramChannelUrl);
-    // External browser/app — never an in-app webview (same as home).
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
 
   /// v4.22 — pushes one of the eight sub-pages (the six cards, the two
   /// family pills, the status cards all land here). v4.25 — every push
@@ -183,7 +175,7 @@ class SettingsScreen extends StatelessWidget {
                         children: [
                           SizedBox(height: AethGeometry.topSafeExtraGap * s),
                           _enter(context, style, 0, _SettingsTopBar(
-                            onInfo: _openTelegram,
+                            store: store,
                             onBack: () => Navigator.of(context).maybePop(),
                           )),
                           SizedBox(height: 22 * s),
@@ -272,14 +264,17 @@ class SettingsScreen extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Top bar: chevron (back) · «تنظیمات» · info (Telegram)
+// Top bar: theme toggle (visual LEFT) · «تنظیمات» · back chevron (visual
+// RIGHT). v4.34 — the exclamation/info tile became the night ⇄ light
+// switch (owner round 10); the Telegram link lives on in the sub-page
+// rows.
 // ---------------------------------------------------------------------------
 
 class _SettingsTopBar extends StatelessWidget {
-  const _SettingsTopBar({required this.onBack, required this.onInfo});
+  const _SettingsTopBar({required this.onBack, required this.store});
 
   final VoidCallback onBack;
-  final VoidCallback onInfo;
+  final ConnectionStore store;
 
   @override
   Widget build(BuildContext context) {
@@ -290,13 +285,12 @@ class _SettingsTopBar extends StatelessWidget {
       height: tile,
       child: Row(
         children: [
-          // LTR-locked (parent) — visual LEFT: the info tile (i → Telegram).
-          _TileButton(
-            asset: AppAssets.iconInformationCircle,
+          // LTR-locked (parent) — visual LEFT: the theme toggle (v4.34).
+          ThemeToggleTile(
+            store: store,
             size: tile,
             iconSize: AethGeometry.topTileIcon * s,
-            semanticLabel: 'Telegram channel',
-            onTap: onInfo,
+            tileKey: const ValueKey('settings-theme-toggle'),
           ),
           const Spacer(),
           Text(
@@ -369,7 +363,7 @@ class _TileButton extends StatelessWidget {
               asset,
               width: iconSize,
               height: iconSize,
-              colorFilter: const ColorFilter.mode(
+              colorFilter: ColorFilter.mode(
                 AethColors.textPrimary,
                 BlendMode.srcIn,
               ),
@@ -474,14 +468,14 @@ class _SettingsCard extends StatelessWidget {
     required this.asset,
     required this.title,
     required this.subtitle,
-    this.subtitleColor = AethColors.textSecondary,
+    this.subtitleColor,
     this.onTap,
   });
 
   final String asset;
   final String title;
   final String subtitle;
-  final Color subtitleColor;
+  final Color? subtitleColor;
   final VoidCallback? onTap;
 
   @override
@@ -554,7 +548,7 @@ class _SettingsCard extends StatelessWidget {
                     fontFamily: 'IRANYekanX',
                     fontWeight: FontWeight.w400,
                     fontSize: AethGeometry.settingsCardSubSize * s,
-                    color: subtitleColor,
+                    color: subtitleColor ?? AethColors.textSecondary,
                   ),
                 ),
               ),
@@ -729,7 +723,7 @@ class _SectionHeading extends StatelessWidget {
       icon,
       width: AethGeometry.settingsHeadingIconSize * s,
       height: AethGeometry.settingsHeadingIconSize * s,
-      colorFilter: const ColorFilter.mode(
+      colorFilter: ColorFilter.mode(
         AethColors.textPrimary,
         BlendMode.srcIn,
       ),
@@ -864,7 +858,7 @@ class _ServerPills extends StatelessWidget {
                   width: AethGeometry.settingsServerLogoSize * s,
                   height: AethGeometry.settingsServerLogoSize * s,
                   fit: BoxFit.contain,
-                  colorFilter: const ColorFilter.mode(
+                  colorFilter: ColorFilter.mode(
                     AethColors.textPrimary,
                     BlendMode.srcIn,
                   ),
@@ -1086,7 +1080,7 @@ class _CoreLogPageState extends State<CoreLogPage> {
                             AppAssets.iconRight2,
                             width: 22,
                             height: 22,
-                            colorFilter: const ColorFilter.mode(
+                            colorFilter: ColorFilter.mode(
                               AethColors.textPrimary,
                               BlendMode.srcIn,
                             ),
@@ -1096,7 +1090,7 @@ class _CoreLogPageState extends State<CoreLogPage> {
                           child: Text(
                             strings.coreLogTitle,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'IRANYekanX',
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
@@ -1145,7 +1139,7 @@ class _CoreLogPageState extends State<CoreLogPage> {
                       alignment: Alignment.centerRight,
                       child: Text(
                         strings.coreLogSize(_snapshot.totalBytes),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'IRANYekanX',
                           fontWeight: FontWeight.w400,
                           fontSize: 11,
@@ -1173,7 +1167,7 @@ class _CoreLogPageState extends State<CoreLogPage> {
                               ? Center(
                                   child: Text(
                                     strings.coreLogEmpty,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontFamily: 'IRANYekanX',
                                       fontWeight: FontWeight.w400,
                                       fontSize: 13,
@@ -1195,7 +1189,7 @@ class _CoreLogPageState extends State<CoreLogPage> {
                                         key: const ValueKey(
                                           'core-log-text',
                                         ),
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontFamily: 'IRANYekanX',
                                           fontWeight: FontWeight.w400,
                                           fontSize: 11,

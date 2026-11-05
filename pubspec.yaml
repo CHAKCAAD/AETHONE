@@ -166,3 +166,8 @@ flutter:
     - design/آیکون های اپ/Close Circle.svg
     - design/آیکون های اپ/Shield 1.svg
     - design/آیکون های اپ/Shield Star.svg
+    # --- v4.34 light mode (owner round 10): the theme-toggle pair
+    # («آیکون با نام Sun 1 برای حالت لایت و آیکون با نام Moon برای حالت
+    # نایت مود که هردو در پوشه آیکون های اپ موجود هستند»). ---
+    - design/آیکون های اپ/Sun 1.svg
+    - design/آیکون های اپ/Moon.svg

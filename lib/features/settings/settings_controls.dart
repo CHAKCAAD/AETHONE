@@ -30,7 +30,7 @@ class SettingInfoText extends StatelessWidget {
       child: Text(
         text,
         textAlign: TextAlign.right,
-        style: const TextStyle(
+        style: TextStyle(
           fontFamily: 'IRANYekanX',
           fontWeight: FontWeight.w400,
           fontSize: 11,
@@ -56,7 +56,7 @@ class SettingLabel extends StatelessWidget {
       child: Text(
         text,
         textAlign: TextAlign.right,
-        style: const TextStyle(
+        style: TextStyle(
           fontFamily: 'IRANYekanX',
           fontWeight: FontWeight.w600,
           fontSize: 12,
@@ -183,7 +183,7 @@ class _CustomSwitch extends StatelessWidget {
             child: Container(
               width: 20,
               height: 20,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AethColors.textPrimary,
                 shape: BoxShape.circle,
               ),

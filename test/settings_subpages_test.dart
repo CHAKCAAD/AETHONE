@@ -475,13 +475,20 @@ void main() {
   });
 
   group('AetherArguments.coreArgs — the CLI folding', () {
-    test('a default CoreSettings adds NOTHING to the args', () {
+    test('a fresh CoreSettings carries EXACTLY the v4.34 app defaults '
+        '(HTTP/2 masque + balanced noize — owner round 10)', () {
       final args = AetherArguments.coreArgs(
         CoreSettings(),
         ProtocolId.wireguard,
         null,
       );
-      expect(args, isEmpty);
+      // v4.34 — the app defaults deliberately differ from the core's own
+      // («دیفالت مسک رو بزار روی HTTP2» + «پروفایل دیفالت حالت اغتشاش رو
+      // بزار روی متعادل»); everything ELSE stays silent.
+      expect(args, contains('--h2'));
+      expect(args, containsAllInOrder(['--noize', 'balanced']));
+      expect(args.where((a) => a.startsWith('--')).length, 2,
+          reason: 'only --h2 + --noize ride a fresh object');
     });
 
     test('the balanced fragment profile folds size + delay', () {
@@ -619,10 +626,13 @@ void main() {
         filesDir: '/data',
         nativeLibraryDir: '/data/lib',
       );
-      // The WG mapping + listener base — nothing extra.
+      // The WG mapping + listener base — nothing extra (a null core means
+      // the CORE's own defaults; the v4.34 app defaults live in
+      // CoreSettings, not here).
       expect(withDefault, containsAllInOrder(['--protocol', 'wg']));
       expect(withDefault.contains('--fragment'), isFalse);
       expect(withDefault.contains('--h2'), isFalse);
+      expect(withDefault.contains('--noize'), isFalse);
     });
   });
 

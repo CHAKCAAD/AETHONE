@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'connection/connection_store.dart';
+import 'core/app_theme.dart';
 import 'core/design_tokens.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/onboarding_flow.dart';
@@ -9,7 +10,14 @@ import 'features/onboarding/onboarding_flow.dart';
 /// The AETHONE app shell. Locale: device locale when supported, else Persian
 /// (the design language). The first-run wizard (v4.23, «صفحه شروع»)
 /// takes over until [ConnectionStore.onboardingComplete].
-class AethoneApp extends StatelessWidget {
+///
+/// v4.34 — LIGHT MODE (owner round 10): the shell owns a 420 ms tween that
+/// lerps [AethPal.night] ↔ [AethPal.light] into the process-wide
+/// [AethThemeSync.palette] every frame and rebuilds the whole tree, so every
+/// surface — Flutter widgets and CustomPaint canvases alike — cross-fades
+/// together («تغیر بین دوحالت باید با انیمیشن و به نرمی اتفاق بیفته»).
+/// The master animation kill-switch collapses the tween to a jump.
+class AethoneApp extends StatefulWidget {
   AethoneApp({super.key, ConnectionStore? store})
       : store = store ?? ConnectionStore();
 
@@ -25,27 +33,96 @@ class AethoneApp extends StatelessWidget {
   ];
 
   @override
+  State<AethoneApp> createState() => _AethoneAppState();
+}
+
+class _AethoneAppState extends State<AethoneApp>
+    with SingleTickerProviderStateMixin {
+  /// The mode tween: 0.0 = night, 1.0 = light. Driven linearly; the easing
+  /// curve is applied when the palette is read (the curve shapes the COLORS,
+  /// the controller stays a plain clock — a mid-flight reversal simply
+  /// retargets `animateTo` from wherever it is, no snapping).
+  late final AnimationController _themeClock;
+
+  /// The mode the clock is currently aimed at (the last one the store
+  /// handed us) — a store notification that does not move it is ignored.
+  AethThemeMode? _clockTarget;
+
+  static const Duration _themeFade = Duration(milliseconds: 420);
+
+  @override
+  void initState() {
+    super.initState();
+    _themeClock = AnimationController(
+      vsync: this,
+      value: widget.store.themeMode == AethThemeMode.light ? 1 : 0,
+      duration: _themeFade,
+    );
+    // The cold start renders the persisted mode with NO animation (the
+    // restore ran before the first frame — the palette is right from the
+    // very first paint, never a flash of the default).
+    _applyPalette(_themeClock.value);
+    _themeClock.addListener(() => _applyPalette(_themeClock.value));
+    widget.store.addListener(_onStoreChanged);
+    _clockTarget = widget.store.themeMode;
+  }
+
+  @override
+  void dispose() {
+    widget.store.removeListener(_onStoreChanged);
+    _themeClock.dispose();
+    super.dispose();
+  }
+
+  void _onStoreChanged() {
+    final target = widget.store.themeMode;
+    if (target == _clockTarget) return;
+    _clockTarget = target;
+    // The master animation kill-switch collapses the cross-fade to a jump
+    // (the same decree that freezes every other animated surface).
+    if (!widget.store.animationsEnabled) {
+      _themeClock
+        ..stop()
+        ..value = target == AethThemeMode.light ? 1 : 0;
+      _applyPalette(_themeClock.value);
+      // A value-only move does not tick the listener — apply explicitly.
+      setState(() {});
+      return;
+    }
+    _themeClock.animateTo(
+      target == AethThemeMode.light ? 1 : 0,
+      curve: Curves.linear,
+    );
+  }
+
+  void _applyPalette(double t) {
+    AethThemeSync.palette =
+        AethPal.lerp(AethPal.night, AethPal.light, Curves.easeInOut.transform(t));
+  }
+
+  @override
   Widget build(BuildContext context) {
     // v4.22 — the language sub-page writes store.appLocale; the shell
     // listens so a change rebuilds MaterialApp with the new locale (null =
-    // follow the system, the default).
+    // follow the system, the default). v4.34 — the theme clock is merged in
+    // so every cross-fade frame rebuilds the tree with the fresh palette.
     return AnimatedBuilder(
-      animation: store,
+      animation: Listenable.merge([widget.store, _themeClock]),
       builder: (context, _) {
         return MaterialApp(
           title: 'AETHONE',
           debugShowCheckedModeBanner: false,
           theme: _theme(),
-          locale: _locale(store.appLocale),
-          supportedLocales: supportedLocales,
+          locale: _locale(widget.store.appLocale),
+          supportedLocales: AethoneApp.supportedLocales,
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          home: store.onboardingComplete
-              ? HomeScreen(store: store)
-              : OnboardingFlow(store: store),
+          home: widget.store.onboardingComplete
+              ? HomeScreen(store: widget.store)
+              : OnboardingFlow(store: widget.store),
         );
       },
     );
@@ -53,7 +130,7 @@ class AethoneApp extends StatelessWidget {
 
   /// The user override → a supported Locale (zh carries the CN script);
   /// null keeps the device locale (MaterialApp resolves it against
-  /// [supportedLocales], else Persian — the design language).
+  /// [AethoneApp.supportedLocales], else Persian — the design language).
   /// v4.23 — 'tk' (the wizard's Turkmenistan tile) maps onto the English
   /// Material locale: flutter_localizations has no Turkmen coverage, and
   /// AppStrings' tk table is the documented en fallback. The store keeps
@@ -68,14 +145,23 @@ class AethoneApp extends StatelessWidget {
       };
 
   ThemeData _theme() {
-    const scheme = ColorScheme.dark(
-      primary: AethColors.accentConnected,
-      error: AethColors.statusDisconnected,
-      surface: AethColors.bgScreen,
-    );
+    // v4.34 — the Material scaffolding follows the same lerped palette the
+    // widgets read (scaffold bg, brightness); the accents never change.
+    final light = _themeClock.value > 0.5;
+    final scheme = light
+        ? const ColorScheme.light(
+            primary: AethColors.accentConnected,
+            error: AethColors.statusDisconnected,
+            surface: Color(0xFFEDEDED), // AethPal.light.bgScreen
+          )
+        : const ColorScheme.dark(
+            primary: AethColors.accentConnected,
+            error: AethColors.statusDisconnected,
+            surface: Color(0xFF141C16), // AethPal.night.bgScreen
+          );
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: light ? Brightness.light : Brightness.dark,
       colorScheme: scheme,
       scaffoldBackgroundColor: AethColors.bgScreen,
       fontFamily: 'IRANYekanX',

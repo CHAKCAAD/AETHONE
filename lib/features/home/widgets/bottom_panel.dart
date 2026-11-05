@@ -251,7 +251,7 @@ class ProtocolCard extends StatelessWidget {
                 width: 26 * s,
                 height: 26 * s,
                 fit: BoxFit.contain,
-                colorFilter: const ColorFilter.mode(
+                colorFilter: ColorFilter.mode(
                   AethColors.textPrimary,
                   BlendMode.srcIn,
                 ),
@@ -305,7 +305,7 @@ class StatCard extends StatelessWidget {
             padding: EdgeInsets.all(10 * s),
             child: SvgPicture.asset(
               iconAsset,
-              colorFilter: const ColorFilter.mode(
+              colorFilter: ColorFilter.mode(
                 AethColors.textPrimary,
                 BlendMode.srcIn,
               ),

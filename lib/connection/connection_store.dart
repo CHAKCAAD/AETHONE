@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/app_assets.dart';
+import '../core/app_theme.dart';
 import '../core/motion.dart';
 import 'connection_state.dart';
 import 'core_settings.dart';
@@ -114,8 +115,11 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
 
   /// v4.32 — the in-flight SMART candidate (attempt i of n), surfaced by
   /// the connecting status card as the explicit fallback chain (spec
-  /// §7.2). Null when the walk is not in a SMART attempt.
-  ({ProtocolId candidate, int attempt, int total})? smartAttempt;
+  /// §7.2). Null when the walk is not in a SMART attempt. v4.34 adds
+  /// [measuring] — true while the tour measures a CONNECTED candidate's
+  /// quality (the card says «سنجش کیفیت …» instead of the attempt count).
+  ({ProtocolId candidate, int attempt, int total, bool measuring})?
+  smartAttempt;
 
   /// v4.32 — the protocol the bottom panel shows: the SMART-resolved
   /// protocol while a SMART session is live, else the committed tile.
@@ -414,6 +418,24 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
+  // ---- v4.34 LIGHT MODE (owner round 10) ----
+
+  /// The app theme — night by default (every earlier build shipped dark;
+  /// the wizard frames are dark). The top-bar sun/moon tile flips it and
+  /// the shell cross-fades the whole palette (see AethoneApp).
+  AethThemeMode themeMode = AethThemeMode.night;
+
+  void setThemeMode(AethThemeMode mode) {
+    if (themeMode == mode) return;
+    themeMode = mode;
+    notifyListeners();
+  }
+
+  void toggleThemeMode() =>
+      setThemeMode(themeMode == AethThemeMode.night
+          ? AethThemeMode.light
+          : AethThemeMode.night);
+
   // ---- v4.23 onboarding («صفحه شروع») ----
 
   /// True once the first-run wizard has been completed — the shell shows
@@ -594,10 +616,17 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
           :final candidate,
           :final attempt,
           :final total,
+          :final measuring,
         ):
         // v4.32 — the explicit, observable SMART chain (spec §7.2): the
-        // connecting card shows which candidate is being tried.
-        smartAttempt = (candidate: candidate, attempt: attempt, total: total);
+        // connecting card shows which candidate is being tried; v4.34 —
+        // or that its quality is being measured.
+        smartAttempt = (
+          candidate: candidate,
+          attempt: attempt,
+          total: total,
+          measuring: measuring,
+        );
       case EngineSmartResolved(:final protocol):
         // v4.32 — a candidate's walk reached Connected: the session runs
         // THIS protocol (the status card shows it instead of the generic

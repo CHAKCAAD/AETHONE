@@ -74,6 +74,12 @@ abstract final class AppAssets {
   static const String iconMap = '$_icons/Map.svg';
   static const String iconSend = '$_icons/Send 1.svg';
 
+  // --- v4.34 light mode (owner round 10): the theme-toggle icons the
+  // owner named — «آیکون با نام Sun 1 برای حالت لایت و آیکون با نام Moon
+  // برای حالت نایت مود که هردو در پوشه آیکون های اپ موجود هستند».
+  static const String iconSun1 = '$_icons/Sun 1.svg';
+  static const String iconMoon = '$_icons/Moon.svg';
+
   // --- owner-mandated assets for the connect/speed/chevron surfaces
   // (v4.11 defect reports #2/#4/#12):
   static const String iconOff = '$_icons/Off.svg';
@@ -318,6 +324,9 @@ abstract final class AppAssets {
         iconCloseCircle,
         iconShield1,
         iconShieldStar,
+        // v4.34 — the theme-toggle pair.
+        iconSun1,
+        iconMoon,
         _protoMasque,
         _protoWireguard,
         _protoGool,

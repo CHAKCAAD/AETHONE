@@ -201,13 +201,19 @@ class AppStrings {
   String get protoModeSmart => _v['protoModeSmart']!;
   String get smartNote => _v['smartNote']!;
 
-  /// v4.32 — the SMART attempt line («اسمارت: ماسک (۱ از ۵)") — the
+  /// v4.32 — the SMART attempt line («اسمارت: ماسک (۱ از ۵)») — the
   /// explicit, observable fallback chain (SMART_AUTO_SPEC §7.2).
   String smartAttemptLabel(String name, int attempt, int total) =>
       _v['smartAttemptLabel']!
           .replaceAll('{name}', name)
           .replaceAll('{i}', '$attempt')
           .replaceAll('{n}', '$total');
+
+  /// v4.34 — the SMART MEASUREMENT line («سنجش کیفیت ماسک …») — the
+  /// tour's quality phase over a candidate that already connected
+  /// (owner round 10: measure every connector, then pick the best).
+  String smartMeasuringLabel(String name) =>
+      _v['smartMeasuringLabel']!.replaceAll('{name}', name);
   String get coreRowDesc => _v['coreRowDesc']!;
 
   // general page
@@ -539,14 +545,14 @@ class AppStrings {
       'masqueSniHint': 'مثلاً www.cloudflare.com',
       'secTransport': 'انتقال',
       'h2Transport': 'انتقال روی HTTP/2 (TCP)',
-      'h2TransportDesc': 'به جای HTTP/3 روی QUIC — برای شبکه‌هایی که UDP را می‌بندند',
+      'h2TransportDesc': 'انتقال MASQUE روی HTTP/2 (TCP) — پیش‌فرض جدید اپ؛ برای شبکه‌هایی که UDP را می‌بندند',
       'quicV2': 'مذاکرهٔ QUIC v2',
       'quicV2Desc': 'بازکردن مسیر HTTP/3 روی شبکه‌هایی که QUIC v1 را می‌بندند',
       'dnsLabel': 'DNS داخل تونل',
       'dnsHint': 'با کاما جدا شود — مثلاً 1.1.1.1,1.0.0.1',
       'secEngine': 'موتور',
       'noizeLabel': 'پروفایل اغتشاش (Noize)',
-      'noizeDesc': 'پیش‌فرض: فایروال برای MASQUE و متعادل برای WireGuard و GOOL؛ برای شبکه‌های سخت‌گیر، GFW یا تهاجمی را امتحان کنید',
+      'noizeDesc': 'پیش‌فرض جدید اپ: متعادل؛ برای شبکه‌های سخت‌گیر GFW یا تهاجمی را امتحان کنید',
       'noizeDefault': 'پیش‌فرض هسته',
       'noizeOff': 'خاموش',
       'noizeLight': 'سبک',
@@ -575,6 +581,7 @@ class AppStrings {
       'protoModeSmart': 'اسمارت',
       'smartNote': 'در حالت اسمارت، خود اپ به‌جای پیش‌فرض هسته پروتکل را انتخاب می‌کند: نامزدها (ماسک، وایرگارد، گول، میم، گول کلاسیک) به ترتیب موفقیت و تأخیر اندازه‌گیری‌شدهٔ قبلی امتحان می‌شوند تا یکی وصل شود. ترتیب تلاش‌ها در صفحهٔ اصلی نمایش داده می‌شود، تأخیر اندازه‌گیری‌شده یادآوری می‌شود و انتخاب دستی شما هرگز بازنویسی نمی‌شود. فقط روی کاشی «اتوماتیک» فعال است.',
       'smartAttemptLabel': 'اسمارت: {name} ({i} از {n})',
+      'smartMeasuringLabel': 'سنجش کیفیت {name} …',
       'coreRowDesc': 'فرگمنت، TLS، انتقال و موتور',
       'secAbout': 'دربارهٔ برنامه',
       'appVersionLabel': 'نسخهٔ برنامه',
@@ -801,14 +808,14 @@ class AppStrings {
       'masqueSniHint': 'e.g. www.cloudflare.com',
       'secTransport': 'Transport',
       'h2Transport': 'HTTP/2 (TCP) transport',
-      'h2TransportDesc': 'Instead of HTTP/3 over QUIC — for networks that block UDP',
+      'h2TransportDesc': 'MASQUE over HTTP/2 (TCP) — the new app default; for networks that block UDP',
       'quicV2': 'QUIC v2 negotiation',
       'quicV2Desc': 'Opens a path for HTTP/3 where QUIC v1 is blocked',
       'dnsLabel': 'DNS inside the tunnel',
       'dnsHint': 'comma-separated — e.g. 1.1.1.1,1.0.0.1',
       'secEngine': 'Engine',
       'noizeLabel': 'Obfuscation profile (Noize)',
-      'noizeDesc': 'Default: firewall for MASQUE, balanced for WireGuard and GOOL; try GFW or Aggressive on strict networks',
+      'noizeDesc': 'New app default: Balanced; try GFW or Aggressive on strict networks',
       'noizeDefault': 'Core default',
       'noizeOff': 'Off',
       'noizeLight': 'Light',
@@ -837,6 +844,7 @@ class AppStrings {
       'protoModeSmart': 'SMART',
       'smartNote': 'In SMART mode the app itself picks the protocol instead of the core default: the candidates (masque, wireguard, gool, mim, gool-classic) are tried in the order of their measured success and latency until one connects. The attempt chain is shown on the home screen, the measured latency is remembered, and your manual pick is never rewritten. Active only with the AUTO tile.',
       'smartAttemptLabel': 'SMART: {name} ({i} of {n})',
+      'smartMeasuringLabel': 'Measuring {name} quality…',
       'coreRowDesc': 'Fragmentation, TLS, transport and engine',
       'secAbout': 'About the app',
       'appVersionLabel': 'App version',
@@ -1060,14 +1068,14 @@ class AppStrings {
       'masqueSniHint': 'напр. www.cloudflare.com',
       'secTransport': 'Транспорт',
       'h2Transport': 'Транспорт HTTP/2 (TCP)',
-      'h2TransportDesc': 'Вместо HTTP/3 на QUIC — для сетей, блокирующих UDP',
+      'h2TransportDesc': 'MASQUE по HTTP/2 (TCP) — новый стандарт приложения; для сетей, блокирующих UDP',
       'quicV2': 'Согласование QUIC v2',
       'quicV2Desc': 'Открывает путь для HTTP/3 там, где QUIC v1 заблокирован',
       'dnsLabel': 'DNS внутри туннеля',
       'dnsHint': 'через запятую — напр. 1.1.1.1,1.0.0.1',
       'secEngine': 'Движок',
       'noizeLabel': 'Профиль обфускации (Noize)',
-      'noizeDesc': 'По умолчанию: firewall для MASQUE, balanced для WireGuard и GOOL; на строгих сетях попробуйте GFW или Aggressive',
+      'noizeDesc': 'Новый стандарт приложения: Balanced; на строгих сетях попробуйте GFW или Aggressive',
       'noizeDefault': 'Как в ядре',
       'noizeOff': 'Выкл.',
       'noizeLight': 'Лёгкий',
@@ -1096,6 +1104,7 @@ class AppStrings {
       'protoModeSmart': 'СМАРТ',
       'smartNote': 'В режиме SMART приложение само выбирает протокол вместо значения ядра по умолчанию: кандидаты (masque, wireguard, gool, mim, gool-classic) пробуются в порядке измеренных успехов и задержек, пока один не подключится. Цепочка попыток видна на главном экране, измеренная задержка запоминается, а ваш ручной выбор никогда не перезаписывается. Активен только с плиткой AUTO.',
       'smartAttemptLabel': 'SMART: {name} ({i} из {n})',
+      'smartMeasuringLabel': 'Замер качества {name}…',
       'coreRowDesc': 'Фрагментация, TLS, транспорт и движок',
       'secAbout': 'О приложении',
       'appVersionLabel': 'Версия приложения',
@@ -1319,14 +1328,14 @@ class AppStrings {
       'masqueSniHint': '如 www.cloudflare.com',
       'secTransport': '传输',
       'h2Transport': 'HTTP/2（TCP）传输',
-      'h2TransportDesc': '代替 HTTP/3 over QUIC — 适合封锁 UDP 的网络',
+      'h2TransportDesc': 'MASQUE 走 HTTP/2（TCP）— 应用新默认；适合封锁 UDP 的网络',
       'quicV2': 'QUIC v2 协商',
       'quicV2Desc': '在封锁 QUIC v1 的网络上打开 HTTP/3 通路',
       'dnsLabel': '隧道内 DNS',
       'dnsHint': '逗号分隔 — 如 1.1.1.1,1.0.0.1',
       'secEngine': '引擎',
       'noizeLabel': '混淆配置（Noize）',
-      'noizeDesc': '默认：MASQUE 用 firewall，WireGuard/GOOL 用 balanced；严格网络可试 GFW 或激进',
+      'noizeDesc': '应用新默认：均衡（balanced）；严格网络可试 GFW 或激进',
       'noizeDefault': '内核默认',
       'noizeOff': '关闭',
       'noizeLight': '轻度',
@@ -1355,6 +1364,7 @@ class AppStrings {
       'protoModeSmart': '智能',
       'smartNote': '在 SMART 模式下，应用自行选择协议而非内核默认值：候选协议（masque、wireguard、gool、mim、gool-classic）按既往实测成功率与延迟依次尝试，直到其中一个连通。尝试链路会在主屏幕显示，实测延迟会被记住，您的手动选择永不被改写。仅在选中 AUTO 卡时生效。',
       'smartAttemptLabel': 'SMART：{name}（第 {i}/{n} 次）',
+      'smartMeasuringLabel': '正在测量 {name} 质量…',
       'coreRowDesc': '分片、TLS、传输与引擎',
       'secAbout': '关于应用',
       'appVersionLabel': '应用版本',

@@ -45,8 +45,8 @@ import '../../core/motion.dart';
 import '../../l10n/app_strings.dart';
 import '../home/widgets/glow_pill.dart';
 import '../home/widgets/pattern_sides.dart';
-import '../settings/subpage_frame.dart'
-    show openTelegramChannel, subpageEnter;
+import '../settings/subpage_frame.dart' show subpageEnter;
+import '../shared/theme_toggle_tile.dart';
 
 /// The family route — v4.25: the STYLE'S OWN personality via
 /// [aethPageRoute] (was the fixed fade+slide recipe).
@@ -177,7 +177,7 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
                           context,
                           widget.style,
                           0,
-                          const _SpeedTopBar(),
+                          _SpeedTopBar(store: widget.store),
                         ),
                         _gap(context, AethGeometry.speedGapTopbarToTitle),
                         subpageEnter(
@@ -243,11 +243,15 @@ Widget _gap(BuildContext context, double ref) =>
     SizedBox(height: ref * _scale(context));
 
 // ---------------------------------------------------------------------
-// The chrome: info tile LEFT · wordmark centered · back tile RIGHT.
+// The chrome: theme-toggle tile LEFT (v4.34 — the exclamation tile became
+// the night ⇄ light switch, owner round 10) · wordmark centered · back tile
+// RIGHT.
 // ---------------------------------------------------------------------
 
 class _SpeedTopBar extends StatelessWidget {
-  const _SpeedTopBar();
+  const _SpeedTopBar({required this.store});
+
+  final ConnectionStore store;
 
   @override
   Widget build(BuildContext context) {
@@ -257,13 +261,11 @@ class _SpeedTopBar extends StatelessWidget {
       height: tile,
       child: Row(
         children: [
-          _TopTile(
-            key: const ValueKey('speed-info'),
-            asset: AppAssets.iconInformationCircle,
+          ThemeToggleTile(
+            store: store,
             size: tile,
             iconSize: AethGeometry.topTileIcon * s,
-            semanticLabel: 'Telegram channel',
-            onTap: openTelegramChannel,
+            tileKey: const ValueKey('speed-info'),
           ),
           const Spacer(),
           // The home wordmark lockup: the brand mark 38 behind the letters.
@@ -349,7 +351,7 @@ class _TopTile extends StatelessWidget {
               asset,
               width: iconSize,
               height: iconSize,
-              colorFilter: const ColorFilter.mode(
+              colorFilter: ColorFilter.mode(
                 AethColors.textPrimary,
                 BlendMode.srcIn,
               ),
@@ -399,7 +401,7 @@ class _TitleRow extends StatelessWidget {
             child: SvgPicture.asset(
               AppAssets.iconActivity4,
               fit: BoxFit.contain,
-              colorFilter: const ColorFilter.mode(
+              colorFilter: ColorFilter.mode(
                 AethColors.textPrimary,
                 BlendMode.srcIn,
               ),
@@ -499,7 +501,7 @@ class _DialZone extends StatelessWidget {
                           // tint — the gradient only reads while it runs).
                           colorFilter: running
                               ? null
-                              : const ColorFilter.mode(
+                              : ColorFilter.mode(
                                   AethColors.speedTrack,
                                   BlendMode.srcIn,
                                 ),

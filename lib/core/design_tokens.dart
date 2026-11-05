@@ -7,10 +7,18 @@ library;
 
 import 'package:flutter/painting.dart';
 
+import 'app_theme.dart';
+
 /// Colors (report table 7). Every value cites its evidence.
+///
+/// v4.34 — LIGHT MODE: the theme-dependent half of this table reads the
+/// process-wide [AethThemeSync.palette] (night ↔ light, owner round 10);
+/// the accent family below stays identical in BOTH modes. The night
+/// values are the evidence-locked ones this file always carried.
 abstract final class AethColors {
-  /// Screen background — owner: `#141C16`; pixel-dominant read `#151C15`.
-  static const Color bgScreen = Color(0xFF141C16);
+  /// Screen background — night `#141C16` (owner-declared) / light `#EDEDED`
+  /// (the owner's light-mode CSS). Theme-dependent (v4.34).
+  static Color get bgScreen => AethThemeSync.palette.bgScreen;
 
   /// Connected / active accent — owner + pattern XML `#1AD995`.
   static const Color accentConnected = Color(0xFF1AD995);
@@ -18,11 +26,14 @@ abstract final class AethColors {
   /// Disconnected / error accent — owner + pattern XML `#EA2323`.
   static const Color statusDisconnected = Color(0xFFEA2323);
 
-  /// Text/icon color on the red status pill (Figma CSS `color: #75160F`).
-  static const Color onPillDisconnected = Color(0xFF75160F);
+  /// Text/icon color on the red status pill — night `#75160F` (Figma CSS)
+  /// / light `#141C16` (the owner's light CSS «غیرفعال»). Theme-dependent.
+  static Color get onPillDisconnected => AethThemeSync.palette.onPillDisconnected;
 
-  /// Text/icon color on the green status pill (Figma CSS + owner: `#123E2B`).
-  static const Color onPillConnected = Color(0xFF123E2B);
+  /// Text/icon color on the green status pill — night `#123E2B` (Figma CSS
+  /// + owner) / light `#141C16` (the owner's light CSS «مــتـصـل»).
+  /// Theme-dependent.
+  static Color get onPillConnected => AethThemeSync.palette.onPillConnected;
 
   /// 4-layer pill opacities (Figma CSS Rectangle 26 / 22 / 21 / 20).
   static const double pillGlowOpacity = 0.53;
@@ -32,43 +43,49 @@ abstract final class AethColors {
   /// Gold accent on mim / gool-classic protocol icons (asset XML `#997A35`).
   static const Color goldAccent = Color(0xFF997A35);
 
-  /// DOWN stat icon box (pixel, connected-look1 @ y=800).
-  static const Color statDownBg = Color(0xFF0A4F33);
+  /// DOWN stat icon box (pixel, connected-look1 @ y=800) — night `#0A4F33` /
+  /// light rgba(0,213,137,0.30) (owner CSS Rectangle 11). Theme-dependent.
+  static Color get statDownBg => AethThemeSync.palette.statDownBg;
 
-  /// UP stat icon box (pixel): background + border tones.
-  static const Color statUpBg = Color(0xFF3A1C1C);
-  static const Color statUpBorder = Color(0xFF652325);
+  /// UP stat icon box (pixel) — night `#3A1C1C` / light rgba(230,57,70,
+  /// 0.20) (owner CSS Rectangle 12). Theme-dependent (v4.34).
+  static Color get statUpBg => AethThemeSync.palette.statUpBg;
+  /// v4.34 — theme-dependent: night `#652325` / light a 35 % tint of the
+  /// CSS red (the light frames show no border on the UP box).
+  static Color get statUpBorder => AethThemeSync.palette.statUpBorder;
 
-  /// Dark cards (protocol / stats / FAB column) — pixel-measured on the four
-  /// reference frames at y 706–845 (samples #0F1511/#0e1410/#101511; JPEG
-  /// drift ±2): the cards are DARKER than the screen bg #141C16, not lighter.
-  /// Re-measured 2026-11-02 against the device screenshots (v4.10 fix):
-  /// the previous #1C1F22 read was wrong (it matched the JPEG noise floor).
-  static const Color cardDark = Color(0xFF0F1511);
+  /// Dark cards (protocol / stats / FAB column) — night: pixel-measured on
+  /// the four reference frames at y 706–845 (samples #0F1511/#0e1410/
+  /// #101511; JPEG drift ±2), DARKER than the screen bg; light: `#FFFFFF`
+  /// (owner CSS «بکگراند بخش انتخاب پروتکل»). Theme-dependent (v4.34).
+  static Color get cardDark => AethThemeSync.palette.cardDark;
 
-  /// Top-bar icon tiles — owner Figma CSS «Rectangle 9»: 50x50, #0F1510,
-  /// radius 16, shadow 0 4 4 rgba(0,0,0,0.25) (v4.11).
-  static const Color topTile = Color(0xFF0F1510);
+  /// Top-bar icon tiles — owner Figma CSS «Rectangle 9»: 50x50, radius 16,
+  /// shadow 0 4 4 rgba(0,0,0,0.25); night fill `#0F1510`, light `#FFFFFF`
+  /// (v4.11 + v4.34). Theme-dependent.
+  static Color get topTile => AethThemeSync.palette.topTile;
 
   /// Dark stroke of the on-core icons per the owner Figma CSS
   /// (Activity 4 vector: border 1.5px #0D4D36).
   static const Color onCoreDark = Color(0xFF0D4D36);
 
-  /// Protocol-logo box inside the protocol card (crop read `#2D323D`).
-  static const Color cardIconBg = Color(0xFF2D323D);
+  /// Protocol-logo box inside the protocol card — night `#2D323D` (crop
+  /// read) / light `#E8ECEA`. Theme-dependent (v4.34).
+  static Color get cardIconBg => AethThemeSync.palette.cardIconBg;
 
   // ---- v4.16 protocol sheet (measured on the sheet frame) ----
-  /// The 66×66 subtile insets inside the family cards — #1A261C measured,
-  /// LIGHTER than the #0F1511 card (a raised inner square, not an inset).
-  static const Color sheetSubtile = Color(0xFF1A261C);
+  /// The 66×66 subtile insets inside the family cards — night #1A261C
+  /// measured, LIGHTER than the card (a raised inner square); light
+  /// `#EFEFEF` (derived). Theme-dependent (v4.34).
+  static Color get sheetSubtile => AethThemeSync.palette.sheetSubtile;
 
   /// The grab handle (#D9D9D9 measured, lum 218).
   static const Color sheetHandle = Color(0xFFD9D9D9);
 
-  /// The descriptions-card fill (#0C120F measured — darker than the scrim
-  /// zone, so the card reads as a second, deeper layer over the dimmed
-  /// sheet exactly like the frame).
-  static const Color sheetDescCard = Color(0xFF0C120F);
+  /// The unselected TRACK fill (pill tracks, switches; originally the
+  /// v4.16 descriptions-card fill, #0C120F measured). Night `#0C120F` /
+  /// light `#E4E7E5` (derived). Theme-dependent (v4.34).
+  static Color get sheetDescCard => AethThemeSync.palette.sheetDescCard;
 
   /// Chevron on the protocol card (crop read coral-red `#E74C5B`).
   static const Color chevronRed = Color(0xFFE74C5B);
@@ -77,16 +94,21 @@ abstract final class AethColors {
   /// red, measured on حالت متصل-ضاهر1 at x 334–346, y 800–820).
   static const Color fabChevrons = Color(0xFFC1303C);
 
-  static const Color textPrimary = Color(0xFFFFFFFF);
+  /// Primary text/icon ink — night `#FFFFFF` / light `#141C16` (owner:
+  /// «متن ها و آیکون های روی کارت … باید به رنگ 141C16 در لایت مود»).
+  /// Theme-dependent (v4.34).
+  static Color get textPrimary => AethThemeSync.palette.textPrimary;
 
-  /// Secondary/muted text (VLM reads `≈#8E8E93`).
-  static const Color textSecondary = Color(0xFF8E8E93);
+  /// Secondary/muted text — night `#8E8E93` (VLM read) / light `#A3A3A3`
+  /// (the light CSS «UP:»/«DOWN:» label color). Theme-dependent (v4.34).
+  static Color get textSecondary => AethThemeSync.palette.textSecondary;
 
   // ---- v4.23 onboarding («صفحه شروع» frames) ----
 
   /// The dim stepper state — bars + icons of the INACTIVE steps, measured
-  /// on all four wizard frames (#15553B; the bright state is the accent).
-  static const Color stepDim = Color(0xFF15553B);
+  /// on all four wizard frames (night #15553B; the bright state is the
+  /// accent). Light: `#CBE9DC` (derived). Theme-dependent (v4.34).
+  static Color get stepDim => AethThemeSync.palette.stepDim;
 
   /// The two light-gray tiles (system-language gear, routing «none» ✕) —
   /// fill #D9D9D9 measured on both frames.
@@ -107,13 +129,15 @@ abstract final class AethColors {
   // the three committed frames (قبل از شروع / در حال تست سرعت / اتمام
   // تست سرعت): tile-box corner grids + polar midline sampling. ----
 
-  /// The gauge track at rest — a shade DARKER than the bg (#0A0F0B read at
-  /// all 19 midline angles on the idle + done frames).
-  static const Color speedTrack = Color(0xFF0A0F0B);
+  /// The gauge track at rest — a shade DARKER than the bg (night #0A0F0B
+  /// read at all 19 midline angles on the idle + done frames; light
+  /// `#E0E0E0`, the same relation against #EDEDED). Theme-dependent.
+  static Color get speedTrack => AethThemeSync.palette.speedTrack;
 
-  /// The gauge track while a phase runs (#16543B on the running frame —
-  /// the step-dim green family).
-  static const Color speedTrackLive = Color(0xFF16543B);
+  /// The gauge track while a phase runs (night #16543B on the running
+  /// frame — the step-dim green family; light `#C8E9DA`, derived).
+  /// Theme-dependent (v4.34).
+  static Color get speedTrackLive => AethThemeSync.palette.speedTrackLive;
 
   /// The progress fill's tail at the 180° end (#0C7650, running frame).
   static const Color speedFillTail = Color(0xFF0C7650);
@@ -124,38 +148,47 @@ abstract final class AethColors {
 
   /// The rest-state core of the page's start button — v4.33: the owner's
   /// own CSS (Rectangle 13) says `#080C09`; it flips to [accentConnected]
-  /// while running.
-  static const Color speedCoreRest = Color(0xFF080C09);
+  /// while running. v4.34 light: `#FFFFFF` (the card family).
+  /// Theme-dependent.
+  static Color get speedCoreRest => AethThemeSync.palette.speedCoreRest;
 
   /// v4.33 (owner CSS, «در حالت قبل از استارت تست»): the start button's
   /// inner layers are BLACK at rest — rgba(17,0,0,0.19) halo and
   /// rgba(17,0,0,0.45) mid — under the permanent green glow; the pair
-  /// flips to the accent family while running.
-  static const Color speedIdleLayer = Color(0xFF110000);
+  /// flips to the accent family while running. v4.34 light: the ink tint
+  /// `#141C16` under the same opacities. Theme-dependent.
+  static Color get speedIdleLayer => AethThemeSync.palette.speedIdleLayer;
 
   /// v4.33 (owner CSS, the look-2 connect button «Hicon / Linear / Off»):
   /// the power glyph's stroke on the GREEN core = `#0D5138`.
   static const Color onConnectCore = Color(0xFF0D5138);
 
   /// v4.33 (owner CSS, Rectangle 13 — the wizard CTA): the continue /
-  /// «برو بریم» button's own ink `#0F1510` (the dark-card family).
-  static const Color obCtaBg = Color(0xFF0F1510);
+  /// «برو بریم» button's fill `#0F1510` (the dark-card family). v4.34
+  /// light: `#FFFFFF` (the CTA is a card; its label is [textPrimary]).
+  /// Theme-dependent.
+  static Color get obCtaBg => AethThemeSync.palette.obCtaBg;
 
-  /// Jitter tile bg (#0A394B); its icon #008FD5.
-  static const Color speedTileJitter = Color(0xFF0A394B);
+  /// Jitter tile bg (night #0A394B / light rgba(0,143,213,0.15) — the CSS
+  /// icon-box tint pattern); its icon #008FD5 both modes. Theme-dependent
+  /// bg (v4.34).
+  static Color get speedTileJitter => AethThemeSync.palette.speedTileJitter;
   static const Color speedIconJitter = Color(0xFF008FD5);
 
-  /// Ping tile bg (#3A3C17); its icon #E6D83A.
-  static const Color speedTilePing = Color(0xFF3A3C17);
+  /// Ping tile bg (night #3A3C17 / light rgba(230,216,58,0.18)); its icon
+  /// #E6D83A both modes. Theme-dependent bg (v4.34).
+  static Color get speedTilePing => AethThemeSync.palette.speedTilePing;
   static const Color speedIconPing = Color(0xFFE6D83A);
 
-  /// The DOWN tile bg is the home panel's own [statDownBg] (#0A4F33 —
-  /// measured EXACT on the frame); its icon #01D589.
-  static const Color speedIconDown = Color(0xFF01D589);
+  /// The DOWN tile bg is the home panel's own [statDownBg]; its icon —
+  /// night #01D589 measured EXACT / light #00D589 (owner CSS Graph Down).
+  /// Theme-dependent (v4.34).
+  static Color get speedIconDown => AethThemeSync.palette.speedIconDown;
 
-  /// The UP tile bg is the home panel's own [statUpBg] (#3A1C1C — measured
-  /// EXACT); its icon #E83946.
-  static const Color speedIconUp = Color(0xFFE83946);
+  /// The UP tile bg is the home panel's own [statUpBg]; its icon — night
+  /// #E83946 measured EXACT / light #E63946 (owner CSS Graph Up).
+  /// Theme-dependent (v4.34).
+  static Color get speedIconUp => AethThemeSync.palette.speedIconUp;
 }
 
 /// Shape & effect tokens (report table 8, Figma CSS + owner CSS v4.11).

@@ -482,7 +482,7 @@ class ObQuestionHeading extends StatelessWidget {
             icon,
             width: AethGeometry.obHeadingIcon * s,
             height: AethGeometry.obHeadingIcon * s,
-            colorFilter: const ColorFilter.mode(
+            colorFilter: ColorFilter.mode(
               AethColors.textPrimary,
               BlendMode.srcIn,
             ),
@@ -549,7 +549,7 @@ class ObCtaButton extends StatelessWidget {
                     AppAssets.iconLeft2,
                     width: AethGeometry.obCtaChevron * s,
                     height: AethGeometry.obCtaChevron * s,
-                    colorFilter: const ColorFilter.mode(
+                    colorFilter: ColorFilter.mode(
                       AethColors.textPrimary,
                       BlendMode.srcIn,
                     ),

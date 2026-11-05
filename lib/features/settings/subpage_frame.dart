@@ -6,9 +6,10 @@
 ///    connected/disconnected state), gated by the appearance switch;
 ///  * the fixed chrome the owner decreed for every page («دکمه برگشت و
 ///    دکمه علامت تعجب هم که دکمه های ثابت همه صفحه ها باید باشن»):
-///    the info tile (Telegram) at the visual LEFT, the title centered,
-///    the back chevron tile at the visual RIGHT — the settings page's
-///    own arrangement;
+///    v4.34 — that exclamation tile is now the NIGHT ⇄ LIGHT theme switch
+///    (owner round 10) at the visual LEFT, the title centered, the back
+///    chevron tile at the visual RIGHT — the settings page's own
+///    arrangement;
 ///  * the entrance/exit cascade: every block slides up 22 px + fades on
 ///    its own slice of the ROUTE timeline (the settings page's recipe,
 ///    v4.17 — «به صفحه و کارت ها انیمیشن ورود و خروج اضافه کن»);
@@ -26,6 +27,7 @@ import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../home/widgets/pattern_sides.dart';
+import '../shared/theme_toggle_tile.dart';
 
 /// The Telegram channel — the info tile's destination on every page.
 Future<void> openTelegramChannel() async {
@@ -117,7 +119,7 @@ class SubPageFrame extends StatelessWidget {
                             0,
                             _SubPageTopBar(
                               title: title,
-                              onInfo: openTelegramChannel,
+                              store: store,
                               onBack: () => Navigator.of(context).maybePop(),
                             ),
                           ),
@@ -154,18 +156,19 @@ class SubPageFrame extends StatelessWidget {
   }
 }
 
-/// The settings-page chrome: info tile (Telegram) visual LEFT · title
-/// centered · back chevron tile visual RIGHT.
+/// The settings-page chrome: theme-toggle tile visual LEFT · title
+/// centered · back chevron tile visual RIGHT (v4.34 — the exclamation /
+/// info tile became the night ⇄ light switch).
 class _SubPageTopBar extends StatelessWidget {
   const _SubPageTopBar({
     required this.title,
+    required this.store,
     required this.onBack,
-    required this.onInfo,
   });
 
   final String title;
+  final ConnectionStore store;
   final VoidCallback onBack;
-  final VoidCallback onInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -175,13 +178,11 @@ class _SubPageTopBar extends StatelessWidget {
       height: tile,
       child: Row(
         children: [
-          _TopTile(
-            key: const ValueKey('subpage-info'),
-            asset: AppAssets.iconInformationCircle,
+          ThemeToggleTile(
+            store: store,
             size: tile,
             iconSize: AethGeometry.topTileIcon * s,
-            semanticLabel: 'Telegram channel',
-            onTap: onInfo,
+            tileKey: const ValueKey('subpage-info'),
           ),
           // v4.22 device lesson: long page titles («تنظیمات هستهٔ Aether»)
           // overflowed the 336 px row at 17 px — the title now rides an
@@ -265,7 +266,7 @@ class _TopTile extends StatelessWidget {
               asset,
               width: iconSize,
               height: iconSize,
-              colorFilter: const ColorFilter.mode(
+              colorFilter: ColorFilter.mode(
                 AethColors.textPrimary,
                 BlendMode.srcIn,
               ),
@@ -316,7 +317,7 @@ class SubSectionHeading extends StatelessWidget {
             icon,
             width: AethGeometry.settingsHeadingIconSize * s,
             height: AethGeometry.settingsHeadingIconSize * s,
-            colorFilter: const ColorFilter.mode(
+            colorFilter: ColorFilter.mode(
               AethColors.textPrimary,
               BlendMode.srcIn,
             ),

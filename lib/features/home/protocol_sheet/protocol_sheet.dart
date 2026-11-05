@@ -41,7 +41,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../connection/connection_state.dart';
 import '../../../connection/connection_store.dart';
@@ -49,8 +48,8 @@ import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 import '../../../l10n/app_strings.dart';
+import '../../shared/theme_toggle_tile.dart';
 import '../widgets/pattern_sides.dart';
-import '../widgets/top_bar.dart';
 
 /// Pushes the protocol-selection page. v4.25 — the route itself is the
 /// STYLE'S OWN personality via [aethPageRoute] (SILK fade-rise / TIDE
@@ -115,12 +114,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
     });
   }
 
-  Future<void> _openTelegram() async {
-    final uri = Uri.parse(HomeTopBar.telegramChannelUrl);
-    // External browser/app — never an in-app webview (same as settings).
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
@@ -163,7 +156,9 @@ class _ProtocolPageState extends State<ProtocolPage> {
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          // ---- top bar: info (Telegram) · title · back
+                          // ---- top bar: theme toggle · title · back
+                          // (v4.34 — the exclamation tile became the
+                          // night ⇄ light switch, owner round 10).
                           _enter(
                             t,
                             0,
@@ -172,7 +167,7 @@ class _ProtocolPageState extends State<ProtocolPage> {
                               left: AethGeometry.pageHPadding * s,
                               right: AethGeometry.pageHPadding * s,
                               child: _PageTopBar(
-                                onInfo: _openTelegram,
+                                store: widget.store,
                                 onBack: () => Navigator.of(context).pop(),
                               ),
                             ),
@@ -414,9 +409,9 @@ class _ProtocolPageState extends State<ProtocolPage> {
 // ---------------------------------------------------------------------------
 
 class _PageTopBar extends StatelessWidget {
-  const _PageTopBar({required this.onInfo, required this.onBack});
+  const _PageTopBar({required this.store, required this.onBack});
 
-  final VoidCallback onInfo;
+  final ConnectionStore store;
   final VoidCallback onBack;
 
   @override
@@ -449,14 +444,12 @@ class _PageTopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          // Visual LEFT: the info tile (i → Telegram channel).
-          _TileButton(
-            key: const ValueKey('proto-page-info'),
-            asset: AppAssets.iconInformationCircle,
+          // Visual LEFT: the theme toggle (v4.34).
+          ThemeToggleTile(
+            store: store,
             size: tile,
             iconSize: AethGeometry.topTileIcon * s,
-            semanticLabel: 'Telegram channel',
-            onTap: onInfo,
+            tileKey: const ValueKey('proto-page-info'),
           ),
         ],
       ),
@@ -511,7 +504,7 @@ class _TileButton extends StatelessWidget {
               asset,
               width: iconSize,
               height: iconSize,
-              colorFilter: const ColorFilter.mode(
+              colorFilter: ColorFilter.mode(
                 AethColors.textPrimary,
                 BlendMode.srcIn,
               ),
@@ -566,7 +559,7 @@ class _SheetHeadingRow extends StatelessWidget {
               badge,
               width: AethGeometry.protoBadgeSize * s,
               height: AethGeometry.protoBadgeSize * s,
-              colorFilter: const ColorFilter.mode(
+              colorFilter: ColorFilter.mode(
                 AethColors.textPrimary,
                 BlendMode.srcIn,
               ),
@@ -872,7 +865,7 @@ class _ProtocolGlyph extends StatelessWidget {
         asset,
         width: w,
         height: w,
-        colorFilter: const ColorFilter.mode(
+        colorFilter: ColorFilter.mode(
           AethColors.textPrimary,
           BlendMode.srcIn,
         ),

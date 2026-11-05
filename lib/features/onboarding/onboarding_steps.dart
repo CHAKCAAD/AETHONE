@@ -382,7 +382,7 @@ class _LookGroup extends StatelessWidget {
                         AppAssets.iconTickCircle,
                         width: AethGeometry.obCheckBadge * 0.7 * s,
                         height: AethGeometry.obCheckBadge * 0.7 * s,
-                        colorFilter: const ColorFilter.mode(
+                        colorFilter: ColorFilter.mode(
                           AethColors.onPillConnected,
                           BlendMode.srcIn,
                         ),
@@ -497,7 +497,7 @@ class _ObSectionHeading extends StatelessWidget {
             badge,
             width: AethGeometry.protoBadgeSize * s,
             height: AethGeometry.protoBadgeSize * s,
-            colorFilter: const ColorFilter.mode(
+            colorFilter: ColorFilter.mode(
               AethColors.textPrimary,
               BlendMode.srcIn,
             ),

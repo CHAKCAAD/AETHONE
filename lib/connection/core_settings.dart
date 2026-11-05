@@ -98,8 +98,17 @@ enum TorLogLevel { info, debug, trace }
 /// enum is only the UI vocabulary.
 enum RoutingArea { iran, turkmenistan, russia, china, none }
 
-/// The Aether core fine-grained settings. Defaults == the core's defaults
-/// (a fresh object passes NOTHING the core would not do on its own).
+/// The Aether core fine-grained settings.
+///
+/// v4.34 — the APP defaults now deliberately DIFFER from the core's own
+/// on the two knobs the owner re-decreed (owner round 10):
+///  * [h2Transport] = true — «دیفالت مسک رو بزار روی HTTP2» (the core's
+///    own default is HTTP/3/QUIC; a fresh object now passes `--h2`);
+///  * [noize] = balanced — «پروفایل دیفالت حالت اغتشاش رو بزار روی
+///    متعادل» (the core default carried `firewall` for MASQUE;
+///    `balanced` is the mid-filtered-network pick).
+/// Existing installs keep their persisted picks — only fresh objects
+/// (and keys missing from a blob) take these.
 class CoreSettings {
   CoreSettings({
     this.fragmentPreset = FragmentPreset.off,
@@ -119,10 +128,16 @@ class CoreSettings {
     this.ciphers12 = '',
     this.ciphers13 = '',
     this.masqueSni = '',
-    this.h2Transport = false,
+    // v4.34 — MASQUE's default transport is HTTP/2 over TCP (owner
+    // round 10: «راستی حالت دیفالت مسک رو بزار روی HTTP2»); H3/QUIC is
+    // now the OPT-IN. Existing installs keep their persisted pick.
+    this.h2Transport = true,
     this.quicV2 = true,
     this.dns = '1.1.1.1,1.0.0.1',
-    this.noize = NoizeProfile.defaultValue,
+    // v4.34 — the obfuscation profile defaults to متعادل (owner round
+    // 10: «پروفایل دیفالت حالت اغتشاش رو بزار روی متعادل»); the core's
+    // own per-protocol choice is now the OPT-IN.
+    this.noize = NoizeProfile.balanced,
     this.perf = PerfProfile.auto,
     this.logLevel = CoreLogLevel.info,
     this.keepalive = 5,

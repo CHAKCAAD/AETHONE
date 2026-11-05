@@ -89,6 +89,29 @@ class MainActivity : FlutterActivity() {
         installCoreLogRedirect()
     }
 
+    /// v4.34 — owner round 10: «هنوز هم داده های زیادی تولید میکنه اپ که
+    /// فکر میکنم به خاطر لاگ هسته ها باشه لطفا بعد از هربار بسته شدن اپ
+    /// فایل لاگ حذف بشه تا انقدر داده جمع نشه». The capture dies with the
+    /// CLOSED app:
+    ///  * at process start the redirect wipes BOTH generations — every
+    ///    process starts with an EMPTY capture (a force-killed session
+    ///    leaves no residue either);
+    ///  * when the activity finishes FOR REAL (back / swipe-away —
+    ///    `isFinishing`, NOT a config-change recreation) the capture is
+    ///    deleted right away; if the process lives on (a running tunnel
+    ///    service), the single-writer reader thread reopens a FRESH file
+    ///    on its next chunk — the capture never grows back from the old
+    ///    one.
+    override fun onDestroy() {
+        if (EngineBridge.channel != null) {
+            EngineBridge.channel = null
+        }
+        if (isFinishing) {
+            clearCoreLog()
+        }
+        super.onDestroy()
+    }
+
     /// v4.26 — BOUNDED, ROTATING capture. The process stdout+stderr are
     /// dup2'd onto a pipe drained by a dedicated reader thread that writes
     /// `core-log.txt`, rotating at [CORE_LOG_MAX_BYTES] into
@@ -108,8 +131,10 @@ class MainActivity : FlutterActivity() {
             val dir = File(filesDir, CORE_LOG_DIR)
             if (!dir.exists()) dir.mkdirs()
             val current = File(dir, CORE_LOG)
-            // Retire legacy over-grown captures from older builds.
-            if (current.length() > CORE_LOG_MAX_BYTES) current.delete()
+            // v4.34 — EVERY process starts with an empty capture (owner:
+            // the log must not survive the closed app). The old code kept
+            // a sub-ceiling current file across launches.
+            current.delete()
             File(dir, CORE_LOG_PREV).delete()
 
             val pipe = Os.pipe()
@@ -350,13 +375,6 @@ class MainActivity : FlutterActivity() {
             }
             previous?.uncaughtException(thread, throwable)
         }
-    }
-
-    override fun onDestroy() {
-        if (EngineBridge.channel != null) {
-            EngineBridge.channel = null
-        }
-        super.onDestroy()
     }
 
     private fun prepareVpn(result: MethodChannel.Result) {
