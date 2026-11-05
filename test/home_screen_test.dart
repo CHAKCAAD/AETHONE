@@ -238,8 +238,8 @@ void main() {
     await tester.pumpWidget(_booth(HomeScreen(store: store)));
     await tester.pumpAndSettle();
 
-    expect(find.byType(GlowCircle), findsOneWidget);
-    await tester.tap(find.byType(GlowCircle), warnIfMissed: false);
+    expect(find.byType(ConnectButtonGlow), findsOneWidget);
+    await tester.tap(find.byType(ConnectButtonGlow), warnIfMissed: false);
     await tester.pump(const Duration(milliseconds: 100));
     expect(store.state, VpnState.starting);
   });

@@ -9,11 +9,12 @@
 ///    grid: ایران و ترکمنستان on the top row, روسیه و چین below, the
 ///    gray «none» tile (✕-in-circle) floating mid-left;
 ///
-///  * step 3 «ضاهر دکمه اتصال چجوری باشه؟» — the two live previews: the
-///    look-1 mini FAB column (dark 65×132 panel, green 48 FAB with the
-///    dark power glyph, 3 red chevrons) and the look-2 core button
-///    (110×110 squircle r42 with the app's own glow layer stack), the
-///    Tick-Circle check badge under the SELECTED one;
+///  * step 3 «ضاهر دکمه اتصال چجوری باشه؟» — the two live previews
+///    (v4.33): the look-1 slot renders the main screen's OWN FabColumn
+///    (an exact copy — no chevrons, the real geometry) and the look-2
+///    slot renders the REAL ConnectButtonGlow composition (the owner's
+///    own CSS, scaled to the preview band), the Tick-Circle check badge
+///    under the SELECTED one;
 ///
 ///  * step 4 — «حالت اتصال» segments (تونل/پروکسی), the «پروتکل اتوماتیک
 ///    میخوای؟» option cards (Shield Star amber on the green اتوماتیک
@@ -33,6 +34,7 @@ import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
 import '../../l10n/app_strings.dart';
+import '../home/widgets/bottom_panel.dart';
 import '../home/widgets/glow_pill.dart';
 
 // ---------------------------------------------------------------------------
@@ -268,6 +270,13 @@ class ObRoutingTiles extends StatelessWidget {
 
 // ---------------------------------------------------------------------------
 // Step 3 — the two look previews with the moving check badge.
+// v4.33 (owner round 9): the LEFT slot is an EXACT copy of the main
+// screen's own [FabColumn] (the real widget — no more mini re-drawing with
+// the chevrons the v4.15 decree removed: «این دکمه دقیقا همون دکمه صفحه
+// اصلی هست همون رو عینا کپی کن همینجا»), and the RIGHT slot renders the
+// REAL [ConnectButtonGlow] composition (the owner's CSS «Group 45»)
+// scaled to the preview band — the very button the home screen shows in
+// look 2.
 // ---------------------------------------------------------------------------
 
 class ObLookPreviews extends StatelessWidget {
@@ -278,30 +287,45 @@ class ObLookPreviews extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final glowH = AethGeometry.obCoreButton * 1.42 * s;
-    final zoneH = glowH + AethGeometry.obCheckGap * s + AethGeometry.obCheckBadge * s;
+    final glowH = AethGeometry.obPreviewGroupSize * s;
+    final zoneH =
+        glowH + AethGeometry.obCheckGap * s + AethGeometry.obCheckBadge * s;
 
     return SizedBox(
       height: zoneH,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Left zone (visual left): the look-1 FAB column preview.
+          // Left zone (visual left): the main screen's OWN look-1 column.
           Expanded(
             child: _LookGroup(
               keyId: 'ob-look-one',
               selected: store.homeLook == HomeLook.one,
               onTap: () => store.setHomeLook(HomeLook.one),
-              preview: _FabColumnPreview(s: s),
+              // The real FabColumn — its own gestures are absorbed so the
+              // GROUP's tap (the look pick) owns every touch.
+              preview: AbsorbPointer(
+                child: FabColumn(
+                  connected: true,
+                  style: store.effectiveMotionStyle(context),
+                  onConnect: () {},
+                  onDisconnect: () {},
+                ),
+              ),
             ),
           ),
-          // Right zone: the look-2 center button preview.
+          // Right zone: the main screen's look-2 button — the owner's CSS
+          // composition at the preview scale.
           Expanded(
             child: _LookGroup(
               keyId: 'ob-look-two',
               selected: store.homeLook == HomeLook.two,
               onTap: () => store.setHomeLook(HomeLook.two),
-              preview: _CoreButtonPreview(s: s),
+              preview: const ConnectButtonGlow(
+                connected: true,
+                scale: AethGeometry.obPreviewGroupSize /
+                    AethGeometry.connectGroupSize,
+              ),
             ),
           ),
         ],
@@ -310,7 +334,7 @@ class ObLookPreviews extends StatelessWidget {
   }
 }
 
-/// One preview group: the preview centered in a 1.42× glow-tall box, then
+/// One preview group: the preview centered in the preview-band box, then
 /// the check badge slot 20 below (the badge rides the SELECTED group —
 /// the frame ships it under the look-1 column).
 class _LookGroup extends StatelessWidget {
@@ -329,7 +353,7 @@ class _LookGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final glowH = AethGeometry.obCoreButton * 1.42 * s;
+    final glowH = AethGeometry.obPreviewGroupSize * s;
     return GestureDetector(
       key: ValueKey(keyId),
       behavior: HitTestBehavior.opaque,
@@ -369,129 +393,6 @@ class _LookGroup extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// The look-1 preview: the mini FAB column — dark 65×132 r20 panel, the
-/// 48×48 r14 green FAB with the dark power glyph at its top, 3 red
-/// chevrons low (the home screen's own column, shrunk).
-class _FabColumnPreview extends StatelessWidget {
-  const _FabColumnPreview({required this.s});
-
-  final double s;
-
-  @override
-  Widget build(BuildContext context) {
-    final fab = AethGeometry.obPreviewFab * s;
-    return Container(
-      width: AethGeometry.obPreviewColumnW * s,
-      height: AethGeometry.obPreviewColumnH * s,
-      decoration: BoxDecoration(
-        color: AethColors.cardDark,
-        borderRadius:
-            BorderRadius.circular(AethGeometry.obPreviewColumnRadius * s),
-      ),
-      child: Column(
-        children: [
-          SizedBox(height: AethGeometry.obPreviewColumnTopInset * s),
-          Container(
-            width: fab,
-            height: fab,
-            decoration: BoxDecoration(
-              color: AethColors.accentConnected,
-              borderRadius:
-                  BorderRadius.circular(AethGeometry.obPreviewFabRadius * s),
-            ),
-            child: Center(
-              child: SvgPicture.asset(
-                AppAssets.iconOff,
-                width: 24 * s,
-                height: 24 * s,
-                fit: BoxFit.contain,
-                colorFilter: const ColorFilter.mode(
-                  AethColors.onPillConnected,
-                  BlendMode.srcIn,
-                ),
-              ),
-            ),
-          ),
-          const Spacer(),
-          for (var i = 0; i < 3; i++)
-            Padding(
-              padding: EdgeInsets.only(bottom: i < 2 ? 3 * s : 0),
-              child: SvgPicture.asset(
-                AppAssets.iconDown1,
-                width: AethGeometry.obPreviewChevronW * s,
-                height: AethGeometry.obPreviewChevronH * s,
-                fit: BoxFit.contain,
-                colorFilter: const ColorFilter.mode(
-                  AethColors.fabChevrons,
-                  BlendMode.srcIn,
-                ),
-              ),
-            ),
-          SizedBox(height: 24 * s),
-        ],
-      ),
-    );
-  }
-}
-
-/// The look-2 preview: the 110×110 squircle core button with the app's
-/// own glow layer stack (LayerStack — the home center-button recipe at
-/// the frame's squircle corners) and the dark power glyph on top.
-class _CoreButtonPreview extends StatelessWidget {
-  const _CoreButtonPreview({required this.s});
-
-  final double s;
-
-  @override
-  Widget build(BuildContext context) {
-    const core = AethGeometry.obCoreButton;
-    const r = AethGeometry.obCoreButtonRadius;
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        LayerStack(
-          scale: s,
-          color: AethColors.accentConnected,
-          layers: [
-            // The frame's three halo steps + the wide soft glow, radii
-            // kept at the core's 42/110 squircle proportion.
-            const LayerSpec(
-              width: core * 1.42,
-              height: core * 1.42,
-              radius: r * 1.42,
-              opacity: 0.30,
-              blurSigma: 16,
-            ),
-            const LayerSpec(
-              width: core * 1.25,
-              height: core * 1.25,
-              radius: r * 1.25,
-              opacity: 0.18,
-            ),
-            const LayerSpec(
-              width: core * 1.12,
-              height: core * 1.12,
-              radius: r * 1.12,
-              opacity: 0.35,
-            ),
-            const LayerSpec(width: core, height: core, radius: r, opacity: 1.0),
-          ],
-        ),
-        SvgPicture.asset(
-          AppAssets.iconOff,
-          width: AethGeometry.obCoreIcon * s,
-          height: AethGeometry.obCoreIcon * s,
-          fit: BoxFit.contain,
-          colorFilter: const ColorFilter.mode(
-            AethColors.onPillConnected,
-            BlendMode.srcIn,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -555,8 +456,13 @@ class ObProtocolSections extends StatelessWidget {
   }
 }
 
-/// A section heading — the protocol page's own row: 16 w700 white text,
-/// 12 gap, the 26 badge flush with the content's right edge.
+/// A section heading — v4.33 (owner round 9): the SAME 20 w700 size as
+/// the question headings on steps 1–3 (owner: «سایز متن سرتیترها توی هر ۴
+/// صفحه باید یکسان باشه»), and the flex-split bug is gone — the old
+/// [Spacer]+[Flexible] pair shared the free row space, floating the text
+/// mid-row («سرتیترها… کمی وسط تر اومدن باید به سمت راست برن»); the text
+/// now renders at its fixed size, right-aligned against its 26 badge with
+/// the protocol page's own 12 gap.
 class _ObSectionHeading extends StatelessWidget {
   const _ObSectionHeading({required this.text, required this.badge});
 
@@ -569,20 +475,20 @@ class _ObSectionHeading extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Spacer(),
           Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                text,
-                textDirection: TextDirection.rtl,
-                style: TextStyle(
-                  fontFamily: 'IRANYekanX',
-                  fontWeight: FontWeight.w700,
-                  fontSize: AethGeometry.protoHeadingTextSize * s,
-                  color: AethColors.textPrimary,
-                ),
+            child: Text(
+              text,
+              textDirection: TextDirection.rtl,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'IRANYekanX',
+                fontWeight: FontWeight.w700,
+                fontSize: AethGeometry.obHeadingSize * s,
+                color: AethColors.textPrimary,
               ),
             ),
           ),

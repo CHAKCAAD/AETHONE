@@ -13,7 +13,10 @@ import 'package:aethone/app.dart';
 import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
+import 'package:aethone/core/design_tokens.dart';
 import 'package:aethone/core/motion.dart';
+import 'package:aethone/features/home/widgets/bottom_panel.dart';
+import 'package:aethone/features/home/widgets/glow_pill.dart';
 import 'package:aethone/features/onboarding/onboarding_flow.dart';
 
 Widget _booth(Widget child) => MaterialApp(
@@ -132,7 +135,15 @@ void main() {
       // Step 3 — the two look previews; the check badge rides the pick.
       await _advance(tester, 2);
       expect(find.text('ضاهر دکمه اتصال چجوری باشه؟'), findsOneWidget);
+      // v4.33 — the question heading renders at the FIXED 20px on every
+      // step (owner: «سایز متن سرتیترها توی هر ۴ صفحه باید یکسان باشه»).
+      final q3 = tester.widget<Text>(find.text('ضاهر دکمه اتصال چجوری باشه؟'));
+      expect(q3.style?.fontSize, AethGeometry.obHeadingSize);
       expect(store.homeLook, HomeLook.one);
+      // v4.33 — the LEFT slot is the home screen's OWN FabColumn (an exact
+      // copy), the RIGHT slot the real ConnectButtonGlow composition.
+      expect(find.byType(FabColumn), findsOneWidget);
+      expect(find.byType(ConnectButtonGlow), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('ob-look-two')));
       await tester.pumpAndSettle();
       expect(store.homeLook, HomeLook.two);
@@ -143,6 +154,13 @@ void main() {
       expect(find.text('پروتکل اتوماتیک میخوای؟'), findsOneWidget);
       expect(find.text('اتوماتیک'), findsOneWidget);
       expect(find.text('دستی'), findsOneWidget);
+      // v4.33 — the section headings share the SAME 20px as the question
+      // headings, and sit flush right next to their badges (the flex-split
+      // float is gone).
+      final h4 = tester.widget<Text>(find.text('پروتکل اتوماتیک میخوای؟'));
+      expect(h4.style?.fontSize, AethGeometry.obHeadingSize);
+      final hMode = tester.widget<Text>(find.text('حالت اتصال').first);
+      expect(hMode.style?.fontSize, AethGeometry.obHeadingSize);
 
       await tester.tap(find.byKey(const ValueKey('ob-segment-tunnel')));
       await tester.pumpAndSettle();
@@ -156,6 +174,32 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('ob-scan-2')));
       await tester.pumpAndSettle();
       expect(store.scanSpeed, 2);
+    });
+
+    // v4.33 — the CTA restyle (owner CSS Rectangle 13): the app's own card
+    // corner language (r17) on the dark #0F1510 ink — never a green pill.
+    testWidgets('the CTA is the owner-CSS dark box (r17, #0F1510)', (
+      tester,
+    ) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(OnboardingFlow(store: store)));
+      await tester.pumpAndSettle();
+
+      final cta = tester.widget<Container>(
+        find.descendant(
+          of: find.byKey(const ValueKey('ob-cta')),
+          matching: find.byType(Container),
+        ).first,
+      );
+      final deco = cta.decoration! as BoxDecoration;
+      expect(deco.color, AethColors.obCtaBg);
+      expect(
+        (deco.borderRadius as BorderRadius).topLeft,
+        const Radius.circular(AethGeometry.obCtaRadius),
+      );
+      expect(AethGeometry.obCtaRadius, 17);
+      expect(AethGeometry.obCtaH, 62);
     });
 
     testWidgets('«برو بریم!» — the scanning wait, then the commit', (

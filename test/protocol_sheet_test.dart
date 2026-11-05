@@ -319,68 +319,6 @@ void main() {
   });
 
   testWidgets(
-      'the ⓘ opens the family descriptions (3 blocks, verbatim §11) and '
-      'the × closes it', (tester) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
-
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
-
-    // The psiphon card ⓘ sits at the card's top-left corner — the v4.17
-    // hit box is 32 px wide, so the old (17,15) offset still lands.
-    final card = tester.getRect(
-      find.byKey(const ValueKey('proto-card-psiphon')),
-    );
-    await tester.tapAt(Offset(card.left + 17, card.top + 15));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 260));
-
-    // The 3 family descriptions (owner §11, verbatim).
-    expect(
-      find.textContaining('اتصال مستقیماً از طریق Psiphon'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('ابتدا تونل Aether برقرار می‌شود'),
-      findsOneWidget,
-    );
-    expect(find.textContaining('ابتدا اتصال از طریق Psiphon'), findsOneWidget);
-
-    // × closes (the button is Ø30 centred at x201, y206..236).
-    await tester.tapAt(
-      const Offset(201, AethGeometry.protoDescCloseTop + 15),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 260));
-    expect(find.textContaining('اتصال مستقیماً از طریق Psiphon'), findsNothing);
-    // The page itself is still there.
-    expect(find.byType(ProtocolPage), findsOneWidget);
-  });
-
-  testWidgets('a single-protocol ⓘ shows one description block', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
-
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
-
-    final tile = tester.getRect(
-      find.byKey(const ValueKey('proto-tile-masque')),
-    );
-    await tester.tapAt(Offset(tile.left + 17, tile.top + 15));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 260));
-
-    expect(find.textContaining('اتصال رمزگذاری‌شده'), findsOneWidget);
-    expect(find.textContaining('ابتدا تونل Aether'), findsNothing);
-  });
-
-  testWidgets(
       'v4.17: the page renders under a Material — no unmaterialed-text '
       'yellow underline (the double yellow lines under every text on the '
       'v4.16 sheet are gone)', (tester) async {

@@ -122,10 +122,24 @@ abstract final class AethColors {
   /// within JPEG drift of [accentConnected] — kept distinct, evidence rule).
   static const Color speedFillHead = Color(0xFF1ACE8D);
 
-  /// The rest-state core of the page's start button (#0A0C09 — darker than
-  /// [topTile]; it flips to [accentConnected] while running — the frame
-  /// measures #1AD994 there).
-  static const Color speedCoreRest = Color(0xFF0A0C09);
+  /// The rest-state core of the page's start button — v4.33: the owner's
+  /// own CSS (Rectangle 13) says `#080C09`; it flips to [accentConnected]
+  /// while running.
+  static const Color speedCoreRest = Color(0xFF080C09);
+
+  /// v4.33 (owner CSS, «در حالت قبل از استارت تست»): the start button's
+  /// inner layers are BLACK at rest — rgba(17,0,0,0.19) halo and
+  /// rgba(17,0,0,0.45) mid — under the permanent green glow; the pair
+  /// flips to the accent family while running.
+  static const Color speedIdleLayer = Color(0xFF110000);
+
+  /// v4.33 (owner CSS, the look-2 connect button «Hicon / Linear / Off»):
+  /// the power glyph's stroke on the GREEN core = `#0D5138`.
+  static const Color onConnectCore = Color(0xFF0D5138);
+
+  /// v4.33 (owner CSS, Rectangle 13 — the wizard CTA): the continue /
+  /// «برو بریم» button's own ink `#0F1510` (the dark-card family).
+  static const Color obCtaBg = Color(0xFF0F1510);
 
   /// Jitter tile bg (#0A394B); its icon #008FD5.
   static const Color speedTileJitter = Color(0xFF0A394B);
@@ -160,6 +174,19 @@ abstract final class AethRadius {
   static const double speedHalo = 32;
   static const double speedMid = 27;
   static const double speedCore = 17;
+
+  /// v4.33 — the look-2 CONNECT button composition (the owner's own CSS,
+  /// «Group 45»/«Group 11», 236×236 at the hero position): four concentric
+  /// layers, the outermost a circular blurred glow, the inner three
+  /// SQUIRCLES (the old circular GlowCircle is retired by decree):
+  ///   glow : 236×236,   r120 (a circle), rgba(26,217,149,0.53), blur(57)
+  ///   halo : 181.92²,   r69,  rgba(26,217,149,0.19)
+  ///   mid  : 152.42²,   r62,  rgba(26,217,149,0.45)
+  ///   core : 108.17²,   r41,  #1AD995 + the Off glyph 48×48, 4.5px #0D5138
+  static const double connectGlow = 120;
+  static const double connectHalo = 69;
+  static const double connectMid = 62;
+  static const double connectCore = 41;
 
   /// Dark cards — corner radius pixel-measured on the reference frames:
   /// protocol card (62 tall) and stat cards (65 tall) both ≈16.
@@ -222,8 +249,21 @@ abstract final class AethGeometry {
   static const double patternLeftArtRows = 459; // 375..834
   static const double patternRightArtBottomRow = 719; // art rows 357..719
 
-  /// Look-2 center connect button core: 112px circle (144,328)–(256,432).
-  static const double centerButtonSize = 112;
+  /// v4.33 — the look-2 CONNECT button composition sizes (the owner's own
+  /// CSS, 236×236 «Group 45» at the hero position left:83 top:263):
+  /// glow 236 (circle r120, blurred 57) / halo 181.92 / mid 152.42 /
+  /// core 108.17 (squircle r41) with the Off glyph 48×48. The whole group
+  /// IS the button's layout box — the glow spills past it via blur.
+  static const double connectGroupSize = 236;
+  static const double connectHaloSize = 181.92;
+  static const double connectMidSize = 152.42;
+  static const double connectCoreSize = 108.17;
+  static const double connectIconSize = 48;
+
+  /// v4.33 — the look page's look-2 preview renders the FULL composition
+  /// (ConnectButtonGlow) scaled to this group size (the frame's preview
+  /// measures ≈150 total / ≈66 core).
+  static const double obPreviewGroupSize = 150;
 
   /// Status pill group — owner CSS (Group 8): outer layer 140×38 at
   /// (131,605); all layers concentric (center x201 = frame center).
@@ -247,10 +287,16 @@ abstract final class AethGeometry {
   static const double pillShadowOffsetY = 8;
   static const double pillShadowAlpha = 0.30;
 
-  /// Speed-Test glow layer (Group 11 halo) — same owner tuning: softer and
-  /// wider, never a tight saturated ring.
-  static const double speedGlowOpacity = 0.34;
-  static const double speedGlowBlur = 24;
+  /// Speed-Test glow layer (Group 11 halo) — v4.33: the owner's own CSS
+  /// (both states) pins the glow at rgba(26,217,149,0.53) with
+  /// `filter: blur(57px)`; the old 0.34/24 tuning is superseded by the
+  /// explicit decree («کد css ش رو هم میزارم»).
+  static const double speedGlowOpacity = 0.53;
+  static const double speedGlowBlur = 57;
+
+  /// The connect-button glow blur — the owner CSS `filter: blur(57px)`
+  /// on the 236×236 layer (v4.33).
+  static const double connectBlur = 57;
 
   /// Speed Test button group — owner CSS (Group 11): 96×96 glow at (153,508),
   /// layers concentric, core 44×44 at (179,534); icon box 28×28 (Activity 4).
@@ -451,12 +497,7 @@ abstract final class AethGeometry {
 
   /// Tile grid: 3 per row, w103 gap 21 (x27..374), row1 y233 h100, row2 y349
   /// h94 (the sheet's internal gaps kept: heading→row1 39, row1→row2 16).
-  /// Tile internals: ⓘ 15×15 at (11,9) + an invisible [protoInfoHit] hit box
-  /// (v4.17 — owner: the ⓘ was too small/hard to tap; the VISUAL stays in
-  /// place, only the tap target grows around it); icon center at top+41;
-  /// label 12 w500 center at top+66.
-  /// v4.17 — owner: the tile corners were «کمی تیز» → radius 16 → 21, the
-  /// settings cards' own radius.
+  /// v4.33 — the ⓘ badge tokens are gone (the descriptions are gone).
   static const double protoTileW = 103;
   static const double protoTileGap = 21;
   static const double protoTileRadius = 21;
@@ -464,9 +505,6 @@ abstract final class AethGeometry {
   static const double protoTileRow1H = 100;
   static const double protoTileRow2Top = 349;
   static const double protoTileRow2H = 94;
-  static const double protoInfoBadgeSize = 15;
-  static const double protoInfoBadgeInset = 11;
-  static const double protoInfoHit = 32;
   static const double protoTileIconCenter = 41;
   static const double protoTileLabelCenter = 66;
   static const double protoTileLabelSize = 12;
@@ -489,6 +527,16 @@ abstract final class AethGeometry {
   static const double protoMainLogoCenterY = 43;
   static const double protoMainLabelCenterY = 80;
 
+  /// v4.33 (owner round 9) — the combined-mode subtile glyphs: the owner's
+  /// own SVGs (38×41 «X اور وارپ» / 24×35 «وارپ اور X»), rendered 48 tall
+  /// inside the 66 subtile (the retired aether+chevron stack measured ≈59
+  /// ink-height; the owner's art carries its own breathing room). The
+  /// plain ONLY subtiles keep the family logos at the old stack's own
+  /// calibrated boxes (psiphon 31.2 / tor 26.3 — the _StackGlyph evidence).
+  static const double protoCombinedGlyphH = 48;
+  static const double protoPsiphonGlyphBox = 31.2;
+  static const double protoTorGlyphBox = 26.3;
+
   /// Scan pills: h36 r8 gap8, CENTERED (row spans x33..367). Widths increase
   /// toward the right; the frame ships the widest (rightmost, 87) SELECTED.
   /// Page top: 40 below its heading top (the sheet's 765→805 rhythm).
@@ -501,19 +549,6 @@ abstract final class AethGeometry {
   static const double protoPillW3 = 64;
   static const double protoPillW4 = 77;
   static const double protoPillW5 = 87;
-
-  /// Descriptions popup (the ⓘ sheet): × button at y206 — v4.17 owner: the
-  /// close was hard to hit → Ø22 → Ø30 (glyph 10 → 13) — and the popup
-  /// background «باید تیره باشه تا متنش قابل خوندن باشه» → the second scrim
-  /// deepens to 94% (#0C120F) so the r24 #0C120F card reads as a solid dark
-  /// layer over the page. Blocks 14px/lh18 white + dividers #1A261C, icon
-  /// column on the right (plain / Aether+∨ / Aether+∧ — subtile ×1.45).
-  static const double protoDescCloseTop = 206;
-  static const double protoDescCloseSize = 30;
-  static const double protoDescCardTop = 242;
-  static const double protoDescCardRadius = 24;
-  static const double protoDescTextSize = 14;
-  static const double protoDescTextHeight = 18;
 
   // -------------------------------------------------------------------
   // v4.23 — ONBOARDING («صفحه شروع», the four wizard frames + «لودینگ
@@ -566,39 +601,35 @@ abstract final class AethGeometry {
   static const double obRowPitch = 95;
   static const double obMidTileTop = 47.5;
 
-  /// CTA: full-width 60-tall pill (r30), 18 w700 white label + the white
-  /// Left-2 chevron 20 from the leading (visual left) edge, soft green
-  /// shadow; 39 of glass below it.
-  static const double obCtaH = 60;
-  static const double obCtaRadius = 30;
+  /// CTA — v4.33 (owner CSS Rectangle 13): full-width 62-tall box, the
+  /// app's own card corner language (r17 — «گردی گوشه‌ها باید اندازه بقیه
+  /// باکس‌های اپ باشه»), ink #0F1510 (AethColors.obCtaBg), the CSS shadow
+  /// rgba(0,0,0,0.25) 0 4 4; 18 w700 white label + the white Left-2
+  /// chevron from the leading (visual left) edge; 39 of glass below it.
+  static const double obCtaH = 62;
+  static const double obCtaRadius = 17;
   static const double obCtaTextSize = 18;
   static const double obCtaChevron = 18;
   static const double obCtaChevronInset = 20;
   static const double obCtaToBottom = 39;
 
-  /// Step-4 look previews: the look-1 mini FAB column (65×132 r20, 48×48
-  /// r14 green FAB with the dark Off glyph, 3 red chevrons low) and the
-  /// look-2 core button (110×110 squircle r42 + three glow layers), the
-  /// 24×24 r8 Tick-Circle check badge 20 under the SELECTED preview.
-  static const double obPreviewColumnW = 65;
-  static const double obPreviewColumnH = 132;
-  static const double obPreviewFab = 48;
-  static const double obPreviewFabRadius = 14;
-  static const double obPreviewColumnRadius = 20;
-  static const double obPreviewColumnTopInset = 8;
-  static const double obPreviewChevronW = 14;
-  static const double obPreviewChevronH = 5;
-  static const double obCoreButton = 110;
-  static const double obCoreButtonRadius = 42;
-  static const double obCoreIcon = 44;
+  /// Step-3 look previews — v4.33 (owner round 9): the look-1 slot is an
+  /// EXACT copy of the home screen's own [FabColumn] (65×138 r20, the
+  /// sliding 48×48 r14 power FAB, NO chevrons — they were removed from
+  /// the real column by the v4.15 decree), and the look-2 slot renders
+  /// the REAL [ConnectButtonGlow] composition scaled to
+  /// [obPreviewGroupSize]; the 24×24 r8 Tick-Circle check badge rides 20
+  /// under the SELECTED preview.
   static const double obCheckBadge = 24;
   static const double obCheckBadgeRadius = 8;
   static const double obCheckGap = 20;
 
   /// Step-4 (mode + protocol + scan): 77 below the stepper icons, section
-  /// headings 16 w700 with the 26 badge (the protocol page's own family),
-  /// segments 36 r14 gap 21, option cards 101 r24 gap 12 with a 56-wide
-  /// icon+label column 24 from the card's right edge, body text 12/1.25.
+  /// headings — v4.33: the SAME 20 w700 size as steps 1–3 (owner: «سایز
+  /// متن سرتیترها توی هر ۴ صفحه باید یکسان باشه») — with the 26 badge
+  /// (the protocol page's own family), segments 36 r14 gap 21, option
+  /// cards 101 r24 gap 12 with a 56-wide icon+label column 24 from the
+  /// card's right edge, body text 12/1.25.
   static const double obStep4TopGap = 77;
   static const double obHeadingToSegments = 16;
   static const double obSegmentsToHeading = 38;
@@ -660,9 +691,16 @@ abstract final class AethGeometry {
   /// The dial itself (the painter box is 216×118.5, center (108,108)).
   static const double speedDialOuterR = 108;
   static const double speedDialInnerR = 87;
-  static const double speedTickW = 10;
-  static const double speedTickTop = 40; // y308 — 40 below the arc top
-  static const double speedTickH = 52; // → y360, faded out
+
+  /// v4.33 — the gauge NEEDLE (the owner's own SVG «عقربه صفحه تست سرعت»,
+  /// 15×52, a green→transparent gradient): pivots at the dial's centre
+  /// (108,108 in the painter box), points at the scale's start (WEST) at
+  /// zero and sweeps with the measured download speed to EAST at 100 Mbs.
+  /// The frames measure the same 52px length (ink y308–360, pivot y≈362).
+  static const double speedNeedleW = 15;
+  static const double speedNeedleH = 52;
+  static const double speedNeedleCx = 108;
+  static const double speedNeedleCy = 108;
 
   /// The whole dial zone: the arc + the value slot + the phase-label slot
   /// as ONE FIXED 176 box — the cards below never move between states.
@@ -691,14 +729,11 @@ abstract final class AethGeometry {
   static const double speedIconPingSize = 22;
   static const double speedIconGraphSize = 31; // 26px square at 25/30 fill
 
-  /// The button + its label zone.
+  /// The button + its label zone. v4.33: the core glyph is the set's own
+  /// Activity 4 waveform (the owner's CSS «Hicon / Linear / Activity 4»
+  /// — 28×28, white on the dark rest core, #0D4D36 on the green one).
   static const double speedGapCardsToButton = 41; // cards y650 → glow box y692
-  static const double speedButtonIcon = 25; // the hexagon+wave brand glyph
+  static const double speedButtonIcon = 28; // the Activity 4 waveform
   static const double speedButtonLabelSize = 16; // «شروع» ink y787–801
   static const double speedGapButtonToLabel = -6; // glow bottom y785 → ink y787
-
-  /// The edge patterns behind the page render at a fraction of the home
-  /// strength here — the frames' own wash peaks ΔL≈8–14 over the bg (the
-  /// home composition at full strength peaks ΔL≈33–40).
-  static const double speedPatternOpacity = 0.2;
 }

@@ -25,12 +25,14 @@
 ///    «حالت اتصال» keeps Password 1.svg; badges 20 → 26 and the text moved
 ///    next to its icon (gap 26 → 12).
 ///  * Tiles/family cards: radius 16 → 21 (the settings cards' corners);
-///    family cards breathe (h 116, subtile gaps 20, vertically centred);
-///    ماسک/وایرگارد glyph boxes match the other tiles (28).
-///  * ⓘ badges: 15 px visual + a 32 px invisible hit box (easy tap, same
-///    structure).
-///  * Descriptions popup: deep 94% scrim so the text reads on the dark
-///    card, and the × close grows Ø22 → Ø30.
+///    family cards breathe (h 116, subtile gaps 20, vertically centred).
+///  * v4.33 (owner round 9): the ⓘ info badges and the WHOLE protocol
+///    descriptions popup are REMOVED by decree («تمام آیکون‌های علامت
+///    تعجب که برای توضیح پروتکل‌ها هست رو حذف بکن و کلا قسمت توضیحات
+///    پروتکل رو حذف بکن»); the combined sub-tiles carry the owner's own
+///    SVG logos (سایفون اور وارپ / وارپ اور سایفون / تور اور وارپ / وارپ
+///    اور تور); ماسک/وایرگارد glyph boxes shrink 28 → 24 («آیکون ماسک و
+///    وایرگارد رو کوچک‌تر کن تا به اندازه آیکون بقیه پروتکل‌ها بشن»).
 ///  * ENTRANCE/EXIT kept: the route fade + the internal block cascade
 ///    (staggered slide-up) ride the same route timeline; the exit retraces
 ///    the cascade on pop. Selecting a protocol still pulses and AUTO-POPS
@@ -43,7 +45,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../connection/connection_state.dart';
 import '../../../connection/connection_store.dart';
-import '../../../connection/transport_modes.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
@@ -81,10 +82,6 @@ class ProtocolPage extends StatefulWidget {
 }
 
 class _ProtocolPageState extends State<ProtocolPage> {
-  /// The protocol whose ⓘ descriptions popup is open (a family id for the
-  /// cards, the protocol itself for a tile).
-  ProtocolId? _descFor;
-
   /// The protocol currently pulsing from a selection tap (auto-pop follows).
   ProtocolId? _pulseId;
 
@@ -118,10 +115,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
     });
   }
 
-  void _openDesc(ProtocolId id) => setState(() => _descFor = id);
-
-  void _closeDesc() => setState(() => _descFor = null);
-
   Future<void> _openTelegram() async {
     final uri = Uri.parse(HomeTopBar.telegramChannelUrl);
     // External browser/app — never an in-app webview (same as settings).
@@ -133,13 +126,7 @@ class _ProtocolPageState extends State<ProtocolPage> {
     final strings = AppStrings.of(context);
     final routeAnim = ModalRoute.of(context)!.animation!;
 
-    return PopScope(
-      // The popup consumes BACK first; otherwise the route pops normally.
-      canPop: _descFor == null,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _descFor != null) _closeDesc();
-      },
-      child: Scaffold(
+    return Scaffold(
         backgroundColor: AethColors.bgScreen,
         body: AnimatedBuilder(
           // v4.17: LIVE store binding — mode segments and scan pills apply
@@ -256,7 +243,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 selected: _plainHighlight,
                                 pulse: _pulseId,
                                 onSelect: _select,
-                                onInfo: _openDesc,
                               ),
                             ),
                           ),
@@ -282,7 +268,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 selected: _plainHighlight,
                                 pulse: _pulseId,
                                 onSelect: _select,
-                                onInfo: _openDesc,
                               ),
                             ),
                           ),
@@ -308,8 +293,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 selected: widget.store.selectedProtocol,
                                 pulse: _pulseId,
                                 onSelect: _select,
-                                onInfo: _openDesc,
-                                infoId: ProtocolId.psiphonChain,
                               ),
                             ),
                           ),
@@ -333,8 +316,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 selected: widget.store.selectedProtocol,
                                 pulse: _pulseId,
                                 onSelect: _select,
-                                onInfo: _openDesc,
-                                infoId: ProtocolId.torChain,
                               ),
                             ),
                           ),
@@ -365,12 +346,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                               ),
                             ),
                           ),
-                          // ---- the ⓘ descriptions popup
-                          if (_descFor != null)
-                            _DescLayer(
-                              forId: _descFor!,
-                              onClose: _closeDesc,
-                            ),
                         ],
                       ),
                     ),
@@ -380,7 +355,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
             );
           },
         ),
-      ),
     );
   }
 
@@ -681,7 +655,6 @@ class _TileRow extends StatelessWidget {
     required this.selected,
     required this.pulse,
     required this.onSelect,
-    required this.onInfo,
   });
 
   final List<ProtocolId> ids;
@@ -692,7 +665,6 @@ class _TileRow extends StatelessWidget {
   final ProtocolId? selected;
   final ProtocolId? pulse;
   final void Function(ProtocolId) onSelect;
-  final void Function(ProtocolId) onInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -708,7 +680,6 @@ class _TileRow extends StatelessWidget {
               isSelected: selected == ids[i],
               pulsing: pulse == ids[i],
               onSelect: onSelect,
-              onInfo: onInfo,
             ),
         ],
       ),
@@ -723,7 +694,6 @@ class _ProtoTile extends StatefulWidget {
     required this.isSelected,
     required this.pulsing,
     required this.onSelect,
-    required this.onInfo,
   });
 
   final ProtocolId id;
@@ -731,20 +701,6 @@ class _ProtoTile extends StatefulWidget {
   final bool isSelected;
   final bool pulsing;
   final void Function(ProtocolId) onSelect;
-  final void Function(ProtocolId) onInfo;
-
-  /// The 32×32 hit box is centred on the 15×15 visual badge so the visual
-  /// position never moves: visual centre (11+7.5, 9+7.5) = (18.5, 16.5)
-  /// ⇒ hit-box top-left (18.5−16, 16.5−16) = (2.5, 0.5).
-  static double get _infoHitLeft =>
-      AethGeometry.protoInfoBadgeInset +
-      AethGeometry.protoInfoBadgeSize / 2 -
-      AethGeometry.protoInfoHit / 2;
-  static double get _infoHitTop =>
-      AethGeometry.protoInfoBadgeInset -
-      2 +
-      AethGeometry.protoInfoBadgeSize / 2 -
-      AethGeometry.protoInfoHit / 2;
 
   @override
   State<_ProtoTile> createState() => _ProtoTileState();
@@ -800,16 +756,10 @@ class _ProtoTileState extends State<_ProtoTile>
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // ⓘ info badge — 15×15 visual at (11,9) inside a 32×32
-                // invisible hit box (v4.17: the badge was hard to tap; the
-                // visual position is unchanged, only the tap target grew).
-                Positioned(
-                  left: _ProtoTile._infoHitLeft * s,
-                  top: _ProtoTile._infoHitTop * s,
-                  width: AethGeometry.protoInfoHit * s,
-                  height: AethGeometry.protoInfoHit * s,
-                  child: _InfoBadge(onTap: () => widget.onInfo(widget.id)),
-                ),
+                // v4.33 (owner round 9): the ⓘ info badge is REMOVED by
+                // decree («تمام آیکون‌های علامت تعجب که برای توضیح
+                // پروتکل‌ها هست رو حذف بکن») — the tile is the icon + the
+                // label only.
                 // Icon — center at top+41 (measured cy 342 on row 1).
                 Positioned(
                   left: 0,
@@ -850,42 +800,19 @@ class _ProtoTileState extends State<_ProtoTile>
 
 }
 
-/// The ⓘ badge: 15×15 white Information Circle glyph + a generous opaque
-/// tap area (the parent Positioned sizes the hit box).
-class _InfoBadge extends StatelessWidget {
-  const _InfoBadge({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Center(
-        child: SvgPicture.asset(
-          AppAssets.iconInformationCircle,
-          width: AethGeometry.protoInfoBadgeSize * s,
-          height: AethGeometry.protoInfoBadgeSize * s,
-          colorFilter: const ColorFilter.mode(
-            AethColors.textPrimary,
-            BlendMode.srcIn,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// Per-protocol tile icon boxes, calibrated so the final GLYPH matches the
 /// frame (each SVG carries its own ink ratio — the settings-page recipe).
 /// v4.17 — owner: ماسک و وایرگارد «هم بزرگه هم اندازه سایر آیکون ها باید
-/// باشن» — 38/37 → 28, the gool/gool-classic box.
+/// باشن» — 38/37 → 28. v4.33 (owner round 9): «آیکون ماسک و وایرگارد رو
+/// کوچک‌تر کن تا به اندازه آیکون بقیه پروتکل‌ها بشن» — the two WIDE
+/// landscape SVGs (39×22 / 38×22) span the full 28-box WIDTH, visually
+/// outweighing the portrait glyphs (gool prints only ≈24 wide in the same
+/// box) — their box drops to 24 so their ink width matches the others.
 double _tileIconBox(ProtocolId id) => switch (id) {
       ProtocolId.auto => 26,
-      ProtocolId.masque => 28,
-      ProtocolId.wireguard => 28,
+      ProtocolId.masque => 24, // v4.33 — 28 → 24 (the wide-glyph shrink)
+      ProtocolId.wireguard => 24, // v4.33 — 28 → 24
       ProtocolId.gool => 28,
       ProtocolId.goolClassic => 28,
       ProtocolId.mim => 32,
@@ -970,8 +897,6 @@ class _FamilyCard extends StatelessWidget {
     required this.selected,
     required this.pulse,
     required this.onSelect,
-    required this.onInfo,
-    required this.infoId,
   });
 
   /// Visual order [only, chain, reverse] — matches the frame's subtiles.
@@ -983,10 +908,6 @@ class _FamilyCard extends StatelessWidget {
   final ProtocolId? selected;
   final ProtocolId? pulse;
   final void Function(ProtocolId) onSelect;
-  final void Function(ProtocolId) onInfo;
-
-  /// The id the ⓘ opens descriptions for (a family representative).
-  final ProtocolId infoId;
 
   @override
   Widget build(BuildContext context) {
@@ -1013,13 +934,8 @@ class _FamilyCard extends StatelessWidget {
                 width: AethGeometry.protoMainBlockW * s,
                 child: Stack(
                   children: [
-                    Positioned(
-                      left: _ProtoTile._infoHitLeft * s,
-                      top: _ProtoTile._infoHitTop * s,
-                      width: AethGeometry.protoInfoHit * s,
-                      height: AethGeometry.protoInfoHit * s,
-                      child: _InfoBadge(onTap: () => onInfo(infoId)),
-                    ),
+                    // v4.33 — the ⓘ badge is gone (owner decree); the main
+                    // block is the logo + the label only.
                     Positioned(
                       left: 0,
                       right: 0,
@@ -1145,13 +1061,25 @@ class _SubTileState extends State<_SubTile>
                 BorderRadius.circular(AethGeometry.protoSubtileRadius * s),
           ),
           child: Center(
-            child: _StackGlyph(
-              protocol: widget.id,
-              chain: chain,
-              reverse: reverse,
-              white: widget.isSelected,
-              scale: 1.0,
-            ),
+            // v4.33 (owner round 9): the combined modes carry their OWN
+            // owner-drawn logos (سایفون اور وارپ / وارپ اور سایفون / تور
+            // اور وارپ / وارپ اور تور) — the composed aether+chevron stacks
+            // are retired. White vector art reads on BOTH the dark and the
+            // selected (green) surfaces; the plain ONLY tiles keep the
+            // family's real logo.
+            child: (chain || reverse)
+                ? SvgPicture.asset(
+                    AppAssets.protocolIcon(widget.id),
+                    height: AethGeometry.protoCombinedGlyphH * s,
+                    fit: BoxFit.contain,
+                  )
+                : _ProtocolGlyph(
+                    id: widget.id,
+                    box: widget.isPsiphon
+                        ? AethGeometry.protoPsiphonGlyphBox
+                        : AethGeometry.protoTorGlyphBox,
+                    white: widget.isSelected,
+                  ),
           ),
         ),
       ),
@@ -1160,131 +1088,6 @@ class _SubTileState extends State<_SubTile>
 }
 
 // ---------------------------------------------------------------------------
-// The stack glyph language (frame-measured): plain = the protocol glyph
-// alone; chain/reverse = [Aether logo ~18×19] +7 [chevron 14×6] +6
-// [protocol glyph ~16×20]. The Aether mark is the app logo 3.svg (white)
-// — pixel-matched to the frame's stack-top glyph. `scale` grows it for the
-// descriptions popup (×1.45).
-// ---------------------------------------------------------------------------
-
-class _StackGlyph extends StatelessWidget {
-  const _StackGlyph({
-    required this.protocol,
-    required this.chain,
-    required this.reverse,
-    this.white = false,
-    this.scale = 1.0,
-  });
-
-  final ProtocolId protocol;
-  final bool chain;
-  final bool reverse;
-
-  /// All-white treatment (selected surfaces — measured on the frame).
-  final bool white;
-
-  final double scale;
-
-  // Canvas-honest layout. The family PNGs carry big transparent margins
-  // (psiphon ink = 47%×64% of its 128-canvas; tor = 57%×86% of 42-box), so
-  // the glyph BOX is larger than its ink. The LAYOUT gaps are compensated
-  // so the VISUAL ink-to-ink gaps land on the frame's ~7 / ~6 and the
-  // whole stack totals ≈59 ink-height inside the 66 box (measured):
-  //   psiphon: box 31.2 (ink 14.6×20), gaps 6.7 / 0.4
-  //   tor:     box 26.3 (ink 15×22.5), gaps 6.7 / 4.1
-  // (aether canvas 20 ≈ its ink — only ~0.2 pad.)
-  static const double _psiphonBox = 31.2;
-  static const double _psiphonG1 = 6.7;
-  static const double _psiphonG2 = 0.4;
-  static const double _torBox = 26.3;
-  static const double _torG1 = 6.7;
-  static const double _torG2 = 4.1;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final isPsiphon = protocol.isPsiphon;
-    final box = (isPsiphon ? _psiphonBox : _torBox) * scale;
-    final glyph = _ProtocolGlyph(id: protocol, box: box, white: white);
-    if (!chain && !reverse) return glyph; // plain = ONLY
-
-    final k = s * scale;
-    final aether = SvgPicture.asset(
-      AppAssets.appLogoNeutralWhite,
-      width: 20 * k,
-      height: 20 * k,
-    );
-    final chevron = _StackChevron(
-      up: reverse,
-      width: 14 * k,
-      height: 6 * k,
-      color: white ? AethColors.textPrimary : Colors.white,
-    );
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        aether,
-        SizedBox(height: (isPsiphon ? _psiphonG1 : _torG1) * k),
-        chevron,
-        SizedBox(height: (isPsiphon ? _psiphonG2 : _torG2) * k),
-        glyph,
-      ],
-    );
-  }
-}
-
-/// The stack chevron — 14×6, 2px round-cap strokes (drawn once here in the
-/// set's linear style; custom drawing precedent D7, documented).
-class _StackChevron extends StatelessWidget {
-  const _StackChevron({
-    required this.up,
-    required this.width,
-    required this.height,
-    required this.color,
-  });
-
-  final bool up;
-  final double width;
-  final double height;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      size: Size(width, height),
-      painter: _StackChevronPainter(up, color),
-    );
-  }
-}
-
-class _StackChevronPainter extends CustomPainter {
-  _StackChevronPainter(this.up, this.color);
-
-  final bool up;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final w = size.width;
-    final h = size.height;
-    final path = Path()
-      ..moveTo(w * 0.06, up ? h * 0.85 : h * 0.15)
-      ..lineTo(w * 0.5, up ? h * 0.28 : h * 0.72)
-      ..lineTo(w * 0.94, up ? h * 0.85 : h * 0.15);
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(_StackChevronPainter old) =>
-      old.up != up || old.color != color;
-}
-
 // ---------------------------------------------------------------------------
 // «سرعت اسکن» pills: 5 increasing widths 28/47/64/77/87, h36 r8 gap8,
 // CENTERED (the row spans x33..367). The widest (rightmost) is selected in
@@ -1350,248 +1153,3 @@ class _ScanPills extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// The ⓘ descriptions popup: × Ø30 at y206 (v4.17 — bigger, easy hit), the
-// card r24 #0C120F over a 94% #0C120F scrim (v4.17 — «باید تیره باشه تا
-// متنش قابل خوندن باشه»), blocks 14px/lh18 white + dividers #1A261C, icon
-// column on the right (plain / Aether+∨ / Aether+∧ — the subtile language
-// ×1.45).
-// ---------------------------------------------------------------------------
-
-class _DescLayer extends StatelessWidget {
-  const _DescLayer({required this.forId, required this.onClose});
-
-  final ProtocolId forId;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final strings = AppStrings.of(context);
-
-    final bool isFamily = forId.isPsiphon || forId.isTor;
-    // v4.20 — every block carries its mode's LOCAL SOCKS PORT (evidence:
-    // transport_modes.dart endpoints; cli.rs L23/L239/L282) so the owner
-    // can see which port each mode actually serves on a device (owner
-    // round 2: tested 1820 while the psiphon chain serves 1821).
-    final blocks = <({String text, bool chain, bool reverse, int port})>[
-      if (isFamily) ...[
-        (
-          text: forId.isPsiphon ? strings.descPsiphonOnly : strings.descTorOnly,
-          chain: false,
-          reverse: false,
-          port: 1819,
-        ),
-        (
-          text: forId.isPsiphon
-              ? strings.descPsiphonChain
-              : strings.descTorChain,
-          chain: true,
-          reverse: false,
-          port: forId.isPsiphon ? 1821 : 1820,
-        ),
-        (
-          text: forId.isPsiphon
-              ? strings.descPsiphonReverse
-              : strings.descTorReverse,
-          chain: true,
-          reverse: true,
-          port: 1819,
-        ),
-      ] else
-        (
-          text: switch (forId) {
-            ProtocolId.auto => strings.descAuto,
-            ProtocolId.masque => strings.descMasque,
-            ProtocolId.wireguard => strings.descWireguard,
-            ProtocolId.gool => strings.descGool,
-            ProtocolId.goolClassic => strings.descGoolClassic,
-            ProtocolId.mim => strings.descMim,
-            _ => strings.descMasque,
-          },
-          chain: false,
-          reverse: false,
-          port: 1819,
-        ),
-    ];
-    assert(
-      !isFamily ||
-          blocks.every(
-            (b) => b.port == TransportModes.byId(
-              // The glyph language: reverse implies a stacked (chain) glyph
-              // with an inverted chevron — derive the MODE reverse-first.
-              forId.isPsiphon
-                  ? (b.reverse
-                        ? ProtocolId.psiphonReverse
-                        : b.chain
-                        ? ProtocolId.psiphonChain
-                        : ProtocolId.psiphonOnly)
-                  : (b.reverse
-                        ? ProtocolId.torReverse
-                        : b.chain
-                        ? ProtocolId.torChain
-                        : ProtocolId.torOnly),
-            ).socksEndpoint.port,
-          ),
-      'desc-popup ports must mirror transport_modes.dart',
-    );
-
-    return Positioned.fill(
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0, end: 1),
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        builder: (context, t, child) {
-          if (t < 0.01) return const SizedBox.shrink();
-          return Stack(
-            children: [
-              // Second scrim over the page (v4.17 — deepened to 94% so the
-              // description text reads on the dark card).
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onClose,
-                  child: Opacity(
-                    opacity: t,
-                    child: const ColoredBox(
-                      color: Color(0xF20C120F), // #0C120F @ 95%
-                    ),
-                  ),
-                ),
-              ),
-              // × close — Ø30 thin white ring + the set's Close.svg
-              Positioned(
-                top: AethGeometry.protoDescCloseTop * s,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onClose,
-                    child: Container(
-                      width: AethGeometry.protoDescCloseSize * s,
-                      height: AethGeometry.protoDescCloseSize * s,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AethColors.cardDark,
-                        border: Border.all(
-                          color: AethColors.textPrimary.withValues(alpha: 0.6),
-                          width: 1.5,
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: SvgPicture.asset(
-                        AppAssets.iconClose,
-                        width: 13 * s,
-                        height: 13 * s,
-                        colorFilter: const ColorFilter.mode(
-                          AethColors.textPrimary,
-                          BlendMode.srcIn,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // the card
-              Positioned(
-                top: AethGeometry.protoDescCardTop * s,
-                left: AethGeometry.protoRightInset * s,
-                right: AethGeometry.protoRightInset * s,
-                child: Opacity(
-                  opacity: t,
-                  child: Transform.scale(
-                    scale: 0.96 + 0.04 * t,
-                    alignment: Alignment.topCenter,
-                    child: child,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AethColors.sheetDescCard,
-            borderRadius:
-                BorderRadius.circular(AethGeometry.protoDescCardRadius * s),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < blocks.length; i++) ...[
-                if (i > 0)
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 32 * s,
-                      vertical: 10 * s,
-                    ),
-                    child: Container(
-                      height: 1,
-                      color: AethColors.sheetSubtile,
-                    ),
-                  ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    32 * s, // left text pad (frame: text starts x≈60)
-                    i == 0 ? 24 * s : 8 * s,
-                    30 * s + 22 * s + 12 * s, // pad + icon column + gap
-                    i == blocks.length - 1 ? 24 * s : 8 * s,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              blocks[i].text,
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontFamily: 'IRANYekanX',
-                                fontWeight: FontWeight.w400,
-                                fontSize: AethGeometry.protoDescTextSize * s,
-                                height: AethGeometry.protoDescTextHeight /
-                                    AethGeometry.protoDescTextSize,
-                                color: AethColors.textPrimary,
-                              ),
-                            ),
-                            // v4.20 — the mode's local SOCKS port (honest
-                            // label, Latin digits like the ping labels).
-                            SizedBox(height: 4 * s),
-                            Text(
-                              strings.protocolPortNote(blocks[i].port),
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontFamily: 'IRANYekanX',
-                                fontWeight: FontWeight.w500,
-                                fontSize:
-                                    (AethGeometry.protoDescTextSize - 2) * s,
-                                height: 1.3,
-                                color: AethColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: 12 * s),
-                      SizedBox(
-                        width: 22 * s,
-                        child: _StackGlyph(
-                          protocol: forId,
-                          chain: blocks[i].chain,
-                          reverse: blocks[i].reverse,
-                          scale: 1.45,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

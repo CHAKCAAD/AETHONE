@@ -11,7 +11,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../connection/connection_state.dart';
 import '../../connection/connection_store.dart';
@@ -211,10 +210,15 @@ class HomeScreen extends StatelessWidget {
                                   ? AuroraBloom(
                                       key: const ValueKey('connected-aura'),
                                       color: AethColors.accentConnected,
-                                      size:
-                                          (isLookOne
+                                      // v4.33 — the bloom wraps the WHOLE
+                                      // connect composition (the 236px
+                                      // group for look 2, the hero for
+                                      // look 1), breathing just outside
+                                      // its glow.
+                                      size: (isLookOne
                                               ? AethGeometry.heroSize
-                                              : AethGeometry.centerButtonSize) *
+                                              : AethGeometry
+                                                  .connectGroupSize) *
                                           1.25 *
                                           s,
                                       style: style,
@@ -474,11 +478,14 @@ class _FailureCaption extends StatelessWidget {
   }
 }
 
-/// Look 2: the hero IS the connect button (112px core, 4-layer glow) with
-/// the set's real Off.svg icon. Owner v4.12: back to CLICK — a tap toggles
-/// (connect when disconnected, disconnect when connected); the swipe-only
-/// interaction from defect #11 is reverted. v4.19 (#3): the toggle logic
-/// lives in [HomeScreen._toggleConnection] (tap-to-cancel during the walk).
+/// Look 2: the hero IS the connect button — v4.33 (owner round 9): the
+/// owner's own CSS composition «Group 45» ([ConnectButtonGlow] — a
+/// circular blurred glow over three SQUIRCLE layers with the Off glyph),
+/// replacing the old all-circle GlowCircle («این دکمه رو هم در صفحه اصلی
+/// و هم در این صفحه بد طراحی کردی»). Owner v4.12: plain tap toggles; the
+/// swipe-only interaction from defect #11 stays reverted. v4.19 (#3): the
+/// toggle logic lives in [HomeScreen._toggleConnection] (tap-to-cancel
+/// during the walk).
 class _CenterConnectButton extends StatelessWidget {
   const _CenterConnectButton({
     required this.store,
@@ -492,37 +499,11 @@ class _CenterConnectButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final connected = store.isConnected;
-    final duration = motionDuration(style, MotionDurations.state);
-
-    return GlowCircle(
-      active: connected,
-      duration: duration,
+    return ConnectButtonGlow(
+      connected: store.isConnected,
+      duration: motionDuration(style, MotionDurations.state),
       curve: style.curve,
       onTap: onTap, // tap-to-toggle (owner v4.12) + cancel (v4.19 #3)
-      child: TweenAnimationBuilder<Color?>(
-        tween: ColorTween(
-          begin: connected
-              ? AethColors.onPillDisconnected
-              : AethColors.onPillConnected,
-          end: connected
-              ? AethColors.onPillConnected
-              : AethColors.onPillDisconnected,
-        ),
-        duration: duration,
-        curve: style.curve,
-        builder: (context, color, _) => SvgPicture.asset(
-          AppAssets.iconOff,
-          width: 48 * s,
-          height: 48 * s,
-          fit: BoxFit.contain,
-          colorFilter: ColorFilter.mode(
-            color ?? AethColors.onPillDisconnected,
-            BlendMode.srcIn,
-          ),
-        ),
-      ),
     );
   }
 }

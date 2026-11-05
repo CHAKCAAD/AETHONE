@@ -355,79 +355,123 @@ class SpeedTestButton extends StatelessWidget {
   }
 }
 
-/// Circular variant of the layered structure (look-2 center connect button).
-class GlowCircle extends StatelessWidget {
-  const GlowCircle({
+/// v4.33 — the look-2 CONNECT button (owner round 9): the owner's own
+/// CSS composition «Group 45» — four concentric layers, the outermost a
+/// CIRCULAR blurred glow, the inner three SQUIRCLES (the old all-circle
+/// GlowCircle is retired by decree: «این دکمه رو هم در صفحه اصلی و هم در
+/// این صفحه بد طراحی کردی»):
+///   glow : 236×236,  r120, α0.53, blur 57 — the soft green/red bloom
+///   halo : 181.92²,  r69,  α0.19
+///   mid  : 152.42²,  r62,  α0.45
+///   core : 108.17²,  r41,  solid — the Off glyph 48×48 on top
+///   (#0D5138 stroke on the green core, #75160F on the red one).
+/// Both states share the geometry (the frames agree: «identical shapes,
+/// color only») — green when connected, red when disconnected, colors
+/// crossfaded. [scale] renders the whole composition smaller (the look
+/// page's preview) without recomputing a single layer.
+class ConnectButtonGlow extends StatelessWidget {
+  const ConnectButtonGlow({
     super.key,
-    required this.active,
-    required this.onTap,
-    required this.child,
-    this.diameter,
-    this.colorOn = AethColors.accentConnected,
-    this.colorOff = AethColors.statusDisconnected,
+    required this.connected,
+    this.onTap,
+    this.scale = 1.0,
     this.duration = const Duration(milliseconds: 400),
     this.curve = Curves.easeInOutCubic,
   });
 
-  final bool active;
+  final bool connected;
   final VoidCallback? onTap;
-  final Widget child;
-  final double? diameter;
-  final Color colorOn;
-  final Color colorOff;
+
+  /// 1.0 = the full 236px composition (the home hero button); the wizard's
+  /// look page passes [AethGeometry.obPreviewGroupSize] / 236.
+  final double scale;
   final Duration duration;
   final Curve curve;
 
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final d = diameter ?? AethGeometry.centerButtonSize * s;
-    final color = active ? colorOn : colorOff;
+    final k = s * scale;
+    final accent =
+        connected ? AethColors.accentConnected : AethColors.statusDisconnected;
+    final iconOn =
+        connected ? AethColors.onConnectCore : AethColors.onPillDisconnected;
 
-    // v4.13 (owner round-4 #4): the tap target covers the WHOLE section —
-    // the core AND its glow background (1.42×d) — so a tap on the halo
-    // toggles too. The stack is centered so the paint is pixel-identical.
+    // The tap target covers the WHOLE composition (glow included) — the
+    // v4.13 halo-taps-too decree carried over from the old circle.
     return _TouchFeedback(
       onTap: onTap,
       child: SizedBox(
-        width: d * 1.45,
-        height: d * 1.45,
+        width: AethGeometry.connectGroupSize * k,
+        height: AethGeometry.connectGroupSize * k,
         child: Stack(
           alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            LayerStack(
-              scale: s,
-              color: color,
-              layers: [
-                LayerSpec(
-                  width: d / s * 1.42,
-                  height: d / s * 1.42,
-                  radius: d / s * 0.71,
-                  opacity: AethColors.pillGlowOpacity,
-                  blurSigma: AethGeometry.pillBlur,
-                ),
-                LayerSpec(
-                  width: d / s * 1.24,
-                  height: d / s * 1.24,
-                  radius: d / s * 0.62,
-                  opacity: AethColors.pillHaloOpacity,
-                ),
-                LayerSpec(
-                  width: d / s * 1.12,
-                  height: d / s * 1.12,
-                  radius: d / s * 0.56,
-                  opacity: AethColors.pillMidOpacity,
-                ),
-                LayerSpec(
-                  width: d / s,
-                  height: d / s,
-                  radius: d / s * 0.5,
-                  opacity: 1,
-                ),
-              ],
+            // The four layers, bottom→top — ONE crossfaded color drives
+            // them all (green ↔ red), the owner's own opacities/radii.
+            TweenAnimationBuilder<Color?>(
+              tween: ColorTween(
+                begin: connected
+                    ? AethColors.statusDisconnected
+                    : AethColors.accentConnected,
+                end: accent,
+              ),
+              duration: duration,
+              curve: curve,
+              builder: (context, color, _) => LayerStack(
+                scale: k,
+                color: color ?? accent,
+                layers: const [
+                  LayerSpec(
+                    width: AethGeometry.connectGroupSize,
+                    height: AethGeometry.connectGroupSize,
+                    radius: AethRadius.connectGlow,
+                    opacity: AethColors.pillGlowOpacity,
+                    blurSigma: AethGeometry.connectBlur,
+                  ),
+                  LayerSpec(
+                    width: AethGeometry.connectHaloSize,
+                    height: AethGeometry.connectHaloSize,
+                    radius: AethRadius.connectHalo,
+                    opacity: AethColors.pillHaloOpacity,
+                  ),
+                  LayerSpec(
+                    width: AethGeometry.connectMidSize,
+                    height: AethGeometry.connectMidSize,
+                    radius: AethRadius.connectMid,
+                    opacity: AethColors.pillMidOpacity,
+                  ),
+                  LayerSpec(
+                    width: AethGeometry.connectCoreSize,
+                    height: AethGeometry.connectCoreSize,
+                    radius: AethRadius.connectCore,
+                    opacity: 1,
+                  ),
+                ],
+              ),
             ),
-            child,
+            // The Off glyph — 48×48, stroke crossfaded with the state.
+            TweenAnimationBuilder<Color?>(
+              tween: ColorTween(
+                begin: connected
+                    ? AethColors.onPillDisconnected
+                    : AethColors.onConnectCore,
+                end: iconOn,
+              ),
+              duration: duration,
+              curve: curve,
+              builder: (context, color, _) => SvgPicture.asset(
+                AppAssets.iconOff,
+                width: AethGeometry.connectIconSize * k,
+                height: AethGeometry.connectIconSize * k,
+                fit: BoxFit.contain,
+                colorFilter: ColorFilter.mode(
+                  color ?? iconOn,
+                  BlendMode.srcIn,
+                ),
+              ),
+            ),
           ],
         ),
       ),

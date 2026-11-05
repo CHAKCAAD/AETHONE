@@ -146,19 +146,16 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // The home patterns behind (the owner's per-page decree),
-            // gated by the appearance switch; alive while a test runs —
-            // at the speed frames' own quiet strength (v4.24.1: the
-            // frames' wash peaks ΔL≈8–14, the home composition ≈33–40).
+            // v4.33 (owner round 9: «از پترن‌های صفحه اصلی برای پس زمینه
+            // این صفحه استفاده کن دقیقا همون پترن») — the HOME composition
+            // itself, same position, same strength, no per-page wash; gated
+            // by the appearance switch; alive while a test runs.
             if (widget.store.showPatterns)
               Positioned.fill(
-                child: Opacity(
-                  opacity: AethGeometry.speedPatternOpacity,
-                  child: PatternSides(
-                    connected: widget.store.isConnected,
-                    style: widget.style,
-                    active: _state == _RunState.running,
-                  ),
+                child: PatternSides(
+                  connected: widget.store.isConnected,
+                  style: widget.style,
+                  active: _state == _RunState.running,
                 ),
               ),
             SafeArea(
@@ -393,14 +390,14 @@ class _TitleRow extends StatelessWidget {
             ),
           ),
           SizedBox(width: AethGeometry.speedTitleBadgeGap * s),
-          // The frame's own badge: the hexagon+wave brand mark (the same
-          // glyph that rides the start button's core), white like the
-          // text — owner-swappable like every glyph on the page.
+          // v4.33 (owner round 9): «آیکون کنار متن تست سرعت… باید از آیکون
+          // با نام Activity 4 در پوشه آیکون‌های اپ استفاده کنی» — the
+          // set's own waveform badge, white like the text.
           SizedBox(
             width: badge,
-            height: badge * 27 / 24, // the glyph's own aspect
+            height: badge,
             child: SvgPicture.asset(
-              AppAssets.iconHexWave,
+              AppAssets.iconActivity4,
               fit: BoxFit.contain,
               colorFilter: const ColorFilter.mode(
                 AethColors.textPrimary,
@@ -440,23 +437,76 @@ class _DialZone extends StatelessWidget {
     return SizedBox(
       height: AethGeometry.speedDialZoneH * s,
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
+          // The dial box (216×118.5, top-centred in the zone) carries BOTH
+          // the arc painter AND the needle — one coordinate system, so the
+          // needle's pivot (108,108) IS the arc's centre by construction
+          // (the v4.33 first cut placed the needle in ZONE coordinates and
+          // it landed 60 px left of the dial: the zone is 336 wide, the box
+          // only 216, centred).
           Positioned.fill(
             child: Align(
               alignment: Alignment.topCenter,
               child: SizedBox(
                 width: 216 * s,
                 height: 118.5 * s,
-                child: CustomPaint(
-                  painter: _DialPainter(
-                    track: running
-                        ? AethColors.speedTrackLive
-                        : AethColors.speedTrack,
-                    fill: running ? snap.liveMbps / 100 : 0,
-                    tick: running
-                        ? AethColors.accentConnected
-                        : AethColors.speedTrack,
-                  ),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _DialPainter(
+                          track: running
+                              ? AethColors.speedTrackLive
+                              : AethColors.speedTrack,
+                          fill: running ? snap.liveMbps / 100 : 0,
+                        ),
+                      ),
+                    ),
+                    // v4.33 (owner round 9) — the gauge NEEDLE: the owner's
+                    // own SVG («عقربه صفحه تست سرعت», 15×52, a
+                    // #1AD995→transparent gradient), pivoted at the box's
+                    // centre and sweeping with the measured download speed —
+                    // WEST at zero, over the top, EAST at 100 Mbs («نباید
+                    // صرفا وسط دایره ثابت باشه، باید همراه با میزان دانلود
+                    // مثل یک عقربه بچرخه»). It tracks the LIVE value during
+                    // the download phase and HOLDS the final download average
+                    // afterwards; the frames' rest pose dims it to the track
+                    // colour. The 12-o'clock tick it replaces is gone.
+                    Positioned(
+                      left: (AethGeometry.speedNeedleCx -
+                              AethGeometry.speedNeedleW / 2) *
+                          s,
+                      top:
+                          (AethGeometry.speedNeedleCy -
+                                  AethGeometry.speedNeedleH) *
+                              s,
+                      child: AnimatedRotation(
+                        key: const ValueKey('speed-needle'),
+                        turns:
+                            _needleFraction() / 2 - 0.25, // 0→W · 0.5→N · 1→E
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOutCubic,
+                        alignment:
+                            Alignment.bottomCenter, // pivot = dial centre
+                        child: SvgPicture.asset(
+                          AppAssets.speedNeedle,
+                          width: AethGeometry.speedNeedleW * s,
+                          height: AethGeometry.speedNeedleH * s,
+                          fit: BoxFit.fill,
+                          // Rest/done: the frames' dark-gray needle (a flat
+                          // tint — the gradient only reads while it runs).
+                          colorFilter: running
+                              ? null
+                              : const ColorFilter.mode(
+                                  AethColors.speedTrack,
+                                  BlendMode.srcIn,
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -531,22 +581,32 @@ class _DialZone extends StatelessWidget {
     if (v >= 999) return '999';
     return v.toStringAsFixed(1);
   }
+
+  /// The needle's position on the 0..1 scale (of 100 Mbs): the LIVE value
+  /// while the download phase streams, the phase's final download average
+  /// after it (held through upload and the done pose), zero before any
+  /// measurement.
+  double _needleFraction() {
+    final v = snap.phase == SpeedTestPhase.download
+        ? snap.liveMbps
+        : (snap.downMbps ?? 0);
+    return v.clamp(0, 100) / 100;
+  }
 }
 
 /// The dial: a 180° top semicircle (r97.5 centerline, stroke 21, round
 /// caps), the fill as a sweep gradient (dark tail at 180° → bright head
 /// at the leading edge — full scale 100 Mbs, the frame's own 50.4 sits
-/// at half the arc), the 12-o'clock tick fading downward.
+/// at half the arc). v4.33: the old 12-o'clock fading tick is REMOVED —
+/// the needle widget (the owner's own SVG) is the dial's pointer now.
 class _DialPainter extends CustomPainter {
-  _DialPainter({required this.track, required this.fill, required this.tick});
+  _DialPainter({required this.track, required this.fill});
 
   final Color track;
   final double fill; // 0..1 of the semicircle
-  final Color tick;
 
   @override
   void paint(Canvas canvas, Size size) {
-    const cx = 108.0; // the painter box is 216×118.5; the dial center x
     const stroke =
         AethGeometry.speedDialOuterR - AethGeometry.speedDialInnerR;
     // The centerline circle's bounding box (108±97.5) — const-friendly.
@@ -575,32 +635,11 @@ class _DialPainter extends CustomPainter {
         ).createShader(rect);
       canvas.drawArc(rect, math.pi, math.pi * p, false, fillPaint);
     }
-
-    // The 12-o'clock tick: solid at its top, fading to nothing downward.
-    const tickRect = Rect.fromLTWH(
-      cx - AethGeometry.speedTickW / 2,
-      AethGeometry.speedTickTop,
-      AethGeometry.speedTickW,
-      AethGeometry.speedTickH,
-    );
-    final tickPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [tick, tick.withValues(alpha: 0)],
-      ).createShader(tickRect);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        tickRect,
-        const Radius.circular(AethGeometry.speedTickW / 2),
-      ),
-      tickPaint,
-    );
   }
 
   @override
   bool shouldRepaint(_DialPainter old) =>
-      old.track != track || old.fill != fill || old.tick != tick;
+      old.track != track || old.fill != fill;
 }
 
 // ---------------------------------------------------------------------
@@ -615,13 +654,11 @@ class _StatGrid extends StatelessWidget {
   final _RunState state;
 
   // The frame's own glyphs — each with the frame's own size (the graphs'
-  // rounded square measures 26px, the drop-with-rain and the wifi arcs
-  // ≈22px; owner-swappable by editing this table):
-  //   jitter (drop + rain)  -> Drop Rain (design/speed_glyphs — traced)
-  //   ping (wifi arcs)      -> Wifi
-  //   down (trend square)   -> Graph Down (the home panel's own pairing)
-  //   up (trend square)     -> Graph Up
-  static const String _jitterIcon = AppAssets.iconDropRain;
+  // rounded square measures 26px; owner-swappable by editing this table).
+  // v4.33 (owner round 9): «آیکون jiter باید آیکون با نام Send 1 باشه»
+  // (the set's paper-plane glyph) and «آیکون ping باید آیکون با نام Wifi
+  // باشه» (already the set's arcs since v4.24).
+  static const String _jitterIcon = AppAssets.iconSend;
   static const String _pingIcon = AppAssets.iconWifi;
   static const String _downIcon = AppAssets.iconGraphDown;
   static const String _upIcon = AppAssets.iconGraphUp;
@@ -695,6 +732,9 @@ class _StatGrid extends StatelessWidget {
 
   /// The honest slot value: measured ⇒ the number; pending mid-run ⇒ the
   /// frame's own «...»; never measured ⇒ empty (the idle frame's slots).
+  /// v4.33 (owner round 9: «کارت دانلود و آپلود باید سرعت دانلود رو نشون
+  /// بدن نه میزان دانلود») — the DOWN/UP cards carry the measured SPEED
+  /// («X.X Mbs», the dial's own unit spelling), never the cumulative MB.
   String _cardValue(_CardSlot slot) {
     final running = state == _RunState.running;
     switch (slot) {
@@ -707,16 +747,15 @@ class _StatGrid extends StatelessWidget {
         if (v != null) return '$v';
         return running ? '...' : '';
       case _CardSlot.down:
-        if (snap.downBytes > 0) return _mb(snap.downBytes);
+        final v = snap.downMbps;
+        if (v != null) return '${v.toStringAsFixed(1)} Mbs';
         return running ? '...' : '';
       case _CardSlot.up:
-        if (snap.upBytes > 0) return _mb(snap.upBytes);
+        final v = snap.upMbps;
+        if (v != null) return '${v.toStringAsFixed(1)} Mbs';
         return running ? '...' : '';
     }
   }
-
-  /// «145 MB» — the bottom panel's own formatter.
-  static String _mb(int bytes) => '${bytes ~/ (1024 * 1024)} MB';
 }
 
 enum _CardSlot { ping, jitter, down, up }
@@ -815,8 +854,13 @@ class _SpeedStatCard extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------
-// The start button: the home Group 11 layers, a dark core at rest, the
-// accent-green core while running; the label rides under the group.
+// The start button — v4.33 (owner round 9): the owner's own CSS in BOTH
+// states. AT REST («در حالت قبل از استارت تست»): the permanent GREEN
+// glow (96 r32, rgba(26,217,149,0.53), blur 57) over BLACK inner layers
+// (74 r32 rgba(17,0,0,0.19), 62 r27 rgba(17,0,0,0.45)) with a #080C09
+// r17 core and the WHITE Activity 4 waveform; WHILE RUNNING («حین تست»)
+// the inner layers + core flip to the accent family (#1AD995 core) and
+// the glyph darkens to #0D4D36. The label rides under the group.
 // ---------------------------------------------------------------------
 
 class _StartButton extends StatelessWidget {
@@ -851,44 +895,55 @@ class _StartButton extends StatelessWidget {
               alignment: Alignment.center,
               clipBehavior: Clip.none,
               children: [
-                // The three soft layers — the frame's idle halo is a
-                // quiet bloom (measured ≈#133C2C 20px out from the core),
-                // never a saturated ring; running carries the full group.
+                // The PERMANENT green glow — the owner CSS's outer layer
+                // («4»/«Rectangle 25»: rgba(26,217,149,0.53), blur 57).
                 LayerStack(
                   scale: s,
                   color: AethColors.accentConnected,
-                  layers: [
+                  layers: const [
                     LayerSpec(
                       width: AethGeometry.speedGroupSize,
                       height: AethGeometry.speedGroupSize,
                       radius: AethRadius.speedGlow,
-                      opacity: running ? 0.34 : 0.10,
+                      opacity: AethGeometry.speedGlowOpacity,
                       blurSigma: AethGeometry.speedGlowBlur,
-                    ),
-                    LayerSpec(
-                      width: AethGeometry.speedHaloSize,
-                      height: AethGeometry.speedHaloSize,
-                      radius: AethRadius.speedHalo,
-                      opacity: running ? 0.19 : 0.05,
-                    ),
-                    LayerSpec(
-                      width: AethGeometry.speedMidSize,
-                      height: AethGeometry.speedMidSize,
-                      radius: AethRadius.speedMid,
-                      opacity: running ? 0.45 : 0.07,
-                    ),
-                    // The layout box taker (44 core) — the real core is
-                    // the AnimatedContainer above it.
-                    const LayerSpec(
-                      width: AethGeometry.speedCoreSize,
-                      height: AethGeometry.speedCoreSize,
-                      radius: AethRadius.speedCore,
-                      opacity: 0,
                     ),
                   ],
                 ),
-                // The core + the brand glyph (the hexagon+wave mark —
-                // the frame's own), animated with the state.
+                // The state layers — BLACK at rest, accent green while
+                // running, crossfaded (the core is the AnimatedContainer
+                // that takes the layout box).
+                TweenAnimationBuilder<Color?>(
+                  tween: ColorTween(
+                    begin: running
+                        ? AethColors.speedIdleLayer
+                        : AethColors.accentConnected,
+                    end: running
+                        ? AethColors.accentConnected
+                        : AethColors.speedIdleLayer,
+                  ),
+                  duration: duration,
+                  curve: Curves.easeOut,
+                  builder: (context, color, _) => LayerStack(
+                    scale: s,
+                    color: color ?? AethColors.speedIdleLayer,
+                    layers: const [
+                      LayerSpec(
+                        width: AethGeometry.speedHaloSize,
+                        height: AethGeometry.speedHaloSize,
+                        radius: AethRadius.speedHalo,
+                        opacity: AethColors.pillHaloOpacity,
+                      ),
+                      LayerSpec(
+                        width: AethGeometry.speedMidSize,
+                        height: AethGeometry.speedMidSize,
+                        radius: AethRadius.speedMid,
+                        opacity: AethColors.pillMidOpacity,
+                      ),
+                    ],
+                  ),
+                ),
+                // The core (44 r17) — #080C09 at rest, #1AD995 running.
                 AnimatedContainer(
                   duration: duration,
                   curve: Curves.easeOut,
@@ -903,9 +958,9 @@ class _StartButton extends StatelessWidget {
                   ),
                   child: Center(
                     child: SvgPicture.asset(
-                      AppAssets.iconHexWave,
+                      AppAssets.iconActivity4,
                       width: AethGeometry.speedButtonIcon * s,
-                      height: AethGeometry.speedButtonIcon * s * 27 / 24,
+                      height: AethGeometry.speedButtonIcon * s,
                       fit: BoxFit.contain,
                       colorFilter: ColorFilter.mode(
                         running

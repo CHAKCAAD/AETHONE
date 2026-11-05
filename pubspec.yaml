@@ -72,6 +72,14 @@ flutter:
     - design/آیکون پروتکل ها/وایرگارد.svg
     - design/آیکون پروتکل ها/گول.svg
     - design/آیکون پروتکل ها/گول کلاسیک.svg
+    # --- v4.33 (owner round 9): the combined-mode icons — the owner's own
+    #     SVGs (سایفون اور وارپ / وارپ اور سایفون / تور اور وارپ / وارپ اور
+    #     تور) replace the composed aether+chevron stacks on the sub-tiles;
+    #     committed under their owner-given names (never rename). ---
+    - design/آیکون پروتکل ها/سایفون اور وارپ.svg
+    - design/آیکون پروتکل ها/وارپ اور سایفون.svg
+    - design/آیکون پروتکل ها/تور اور وارپ.svg
+    - design/آیکون پروتکل ها/وارپ اور تور.svg
     - design/proto_icons_png/
     # --- background patterns: pre-rendered PNGs (v4.10 — the SVGs carry
     # feGaussianBlur which flutter_svg cannot rasterize; rendered via
@@ -106,6 +114,10 @@ flutter:
     - design/آیکون های اپ/Wifi.svg
     - design/speed_glyphs/Drop Rain.svg
     - design/speed_glyphs/Hex Wave.svg
+    # --- v4.33 (owner round 9): the dial NEEDLE — the owner's own SVG
+    #     (عقربه, 15×52, green→transparent gradient), pivoted at the dial
+    #     centre and sweeping with the measured download speed. ---
+    - design/speed_glyphs/عقربه صفحه تست سرعت.svg
     # --- step 2 (settings main page): the set's own line icons for the six
     # cards + status cards + section headings, plus the owner's GitHub logo
     # for the server cards (all pixel-matched against the design frame) ---

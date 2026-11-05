@@ -130,6 +130,7 @@ void main() {
       jitterMs: 24,
       liveMbps: 50.4,
       downBytes: 145 * 1024 * 1024,
+      downMbps: 50.4,
     ));
     await _save(tester, 'speed_running');
 
@@ -140,6 +141,8 @@ void main() {
       jitterMs: 24,
       downBytes: 145 * 1024 * 1024,
       upBytes: 45 * 1024 * 1024,
+      downMbps: 23.4,
+      upMbps: 5.6,
     ));
     await _save(tester, 'speed_done');
   });

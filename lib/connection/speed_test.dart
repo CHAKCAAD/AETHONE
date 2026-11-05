@@ -42,6 +42,8 @@ class SpeedTestSnapshot {
     this.jitterMs,
     this.downBytes = 0,
     this.upBytes = 0,
+    this.downMbps,
+    this.upMbps,
     this.failed = false,
   });
 
@@ -62,6 +64,17 @@ class SpeedTestSnapshot {
 
   /// Cumulative volume pushed during THIS run (steps per completed post).
   final int upBytes;
+
+  /// v4.33 (owner round 9: «کارت دانلود و آپلود باید سرعت دانلود رو نشون
+  /// بدن نه میزان دانلود») — the DOWNLOAD card's speed: the live rolling
+  /// Mbps while the download phase streams, then the phase's final overall
+  /// average (bytes ÷ elapsed), held through upload/finish. null ⇒ never
+  /// measured.
+  final double? downMbps;
+
+  /// The UPLOAD card's speed — steps per completed post (the server offers
+  /// no intra-post progress), the phase's overall average at the end.
+  final double? upMbps;
 
   /// True when the run ended in an error (measured values stay).
   final bool failed;
@@ -86,6 +99,8 @@ class SpeedTestEngine {
   int _downBytes = 0;
   int _downBase = 0; // completed-chunk totals inside _downBytes
   int _upBytes = 0;
+  double? _downMbps;
+  double? _upMbps;
   bool _failed = false;
   DateTime _lastFire = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -129,6 +144,8 @@ class SpeedTestEngine {
     _downBytes = 0;
     _downBase = 0;
     _upBytes = 0;
+    _downMbps = null;
+    _upMbps = null;
     _failed = false;
 
     _Tunnel? tunnel;
@@ -178,6 +195,12 @@ class SpeedTestEngine {
           final elapsed = DateTime.now().difference(started);
           if (_downBytes >= _dlMaxBytes || elapsed >= _dlMinTime) break;
         }
+        // v4.33 — the card's SPEED: the phase's final overall average
+        // (bytes×8 ÷ elapsed µs = Mbps), held through the phases after it.
+        final dt = DateTime.now().difference(started).inMicroseconds;
+        if (_downBytes > 0 && dt > 0) {
+          _downMbps = _downBytes * 8 / dt;
+        }
         _liveMbps = 0;
         _fire(force: true);
       }
@@ -194,6 +217,11 @@ class SpeedTestEngine {
           if (put <= 0) break;
           final elapsed = DateTime.now().difference(started);
           if (_upBytes >= _ulMaxBytes || elapsed >= _ulMinTime) break;
+        }
+        // v4.33 — the upload card's final overall average.
+        final dt = DateTime.now().difference(started).inMicroseconds;
+        if (_upBytes > 0 && dt > 0) {
+          _upMbps = _upBytes * 8 / dt;
         }
         _liveMbps = 0;
         _fire(force: true);
@@ -261,6 +289,8 @@ class SpeedTestEngine {
       final span = now.difference(windowTimes.first).inMicroseconds;
       if (span > 0) {
         _liveMbps = (windowBytes.last - windowBytes.first) / span * 8;
+        // v4.33 — the speed card rides the same rolling window live.
+        _downMbps = _liveMbps;
       }
       _fire();
     });
@@ -293,6 +323,8 @@ class SpeedTestEngine {
     _upBytes += _ulPayload.length;
     if (dt.inMicroseconds > 0) {
       _liveMbps = _ulPayload.length / dt.inMicroseconds * 8;
+      // v4.33 — the upload card steps per completed post.
+      _upMbps = _liveMbps;
     }
     _fire(force: true);
     return _ulPayload.length;
@@ -311,6 +343,8 @@ class SpeedTestEngine {
         jitterMs: _jitterMs,
         downBytes: _downBytes,
         upBytes: _upBytes,
+        downMbps: _downMbps,
+        upMbps: _upMbps,
         failed: _failed,
       ),
     );

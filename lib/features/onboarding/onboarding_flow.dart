@@ -439,8 +439,15 @@ class ObStepper extends StatelessWidget {
   }
 }
 
-/// The question heading: 20 w700 white with the step's own 22px glyph at
-/// the page's right inset, 8 gap — the frames' exact arrangement.
+/// The question heading — v4.33 (owner round 9): 20 w700 white at the
+/// SAME size on ALL four wizard pages and in EVERY language (owner:
+/// «سایز متن سرتیترها توی هر ۴ صفحه باید یکسان باشه… دقت کن که متن به
+/// زبانهای دیگه هم همین سایز باشه»). The old [Spacer]+[Flexible] pair
+/// split the free row space between two flex children, floating the text
+/// mid-row and shrinking longer translations through a FittedBox — both
+/// are gone: the text renders at its FIXED size, right-aligned next to
+/// its 22px glyph at the page's right inset (the frames' arrangement,
+/// 8 gap). Long locales wrap to a second line (max 2) instead of scaling.
 class ObQuestionHeading extends StatelessWidget {
   const ObQuestionHeading({super.key, required this.icon, required this.text});
 
@@ -453,20 +460,20 @@ class ObQuestionHeading extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Spacer(),
           Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                text,
-                textDirection: TextDirection.rtl,
-                style: TextStyle(
-                  fontFamily: 'IRANYekanX',
-                  fontWeight: FontWeight.w700,
-                  fontSize: AethGeometry.obHeadingSize * s,
-                  color: AethColors.textPrimary,
-                ),
+            child: Text(
+              text,
+              textDirection: TextDirection.rtl,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'IRANYekanX',
+                fontWeight: FontWeight.w700,
+                fontSize: AethGeometry.obHeadingSize * s,
+                color: AethColors.textPrimary,
               ),
             ),
           ),
@@ -486,9 +493,11 @@ class ObQuestionHeading extends StatelessWidget {
   }
 }
 
-/// The full-width green CTA pill: white 18 w700 label + the white Left-2
-/// chevron 20 from the visual LEFT edge (RTL "forward"), soft green
-/// shadow (the frames' under-glow).
+/// The full-width CTA — v4.33 (owner round 9, the owner's own CSS
+/// «Rectangle 13»): the app's own card corner language (r17 — «گردی
+/// گوشه‌ها باید اندازه بقیه باکس‌های اپ باشه»), ink #0F1510 with the CSS
+/// shadow rgba(0,0,0,0.25) 0 4 4; the 18 w700 white label + the white
+/// Left-2 chevron at the visual left edge (RTL forward) stay.
 class ObCtaButton extends StatelessWidget {
   const ObCtaButton({super.key, required this.label, required this.onTap});
 
@@ -508,13 +517,13 @@ class ObCtaButton extends StatelessWidget {
         child: Container(
           height: AethGeometry.obCtaH * s,
           decoration: BoxDecoration(
-            color: AethColors.accentConnected,
+            color: AethColors.obCtaBg,
             borderRadius: BorderRadius.circular(AethGeometry.obCtaRadius * s),
             boxShadow: [
               BoxShadow(
-                color: AethColors.accentConnected.withValues(alpha: 0.30),
+                color: const Color(0x40000000), // rgba(0,0,0,0.25) 0 4 4
                 offset: Offset(0, 4 * s),
-                blurRadius: 14 * s,
+                blurRadius: 4 * s,
               ),
             ],
           ),

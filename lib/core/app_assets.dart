@@ -196,6 +196,11 @@ abstract final class AppAssets {
   static const String iconDropRain = '$_speedGlyphs/Drop Rain.svg';
   static const String iconHexWave = '$_speedGlyphs/Hex Wave.svg';
 
+  /// v4.33 (owner round 9) — the dial needle: the owner's own SVG «عقربه
+  /// صفحه تست سرعت» (15×52, #1AD995→transparent gradient), committed under
+  /// its owner-given name. It sweeps with the measured download speed.
+  static const String speedNeedle = '$_speedGlyphs/عقربه صفحه تست سرعت.svg';
+
   // --- protocol logos. Tor/Psiphon ship as pre-rendered PNGs (their SVGs
   // embed the artwork in hidden tracing layers + the real vector art,
   // which flutter_svg renders partially) — v4.10.
@@ -206,6 +211,16 @@ abstract final class AppAssets {
   static const String _protoMim = '$_protocols/میم.svg';
   static const String _protoTor = '$_protoPng/تور.png';
   static const String _protoPsiphon = '$_protoPng/سایفون.png';
+
+  // v4.33 (owner round 9) — the combined-mode logos: the owner's own SVGs,
+  // committed under their owner-given names. «X اور وارپ» = X riding the
+  // WARP (Aether-wireguard) tunnel = the CHAIN mode; «وارپ اور X» = the
+  // REVERSE mode. White vector art (the drop-shadow filters inside are
+  // skipped by flutter_svg — the paths render clean).
+  static const String _protoPsiphonOverWarp = '$_protocols/سایفون اور وارپ.svg';
+  static const String _protoWarpOverPsiphon = '$_protocols/وارپ اور سایفون.svg';
+  static const String _protoTorOverWarp = '$_protocols/تور اور وارپ.svg';
+  static const String _protoWarpOverTor = '$_protocols/وارپ اور تور.svg';
 
   /// Public protocol-logo paths (the settings Psiphon/Tor pills render the
   /// REAL logos with an accent-green tint).
@@ -222,11 +237,13 @@ abstract final class AppAssets {
         ProtocolId.gool => _protoGool,
         ProtocolId.goolClassic => _protoGoolClassic,
         ProtocolId.mim => _protoMim,
-        ProtocolId.torChain => _protoTor,
-        ProtocolId.torReverse => _protoTor,
+        // v4.33 — the combined modes carry their OWN owner-drawn logos
+        // (the composed aether+chevron stacks are retired by decree).
+        ProtocolId.torChain => _protoTorOverWarp,
+        ProtocolId.torReverse => _protoWarpOverTor,
         ProtocolId.torOnly => _protoTor,
-        ProtocolId.psiphonChain => _protoPsiphon,
-        ProtocolId.psiphonReverse => _protoPsiphon,
+        ProtocolId.psiphonChain => _protoPsiphonOverWarp,
+        ProtocolId.psiphonReverse => _protoWarpOverPsiphon,
         ProtocolId.psiphonOnly => _protoPsiphon,
       };
 
@@ -321,5 +338,12 @@ abstract final class AppAssets {
         iconWifi,
         iconDropRain,
         iconHexWave,
+        // v4.33 — the dial needle (the owner's own SVG).
+        speedNeedle,
+        // v4.33 — the combined-mode logos (the owner's own SVGs).
+        _protoPsiphonOverWarp,
+        _protoWarpOverPsiphon,
+        _protoTorOverWarp,
+        _protoWarpOverTor,
       ];
 }

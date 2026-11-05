@@ -75,6 +75,8 @@ class _ManualSpeedEngine extends SpeedTestEngine {
         jitterMs: 24,
         downBytes: 145 * 1024 * 1024,
         upBytes: 45 * 1024 * 1024,
+        downMbps: 23.4,
+        upMbps: 5.6,
       ),
     );
   }
@@ -153,6 +155,7 @@ void main() {
           jitterMs: 24,
           liveMbps: 50.4,
           downBytes: 145 * 1024 * 1024,
+          downMbps: 50.4,
         ),
       );
       await tester.pump();
@@ -160,7 +163,8 @@ void main() {
       expect(find.text('50.4'), findsOneWidget); // the live gauge value
       expect(find.text('345'), findsOneWidget); // Ping slot
       expect(find.text('24'), findsOneWidget); // Jiter slot
-      expect(find.text('145 MB'), findsOneWidget); // DOWN ticks live
+      // v4.33 — the DOWN card carries the SPEED, never the MB volume.
+      expect(find.text('50.4 Mbs'), findsOneWidget);
 
       // Upload phase — the UP slot still pending.
       engine.emit(
@@ -170,11 +174,12 @@ void main() {
           jitterMs: 24,
           downBytes: 145 * 1024 * 1024,
           liveMbps: 12.5,
+          downMbps: 23.4,
         ),
       );
       await tester.pump();
       expect(find.text('آپلود'), findsOneWidget);
-      expect(find.text('45 MB'), findsNothing); // UP not measured yet
+      expect(find.text('5.6 Mbs'), findsNothing); // UP not measured yet
 
       // Finish — phase null, the done label; the gauge resets (frame).
       engine.emit(
@@ -184,11 +189,13 @@ void main() {
           jitterMs: 24,
           downBytes: 145 * 1024 * 1024,
           upBytes: 45 * 1024 * 1024,
+          downMbps: 23.4,
+          upMbps: 5.6,
         ),
       );
       await tester.pump();
       expect(find.text('شروع دوباره'), findsOneWidget);
-      expect(find.text('45 MB'), findsOneWidget);
+      expect(find.text('5.6 Mbs'), findsOneWidget);
       expect(find.text('0.0'), findsOneWidget); // the gauge resets (frame)
       expect(find.text('دانلود'), findsNothing); // no label at rest
       await tester.pump(const Duration(milliseconds: 400));
@@ -214,11 +221,13 @@ void main() {
           phase: SpeedTestPhase.download,
           liveMbps: 8.1,
           downBytes: 40 * 1024 * 1024,
+          downMbps: 8.1,
         ),
       );
       await tester.pump();
       expect(find.text('شروع شده...'), findsOneWidget);
       expect(find.text('8.1'), findsOneWidget);
+      expect(find.text('8.1 Mbs'), findsOneWidget);
 
       // Tap-to-stop: the abort snapshot lands, the page goes done with
       // whatever was measured (nothing fabricated).
@@ -226,8 +235,8 @@ void main() {
       await tester.pump();
       expect(find.text('شروع دوباره'), findsOneWidget);
       expect(find.text('345'), findsOneWidget); // from the abort snapshot
-      expect(find.text('145 MB'), findsOneWidget);
-      expect(find.text('45 MB'), findsOneWidget);
+      expect(find.text('23.4 Mbs'), findsOneWidget);
+      expect(find.text('5.6 Mbs'), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 400));
     });
   });

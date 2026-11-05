@@ -18,7 +18,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aethone/app.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
-import 'package:aethone/core/design_tokens.dart';
 import 'package:aethone/features/home/home_screen.dart';
 import 'package:aethone/features/home/protocol_sheet/protocol_sheet.dart';
 
@@ -91,41 +90,26 @@ Future<void> _capture(WidgetTester tester, String name) async {
 void main() {
   Directory('/tmp/ui_shots').createSync(recursive: true);
 
-  testWidgets('render the protocol sheet + the descriptions popup', (
-    tester,
-  ) async {
-    await _loadRealFonts();
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
+  testWidgets(
+    'render the protocol page (the descriptions popup is gone — v4.33 '
+    'owner decree)',
+    (tester) async {
+      await _loadRealFonts();
+      tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
 
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await tester.pumpWidget(_shot(HomeScreen(store: store)));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('وایرگارد').first);
-    await tester.pump();
-    await tester.pumpAndSettle();
-    await _capture(tester, 'proto_sheet');
-    // open the psiphon family descriptions
-    final card = tester.getRect(
-      find.byKey(const ValueKey('proto-card-psiphon')),
-    );
-    await tester.tapAt(Offset(card.left + 17, card.top + 15));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    await _capture(tester, 'proto_desc');
-
-    // close it and open a single-protocol desc (میم tile)
-    await tester.tapAt(
-      const Offset(201, AethGeometry.protoDescCloseTop + 15),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    final mim = tester.getRect(find.byKey(const ValueKey('proto-tile-mim')));
-    await tester.tapAt(Offset(mim.left + 17, mim.top + 15));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    await _capture(tester, 'proto_desc_single');
-    expect(find.byType(ProtocolPage), findsOneWidget);
-  });
+      final store = ConnectionStore(engine: ScriptedEngine());
+      await tester.pumpWidget(_shot(HomeScreen(store: store)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('وایرگارد').first);
+      await tester.pump();
+      await tester.pumpAndSettle();
+      await _capture(tester, 'proto_sheet');
+      // v4.33 — no ⓘ badges and no descriptions layer anywhere on the page.
+      expect(find.byType(ProtocolPage), findsOneWidget);
+      expect(find.textContaining('اتصال مستقیماً از طریق Psiphon'), findsNothing);
+      expect(find.textContaining('اتصال رمزگذاری‌شده'), findsNothing);
+    },
+  );
 }

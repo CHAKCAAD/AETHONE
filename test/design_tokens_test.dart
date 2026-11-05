@@ -37,7 +37,17 @@ void main() {
       expect(AethGeometry.heroSize, 164);
       expect(AethGeometry.connectButtonSize, 48);
       expect(AethGeometry.connectButtonRise, 72);
-      expect(AethGeometry.centerButtonSize, 112);
+      // v4.33 — the look-2 connect button is the owner's own CSS
+      // composition (a 236 glow circle over squircle layers).
+      expect(AethGeometry.connectGroupSize, 236);
+      expect(AethGeometry.connectHaloSize, 181.92);
+      expect(AethGeometry.connectMidSize, 152.42);
+      expect(AethGeometry.connectCoreSize, 108.17);
+      expect(AethGeometry.connectIconSize, 48);
+      expect(AethRadius.connectGlow, 120);
+      expect(AethRadius.connectHalo, 69);
+      expect(AethRadius.connectMid, 62);
+      expect(AethRadius.connectCore, 41);
       // v4.11 — owner CSS Group 8: pill group is the 140x38 halo (the old
       // 162x60 blurred 4th layer was REMOVED per the owner's defect report).
       expect(AethGeometry.pillWidth, 140);
