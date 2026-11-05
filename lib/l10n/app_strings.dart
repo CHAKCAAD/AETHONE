@@ -323,7 +323,8 @@ class AppStrings {
 
   /// The family-leg pills reuse the protocol tiles' own labels
   /// («ماسک / وایرگارد / …») — the same protocol reads the same everywhere.
-  String aetherLegLabel(AetherLegProtocol leg) => switch (leg) {
+  /// (Named aetherLegName — aetherLegLabel is the section card's label.)
+  String aetherLegName(AetherLegProtocol leg) => switch (leg) {
     AetherLegProtocol.masque => _v['protoMasque']!,
     AetherLegProtocol.wireguard => _v['protoWireguard']!,
     AetherLegProtocol.gool => _v['protoGool']!,

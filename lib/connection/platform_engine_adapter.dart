@@ -656,7 +656,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     // refuses UDP-to-WARP legs on the TCP-only reverse modes.
     final leg = overlay == null
         ? selection
-        : legProtocolId(config.coreSettings.aetherLegProtocol);
+        : AetherArguments.legProtocolId(config.coreSettings.aetherLegProtocol);
     final modeId = AetherArguments.effectiveMode(leg, overlay);
     final mode = TransportModes.byId(modeId);
     final tunnel = config.connectionMode == ConnectionMode.tunnel;

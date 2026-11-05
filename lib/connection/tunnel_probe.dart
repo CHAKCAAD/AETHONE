@@ -132,7 +132,7 @@ class TunnelProbe {
       timeout: timeout,
     );
     try {
-      final reader = _SocketReader(socket, timeout);
+      final reader = SocksReader(socket, timeout);
 
       // --- SOCKS5 greeting: one no-auth method ---
       socket.add(<int>[0x05, 0x01, 0x00]);
@@ -247,11 +247,11 @@ class TunnelProbe {
 /// single-subscription — a second reader would throw "Stream has already
 /// been listened to", the bug the naive shared-handshake refactor had).
 class SocksTunnel {
-  SocksTunnel(this.socket, this._reader);
+  SocksTunnel(this.socket, SocksReader reader) : _reader = reader;
 
   /// The raw, connected socket (no TLS).
   final Socket socket;
-  final _SocketReader _reader;
+  final SocksReader _reader;
 
   /// Reads exactly [count] bytes (buffered, chunk-safe).
   Future<List<int>> read(int count) => _reader.read(count);
@@ -277,9 +277,10 @@ class SocksTunnel {
 
 /// Sequential chunk-safe socket reader: one [StreamIterator] for the whole
 /// exchange with an internal leftover buffer — bytes beyond a read are never
-/// dropped.
-class _SocketReader {
-  _SocketReader(Socket socket, this._timeout)
+/// dropped. Public because [SocksTunnel] exposes it in its construction
+/// seam (socksConnect) — the whole tunnel is one library-internal surface.
+class SocksReader {
+  SocksReader(Socket socket, this._timeout)
     : _iterator = StreamIterator<Uint8List>(socket);
 
   final Duration _timeout;

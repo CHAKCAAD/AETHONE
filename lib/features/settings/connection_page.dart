@@ -89,16 +89,16 @@ class ConnectionSettingsPage extends StatelessWidget {
                 keyId: 'aether-leg',
                 options: [
                   // The same order + labels as the protocol page's own
-                  // tiles (strings.aetherLegLabel reuses their names).
-                  (AetherLegProtocol.wireguard, strings.aetherLegLabel(
+                  // tiles (strings.aetherLegName reuses their names).
+                  (AetherLegProtocol.wireguard, strings.aetherLegName(
                       AetherLegProtocol.wireguard)),
-                  (AetherLegProtocol.masque, strings.aetherLegLabel(
+                  (AetherLegProtocol.masque, strings.aetherLegName(
                       AetherLegProtocol.masque)),
-                  (AetherLegProtocol.gool, strings.aetherLegLabel(
+                  (AetherLegProtocol.gool, strings.aetherLegName(
                       AetherLegProtocol.gool)),
-                  (AetherLegProtocol.goolClassic, strings.aetherLegLabel(
+                  (AetherLegProtocol.goolClassic, strings.aetherLegName(
                       AetherLegProtocol.goolClassic)),
-                  (AetherLegProtocol.mim, strings.aetherLegLabel(
+                  (AetherLegProtocol.mim, strings.aetherLegName(
                       AetherLegProtocol.mim)),
                 ],
                 selected: core.aetherLegProtocol,
