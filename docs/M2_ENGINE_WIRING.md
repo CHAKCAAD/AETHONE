@@ -524,3 +524,113 @@ completes, outside the flag window) still runs, and every jump's own
 notifications are swallowed by its flag window. The remaining
 jump-per-settle sequence converges (each jump is whole-cycle and
 pixel-identical).
+
+### v4.31 — the Tor pseudo-country (T1) and the honest exit resolution
+
+Owner round 7: «روی لوکیشن خودکار تور به لوکیشن اتریش متصل شدم اما قسمت
+نمایش پروتکل برای پرچمی نشون نداد و اسمش رو هم T1 نوشته بود».
+
+Root cause — `loc=T1` is not a country: Cloudflare's `/cdn-cgi/trace`
+answers with the GeoIP PSEUDO-country `T1` ("Tor network") for EVERY Tor
+exit (Cloudflare's own continental field table, developers.cloudflare.com
+ip.src.continent values; measured on the wire by the community —
+community.cloudflare.com «How to block all traffic from Tor» shows
+`loc=T1 tls=TLSv1.2`). `parseBody` happily lowercased it into
+`exitCountryCode: 't1'`, `countryName('t1')` fell back to the raw
+`'T1'`, and no flag asset exists — the header showed a bare «T1».
+
+Fix, three layers:
+
+1. **Detection** — `TunnelProbe.pseudoCountryCodes` (`t1` tor, `a1`
+   anonymous proxy, `a2` satellite, `o1` other) + the result's
+   `countryIsPseudo`; the shared `PlatformEngineAdapter.statsEvent`
+   strips a pseudo exit to `null` on EVERY emission path (walk, resume,
+   5 s tick), so the store never sees a displayable-less code.
+2. **Resolution** — the same trace body carries the exit relay's `ip=`;
+   `EgressLocations.resolveTorExitCountry` asks Onionoo (the Tor
+   network's own metrics API) `search=<ip>` for the relay's `country`
+   (verified 2026-11-05; `lookup=<ip>` answers 400 — `search=` is the
+   documented way). The fetch rides the LIVE TUNNEL's own SOCKS
+   listener (SOCKS CONNECT + `SecureSocket.secure`): a direct fetch is
+   blocked in exactly the markets this app serves, so the resolution
+   travels through the very exit it resolves. Never throws; null =
+   honestly unknown (the wheel keeps the remembered pick / AUTO globe).
+3. **Application** — the adapter emits `EngineExitCountryResolved(code)`
+   (generation-guarded: a superseded walk stays silent); the store
+   applies it ONLY while `connected`, so a late resolution can never
+   park a stale flag on the disconnected home screen. The v4.30
+   display-union logic then unions the code in and spins to its real
+   flag («اتریش» for the owner's Austria exit).
+
+Regressions: m2_engine_test (T1 parse + statsEvent strip + real-country
+non-pseudo), egress_locations_test (Onionoo search parse: running-gate,
+pseudo-t1 refusal, path shape), home_screen_test (pseudo exit keeps the
+AUTO anchor; the resolution follows to the real flag; a post-disconnect
+resolution is dropped).
+
+### v4.31 — the psiphon/tor tunnel stall: UDP blackhole → ICMP unreachable
+
+Owner round 7: «تونل در لوکیشن های سایفون نمیتونه خوب دیتا رو رد کنه …
+به مقدار دیتا رد و بدل میشه و بعد دویاره دیتایی رد نمیشه … در حالت
+سایفون اور وارپ من با پورت پروکسی 1821 توی تلگرام وصلم ولی تونل
+اتصال نداره».
+
+Root cause — the proxy worked on the SAME listener the tunnel relays
+into, so the core chain was healthy; what differs on the TUN path is
+UDP. Every tor/psiphon family mode is TCP-only
+(`transport_modes.tcpOnly`): the core's socks listener ACCEPTS the UDP
+ASSOCIATE and then silently DROPS every non-DNS datagram (socks.rs
+`this listener reaches the internet over tcp only`). zeptun, believing
+the association works, kept relaying the device's QUIC/UDP flows into
+that void — no ICMP, no error, just silence — so apps retransmitted
+into a black hole instead of falling back to TCP. On the WARP legs the
+same listener DOES carry UDP, which is why the tunnel felt fine there
+and broke only in the psiphon/tor locations.
+
+Fix — `AethoneVpnService` now receives the mode's `tcpOnly` through
+`EXTRA_TCP_ONLY` and configures zeptun with `handler.socks5.udp =
+"disabled"` for those modes: zeptun then REFUSES every UDP flow at open
+(handler.zig `udpOpen` returns false) and answers the device with ICMP
+port-unreachable (stack/udp.zig → `icmp.sendUnreachable`) — the honest
+"this network has no UDP" every Android app falls back from within a
+round trip. Fake-IP DNS is unaffected: zeptun answers it locally in
+front of the handler (stack/dns.zig). A mode switch on the SAME port
+that changes the udp mode (e.g. MASQUE 1819 → PSIPHON ONLY 1819) now
+restarts zeptun exactly like a port change (`socksTcpOnly` joins the
+restart predicate). `ZeptunConfigToml.build` grew the matching
+`tcpOnly` parameter; the walk passes `mode.tcpOnly` in the `startVpn`
+payload.
+
+Regressions: m2_engine_test (the TOML carries `udp = "disabled"` only
+for tcpOnly; plain TOML carries no udp line).
+
+### v4.31 — the round-7 settings expansion («تنظیمات بیشتر»)
+
+Owner round 7: «بخش تنطیمات زیاد جامع و کامل نیست گزینه های زیادی
+وجود داره در مستندات هسته ها که میشه به تنظیمات بخش های مختلف اضافه
+کرد». Every new control maps to a REAL pinned-core surface (CLI_REFERENCE
+numbering) and folds ONLY when it differs from the core's own default:
+
+* **پروتکل هستهٔ Aether در حالت‌های ترکیبی** (the option the v4.21
+  decree deferred — «انتخاب پروتکل هسته ایتر برای حالت های ترکیبی اور
+  وارپ»): `aetherLegProtocol` picks the WARP leg under a family mode
+  (WireGuard default = the v4.19 fixed leg; MASQUE / GOOL / GOOL
+  CLASSIC / MIM). `protocolArgs` still forces MASQUE where the core
+  refuses UDP-to-WARP legs on the TCP-only reverse modes.
+* **نسخهٔ IP** (`-4` default / `-6` / `--dual`, #11-13) and
+  **پروکسی بالادست** (`--upstream`, #3 — plain modes only; the reverse
+  family owns AETHER_UPSTREAM internally for its carrier).
+* **ECH (رمزنگاری SNI)** — `--ech auto|base64` + `--ech-dns` +
+  `--ech-domain` (#45-47), its own expert card on the core page: the
+  direct anti-SNI-blocking answer.
+* **پل‌های دستی تور** («وارد کردن دستی پل های تور»): bridge policy
+  gains «دستی» — one `--tor-bridge` per non-empty line (#70), exactly
+  what the core's append() would build (AETHER_TOR_BRIDGES `;`-joined →
+  `Bridges::Manual`).
+* **زمان‌های اتصال تور** — the env-only `AETHER_TOR_DIRECT_SECS` (75)
+  and `AETHER_TOR_BRIDGE_SECS` (360); **زمان آماده‌سازی سایفون** —
+  `AETHER_PSIPHON_READY_SECS` (180), which also WIDENS the app's own
+  walk budget (`readyBudget` couples to the setting so the app never
+  gives up on a core it is still giving time to).
+* **Psiphon fronting sets** (`--psiphon-cdn-sets`, #91) and **ورودی‌های
+  سرور** (`--psiphon-server-entries`, #94).

@@ -539,9 +539,23 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         this.pingMs = pingMs;
         this.downBytes = downBytes;
         this.upBytes = upBytes;
-        this.exitCountryCode = exitCountryCode;
+        // v4.31 — null means "no DISPLAYABLE exit this report": the
+        // adapter strips GeoIP pseudo-countries (loc=T1, the Tor network —
+        // no flag, no name) to null. Keep the last real exit (e.g. the
+        // post-connect Onionoo resolution) instead of erasing it; every
+        // new session clears the field on the connecting transition
+        // anyway.
+        if (exitCountryCode != null) this.exitCountryCode = exitCountryCode;
       case EngineEgressRegions(:final regions):
         applyPsiphonEgressRegions(regions);
+      case EngineExitCountryResolved(:final code):
+        // v4.31 — the REAL country behind a Tor exit (the trace only says
+        // T1): apply it while — and only while — a session is actually
+        // connected; a late resolution from a superseded walk must never
+        // park a stale flag on the disconnected home screen.
+        if (_machine.current == VpnState.connected) {
+          exitCountryCode = code;
+        }
       case EngineLogLine():
         break; // structured logging lands with the diagnostics page
     }

@@ -140,4 +140,49 @@ void main() {
       );
     });
   });
+
+  // v4.31 — the Tor exit-country RESOLUTION (owner round 7: the trace
+  // answers loc=T1 for every Tor exit; the real country comes from the
+  // exit relay's own Onionoo directory record, searched by IP).
+  group('parseOnionooSearchCountry', () {
+    test('extracts the first RUNNING relay country (the verified reply '
+        'shape, 2026-11-05)', () {
+      const body = '{"version":"8.0","build_revision":"89598ea",'
+          '"relays_published":"2026-11-05 09:00:00",'
+          '"relays":[{"running":true,"country":"us"}],'
+          '"bridges_published":"2026-11-05 08:55:39","bridges":[]}';
+      expect(EgressLocations.parseOnionooSearchCountry(body), 'us');
+    });
+
+    test('skips non-running relays', () {
+      const body = '{"relays":['
+          '{"running":false,"country":"de"},'
+          '{"running":true,"country":"at"}'
+          ']}';
+      expect(EgressLocations.parseOnionooSearchCountry(body), 'at');
+    });
+
+    test('never fabricates: empty/garbage/non-code answers are null', () {
+      expect(EgressLocations.parseOnionooSearchCountry(''), isNull);
+      expect(EgressLocations.parseOnionooSearchCountry('not json'), isNull);
+      expect(EgressLocations.parseOnionooSearchCountry('{"relays":[]}'), isNull);
+      expect(EgressLocations.parseOnionooSearchCountry('{"relays":[{}]}'),
+          isNull);
+      // A pseudo-code country from the directory feed is NOT displayable.
+      expect(
+        EgressLocations.parseOnionooSearchCountry('{"relays":['
+            '{"running":true,"country":"t1"}]}'),
+        isNull,
+      );
+    });
+
+    test('the search targets the documented search-by-IP endpoint', () {
+      final path = EgressLocations.onionooSearchPath('198.98.51.249');
+      expect(path, startsWith('/details'));
+      expect(path, contains('search=198.98.51.249'));
+      expect(path, contains('flag=exit'));
+      expect(path, contains('running=true'));
+      expect(EgressLocations.onionooHost, 'onionoo.torproject.org');
+    });
+  });
 }

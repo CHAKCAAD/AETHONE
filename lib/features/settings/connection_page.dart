@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 
 import '../../../connection/connection_store.dart';
 import '../../../connection/connection_state.dart';
+import '../../../connection/core_settings.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
@@ -25,6 +26,7 @@ class ConnectionSettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final core = store.coreSettings;
     return SubPageFrame(
       store: store,
       title: strings.settingsConnection,
@@ -64,6 +66,99 @@ class ConnectionSettingsPage extends StatelessWidget {
               ),
               const SubSectionDivider(),
               SettingInfoText(strings.smartNote),
+            ],
+          ),
+        ),
+
+        // ---- Section: the Aether core protocol under the family modes
+        // (v4.31 — owner round 7: «انتخاب پروتکل هسته ایتر برای حالت های
+        // ترکیبی اور وارپ و …»; the option the v4.21 decree deferred) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSwap1,
+          title: strings.secAetherLeg,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingLabel(strings.aetherLegLabel),
+              const SizedBox(height: 10),
+              SettingPills<AetherLegProtocol>(
+                keyId: 'aether-leg',
+                options: [
+                  // The same order + labels as the protocol page's own
+                  // tiles (strings.aetherLegLabel reuses their names).
+                  (AetherLegProtocol.wireguard, strings.aetherLegLabel(
+                      AetherLegProtocol.wireguard)),
+                  (AetherLegProtocol.masque, strings.aetherLegLabel(
+                      AetherLegProtocol.masque)),
+                  (AetherLegProtocol.gool, strings.aetherLegLabel(
+                      AetherLegProtocol.gool)),
+                  (AetherLegProtocol.goolClassic, strings.aetherLegLabel(
+                      AetherLegProtocol.goolClassic)),
+                  (AetherLegProtocol.mim, strings.aetherLegLabel(
+                      AetherLegProtocol.mim)),
+                ],
+                selected: core.aetherLegProtocol,
+                onSelect: (v) =>
+                    store.updateCore((c) => c.aetherLegProtocol = v),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.aetherLegDesc),
+            ],
+          ),
+        ),
+
+        // ---- Section: IP version (v4.31) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconWebsite,
+          title: strings.secIpVersion,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingPills<IpVersion>(
+                keyId: 'ip-version',
+                options: [
+                  (IpVersion.v4, strings.ipV4),
+                  (IpVersion.v6, strings.ipV6),
+                  (IpVersion.dual, strings.ipDual),
+                ],
+                selected: core.ipVersion,
+                onSelect: (v) => store.updateCore((c) => c.ipVersion = v),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.ipVersionDesc),
+            ],
+          ),
+        ),
+
+        // ---- Section: upstream proxy (v4.31) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconArrowSwapHorizontal,
+          title: strings.secUpstream,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingField(
+                keyId: 'upstream',
+                label: strings.upstreamLabel,
+                hint: strings.upstreamHint,
+                initial: core.upstreamProxy,
+                onChanged: (v) =>
+                    store.updateCore((c) => c.upstreamProxy = v.trim()),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.upstreamDesc),
             ],
           ),
         ),

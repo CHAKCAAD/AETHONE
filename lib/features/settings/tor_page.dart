@@ -3,7 +3,10 @@
 /// snapshot — exactly the list the home wheel's tor band offers, AUTO
 /// first; the honest caption says the Tor core picks the exit from the
 /// available relays) and the bridges panel (--no-tor-bridges + the
-/// env-only tor log level).
+/// env-only tor log level). v4.31 (owner round 7: «وارد کردن دستی پل های
+/// تور») adds the MANUAL bridge lines (one `--tor-bridge` per line) and
+/// the tor connection budgets (the env-only AETHER_TOR_DIRECT_SECS /
+/// AETHER_TOR_BRIDGE_SECS).
 library;
 
 import 'package:flutter/material.dart';
@@ -31,6 +34,7 @@ class TorSettingsPage extends StatelessWidget {
     final bridgesDesc = switch (core.torBridges) {
       TorBridgePolicy.auto => strings.bridgesAutoDesc,
       TorBridgePolicy.off => strings.bridgesOffDesc,
+      TorBridgePolicy.custom => strings.bridgesCustomDesc,
     };
 
     return SubPageFrame(
@@ -86,12 +90,30 @@ class TorSettingsPage extends StatelessWidget {
                 options: [
                   (TorBridgePolicy.auto, strings.bridgesAuto),
                   (TorBridgePolicy.off, strings.bridgesOff),
+                  // v4.31 — the owner's manual-bridges round: «وارد کردن
+                  // دستی پل های تور».
+                  (TorBridgePolicy.custom, strings.bridgesCustom),
                 ],
                 selected: core.torBridges,
                 onSelect: (v) => store.updateCore((c) => c.torBridges = v),
               ),
               const SubSectionDivider(),
               SettingInfoText(bridgesDesc),
+              // v4.31 — the bridge lines, only while the policy is custom
+              // (the same conditional-fields pattern the fragment preset's
+              // custom size/delay pair uses on the core page).
+              if (core.torBridges == TorBridgePolicy.custom) ...[
+                const SubSectionDivider(),
+                SettingField(
+                  keyId: 'tor-bridge-lines',
+                  label: strings.torBridgeLinesLabel,
+                  hint: strings.torBridgeLinesHint,
+                  initial: core.torBridgeLines,
+                  maxLines: 4,
+                  onChanged: (v) =>
+                      store.updateCore((c) => c.torBridgeLines = v.trim()),
+                ),
+              ],
               const SubSectionDivider(),
               SettingLabel(strings.torLogLevelLabel),
               const SizedBox(height: 10),
@@ -105,6 +127,42 @@ class TorSettingsPage extends StatelessWidget {
                 selected: core.torLog,
                 onSelect: (v) => store.updateCore((c) => c.torLog = v),
               ),
+            ],
+          ),
+        ),
+
+        // ---- Section: tor connection budgets (v4.31) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconWatch1,
+          title: strings.secTorTimings,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingStepperRow(
+                keyId: 'tor-direct-secs',
+                icon: AppAssets.iconWatch1,
+                label: strings.torDirectSecsLabel,
+                value: core.torDirectSecs,
+                min: 15,
+                max: 600,
+                onChanged: (v) => store.updateCore((c) => c.torDirectSecs = v),
+              ),
+              const SubSectionDivider(),
+              SettingStepperRow(
+                keyId: 'tor-bridge-secs',
+                icon: AppAssets.iconWatch1,
+                label: strings.torBridgeSecsLabel,
+                value: core.torBridgeSecs,
+                min: 60,
+                max: 900,
+                onChanged: (v) => store.updateCore((c) => c.torBridgeSecs = v),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.torTimingsDesc),
             ],
           ),
         ),

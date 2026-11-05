@@ -116,7 +116,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.protocolModeSmart, isTrue);
 
-      // The core entry row opens the core page.
+      // The core entry row opens the core page. v4.31 added the leg /
+      // IP-version / upstream sections above it — scroll it into view.
+      await tester.ensureVisible(find.byKey(const ValueKey('nav-core-entry')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('nav-core-entry')));
       await tester.pumpAndSettle();
       expect(find.text('فرگمنت TLS'), findsOneWidget);
@@ -671,6 +674,109 @@ void main() {
       await persistence.restore(b);
       expect(b.coreSettings.fragmentPreset, FragmentPreset.off);
       expect(b.coreSettings.tlsCustom, isFalse);
+    });
+  });
+
+  // v4.31 — owner round 7 («تنظیمات بیشتر»): the new controls commit to
+  // the store and render in the pages' own design language.
+  group('round 7 — the settings expansion', () {
+    testWidgets('tor page: manual bridges policy reveals the lines field',
+        (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(TorSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('pill-bridges-دستی')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pill-bridges-دستی')));
+      await tester.pumpAndSettle();
+      expect(store.coreSettings.torBridges, TorBridgePolicy.custom);
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('field-tor-bridge-lines')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('field-tor-bridge-lines')),
+        'obfs4 1.2.3.4:443 cert=abc iat-mode=0',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        store.coreSettings.torBridgeLines,
+        'obfs4 1.2.3.4:443 cert=abc iat-mode=0',
+      );
+    });
+
+    testWidgets('psiphon page: the ready-budget stepper commits', (
+      tester,
+    ) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(PsiphonSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('step-plus-psiphon-ready-secs')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('step-plus-psiphon-ready-secs')),
+      );
+      await tester.pumpAndSettle();
+      expect(store.coreSettings.psiphonReadySecs, 181);
+    });
+
+    testWidgets('connection page: the family-leg protocol + IP version '
+        'commit', (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(ConnectionSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      // The default leg stays the v4.19 fixed WireGuard.
+      expect(
+        store.coreSettings.aetherLegProtocol,
+        AetherLegProtocol.wireguard,
+      );
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('pill-aether-leg-ماسک')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pill-aether-leg-ماسک')));
+      await tester.pumpAndSettle();
+      expect(store.coreSettings.aetherLegProtocol, AetherLegProtocol.masque);
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('pill-ip-version-IPv6')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pill-ip-version-IPv6')));
+      await tester.pumpAndSettle();
+      expect(store.coreSettings.ipVersion, IpVersion.v6);
+    });
+
+    testWidgets('core page: the expert ECH pills commit', (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(CoreSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      // Reveal the expert panels, then the ECH card.
+      await tester.ensureVisible(find.byKey(const ValueKey('toggle-expert')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('toggle-expert')));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('pill-ech-mode-خودکار')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pill-ech-mode-خودکار')));
+      await tester.pumpAndSettle();
+      expect(store.coreSettings.echMode, EchMode.auto);
     });
   });
 }

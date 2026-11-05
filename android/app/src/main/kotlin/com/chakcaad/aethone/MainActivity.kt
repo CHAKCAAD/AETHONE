@@ -250,6 +250,11 @@ class MainActivity : FlutterActivity() {
                     // from stale instances (the late-`destroy` race that
                     // failed fresh tunnel walks).
                     val session = call.argument<Int>("session") ?: 0
+                    // v4.31 — the selected mode's UDP capability: TCP-only
+                    // modes configure zeptun with udp=disabled so UDP flows
+                    // get ICMP-unreachable instead of the core's silent
+                    // drop (see AethoneVpnService.EXTRA_TCP_ONLY).
+                    val tcpOnly = call.argument<Boolean>("tcpOnly") ?: false
                     // v4.26 — record the session BEFORE the start goes out:
                     // a stop that lands while this start is still in flight
                     // bumps the stop generation past it, and the straggler
@@ -259,6 +264,7 @@ class MainActivity : FlutterActivity() {
                     val intent = Intent(this, AethoneVpnService::class.java)
                         .putExtra(AethoneVpnService.EXTRA_PORT, port)
                         .putExtra(AethoneVpnService.EXTRA_SESSION, session)
+                        .putExtra(AethoneVpnService.EXTRA_TCP_ONLY, tcpOnly)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         startForegroundService(intent)
                     } else {

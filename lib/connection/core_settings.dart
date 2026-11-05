@@ -54,8 +54,33 @@ enum CoreLogLevel { info, debug, trace }
 /// Psiphon fronting shape (`--psiphon-mode`).
 enum PsiphonFronting { auto, cdn, direct }
 
-/// Tor bridge policy (`--tor-bridges auto` / `--no-tor-bridges`).
-enum TorBridgePolicy { auto, off }
+/// Tor bridge policy (`--tor-bridges auto` / `--no-tor-bridges` / the
+/// manual lines, `--tor-bridge`-per-line — owner round 7: «وارد کردن دستی
+/// پل های تور»). `custom` feeds [CoreSettings.torBridgeLines] into
+/// `AETHER_TOR_BRIDGES` verbatim (tor.rs splits on `;`/newline →
+/// `Bridges::Manual`).
+enum TorBridgePolicy { auto, off, custom }
+
+/// v4.31 — the WARP-leg protocol under a tor/psiphon FAMILY mode (owner
+/// round 7: «انتخاب پروتکل هسته ایتر برای حالت های ترکیبی اور وارپ»;
+/// the v4.21 decree deferred this exact option). The default keeps the
+/// v4.19 fixed leg: WireGuard. The adapter maps it through
+/// `protocolArgs`, which still forces MASQUE for the UDP-needing legs on
+/// the TCP-only reverse modes (the core's own refusal, lib.rs L203-244).
+enum AetherLegProtocol { wireguard, masque, gool, goolClassic, mim }
+
+/// v4.31 — the IP version the core dials with (`-4` default / `-6` /
+/// `--dual`, CLI_REFERENCE #11-13). Some Iranian mobile carriers carry
+/// broken IPv6 — an explicit v4 pin is a real fix there.
+enum IpVersion { v4, v6, dual }
+
+/// v4.31 — Encrypted Client Hello on the MASQUE handshakes and the WARP
+/// API calls (`--ech auto|base64`, cli.rs L154-167): the SNI travels
+/// encrypted, the direct anti-SNI-blocking answer. `auto` looks the key
+/// up over DoH (`--ech-dns` resolver, default udp://1.1.1.1), `manual`
+/// takes a base64 key verbatim; without a usable key the handshake
+/// neither leaks the name nor proceeds — honest.
+enum EchMode { off, auto, manual }
 
 /// Tor log verbosity — environment-only in the pinned core
 /// (`AETHER_TOR_LOG`, no CLI flag) → injected as a process env var by the
@@ -98,8 +123,21 @@ class CoreSettings {
     this.psiphonFronting = PsiphonFronting.auto,
     this.cdnSni = '',
     this.cdnIps = '',
+    this.cdnSets = '',
+    this.psiphonReadySecs = 180,
+    this.psiphonServerEntries = '',
     this.torBridges = TorBridgePolicy.auto,
+    this.torBridgeLines = '',
+    this.torDirectSecs = 75,
+    this.torBridgeSecs = 360,
     this.torLog = TorLogLevel.info,
+    this.aetherLegProtocol = AetherLegProtocol.wireguard,
+    this.ipVersion = IpVersion.v4,
+    this.upstreamProxy = '',
+    this.echMode = EchMode.off,
+    this.echKey = '',
+    this.echDns = '',
+    this.echDomain = '',
     this.routeBlock = '',
     this.routeDirect = '',
     this.expertRevealed = false,
@@ -147,9 +185,72 @@ class CoreSettings {
   String cdnSni; // non-empty ⇒ `--psiphon-cdn-sni`
   String cdnIps; // non-empty ⇒ `--psiphon-cdn-ips`
 
+  /// v4.31 — `--psiphon-cdn-sets` (#91): which of the built-in fronting
+  /// edge lists to use (e.g. `psiphon-akamai,vercel`); empty = all of
+  /// them (the core's own default).
+  String cdnSets;
+
+  /// v4.31 — `AETHER_PSIPHON_READY_SECS` (env-only, default 180): how long
+  /// the core waits for psiphon to tunnel. The adapter also widens its
+  /// own walk budget past this so a slower psiphon is not failed by the
+  /// app before the core itself gives up.
+  int psiphonReadySecs;
+
+  /// v4.31 — `--psiphon-server-entries` (#94): pasted psiphon server
+  /// entries (the JSON blob the official clients export); empty = the
+  /// built-in discovery.
+  String psiphonServerEntries;
+
   // ---- tor family ----
   TorBridgePolicy torBridges; // off ⇒ `--no-tor-bridges`
+
+  /// v4.31 — the MANUAL bridge lines (one per line, `obfs4 …` /
+  /// `webtunnel …`); joined with `;` into `AETHER_TOR_BRIDGES` when
+  /// [torBridges] == custom — exactly what repeated `--tor-bridge` args
+  /// produce (cli.rs append(), tor.rs splits on `;`/newline).
+  String torBridgeLines;
+
+  /// v4.31 — `AETHER_TOR_DIRECT_SECS` (env-only, default 75): how long tor
+  /// tries the plain direct path before bridges.
+  int torDirectSecs;
+
+  /// v4.31 — `AETHER_TOR_BRIDGE_SECS` (env-only, default 360): the longest
+  /// any ONE bridge may take.
+  int torBridgeSecs;
+
   TorLogLevel torLog; // ≠ info ⇒ env `AETHER_TOR_LOG` (env-only in the pin)
+
+  // ---- v4.31: the family-mode WARP leg + the dial layer ----
+
+  /// The Aether protocol under a tor/psiphon family mode (the owner's
+  /// deferred «انتخاب پروتکل هسته ایتر» option; default = the v4.19
+  /// fixed WireGuard leg).
+  AetherLegProtocol aetherLegProtocol;
+
+  /// The IP version of the dial (`-4`/`-6`/`--dual`); default = the
+  /// core's own v4.
+  IpVersion ipVersion;
+
+  /// `--upstream` (#3, e.g. `socks5://host:port`): dial THROUGH another
+  /// proxy. Only folded for PLAIN Aether modes — the reverse family modes
+  /// own this variable internally for their carrier (lib.rs L203-244) and
+  /// a user value there would fight the chain itself. Empty = off.
+  String upstreamProxy;
+
+  // ---- v4.31: ECH (encrypted SNI) ----
+  EchMode echMode;
+
+  /// base64 ECH key (`--ech <base64>`; only in [EchMode.manual]).
+  String echKey;
+
+  /// The DoH resolver `--ech auto` asks for the key (`--ech-dns`, e.g.
+  /// `https://1.1.1.1/dns-query` or `udp://1.1.1.1`); empty = the core
+  /// default (udp://1.1.1.1).
+  String echDns;
+
+  /// The domain whose key `--ech auto` takes (`--ech-domain`, default
+  /// cloudflare-ech.com); empty = the core default.
+  String echDomain;
 
   // ---- routing (expert) ----
   String routeBlock; // non-empty ⇒ `--route-block` (comma/newline list)
@@ -209,8 +310,21 @@ class CoreSettings {
         'psiphonFronting': psiphonFronting.name,
         'cdnSni': cdnSni,
         'cdnIps': cdnIps,
+        'cdnSets': cdnSets,
+        'psiphonReadySecs': psiphonReadySecs,
+        'psiphonServerEntries': psiphonServerEntries,
         'torBridges': torBridges.name,
+        'torBridgeLines': torBridgeLines,
+        'torDirectSecs': torDirectSecs,
+        'torBridgeSecs': torBridgeSecs,
         'torLog': torLog.name,
+        'aetherLegProtocol': aetherLegProtocol.name,
+        'ipVersion': ipVersion.name,
+        'upstreamProxy': upstreamProxy,
+        'echMode': echMode.name,
+        'echKey': echKey,
+        'echDns': echDns,
+        'echDomain': echDomain,
         'routeBlock': routeBlock,
         'routeDirect': routeDirect,
         'expertRevealed': expertRevealed,
@@ -262,8 +376,31 @@ class CoreSettings {
         pickEnum(PsiphonFronting.values, m['psiphonFronting']) ?? s.psiphonFronting;
     if (m['cdnSni'] is String) s.cdnSni = m['cdnSni'];
     if (m['cdnIps'] is String) s.cdnIps = m['cdnIps'];
+    if (m['cdnSets'] is String) s.cdnSets = m['cdnSets'];
+    if (m['psiphonReadySecs'] is int && (m['psiphonReadySecs'] as int) > 0) {
+      s.psiphonReadySecs = m['psiphonReadySecs'];
+    }
+    if (m['psiphonServerEntries'] is String) {
+      s.psiphonServerEntries = m['psiphonServerEntries'];
+    }
     s.torBridges = pickEnum(TorBridgePolicy.values, m['torBridges']) ?? s.torBridges;
+    if (m['torBridgeLines'] is String) s.torBridgeLines = m['torBridgeLines'];
+    if (m['torDirectSecs'] is int && (m['torDirectSecs'] as int) > 0) {
+      s.torDirectSecs = m['torDirectSecs'];
+    }
+    if (m['torBridgeSecs'] is int && (m['torBridgeSecs'] as int) > 0) {
+      s.torBridgeSecs = m['torBridgeSecs'];
+    }
     s.torLog = pickEnum(TorLogLevel.values, m['torLog']) ?? s.torLog;
+    s.aetherLegProtocol =
+        pickEnum(AetherLegProtocol.values, m['aetherLegProtocol']) ??
+            s.aetherLegProtocol;
+    s.ipVersion = pickEnum(IpVersion.values, m['ipVersion']) ?? s.ipVersion;
+    if (m['upstreamProxy'] is String) s.upstreamProxy = m['upstreamProxy'];
+    s.echMode = pickEnum(EchMode.values, m['echMode']) ?? s.echMode;
+    if (m['echKey'] is String) s.echKey = m['echKey'];
+    if (m['echDns'] is String) s.echDns = m['echDns'];
+    if (m['echDomain'] is String) s.echDomain = m['echDomain'];
     if (m['routeBlock'] is String) s.routeBlock = m['routeBlock'];
     if (m['routeDirect'] is String) s.routeDirect = m['routeDirect'];
     if (m['expertRevealed'] is bool) s.expertRevealed = m['expertRevealed'];

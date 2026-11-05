@@ -1,7 +1,10 @@
 /// «سایفون» — the Psiphon sub-page (v4.22): the exit-location pick (the
 /// psiphon egress regions the pinned core actually serves, AUTO first —
 /// the same source the home wheel filters by) and the CDN-fronting panel
-/// (--psiphon-mode / --psiphon-cdn-sni / --psiphon-cdn-ips).
+/// (--psiphon-mode / --psiphon-cdn-sni / --psiphon-cdn-ips). v4.31 (owner
+/// round 7: «تننیمات بیشتر») adds the fronting SETS, the ready budget
+/// (the env-only AETHER_PSIPHON_READY_SECS) and the pasted server
+/// entries.
 library;
 
 import 'package:flutter/material.dart';
@@ -48,11 +51,10 @@ class PsiphonSettingsPage extends StatelessWidget {
             children: [
               FlagPickStrip(
                 // v4.30 — the SAME list the home wheel offers (owner round
-                // 6: the two pickers are ONE — «نه تنها از لحاظ عملکرد
-                // بک‌اند بلکه از لحاظ ظاهری هم باید همگامسازی بشن»): the
-                // LIVE psiphon egress set once the core itself reported
-                // one, else the standing seed. A pick here and a pick on
-                // the home wheel write the SAME store field.
+                // 6: the two pickers are ONE): the LIVE psiphon egress set
+                // once the core itself reported one, else the standing
+                // seed. A pick here and a pick on the home wheel write the
+                // SAME store field.
                 codes: [
                   LocationWheelPolicy.autoCode,
                   ...(store.livePsiphonRegions ?? psiphonEgressRegions),
@@ -110,6 +112,72 @@ class PsiphonSettingsPage extends StatelessWidget {
                 onChanged: (v) =>
                     store.updateCore((c) => c.cdnIps = v.trim()),
               ),
+              // v4.31 — which of psiphon's built-in fronting edge lists
+              // the CDN fronting uses (--psiphon-cdn-sets, #91).
+              const SubSectionDivider(),
+              SettingField(
+                keyId: 'cdn-sets',
+                label: strings.cdnSetsLabel,
+                hint: strings.cdnSetsHint,
+                initial: core.cdnSets,
+                onChanged: (v) =>
+                    store.updateCore((c) => c.cdnSets = v.trim()),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.cdnSetsDesc),
+            ],
+          ),
+        ),
+
+        // ---- Section: ready budget (v4.31) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconWatch1,
+          title: strings.secPsiphonTimings,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingStepperRow(
+                keyId: 'psiphon-ready-secs',
+                icon: AppAssets.iconWatch1,
+                label: strings.psiphonReadyLabel,
+                value: core.psiphonReadySecs,
+                min: 60,
+                max: 600,
+                onChanged: (v) =>
+                    store.updateCore((c) => c.psiphonReadySecs = v),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.psiphonReadyDesc),
+            ],
+          ),
+        ),
+
+        // ---- Section: server entries (v4.31) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSetting,
+          title: strings.serverEntriesLabel,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingField(
+                keyId: 'psiphon-server-entries',
+                label: strings.serverEntriesLabel,
+                hint: strings.serverEntriesHint,
+                initial: core.psiphonServerEntries,
+                maxLines: 4,
+                onChanged: (v) =>
+                    store.updateCore((c) => c.psiphonServerEntries = v.trim()),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.serverEntriesDesc),
             ],
           ),
         ),

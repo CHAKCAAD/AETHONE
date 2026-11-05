@@ -11,6 +11,7 @@ library;
 
 import 'package:flutter/widgets.dart';
 
+import '../connection/core_settings.dart';
 import '../core/app_assets.dart';
 
 class AppStrings {
@@ -273,6 +274,62 @@ class AppStrings {
   String get bridgesAutoDesc => _v['bridgesAutoDesc']!;
   String get bridgesOffDesc => _v['bridgesOffDesc']!;
   String get torLogLevelLabel => _v['torLogLevelLabel']!;
+
+  // ---- v4.31 — the round-7 settings expansion (manual bridges, tor
+  // budgets, psiphon sets/entries/budget, the family leg protocol, the
+  // dial layer, ECH) ----
+  String get bridgesCustom => _v['bridgesCustom']!;
+  String get bridgesCustomDesc => _v['bridgesCustomDesc']!;
+  String get torBridgeLinesLabel => _v['torBridgeLinesLabel']!;
+  String get torBridgeLinesHint => _v['torBridgeLinesHint']!;
+  String get secTorTimings => _v['secTorTimings']!;
+  String get torDirectSecsLabel => _v['torDirectSecsLabel']!;
+  String get torBridgeSecsLabel => _v['torBridgeSecsLabel']!;
+  String get torTimingsDesc => _v['torTimingsDesc']!;
+  String get cdnSetsLabel => _v['cdnSetsLabel']!;
+  String get cdnSetsHint => _v['cdnSetsHint']!;
+  String get cdnSetsDesc => _v['cdnSetsDesc']!;
+  String get secPsiphonTimings => _v['secPsiphonTimings']!;
+  String get psiphonReadyLabel => _v['psiphonReadyLabel']!;
+  String get psiphonReadyDesc => _v['psiphonReadyDesc']!;
+  String get serverEntriesLabel => _v['serverEntriesLabel']!;
+  String get serverEntriesHint => _v['serverEntriesHint']!;
+  String get serverEntriesDesc => _v['serverEntriesDesc']!;
+  String get secAetherLeg => _v['secAetherLeg']!;
+  String get aetherLegLabel => _v['aetherLegLabel']!;
+  String get aetherLegDesc => _v['aetherLegDesc']!;
+  String get secIpVersion => _v['secIpVersion']!;
+  String get ipV4 => _v['ipV4']!;
+  String get ipV6 => _v['ipV6']!;
+  String get ipDual => _v['ipDual']!;
+  String get ipVersionDesc => _v['ipVersionDesc']!;
+  String get secUpstream => _v['secUpstream']!;
+  String get upstreamLabel => _v['upstreamLabel']!;
+  String get upstreamHint => _v['upstreamHint']!;
+  String get upstreamDesc => _v['upstreamDesc']!;
+  String get echLabel => _v['echLabel']!;
+  String get echOff => _v['echOff']!;
+  String get echAuto => _v['echAuto']!;
+  String get echManual => _v['echManual']!;
+  String get echOffDesc => _v['echOffDesc']!;
+  String get echAutoDesc => _v['echAutoDesc']!;
+  String get echManualDesc => _v['echManualDesc']!;
+  String get echKeyLabel => _v['echKeyLabel']!;
+  String get echKeyHint => _v['echKeyHint']!;
+  String get echDnsLabel => _v['echDnsLabel']!;
+  String get echDnsHint => _v['echDnsHint']!;
+  String get echDomainLabel => _v['echDomainLabel']!;
+  String get echDomainHint => _v['echDomainHint']!;
+
+  /// The family-leg pills reuse the protocol tiles' own labels
+  /// («ماسک / وایرگارد / …») — the same protocol reads the same everywhere.
+  String aetherLegLabel(AetherLegProtocol leg) => switch (leg) {
+    AetherLegProtocol.masque => _v['protoMasque']!,
+    AetherLegProtocol.wireguard => _v['protoWireguard']!,
+    AetherLegProtocol.gool => _v['protoGool']!,
+    AetherLegProtocol.goolClassic => _v['protoGoolClassic']!,
+    AetherLegProtocol.mim => _v['protoMim']!,
+  };
 
   // ---- v4.23 onboarding («صفحه شروع» — fa VERBATIM from the four wizard
   // frames + «لودینگ اسکن», transcribed off 3–5× crops) ----
@@ -591,6 +648,49 @@ class AppStrings {
       'bridgesOff': 'بدون پل',
       'bridgesOffDesc': 'پل‌ها خاموش می‌شوند (فقط برای شبکه‌های بدون فیلتر Tor)',
       'torLogLevelLabel': 'سطح لاگ Tor',
+      // v4.31 — the round-7 settings expansion.
+      'bridgesCustom': 'دستی',
+      'bridgesCustomDesc': 'خط‌های پل خودتان را وارد کنید؛ هسته به‌جای پل‌های گرفته‌شده از bridgedb از همین‌ها استفاده می‌کند',
+      'torBridgeLinesLabel': 'خط‌های پل',
+      'torBridgeLinesHint': 'هر پل در یک خط — مثلاً obfs4 1.2.3.4:443 CERT=… iat-mode=0',
+      'secTorTimings': 'زمان‌های اتصال تور',
+      'torDirectSecsLabel': 'مهلت اتصال مستقیم (ثانیه)',
+      'torBridgeSecsLabel': 'مهلت هر پل (ثانیه)',
+      'torTimingsDesc': 'پیش‌فرض هسته: ۷۵ ثانیه اتصال مستقیم و ۳۶۰ ثانیه برای هر پل. در شبکه‌های کند می‌توانید بیشتر بگذارید',
+      'cdnSetsLabel': 'مجموعه‌های فرانتینگ',
+      'cdnSetsHint': 'با کاما جدا شود — مثلاً psiphon-akamai,vercel (خالی = همه)',
+      'cdnSetsDesc': 'کدام فهرست‌های لبهٔ داخلی سایفون برای فرانتینگ CDN استفاده شوند',
+      'secPsiphonTimings': 'زمان آماده‌سازی',
+      'psiphonReadyLabel': 'مهلت آماده‌سازی سایفون (ثانیه)',
+      'psiphonReadyDesc': 'پیش‌فرض هسته ۱۸۰ ثانیه است؛ در شبکه‌های کند بیشترش کنید — بودجهٔ خود اپ هم هماهنگ با آن باز می‌شود',
+      'serverEntriesLabel': 'ورودی‌های سرور',
+      'serverEntriesHint': 'متن JSON ورودی‌های سرور از کلاینت رسمی سایفون',
+      'serverEntriesDesc': 'خالی یعنی کشف خودکار داخلی سایفون',
+      'secAetherLeg': 'پروتکل هستهٔ Aether',
+      'aetherLegLabel': 'پایهٔ حالت‌های ترکیبی',
+      'aetherLegDesc': 'در حالت‌های ترکیبی (تور/سایفون روی وارپ)، تونل Aether زیرین با این پروتکل برقرار می‌شود. در حالت‌های معکوس، پایه‌های نیازمند UDP خودکار به ماسک تغییر می‌کنند (محدودیت خود هسته)',
+      'secIpVersion': 'نسخهٔ IP',
+      'ipV4': 'IPv4',
+      'ipV6': 'IPv6',
+      'ipDual': 'دوگانه',
+      'ipVersionDesc': 'برخی اپراتورها IPv6 را سالم حمل نمی‌کنند؛ IPv4 پیش‌فرضِ خود هسته است',
+      'secUpstream': 'پروکسی بالادست',
+      'upstreamLabel': 'آدرس پروکسی (اختیاری)',
+      'upstreamHint': 'socks5://127.0.0.1:1080',
+      'upstreamDesc': 'فقط برای پروتکل‌های سادهٔ Aether؛ ترافیک هسته از این پروکسی عبور می‌کند. خالی = خاموش',
+      'echLabel': 'ECH (رمزنگاری SNI)',
+      'echOff': 'خاموش',
+      'echAuto': 'خودکار',
+      'echManual': 'دستی',
+      'echOffDesc': 'SNI مثل حالت عادی ارسال می‌شود',
+      'echAutoDesc': 'کلید ECH به‌صورت خودکار از DNS خوانده می‌شود و نام سرور رمزنگاری‌شده ارسال می‌شود',
+      'echManualDesc': 'کلید ECH را دستی (base64) وارد می‌کنید',
+      'echKeyLabel': 'کلید ECH (base64)',
+      'echKeyHint': 'مثلاً AEDW…',
+      'echDnsLabel': 'DNS یابندهٔ کلید',
+      'echDnsHint': 'مثلاً https://1.1.1.1/dns-query',
+      'echDomainLabel': 'دامنهٔ کلید (اختیاری)',
+      'echDomainHint': 'پیش‌فرض: cloudflare-ech.com',
       // v4.23 onboarding — verbatim from the «صفحه شروع» frames.
       'obLanguageTitle': 'زبان برنامه چی باشه؟',
       'obRoutingTitle': 'ترافیک کدوم کشور مستقیم باشه؟',
@@ -832,6 +932,49 @@ class AppStrings {
       'bridgesOff': 'No bridges',
       'bridgesOffDesc': 'Bridges off (only for networks that do not filter Tor)',
       'torLogLevelLabel': 'Tor log level',
+      // v4.31 — the round-7 settings expansion.
+      'bridgesCustom': 'Manual',
+      'bridgesCustomDesc': 'Enter your own bridge lines; the core uses them instead of the ones fetched from bridgedb',
+      'torBridgeLinesLabel': 'Bridge lines',
+      'torBridgeLinesHint': 'one bridge per line — e.g. obfs4 1.2.3.4:443 CERT=… iat-mode=0',
+      'secTorTimings': 'Tor connection budgets',
+      'torDirectSecsLabel': 'Direct attempt budget (seconds)',
+      'torBridgeSecsLabel': 'Per-bridge budget (seconds)',
+      'torTimingsDesc': 'Core defaults: 75 s direct and 360 s per bridge. Raise them on slow networks',
+      'cdnSetsLabel': 'Fronting sets',
+      'cdnSetsHint': 'comma-separated — e.g. psiphon-akamai,vercel (empty = all)',
+      'cdnSetsDesc': 'Which built-in psiphon edge lists the CDN fronting uses',
+      'secPsiphonTimings': 'Ready budget',
+      'psiphonReadyLabel': 'Psiphon ready budget (seconds)',
+      'psiphonReadyDesc': 'The core default is 180 s; raise it on slow networks — the app walk budget widens with it',
+      'serverEntriesLabel': 'Server entries',
+      'serverEntriesHint': 'the server-entries JSON from the official psiphon client',
+      'serverEntriesDesc': 'Empty means the built-in psiphon discovery',
+      'secAetherLeg': 'Aether core protocol',
+      'aetherLegLabel': 'Base of the combined modes',
+      'aetherLegDesc': 'In combined modes (tor/psiphon over WARP) the underlying Aether tunnel runs this protocol. On the reverse modes the UDP-needing legs map to MASQUE automatically (a core limit)',
+      'secIpVersion': 'IP version',
+      'ipV4': 'IPv4',
+      'ipV6': 'IPv6',
+      'ipDual': 'Dual',
+      'ipVersionDesc': "Some carriers carry broken IPv6; IPv4 is the core's own default",
+      'secUpstream': 'Upstream proxy',
+      'upstreamLabel': 'Proxy address (optional)',
+      'upstreamHint': 'socks5://127.0.0.1:1080',
+      'upstreamDesc': 'Plain Aether modes only; the core dials through this proxy. Empty = off',
+      'echLabel': 'ECH (encrypted SNI)',
+      'echOff': 'Off',
+      'echAuto': 'Auto',
+      'echManual': 'Manual',
+      'echOffDesc': 'The SNI is sent as usual',
+      'echAutoDesc': 'The ECH key is looked up over DNS and the server name travels encrypted',
+      'echManualDesc': 'You provide the base64 ECH key yourself',
+      'echKeyLabel': 'ECH key (base64)',
+      'echKeyHint': 'e.g. AEDW…',
+      'echDnsLabel': 'Key-lookup DNS',
+      'echDnsHint': 'e.g. https://1.1.1.1/dns-query',
+      'echDomainLabel': 'Key domain (optional)',
+      'echDomainHint': 'default: cloudflare-ech.com',
       // v4.23 onboarding.
       'obLanguageTitle': 'What should the app language be?',
       'obRoutingTitle': "Which country's traffic should go direct?",
@@ -1070,6 +1213,49 @@ class AppStrings {
       'bridgesOff': 'Без мостов',
       'bridgesOffDesc': 'Мосты выключены (для сетей без фильтрации Tor)',
       'torLogLevelLabel': 'Уровень логов Tor',
+      // v4.31 — the round-7 settings expansion.
+      'bridgesCustom': 'Вручную',
+      'bridgesCustomDesc': 'Введите свои строки мостов; ядро использует их вместо полученных от bridgedb',
+      'torBridgeLinesLabel': 'Строки мостов',
+      'torBridgeLinesHint': 'один мост на строку — напр. obfs4 1.2.3.4:443 CERT=… iat-mode=0',
+      'secTorTimings': 'Лимиты подключения Tor',
+      'torDirectSecsLabel': 'Лимит прямой попытки (сек)',
+      'torBridgeSecsLabel': 'Лимит на мост (сек)',
+      'torTimingsDesc': 'По умолчанию ядра: 75 с напрямую и 360 с на мост. Увеличьте в медленных сетях',
+      'cdnSetsLabel': 'Наборы фронтинга',
+      'cdnSetsHint': 'через запятую — напр. psiphon-akamai,vercel (пусто = все)',
+      'cdnSetsDesc': 'Какие встроенные списки рёбер psiphon использует CDN-фронтинг',
+      'secPsiphonTimings': 'Лимит готовности',
+      'psiphonReadyLabel': 'Лимит готовности psiphon (сек)',
+      'psiphonReadyDesc': 'По умолчанию ядра 180 с; увеличьте в медленных сетях — бюджет самого приложения расширяется вместе с ним',
+      'serverEntriesLabel': 'Записи серверов',
+      'serverEntriesHint': 'JSON записей серверов из официального клиента psiphon',
+      'serverEntriesDesc': 'Пусто — встроенное обнаружение psiphon',
+      'secAetherLeg': 'Протокол ядра Aether',
+      'aetherLegLabel': 'Основа комбинированных режимов',
+      'aetherLegDesc': 'В комбинированных режимах (tor/psiphon поверх WARP) туннель Aether работает по этому протоколу. В обратных режимах ветки с UDP автоматически переходят на MASQUE (ограничение ядра)',
+      'secIpVersion': 'Версия IP',
+      'ipV4': 'IPv4',
+      'ipV6': 'IPv6',
+      'ipDual': 'Обе',
+      'ipVersionDesc': 'У некоторых операторов IPv6 сломан; IPv4 — значение ядра по умолчанию',
+      'secUpstream': 'Вышестоящий прокси',
+      'upstreamLabel': 'Адрес прокси (необязательно)',
+      'upstreamHint': 'socks5://127.0.0.1:1080',
+      'upstreamDesc': 'Только для обычных режимов Aether; ядро ходит через этот прокси. Пусто = выкл',
+      'echLabel': 'ECH (шифрование SNI)',
+      'echOff': 'Выкл',
+      'echAuto': 'Авто',
+      'echManual': 'Вручную',
+      'echOffDesc': 'SNI отправляется как обычно',
+      'echAutoDesc': 'Ключ ECH ищется через DNS, имя сервера уходит зашифрованным',
+      'echManualDesc': 'Вы указываете base64-ключ ECH сами',
+      'echKeyLabel': 'Ключ ECH (base64)',
+      'echKeyHint': 'напр. AEDW…',
+      'echDnsLabel': 'DNS для поиска ключа',
+      'echDnsHint': 'напр. https://1.1.1.1/dns-query',
+      'echDomainLabel': 'Домен ключа (необязательно)',
+      'echDomainHint': 'по умолчанию: cloudflare-ech.com',
       // v4.23 onboarding.
       'obLanguageTitle': 'Какой язык приложения?',
       'obRoutingTitle': 'Трафик какой страны идёт напрямую?',
@@ -1307,6 +1493,49 @@ class AppStrings {
       'bridgesOff': '无网桥',
       'bridgesOffDesc': '关闭网桥（仅适合不封锁 Tor 的网络）',
       'torLogLevelLabel': 'Tor 日志级别',
+      // v4.31 — the round-7 settings expansion.
+      'bridgesCustom': '手动',
+      'bridgesCustomDesc': '输入你自己的网桥行；内核将用它们代替从 bridgedb 获取的网桥',
+      'torBridgeLinesLabel': '网桥行',
+      'torBridgeLinesHint': '每行一个网桥 — 例如 obfs4 1.2.3.4:443 CERT=… iat-mode=0',
+      'secTorTimings': 'Tor 连接时限',
+      'torDirectSecsLabel': '直连尝试时限（秒）',
+      'torBridgeSecsLabel': '单个网桥时限（秒）',
+      'torTimingsDesc': '内核默认：直连 75 秒、每个网桥 360 秒。慢速网络可调大',
+      'cdnSetsLabel': '前端托管集合',
+      'cdnSetsHint': '逗号分隔 — 例如 psiphon-akamai,vercel（留空 = 全部）',
+      'cdnSetsDesc': 'CDN 前端托管使用 psiphon 内置的哪些边缘列表',
+      'secPsiphonTimings': '就绪时限',
+      'psiphonReadyLabel': 'Psiphon 就绪时限（秒）',
+      'psiphonReadyDesc': '内核默认 180 秒；慢速网络可调大 — 应用自身的等待预算也会随之放宽',
+      'serverEntriesLabel': '服务器条目',
+      'serverEntriesHint': '来自 psiphon 官方客户端的服务器条目 JSON',
+      'serverEntriesDesc': '留空表示使用 psiphon 内置发现',
+      'secAetherLeg': 'Aether 核心协议',
+      'aetherLegLabel': '组合模式的底层',
+      'aetherLegDesc': '在组合模式（WARP 上的 tor/psiphon）中，底层 Aether 隧道使用此协议。反向模式下需要 UDP 的分支会自动映射为 MASQUE（内核自身的限制）',
+      'secIpVersion': 'IP 版本',
+      'ipV4': 'IPv4',
+      'ipV6': 'IPv6',
+      'ipDual': '双栈',
+      'ipVersionDesc': '部分运营商的 IPv6 有问题；IPv4 是内核自身的默认值',
+      'secUpstream': '上游代理',
+      'upstreamLabel': '代理地址（可选）',
+      'upstreamHint': 'socks5://127.0.0.1:1080',
+      'upstreamDesc': '仅适用于普通 Aether 模式；内核经由该代理拨号。留空 = 关闭',
+      'echLabel': 'ECH（加密 SNI）',
+      'echOff': '关闭',
+      'echAuto': '自动',
+      'echManual': '手动',
+      'echOffDesc': 'SNI 按常规方式发送',
+      'echAutoDesc': '通过 DNS 查询 ECH 密钥，服务器名以加密方式发送',
+      'echManualDesc': '你自行提供 base64 的 ECH 密钥',
+      'echKeyLabel': 'ECH 密钥（base64）',
+      'echKeyHint': '例如 AEDW…',
+      'echDnsLabel': '查找密钥的 DNS',
+      'echDnsHint': '例如 https://1.1.1.1/dns-query',
+      'echDomainLabel': '密钥域名（可选）',
+      'echDomainHint': '默认：cloudflare-ech.com',
       // v4.23 onboarding.
       'obLanguageTitle': '程序用什么语言？',
       'obRoutingTitle': '哪个国家的流量直连？',

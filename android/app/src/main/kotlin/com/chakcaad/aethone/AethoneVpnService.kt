@@ -39,6 +39,22 @@ class AethoneVpnService : VpnService() {
     companion object {
         const val EXTRA_PORT = "port"
 
+        /// v4.31 — the selected mode carries UDP or not: every tor/psiphon
+        /// family mode reaches the internet over TCP only (transport_modes
+        /// `tcpOnly`; the core's socks listener accepts the UDP ASSOCIATE
+        /// and then silently DROPS every non-DNS datagram, socks.rs
+        /// “this listener reaches the internet over tcp only”). With UDP
+        /// left enabled in zeptun, the device's QUIC/UDP flows vanish into
+        /// that black hole — apps hang retransmitting instead of falling
+        /// back to TCP (owner round 7: «تونل در لوکیشن های سایفون نمیتونه
+        /// خوب دیتا رو رد کنه … به مقدار دیتا رد و بدل میشه و بعد دویاره
+        /// دیتایی رد نمیشه» — proxy on the same port worked). With
+        /// `handler.socks5.udp = "disabled"` zeptun REFUSES the flow at
+        /// open (handler.zig udpOpen) and answers ICMP port-unreachable
+        /// (stack/udp.zig → icmp.sendUnreachable) — the honest
+        /// "this network has no UDP" every app falls back from.
+        const val EXTRA_TCP_ONLY = "tcpOnly"
+
         /// v4.21 — the Dart-side tunnel-session stamp (see MainActivity's
         /// startVpn): every event THIS instance emits carries it back so the
         /// adapter can drop the stale instance's late `down/destroy` events
@@ -115,6 +131,12 @@ class AethoneVpnService : VpnService() {
     private var socksPort: Int = 1819
     private var zeptunUp = false
 
+    /// v4.31 — the udp mode zeptun is CURRENTLY serving; a mode switch
+    /// between a UDP-carrying leg and a TCP-only one on the SAME port
+    /// (e.g. MASQUE 1819 → PSIPHON ONLY 1819) must restart zeptun, exactly
+    /// like a port change — the blackhole/ICMP behaviour differs.
+    private var socksTcpOnly: Boolean = false
+
     /// v4.21 — the session stamp from the start intent (0 when absent,
     /// e.g. an external start); echoed on EVERY event this instance emits.
     private var sessionId: Int = 0
@@ -129,6 +151,7 @@ class AethoneVpnService : VpnService() {
         val port = intent?.getIntExtra(EXTRA_PORT, 1819) ?: 1819
         socksPort = port
         sessionId = intent?.getIntExtra(EXTRA_SESSION, 0) ?: 0
+        val tcpOnly = intent?.getBooleanExtra(EXTRA_TCP_ONLY, false) ?: false
         // v4.26 — the straggler gate: this start was superseded by a stop
         // (a `stopVpn` processed while the start delivery was still in
         // flight — the lost-cancel window's platform half). Establishing
@@ -179,7 +202,7 @@ class AethoneVpnService : VpnService() {
         // uncaught-exception breadcrumb in MainActivity covers the Java
         // seam and adb logcat remains the native-truth source.
         try {
-            if (!startTunnel(port)) {
+            if (!startTunnel(port, tcpOnly)) {
                 EngineBridge.emit(downEvent("establish-failed"))
                 stopSelf()
                 return START_NOT_STICKY
@@ -230,15 +253,21 @@ class AethoneVpnService : VpnService() {
     private fun downEvent(reason: String): Map<String, Any?> =
         mapOf("event" to "down", "reason" to reason, "session" to sessionId)
 
-    private fun startTunnel(port: Int): Boolean {
+    private fun startTunnel(port: Int, tcpOnly: Boolean): Boolean {
         if (zeptunUp) {
             // v4.20: a mode switch (e.g. 1819 → 1820) between connects used
             // to keep serving the OLD port — zeptun would relay into a
             // listener nothing serves anymore. A different target is a
             // full restart; the same target is the plain "already serving"
             // re-entry (activity restart re-invoked the service).
-            if (port != socksPort) {
-                Log.i(TAG, "socks target changed $socksPort -> $port; restarting zeptun")
+            // v4.31: the UDP mode counts as part of the target — the same
+            // port with a different tcpOnly answers flows differently
+            // (ICMP-unreachable vs relayed UDP ASSOCIATE).
+            if (port != socksPort || tcpOnly != socksTcpOnly) {
+                Log.i(
+                    TAG,
+                    "socks target changed $socksPort/$socksTcpOnly -> $port/$tcpOnly; restarting zeptun",
+                )
                 stopTunnel("port-change")
             } else {
                 EngineBridge.emit(upEvent(port))
@@ -285,7 +314,14 @@ class AethoneVpnService : VpnService() {
         descriptor = fd
 
         // Must match ZeptunConfigToml.build on the Dart side (single source
-        // of truth: the zeptun config keys at the frozen pin).
+        // of truth: the zeptun config keys at the frozen pin). v4.31 — the
+        // `udp = "disabled"` line for TCP-only modes: zeptun then refuses
+        // every UDP flow at open and answers the device with ICMP
+        // port-unreachable (src/stack/udp.zig → icmp.sendUnreachable), so
+        // QUIC-happy apps fall back to TCP immediately instead of
+        // blackholing into the core's drop-everything UDP relay. The
+        // fake-IP DNS keeps working — zeptun answers it locally before
+        // any flow reaches the handler (src/stack/dns.zig).
         val toml = """
             preset = "mobile"
 
@@ -294,6 +330,7 @@ class AethoneVpnService : VpnService() {
 
             [handler.socks5]
             server = "127.0.0.1:$port"
+            ${if (tcpOnly) "udp = \"disabled\"" else ""}
 
             [dns]
             fake_ip = true
@@ -307,7 +344,12 @@ class AethoneVpnService : VpnService() {
             return false
         }
         zeptunUp = true
-        Log.i(TAG, "zeptun up on socks 127.0.0.1:$port (protect callback installed)")
+        socksTcpOnly = tcpOnly
+        Log.i(
+            TAG,
+            "zeptun up on socks 127.0.0.1:$port udp=${if (tcpOnly) "disabled" else "enabled"} " +
+                "(protect callback installed)",
+        )
         EngineBridge.emit(upEvent(port))
         return true
     }

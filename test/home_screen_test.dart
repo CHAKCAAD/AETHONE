@@ -619,5 +619,54 @@ void main() {
       expect(find.text('آلمان'), findsOneWidget);
       expect(store.psiphonLocation, 'de');
     });
+
+    // v4.31 — the Tor pseudo-country round (owner: «قسمت نمایش پروتکل برای
+    // پرچمی نشون نداد و اسمش رو هم T1 نوشته بود»): the trace answers
+    // loc=T1 for EVERY Tor exit, so the adapter strips the exit to null
+    // (no flag, no «T1» name) and the wheel keeps the honest anchor until
+    // the post-connect Onionoo resolution lands with the REAL country.
+    testWidgets('a Tor pseudo exit (T1) shows the anchor until the '
+        'resolution lands, then follows it', (tester) async {
+      await useReferenceSurface(tester);
+      final engine = ScriptedEngine();
+      final store = ConnectionStore(engine: engine);
+      store.selectedProtocol = ProtocolId.torOnly; // pick = auto
+      await tester.pumpWidget(_booth(HomeScreen(store: store)));
+      await tester.pumpAndSettle();
+
+      await store.connect();
+      engine.emit(const EngineStateChanged(VpnState.connecting));
+      await tester.pump(const Duration(milliseconds: 300));
+      engine.emit(const EngineStateChanged(VpnState.connected));
+      // The adapter already stripped loc=T1 to null (statsEvent) — no
+      // «T1» anywhere, the AUTO anchor stays.
+      engine.emit(
+        const EngineStatsUpdated(pingMs: 210, downBytes: 0, upBytes: 0),
+      );
+      for (var i = 0; i < 16; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      expect(find.text('T1'), findsNothing);
+      expect(find.text('خودکار'), findsOneWidget);
+      expect(store.exitCountryCode, isNull);
+
+      // The resolution lands (Onionoo said the exit relay is in Austria).
+      engine.emit(const EngineExitCountryResolved('at'));
+      for (var i = 0; i < 16; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      expect(store.exitCountryCode, 'at');
+      expect(find.text('اتریش'), findsOneWidget);
+
+      // A late resolution from a dead session must never park a flag on
+      // the disconnected home screen (the store applies it ONLY while
+      // connected).
+      await store.disconnect();
+      engine.emit(const EngineStateChanged(VpnState.disconnected));
+      await tester.pumpAndSettle();
+      engine.emit(const EngineExitCountryResolved('nl'));
+      await tester.pumpAndSettle();
+      expect(store.exitCountryCode, isNull);
+    });
   });
 }

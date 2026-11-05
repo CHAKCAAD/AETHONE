@@ -264,12 +264,218 @@ void main() {
     });
   });
 
+  // v4.31 — the round-7 settings expansion: every new knob folds into the
+  // pinned CLI surface exactly once, and only when it differs from the
+  // core's own default.
+  group('AetherArguments.coreArgs — the v4.31 expansion', () {
+    List<String> build({
+      ProtocolId protocol = ProtocolId.masque,
+      ProtocolId? chain,
+      CoreSettings? core,
+    }) => AetherArguments.build(
+          protocol: protocol,
+          chain: chain,
+          core: core,
+          filesDir: '/data/files',
+          nativeLibraryDir: '/data/lib',
+        );
+
+    test('manual tor bridges: one --tor-bridge per line (comments skipped)',
+        () {
+      final core = CoreSettings()
+        ..torBridges = TorBridgePolicy.custom
+        ..torBridgeLines = '# from bridgedb\n'
+            'obfs4 1.2.3.4:443 FINGERPRINT cert=abc iat-mode=0\n'
+            '\n'
+            'webtunnel 5.6.7.8:8443 FINGERPRINT2 url=https://x/y\n';
+      final args = build(
+        protocol: ProtocolId.wireguard,
+        chain: ProtocolId.torChain,
+        core: core,
+      );
+      expect(
+        args,
+        containsAllInOrder([
+          '--tor-bridge',
+          'obfs4 1.2.3.4:443 FINGERPRINT cert=abc iat-mode=0',
+        ]),
+      );
+      expect(
+        args,
+        containsAllInOrder([
+          '--tor-bridge',
+          'webtunnel 5.6.7.8:8443 FINGERPRINT2 url=https://x/y',
+        ]),
+      );
+      expect(args, isNot(contains('--no-tor-bridges')));
+    });
+
+    test('bridge policy off still passes --no-tor-bridges only', () {
+      final core = CoreSettings()..torBridges = TorBridgePolicy.off;
+      final args = build(
+        protocol: ProtocolId.wireguard,
+        chain: ProtocolId.torOnly,
+        core: core,
+      );
+      expect(args, contains('--no-tor-bridges'));
+      expect(args, isNot(contains('--tor-bridge')));
+    });
+
+    test('IP version: v6 → -6, dual → --dual, default v4 → neither', () {
+      expect(
+        build(core: CoreSettings()..ipVersion = IpVersion.v6),
+        contains('-6'),
+      );
+      expect(
+        build(core: CoreSettings()..ipVersion = IpVersion.dual),
+        contains('--dual'),
+      );
+      final plain = build(core: CoreSettings());
+      expect(plain, isNot(contains('-6')));
+      expect(plain, isNot(contains('--dual')));
+    });
+
+    test('upstream: plain modes only', () {
+      final core = CoreSettings()
+        ..upstreamProxy = 'socks5://10.0.0.5:1080';
+      expect(
+        build(core: core),
+        containsAllInOrder(['--upstream', 'socks5://10.0.0.5:1080']),
+      );
+      // The family modes own AETHER_UPSTREAM internally — a user value
+      // there would fight the chain itself.
+      expect(
+        build(chain: ProtocolId.psiphonChain, core: core),
+        isNot(contains('--upstream')),
+      );
+    });
+
+    test('ECH: auto / manual / off fold their own flags', () {
+      final auto = CoreSettings()
+        ..echMode = EchMode.auto
+        ..echDns = 'https://1.1.1.1/dns-query'
+        ..echDomain = 'cloudflare-ech.com';
+      expect(
+        build(core: auto),
+        containsAllInOrder([
+          '--ech',
+          'auto',
+          '--ech-dns',
+          'https://1.1.1.1/dns-query',
+          '--ech-domain',
+          'cloudflare-ech.com',
+        ]),
+      );
+
+      final manual = CoreSettings()
+        ..echMode = EchMode.manual
+        ..echKey = 'AEDW BASE64==';
+      expect(build(core: manual), containsAllInOrder(['--ech', 'AEDW BASE64==']));
+
+      expect(build(core: CoreSettings()), isNot(contains('--ech')));
+    });
+
+    test('psiphon sets + server entries fold under the family gate', () {
+      final core = CoreSettings()
+        ..cdnSets = 'psiphon-akamai,vercel'
+        ..psiphonServerEntries = '[{"ipAddress":"1.2.3.4"}]';
+      final args = build(
+        protocol: ProtocolId.wireguard,
+        chain: ProtocolId.psiphonChain,
+        core: core,
+      );
+      expect(
+        args,
+        containsAllInOrder(['--psiphon-cdn-sets', 'psiphon-akamai,vercel']),
+      );
+      expect(
+        args,
+        containsAllInOrder([
+          '--psiphon-server-entries',
+          '[{"ipAddress":"1.2.3.4"}]',
+        ]),
+      );
+      // Plain modes carry no psiphon flags at all.
+      final plain = build(core: core);
+      expect(plain, isNot(contains('--psiphon-cdn-sets')));
+      expect(plain, isNot(contains('--psiphon-server-entries')));
+    });
+
+    test('the family leg protocol maps to its own --protocol pair', () {
+      expect(
+        AetherArguments.legProtocolId(AetherLegProtocol.masque),
+        ProtocolId.masque,
+      );
+      expect(
+        AetherArguments.legProtocolId(AetherLegProtocol.goolClassic),
+        ProtocolId.goolClassic,
+      );
+    });
+
+    test('readyBudget widens with the family timeout settings', () {
+      const base = Duration(seconds: 360);
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.torChain),
+        base,
+      );
+      expect(
+        PlatformEngineAdapter.readyBudget(
+          ProtocolId.torChain,
+          core: CoreSettings()..torBridgeSecs = 600,
+        ),
+        const Duration(seconds: 630),
+      );
+      expect(
+        PlatformEngineAdapter.readyBudget(
+          ProtocolId.psiphonChain,
+          core: CoreSettings()..psiphonReadySecs = 300,
+        ),
+        const Duration(seconds: 330),
+      );
+    });
+
+    test('CoreSettings roundtrips the new fields', () {
+      final s = CoreSettings()
+        ..torBridges = TorBridgePolicy.custom
+        ..torBridgeLines = 'obfs4 1.2.3.4:443 cert=abc iat-mode=0'
+        ..torDirectSecs = 120
+        ..torBridgeSecs = 500
+        ..cdnSets = 'vercel'
+        ..psiphonReadySecs = 240
+        ..psiphonServerEntries = '[]'
+        ..aetherLegProtocol = AetherLegProtocol.gool
+        ..ipVersion = IpVersion.dual
+        ..upstreamProxy = 'socks5://h:1'
+        ..echMode = EchMode.auto
+        ..echKey = 'K=='
+        ..echDns = 'https://d'
+        ..echDomain = 'dom';
+      final back = CoreSettings.fromJson(
+        (jsonDecode(jsonEncode(s.toJson())) as Map).cast<String, dynamic>(),
+      );
+      expect(back.encode(), s.encode());
+    });
+  });
+
   group('ZeptunConfigToml.build', () {
     test('mobile preset + socks5 handler on the given port + fake-IP DNS', () {
-      final toml = ZeptunConfigToml.build(socksPort: 1820);
+      final toml = ZeptunConfigToml.build(socksPort: 1820, tcpOnly: false);
       expect(toml, contains('preset = "mobile"'));
       expect(toml, contains('kind = "socks5"'));
       expect(toml, contains('server = "127.0.0.1:1820"'));
+      expect(toml, contains('fake_ip = true'));
+      // UDP stays relayed (the plain UDP-carrying legs).
+      expect(toml, isNot(contains('udp = ')));
+    });
+
+    // v4.31 — the TCP-only modes (every tor/psiphon family member): zeptun
+    // REFUSES UDP flows (ICMP port-unreachable) instead of relaying them
+    // into the core's silent drop-everything UDP relay.
+    test('tcpOnly adds handler.socks5.udp = "disabled"', () {
+      final toml = ZeptunConfigToml.build(socksPort: 1821, tcpOnly: true);
+      expect(toml, contains('preset = "mobile"'));
+      expect(toml, contains('server = "127.0.0.1:1821"'));
+      expect(toml, contains('udp = "disabled"'));
       expect(toml, contains('fake_ip = true'));
     });
   });
@@ -301,6 +507,30 @@ void main() {
         () => TunnelProbe.parseBody('fl=x\nip=1.2.3.4\n', 5),
         throwsA(isA<SocketException>()),
       );
+    });
+
+    // v4.31 — the Tor-network pseudo country (owner round 7: «اسمش رو هم
+    // T1 نوشته بود»): the trace still succeeds, the raw code stays for the
+    // resolver, and the STATS event carries null (no «T1» name, no fake
+    // flag).
+    test('loc=T1 (the Tor network) parses as a PSEUDO country', () {
+      final r = TunnelProbe.parseBody(
+        'fl=x\nip=185.220.101.1\ncolo=FRA\nloc=T1\ntls=TLSv1.3\nwarp=off\n',
+        42,
+      );
+      expect(r.exitCountryCode, 't1');
+      expect(r.exitIp, '185.220.101.1');
+      expect(r.countryIsPseudo, isTrue);
+      final stats = PlatformEngineAdapter.statsEvent(r);
+      expect(stats.exitCountryCode, isNull);
+      expect(stats.pingMs, 42);
+    });
+
+    test('a real country is not pseudo', () {
+      const body = 'fl=x\nip=1.1.1.1\nloc=DE\nwarp=off\n';
+      final r = TunnelProbe.parseBody(body, 1);
+      expect(r.countryIsPseudo, isFalse);
+      expect(PlatformEngineAdapter.statsEvent(r).exitCountryCode, 'de');
     });
   });
 

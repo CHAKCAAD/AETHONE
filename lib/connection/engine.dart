@@ -88,6 +88,19 @@ class EngineEgressRegions extends EngineEvent {
   final List<String> regions;
 }
 
+/// v4.31 — the REAL exit country of a pseudo-country exit, resolved
+/// post-connect (owner round 7: a Tor exit answers the trace with
+/// `loc=T1` — Cloudflare's GeoIP pseudo-country for the Tor network —
+/// which has no flag and no name). The adapter asks Onionoo (through the
+/// live tunnel, by the exit relay's IP) and emits the real ISO-3166 code
+/// here; the store applies it only while connected, so a late resolution
+/// from a superseded walk can never park a stale flag. Unresolved ⇒ no
+/// event (the UI keeps its honest unknown).
+class EngineExitCountryResolved extends EngineEvent {
+  const EngineExitCountryResolved(this.code);
+  final String code;
+}
+
 /// Structured log line (level + message; secrets already stripped upstream).
 class EngineLogLine extends EngineEvent {
   const EngineLogLine(this.level, this.message);

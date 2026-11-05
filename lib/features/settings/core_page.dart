@@ -179,6 +179,18 @@ class CoreSettingsPage extends StatelessWidget {
           SubSectionCard(
             child: _buildTlsPanel(context, strings, s, core),
           ),
+          // v4.31 — ECH (encrypted SNI): its own expert card, on the layer
+          // it actually lives on (the MASQUE handshakes + the WARP API
+          // calls), not under the fingerprint switches.
+          SizedBox(height: 24 * s),
+          SubSectionHeading(
+            icon: AppAssets.iconLock1,
+            title: strings.echLabel,
+          ),
+          const SubSectionGap.headingToCard(),
+          SubSectionCard(
+            child: _buildEchPanel(context, strings, s, core),
+          ),
           SizedBox(height: 24 * s),
           SubSectionHeading(
             icon: AppAssets.iconGraphUp,
@@ -319,6 +331,70 @@ class CoreSettingsPage extends StatelessWidget {
             hint: strings.masqueSniHint,
             initial: core.masqueSni,
             onChanged: (v) => store.updateCore((c) => c.masqueSni = v.trim()),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// v4.31 — the ECH panel (encrypted SNI, `--ech auto|base64` +
+  /// `--ech-dns` / `--ech-domain`): pills first, then the mode's own
+  /// fields. Independent of the fingerprint switches above — ECH is its
+  /// own layer on the MASQUE handshakes and the WARP API calls.
+  Widget _buildEchPanel(
+    BuildContext context,
+    AppStrings strings,
+    double s,
+    CoreSettings core,
+  ) {
+    final echDesc = switch (core.echMode) {
+      EchMode.off => strings.echOffDesc,
+      EchMode.auto => strings.echAutoDesc,
+      EchMode.manual => strings.echManualDesc,
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SettingLabel(strings.echLabel),
+        const SizedBox(height: 10),
+        SettingPills<EchMode>(
+          keyId: 'ech-mode',
+          options: [
+            (EchMode.off, strings.echOff),
+            (EchMode.auto, strings.echAuto),
+            (EchMode.manual, strings.echManual),
+          ],
+          selected: core.echMode,
+          onSelect: (v) => store.updateCore((c) => c.echMode = v),
+        ),
+        const SubSectionDivider(),
+        SettingInfoText(echDesc),
+        if (core.echMode == EchMode.manual) ...[
+          const SubSectionDivider(),
+          SettingField(
+            keyId: 'ech-key',
+            label: strings.echKeyLabel,
+            hint: strings.echKeyHint,
+            initial: core.echKey,
+            onChanged: (v) => store.updateCore((c) => c.echKey = v.trim()),
+          ),
+        ],
+        if (core.echMode != EchMode.off) ...[
+          const SubSectionDivider(),
+          SettingField(
+            keyId: 'ech-dns',
+            label: strings.echDnsLabel,
+            hint: strings.echDnsHint,
+            initial: core.echDns,
+            onChanged: (v) => store.updateCore((c) => c.echDns = v.trim()),
+          ),
+          const SubSectionDivider(),
+          SettingField(
+            keyId: 'ech-domain',
+            label: strings.echDomainLabel,
+            hint: strings.echDomainHint,
+            initial: core.echDomain,
+            onChanged: (v) => store.updateCore((c) => c.echDomain = v.trim()),
           ),
         ],
       ],

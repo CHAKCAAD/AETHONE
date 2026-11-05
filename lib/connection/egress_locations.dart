@@ -29,10 +29,14 @@
 /// caller keeps what it already had.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'tunnel_probe.dart';
 
 /// The verified Onionoo query (checked 2026-11-05, 245 KB gzip'd reply):
 /// only relay documents, only the Exit flag, only currently-running
@@ -215,5 +219,132 @@ abstract final class EgressLocations {
     } catch (_) {
       // never fatal — the wheel always has the snapshot seed
     }
+  }
+
+  // ---- v4.31 — the Tor exit-country RESOLUTION (owner round 7:
+  // «روی لوکیشن خودکار تور … قسمت نمایش پروتکل برای پرچمی نشون نداد و
+  // اسمش رو هم T1 نوشته بود») ------------------------------------------
+  //
+  // The connect probe's trace answers `loc=T1` for EVERY Tor exit — T1 is
+  // Cloudflare's GeoIP pseudo-country for the Tor network ("T1": Tor
+  // network — developers.cloudflare.com ip.src.continent values), so the
+  // raw code has no flag and no name. The SAME trace body carries the
+  // exit relay's `ip=`, and Onionoo — the Tor network's own metrics API
+  // — answers `search=<ip>` with the relay documents at that address,
+  // `country` included (verified 2026-11-05: the query below returns the
+  // relay's `{"running":true,"country":"us"}` in a 192-byte body,
+  // content-length framed, connection: close — no chunking, no gzip).
+  //
+  // The fetch goes THROUGH the tunnel's own SOCKS listener: a DIRECT
+  // fetch is worthless in exactly the markets this app serves
+  // (onionoo.torproject.org is blocked there), so the resolution rides
+  // the very exit it resolves. TLS over the SOCKS CONNECT tunnel via
+  // SecureSocket.secure.
+
+  /// The verified search-by-IP query (checked 2026-11-05; the `lookup=`
+  /// parameter answers 400 Bad Request — `search=` is the documented way
+  /// to find a relay by address). Returned as the HTTP request PATH —
+  /// the host is [onionooHost], carried in the Host header.
+  static String onionooSearchPath(String exitIp) =>
+      '/details'
+      '?type=relay&flag=exit&running=true&search=${Uri.encodeComponent(exitIp)}'
+      '&fields=country,running';
+
+  /// Onionoo is served over HTTPS only.
+  static const String onionooHost = 'onionoo.torproject.org';
+
+  /// Extracts the first RUNNING relay's country from an Onionoo `details`
+  /// search reply (`{"relays":[{"country":"at","running":true}, …]}`).
+  /// Returns null for an empty/shapeless document or when no running
+  /// relay carries a country — never a fabricated code.
+  static String? parseOnionooSearchCountry(String body) {
+    Object? doc;
+    try {
+      doc = jsonDecode(body);
+    } catch (_) {
+      return null;
+    }
+    if (doc is! Map) return null;
+    final relays = doc['relays'];
+    if (relays is! List) return null;
+    for (final r in relays) {
+      if (r is! Map) continue;
+      if (r['running'] != true) continue;
+      final country = r['country'];
+      if (country is String &&
+          country.length == 2 &&
+          _alpha2.hasMatch(country.toLowerCase())) {
+        return country.toLowerCase();
+      }
+    }
+    return null;
+  }
+
+  /// Resolves the real country of the exit relay at [exitIp] by asking
+  /// Onionoo THROUGH the live tunnel's SOCKS listener on [socksPort].
+  /// Never throws: null = unresolved (the UI keeps its honest unknown —
+  /// the anchor pick / the AUTO globe, never a fake flag).
+  static Future<String?> resolveTorExitCountry({
+    required int socksPort,
+    required String exitIp,
+    Duration timeout = const Duration(seconds: 25),
+  }) async {
+    SocksTunnel? tunnel;
+    SecureSocket? tls;
+    try {
+      tunnel = await TunnelProbe.socksConnect(
+        port: socksPort,
+        host: onionooHost,
+        dstPort: 443,
+        timeout: timeout,
+      );
+      // detach() releases the handshake reader's stream subscription —
+      // the ONLY one this socket may ever have (single-subscription) —
+      // and hands the raw descriptor to the TLS layer.
+      final raw = tunnel.detach();
+      tls = await SecureSocket.secure(raw, host: onionooHost)
+          .timeout(timeout);
+      final request =
+          'GET ${onionooSearchPath(exitIp)} HTTP/1.1\r\n'
+          'Host: $onionooHost\r\n'
+          'User-Agent: aethone/1\r\n'
+          'Accept: application/json\r\n'
+          'Connection: close\r\n'
+          '\r\n';
+      tls.write(request);
+      await tls.flush().timeout(timeout);
+      final body = await _readToEof(tls, timeout);
+      final text = utf8.decode(body, allowMalformed: true);
+      final split = text.indexOf('\r\n\r\n');
+      if (split < 0) return null;
+      return parseOnionooSearchCountry(text.substring(split + 4));
+    } catch (_) {
+      return null; // offline exit, blocked Onionoo, slow relay — unknown
+    } finally {
+      tls?.destroy();
+      tunnel?.destroy(); // reader already released when detached — no-op
+    }
+  }
+
+  /// Reads a socket to EOF (Connection: close) with a per-chunk timeout.
+  static Future<List<int>> _readToEof(
+    Stream<Uint8List> stream,
+    Duration timeout,
+  ) async {
+    final iterator = StreamIterator<Uint8List>(stream);
+    final builder = BytesBuilder(copy: false);
+    try {
+      while (true) {
+        final hasMore = await iterator.moveNext().timeout(
+              timeout,
+              onTimeout: () => throw const SocketException('read timeout'),
+            );
+        if (!hasMore) break;
+        builder.add(iterator.current);
+      }
+    } finally {
+      await iterator.cancel();
+    }
+    return builder.takeBytes();
   }
 }

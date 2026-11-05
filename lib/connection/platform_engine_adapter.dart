@@ -222,6 +222,45 @@ class AetherArguments {
       a.addAll(['--dns', dns]);
     }
 
+    // -- v4.31 dial layer: the IP version (#11-13; v4 = the core's own
+    // default — pass nothing) and the upstream proxy (#3, PLAIN modes
+    // only: the reverse family modes own AETHER_UPSTREAM internally for
+    // their carrier, lib.rs L203-244 — a user value there would fight
+    // the chain itself).
+    switch (core.ipVersion) {
+      case IpVersion.v4:
+        break;
+      case IpVersion.v6:
+        a.add('-6');
+      case IpVersion.dual:
+        a.add('--dual');
+    }
+    if (overlay == null) {
+      final upstream = core.upstreamProxy.trim();
+      if (upstream.isNotEmpty) a.addAll(['--upstream', upstream]);
+    }
+
+    // -- v4.31 ECH — encrypted SNI (#45-47), independent of the TLS
+    // fingerprint switches: `--ech auto` looks the key up over DoH
+    // (`--ech-dns`, default udp://1.1.1.1), `manual` takes the base64
+    // key verbatim. Without a usable key the handshake neither leaks
+    // the name nor proceeds (cli.rs L154-167) — honest.
+    switch (core.echMode) {
+      case EchMode.off:
+        break;
+      case EchMode.auto:
+        a.addAll(['--ech', 'auto']);
+      case EchMode.manual:
+        final key = core.echKey.trim();
+        if (key.isNotEmpty) a.addAll(['--ech', key]);
+    }
+    if (core.echMode != EchMode.off) {
+      final echDns = core.echDns.trim();
+      if (echDns.isNotEmpty) a.addAll(['--ech-dns', echDns]);
+      final echDomain = core.echDomain.trim();
+      if (echDomain.isNotEmpty) a.addAll(['--ech-domain', echDomain]);
+    }
+
     // -- engine-wide: noize (#34), perf (#111), log level (#113).
     if (core.noize != NoizeProfile.defaultValue) {
       a.addAll(['--noize', core.noize.name]);
@@ -267,7 +306,7 @@ class AetherArguments {
     final direct = core.routeDirect.trim();
     if (direct.isNotEmpty) a.addAll(['--route-direct', direct]);
 
-    // -- psiphon family (#87-91).
+    // -- psiphon family (#87-94).
     if (overlay != null && overlay.isPsiphon) {
       if (core.psiphonFronting != PsiphonFronting.auto) {
         a.addAll(['--psiphon-mode', core.psiphonFronting.name]);
@@ -276,17 +315,46 @@ class AetherArguments {
       if (cdnSni.isNotEmpty) a.addAll(['--psiphon-cdn-sni', cdnSni]);
       final cdnIps = core.cdnIps.trim();
       if (cdnIps.isNotEmpty) a.addAll(['--psiphon-cdn-ips', cdnIps]);
+      // v4.31 — the built-in fronting edge lists (#91); empty = all.
+      final cdnSets = core.cdnSets.trim();
+      if (cdnSets.isNotEmpty) a.addAll(['--psiphon-cdn-sets', cdnSets]);
+      // v4.31 — pasted server entries (#94); empty = built-in discovery.
+      final entries = core.psiphonServerEntries.trim();
+      if (entries.isNotEmpty) {
+        a.addAll(['--psiphon-server-entries', entries]);
+      }
     }
 
-    // -- tor family (#72).
-    if (overlay != null &&
-        overlay.isTor &&
-        core.torBridges == TorBridgePolicy.off) {
-      a.add('--no-tor-bridges');
+    // -- tor family (#70-72).
+    if (overlay != null && overlay.isTor) {
+      if (core.torBridges == TorBridgePolicy.off) {
+        a.add('--no-tor-bridges');
+      } else if (core.torBridges == TorBridgePolicy.custom) {
+        // v4.31 — the owner's manual bridge lines (round 7: «وارد کردن
+        // دستی پل های تور»): one `--tor-bridge` per non-empty line — the
+        // core's append() joins them with ';' into AETHER_TOR_BRIDGES,
+        // which tor.rs parses as Bridges::Manual(lines). Comment/empty
+        // lines are skipped.
+        for (final raw in core.torBridgeLines.split('\n')) {
+          final line = raw.trim();
+          if (line.isEmpty || line.startsWith('#')) continue;
+          a.addAll(['--tor-bridge', line]);
+        }
+      }
     }
 
     return a;
   }
+
+  /// v4.31 — the family-leg setting → the [ProtocolId] the arg builder
+  /// speaks (the enum order mirrors the protocol sheet's own tiles).
+  static ProtocolId legProtocolId(AetherLegProtocol leg) => switch (leg) {
+    AetherLegProtocol.wireguard => ProtocolId.wireguard,
+    AetherLegProtocol.masque => ProtocolId.masque,
+    AetherLegProtocol.gool => ProtocolId.gool,
+    AetherLegProtocol.goolClassic => ProtocolId.goolClassic,
+    AetherLegProtocol.mim => ProtocolId.mim,
+  };
 
   /// The mode the ENGINE actually runs: the overlay when one is selected,
   /// else the leg tile (AUTO resolves to the core's own default, MASQUE).
@@ -347,8 +415,18 @@ class AetherArguments {
 /// The zeptun TOML handed to `nativeStart` (zeptun config keys, frozen pin:
 /// preset mobile + socks5 handler + fake-IP DNS = remote resolution through
 /// the core; the fd is injected by the JNI bridge itself).
+///
+/// v4.31 — [tcpOnly] adds `handler.socks5.udp = "disabled"` for the
+/// tor/psiphon family modes: zeptun then refuses every UDP flow at open
+/// and answers ICMP port-unreachable (src/stack/udp.zig →
+/// icmp.sendUnreachable), the honest "this network has no UDP" that apps
+/// fall back from — instead of relaying into the core's silent
+/// drop-everything UDP relay (socks.rs accepts the ASSOCIATE, drops all
+/// non-DNS datagrams). Fake-IP DNS keeps working: zeptun answers it
+/// locally in front of the handler (src/stack/dns.zig).
 class ZeptunConfigToml {
-  static String build({required int socksPort}) => '''
+  static String build({required int socksPort, required bool tcpOnly}) =>
+      '''
 preset = "mobile"
 
 [handler]
@@ -356,6 +434,7 @@ kind = "socks5"
 
 [handler.socks5]
 server = "127.0.0.1:$socksPort"
+${tcpOnly ? 'udp = "disabled"' : ''}
 
 [dns]
 fake_ip = true
@@ -409,16 +488,30 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// The end-to-end ready budget per effective mode, mirroring the core's
   /// own timeouts (psiphon.rs READY_TIMEOUT 180 s; tor.rs DIRECT_PROBE 75 s
   /// + BRIDGE_PROBE 360 s; plain WARP = registration + scan ≈ listener
-  /// budget).
-  static Duration readyBudget(ProtocolId mode) => switch (mode) {
-    ProtocolId.torChain ||
-    ProtocolId.torReverse ||
-    ProtocolId.torOnly => const Duration(seconds: 360),
-    ProtocolId.psiphonChain ||
-    ProtocolId.psiphonReverse ||
-    ProtocolId.psiphonOnly => const Duration(seconds: 210),
-    _ => const Duration(seconds: 120),
-  };
+  /// budget). v4.31 — the family TIMEOUT settings widen their own budget
+  /// (the app must never give up on a core it is still giving time to).
+  static Duration readyBudget(ProtocolId mode, {CoreSettings? core}) {
+    Duration atLeast(Duration base, int? userSecs) => userSecs == null
+        ? base
+        : base < Duration(seconds: userSecs + 30)
+        ? Duration(seconds: userSecs + 30)
+        : base;
+    return switch (mode) {
+      ProtocolId.torChain ||
+      ProtocolId.torReverse ||
+      ProtocolId.torOnly => atLeast(
+        const Duration(seconds: 360),
+        core?.torBridgeSecs == 360 ? null : core?.torBridgeSecs,
+      ),
+      ProtocolId.psiphonChain ||
+      ProtocolId.psiphonReverse ||
+      ProtocolId.psiphonOnly => atLeast(
+        const Duration(seconds: 210),
+        core?.psiphonReadySecs == 180 ? null : core?.psiphonReadySecs,
+      ),
+      _ => const Duration(seconds: 120),
+    };
+  }
 
   final Duration _statsInterval;
   final AetherCoreApi Function()? _coreFactory;
@@ -551,14 +644,19 @@ class PlatformEngineAdapter implements EngineAdapter {
     if (_stale(gen)) return;
 
     // v4.21 — the v4.20 chain/leg split is REVERTED to the single-knob
-    // selection (owner decree; the WARP leg under a family mode stays the
-    // fixed WireGuard default until the promised dedicated option lands).
-    // The adapter still builds the core args in leg+overlay form — that
-    // seam is exactly where the future "AETHER leg protocol" option will
-    // plug in.
+    // selection (owner decree). The adapter still builds the core args in
+    // leg+overlay form; the dedicated family-leg option the v4.21 decree
+    // promised LANDED in v4.31 (see the leg line below).
     final selection = config.selectedProtocol;
     final overlay = selection.isTor || selection.isPsiphon ? selection : null;
-    final leg = overlay == null ? selection : ProtocolId.wireguard;
+    // v4.31 — the WARP leg under a family mode is the OWNER'S choice now
+    // (round 7: «انتخاب پروتکل هسته ایتر برای حالت های ترکیبی اور وارپ»;
+    // v4.21 deferred exactly this). Default stays the v4.19 fixed
+    // WireGuard leg; protocolArgs still forces MASQUE where the core
+    // refuses UDP-to-WARP legs on the TCP-only reverse modes.
+    final leg = overlay == null
+        ? selection
+        : legProtocolId(config.coreSettings.aetherLegProtocol);
     final modeId = AetherArguments.effectiveMode(leg, overlay);
     final mode = TransportModes.byId(modeId);
     final tunnel = config.connectionMode == ConnectionMode.tunnel;
@@ -610,6 +708,16 @@ class PlatformEngineAdapter implements EngineAdapter {
         await _channel.invokeMethod<void>('startVpn', {
           'port': _activePort,
           'session': _tunnelSession,
+          // v4.31 — the mode's UDP capability: every tor/psiphon family
+          // mode is TCP-only (the core's socks listener ACCEPTS the UDP
+          // ASSOCIATE and then silently drops every non-DNS datagram), so
+          // zeptun is configured with `udp = "disabled"` — it then
+          // answers the device's UDP flows with ICMP port-unreachable
+          // (apps fall back to TCP immediately) instead of blackholing
+          // them (owner round 7: the psiphon tunnel «به مقدار دیتا رد و
+          // بدل میشه و بعد دویاره دیتایی رد نمیشه» while the same port's
+          // proxy worked).
+          'tcpOnly': mode.tcpOnly,
         });
       } on PlatformException catch (e) {
         if (!_stale(gen)) {
@@ -666,6 +774,36 @@ class PlatformEngineAdapter implements EngineAdapter {
         overlay.isTor &&
         config.coreSettings.torLog != TorLogLevel.info) {
       setAetherEnvVar('AETHER_TOR_LOG', config.coreSettings.torLog.name);
+    }
+    // v4.31 — the family TIMEOUTS are env-only too (cli.rs L423-428):
+    //  * tor: the plain-direct budget (AETHER_TOR_DIRECT_SECS, default
+    //    75) and the per-bridge budget (AETHER_TOR_BRIDGE_SECS, 360) —
+    //    owner round 7's «تنظیمات بیشتر»;
+    //  * psiphon: the ready budget (AETHER_PSIPHON_READY_SECS, 180) — the
+    //    walk's own budget widens with it (see readyBudget) so the app
+    //    never fails a psiphon the core itself is still given time to
+    //    bring up.
+    if (overlay != null && overlay.isTor) {
+      if (config.coreSettings.torDirectSecs != 75) {
+        setAetherEnvVar(
+          'AETHER_TOR_DIRECT_SECS',
+          '${config.coreSettings.torDirectSecs}',
+        );
+      }
+      if (config.coreSettings.torBridgeSecs != 360) {
+        setAetherEnvVar(
+          'AETHER_TOR_BRIDGE_SECS',
+          '${config.coreSettings.torBridgeSecs}',
+        );
+      }
+    }
+    if (overlay != null && overlay.isPsiphon) {
+      if (config.coreSettings.psiphonReadySecs != 180) {
+        setAetherEnvVar(
+          'AETHER_PSIPHON_READY_SECS',
+          '${config.coreSettings.psiphonReadySecs}',
+        );
+      }
     }
 
     final core = _core =
@@ -756,13 +894,13 @@ class PlatformEngineAdapter implements EngineAdapter {
     // listeners BEFORE the data path exists. The loop retries the probe
     // within the mode's own budget while still FOLLOWING the core — a core
     // that dies fails the walk immediately with its own error.
-    final stats = await _probeUntilReadyFollowingCore(
+    final probe = await _probeUntilReadyFollowingCore(
       gen,
       _activePort,
-      budget: readyBudget(modeId),
+      budget: readyBudget(modeId, core: config.coreSettings),
     );
     if (_stale(gen)) return; // cancelled during the probe (#3)
-    if (stats == null) {
+    if (probe == null) {
       await _hardCleanup();
       if (_coreFailureDuringStart != null) {
         _emitFail('coreExited', _coreFailureDuringStart);
@@ -788,8 +926,17 @@ class PlatformEngineAdapter implements EngineAdapter {
       );
       return;
     }
-    _emit(stats);
+    _emit(statsEvent(probe));
     _emitState(VpnState.connected);
+
+    // v4.31 — a pseudo-country exit (loc=T1 — the Tor network, no flag,
+    // no name; owner round 7 «اسمش رو هم T1 نوشته بود»): resolve the REAL
+    // country from the exit relay's own directory record (Onionoo, by the
+    // exit IP, fetched through the live tunnel) once the session is up.
+    // Unresolved stays honestly unknown — never a fake flag.
+    if (probe.countryIsPseudo && probe.exitIp != null) {
+      unawaited(_resolveExitCountry(gen, _activePort, probe.exitIp!));
+    }
 
     // v4.28 — harvest the psiphon egress regions the core reported during
     // the walk (the network's own `AvailableEgressRegions` notice lands in
@@ -922,17 +1069,50 @@ class PlatformEngineAdapter implements EngineAdapter {
     return false;
   }
 
+  /// v4.31 — the shared probe→stats mapping: a GeoIP PSEUDO-country
+  /// (loc=T1 — the Tor network; A1/A2/O1) is stripped to null instead of
+  /// reaching the store, where it would show as the raw name «T1» with no
+  /// flag (owner round 7). The real country for a tor exit is resolved
+  /// afterwards from the exit relay's directory data (Onionoo by IP —
+  /// [_resolveExitCountry]) and lands as [EngineExitCountryResolved].
+  static EngineStatsUpdated statsEvent(
+    TunnelProbeResult result, {
+    int? downBytes,
+    int? upBytes,
+  }) => EngineStatsUpdated(
+    pingMs: result.pingMs,
+    downBytes: downBytes ?? 0,
+    upBytes: upBytes ?? 0,
+    exitCountryCode: result.countryIsPseudo ? null : result.exitCountryCode,
+  );
+
+  /// v4.31 — resolves the REAL country behind a pseudo-country exit: the
+  /// trace only says `T1` (the Tor network), but its `ip=` names the exit
+  /// relay, and Onionoo — the Tor network's own metrics API — answers
+  /// `search=<ip>` with the relay's `country`. The fetch rides the live
+  /// tunnel's own SOCKS listener (a direct fetch is blocked in exactly
+  /// the markets this app serves). Fire-and-forget by design: unresolved
+  /// ⇒ no event, and a walk superseded meanwhile (gen moved) stays silent.
+  Future<void> _resolveExitCountry(int gen, int port, String exitIp) async {
+    final code = await EgressLocations.resolveTorExitCountry(
+      socksPort: port,
+      exitIp: exitIp,
+    );
+    if (code == null || _stale(gen)) return;
+    _emit(EngineExitCountryResolved(code));
+  }
+
   /// v4.20 — the end-to-end probe RETRY loop (the single-shot probe failed
   /// every slow-bootstrapping mode: chain listeners are bound before their
   /// inner protocol exists, so the first SOCKS greeting simply hangs until
   /// the 20 s probe timeout). Retries within [budget] while following the
   /// core: a job that dies fails the walk immediately with the core's own
   /// error; a cancel aborts at the next checkpoint. Returns the successful
-  /// probe's stats, or null (budget exhausted / core died / cancelled).
+  /// probe's raw result, or null (budget exhausted / core died / cancelled).
   /// v4.26 — a probe success that belongs to a NEWER session (this walk was
   /// superseded mid-probe and the new core's listener answered) is NOT this
   /// walk's success: return null and let the staleness check silence it.
-  Future<EngineStatsUpdated?> _probeUntilReadyFollowingCore(
+  Future<TunnelProbeResult?> _probeUntilReadyFollowingCore(
     int gen,
     int port, {
     required Duration budget,
@@ -946,10 +1126,7 @@ class PlatformEngineAdapter implements EngineAdapter {
           timeout: _probeTimeout,
         );
         if (_stale(gen)) return null;
-        return EngineStatsUpdated(
-          pingMs: result.pingMs,
-          exitCountryCode: result.exitCountryCode,
-        );
+        return result;
       } catch (_) {
         // Probe failed — the core may have died; it owns the failure truth.
         final failure = _pollCoreOnce();
@@ -1162,10 +1339,11 @@ class PlatformEngineAdapter implements EngineAdapter {
         timeout: _probeTimeout,
       );
       _probeStrikes = 0;
+      // v4.31 — the tick strips pseudo-countries (loc=T1) to null so it
+      // can never overwrite the resolved real exit with the raw «T1».
       _emit(
-        EngineStatsUpdated(
-          pingMs: result.pingMs,
-          exitCountryCode: result.exitCountryCode,
+        statsEvent(
+          result,
           downBytes:
               (txBytes ?? 0) < 0
                   ? 0
@@ -1502,13 +1680,13 @@ class PlatformEngineAdapter implements EngineAdapter {
       if (_stale(gen)) return;
       _emitState(VpnState.starting);
       _emitState(VpnState.connecting);
-      _emit(
-        EngineStatsUpdated(
-          pingMs: result.pingMs,
-          exitCountryCode: result.exitCountryCode,
-        ),
-      );
+      _emit(statsEvent(result));
       _emitState(VpnState.connected);
+      // v4.31 — same pseudo-country resolution as the fresh walk (a Tor
+      // exit answers loc=T1; the real country comes from Onionoo by IP).
+      if (result.countryIsPseudo && result.exitIp != null) {
+        unawaited(_resolveExitCountry(gen, port, result.exitIp!));
+      }
       _startTicker(gen);
     } catch (_) {
       if (_stale(gen)) return;
