@@ -66,6 +66,22 @@ class PatternSides extends StatefulWidget {
   State<PatternSides> createState() => _PatternSidesState();
 }
 
+/// v4.35 (owner round 11, item 8: «حالت‌های سبز و قرمز پترن‌های صفحات رو
+/// کمی پر رنگ‌تر و بزرگ‌تر کن») — the paint half of the decree: the pattern
+/// PNGs are thin blurred strokes whose alpha mostly sits at 12–25 % (the
+/// feGaussianBlur falloff of the source art), so on screen they read as a
+/// dim ghost. This matrix multiplies every pixel's ALPHA by 1.6 (capped at
+/// opaque by the rasterizer) — the soft halos lift toward their stroke
+/// colors and the canvases grow 0.6 → 0.7 ([AethGeometry.patternScale],
+/// the size half of the same decree). Hue/saturation untouched (the
+/// strokes are already pure #1AD995 / #EA2323).
+const List<double> _patternAlphaBoost = <double>[
+  1, 0, 0, 0, 0, //
+  0, 1, 0, 0, 0, //
+  0, 0, 1, 0, 0, //
+  0, 0, 0, 1.6, 0, //
+];
+
 class _PatternSidesState extends State<PatternSides>
     with SingleTickerProviderStateMixin {
   late final AnimationController _sway = AnimationController(
@@ -154,15 +170,20 @@ class _PatternSidesState extends State<PatternSides>
                   breathFloor: recipe.swayBreathFloor,
                   child: AnimatedSwitcher(
                     duration: duration,
-                    child: Image.asset(
-                      key: ValueKey(
-                        'pattern-left-${widget.connected ? 'on' : 'off'}',
+                    child: ColorFiltered(
+                      colorFilter: const ColorFilter.matrix(
+                        _patternAlphaBoost,
                       ),
-                      widget.connected
-                          ? AppAssets.patternConnectedLeft
-                          : AppAssets.patternDisconnectedLeft,
-                      fit: BoxFit.fill,
-                      filterQuality: FilterQuality.medium,
+                      child: Image.asset(
+                        key: ValueKey(
+                          'pattern-left-${widget.connected ? 'on' : 'off'}',
+                        ),
+                        widget.connected
+                            ? AppAssets.patternConnectedLeft
+                            : AppAssets.patternDisconnectedLeft,
+                        fit: BoxFit.fill,
+                        filterQuality: FilterQuality.medium,
+                      ),
                     ),
                   ),
                 ),
@@ -179,15 +200,20 @@ class _PatternSidesState extends State<PatternSides>
                   breathFloor: recipe.swayBreathFloor,
                   child: AnimatedSwitcher(
                     duration: duration,
-                    child: Image.asset(
-                      key: ValueKey(
-                        'pattern-right-${widget.connected ? 'on' : 'off'}',
+                    child: ColorFiltered(
+                      colorFilter: const ColorFilter.matrix(
+                        _patternAlphaBoost,
                       ),
-                      widget.connected
-                          ? AppAssets.patternConnectedRight
-                          : AppAssets.patternDisconnectedRight,
-                      fit: BoxFit.fill,
-                      filterQuality: FilterQuality.medium,
+                      child: Image.asset(
+                        key: ValueKey(
+                          'pattern-right-${widget.connected ? 'on' : 'off'}',
+                        ),
+                        widget.connected
+                            ? AppAssets.patternConnectedRight
+                            : AppAssets.patternDisconnectedRight,
+                        fit: BoxFit.fill,
+                        filterQuality: FilterQuality.medium,
+                      ),
                     ),
                   ),
                 ),

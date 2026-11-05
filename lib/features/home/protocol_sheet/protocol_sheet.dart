@@ -48,6 +48,7 @@ import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 import '../../../l10n/app_strings.dart';
+import '../../shared/protocol_glyph.dart';
 import '../../shared/theme_toggle_tile.dart';
 import '../widgets/pattern_sides.dart';
 
@@ -491,10 +492,13 @@ class _TileButton extends StatelessWidget {
             color: AethColors.topTile,
             borderRadius:
                 BorderRadius.circular(AethGeometry.topTileRadius * s),
-            boxShadow: const [
+            // v4.35 (owner round 11, item 1): NO shadow in light mode —
+            // the color rides the palette (night rgba(0,0,0,0.25) 0 4 4 /
+            // light transparent) and fades with the 420 ms mode tween.
+            boxShadow: [
               BoxShadow(
-                color: Color(0x40000000), // rgba(0,0,0,0.25) 0 4 4
-                offset: Offset(0, 4),
+                color: AethColors.tileShadow,
+                offset: const Offset(0, 4),
                 blurRadius: 4,
               ),
             ],
@@ -759,9 +763,9 @@ class _ProtoTileState extends State<_ProtoTile>
                   right: 0,
                   top: (AethGeometry.protoTileIconCenter - iconBox / 2) * s,
                   child: Center(
-                    child: _ProtocolGlyph(
+                    child: ProtocolGlyph(
                       id: widget.id,
-                      box: iconBox,
+                      size: iconBox * s,
                       white: widget.isSelected,
                     ),
                   ),
@@ -812,68 +816,9 @@ double _tileIconBox(ProtocolId id) => switch (id) {
       _ => 30, // families never render on the tile grid
     };
 
-// ---------------------------------------------------------------------------
-// One protocol glyph at a calibrated box. SVGs render in their NATIVE
-// colors (white / #997A35 gold — exactly how the frame colours them);
-// PNGs (psiphon/tor) are tinted white. `white` forces the all-white
-// treatment the frame uses on the SELECTED (green) surface.
-// ---------------------------------------------------------------------------
-
-class _ProtocolGlyph extends StatelessWidget {
-  const _ProtocolGlyph({
-    required this.id,
-    required this.box,
-    this.white = false,
-  });
-
-  final ProtocolId id;
-  final double box;
-  final bool white;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final asset = AppAssets.protocolIcon(id);
-    final isRaster = AppAssets.isRasterAsset(asset);
-    final w = box * s;
-
-    if (id == ProtocolId.auto) {
-      // AUTO has no dedicated artwork (report §6.9): Shield Tick, gold —
-      // the frame's gold shield.
-      return SvgPicture.asset(
-        AppAssets.iconShieldTick,
-        width: w,
-        height: w,
-        colorFilter: ColorFilter.mode(
-          white ? AethColors.textPrimary : AethColors.goldAccent,
-          BlendMode.srcIn,
-        ),
-      );
-    }
-    if (isRaster) {
-      return Image.asset(
-        asset,
-        width: w,
-        height: w,
-        fit: BoxFit.contain,
-        color: white ? AethColors.textPrimary : Colors.white,
-        colorBlendMode: BlendMode.srcIn,
-      );
-    }
-    if (white) {
-      return SvgPicture.asset(
-        asset,
-        width: w,
-        height: w,
-        colorFilter: ColorFilter.mode(
-          AethColors.textPrimary,
-          BlendMode.srcIn,
-        ),
-      );
-    }
-    return SvgPicture.asset(asset, width: w, height: w);
-  }
-}
+// v4.35 — the tile glyphs render through the shared [ProtocolGlyph]
+// (lib/features/shared/protocol_glyph.dart): theme ink + the combined
+// modes' rebuilt drop shadow (owner round 11, items 4 + 5).
 
 // ---------------------------------------------------------------------------
 // Family cards (سایفون/تور): v4.17 breathing — h116 r21 #0F1511, subtiles
@@ -934,12 +879,14 @@ class _FamilyCard extends StatelessWidget {
                       right: 0,
                       top: (AethGeometry.protoMainLogoCenterY - 28) * s,
                       child: Center(
-                        child: Image.asset(
-                          logoAsset,
-                          height: (isPsiphon ? 56 : 42) * s,
-                          fit: BoxFit.contain,
-                          color: Colors.white,
-                          colorBlendMode: BlendMode.srcIn,
+                        // v4.35 (owner item 4): the family main logo rides
+                        // the theme ink (was hardcoded Colors.white —
+                        // invisible on the light card).
+                        child: ProtocolGlyph(
+                          id: isPsiphon
+                              ? ProtocolId.psiphonOnly
+                              : ProtocolId.torOnly,
+                          size: (isPsiphon ? 56 : 42) * s,
                         ),
                       ),
                     ),
@@ -1055,22 +1002,20 @@ class _SubTileState extends State<_SubTile>
           ),
           child: Center(
             // v4.33 (owner round 9): the combined modes carry their OWN
-            // owner-drawn logos (سایفون اور وارپ / وارپ اور سایفون / تور
-            // اور وارپ / وارپ اور تور) — the composed aether+chevron stacks
-            // are retired. White vector art reads on BOTH the dark and the
-            // selected (green) surfaces; the plain ONLY tiles keep the
-            // family's real logo.
+            // owner-drawn logos — now through the shared [ProtocolGlyph]
+            // (v4.35: theme ink + the rebuilt drop shadow, owner items 4/5);
+            // the plain ONLY tiles keep the family's real logo.
             child: (chain || reverse)
-                ? SvgPicture.asset(
-                    AppAssets.protocolIcon(widget.id),
-                    height: AethGeometry.protoCombinedGlyphH * s,
-                    fit: BoxFit.contain,
-                  )
-                : _ProtocolGlyph(
+                ? ProtocolGlyph(
                     id: widget.id,
-                    box: widget.isPsiphon
-                        ? AethGeometry.protoPsiphonGlyphBox
-                        : AethGeometry.protoTorGlyphBox,
+                    size: AethGeometry.protoCombinedGlyphH * s,
+                  )
+                : ProtocolGlyph(
+                    id: widget.id,
+                    size: (widget.isPsiphon
+                            ? AethGeometry.protoPsiphonGlyphBox
+                            : AethGeometry.protoTorGlyphBox)
+                        * s,
                     white: widget.isSelected,
                   ),
           ),

@@ -750,7 +750,21 @@ class _LocationHeaderState extends State<LocationHeader> {
 }
 
 /// The horizontal flag wheel — UNBOUNDED PageView (v4.13).
-class _FlagsWheel extends StatelessWidget {
+///
+/// v4.35 (owner round 11, item 7: «تغیر حالت بین دارک مود و لایت مود روی
+/// حالت پرچم‌های نمایش لوکیشن صفحه اصلی اثر میزاره») — ROOT CAUSE: the
+/// falloff (size + opacity per flag) is read from the controller at item
+/// BUILD time; the first build runs BEFORE the controller has dimensions,
+/// so every item fell back to distance-0 (ALL flags full-size/full-opacity)
+/// — and nothing rebuilt the items afterwards (the initial re-anchor jump
+/// is a pixel NO-OP, so the controller never notified), leaving the wrong
+/// falloff on screen until the NEXT store notification happened to rebuild
+/// the tree — which is exactly what the owner saw: toggling the theme
+/// suddenly changed the flags' state. The fix: one extra rebuild after the
+/// first layout, so the items re-read the REAL page from the very first
+/// seconds and the theme toggle can no longer be the thing that "fixes"
+/// the wheel.
+class _FlagsWheel extends StatefulWidget {
   const _FlagsWheel({
     required this.codes,
     required this.controller,
@@ -766,6 +780,14 @@ class _FlagsWheel extends StatelessWidget {
   final void Function(int page)? onTapFlag;
   final void Function(int page) onPageSettled;
   final void Function(int page) onPageChanged;
+
+  @override
+  State<_FlagsWheel> createState() => _FlagsWheelState();
+}
+
+class _FlagsWheelState extends State<_FlagsWheel> {
+  /// Set after the one-shot post-layout rebuild (see the class doc).
+  bool _primed = false;
 
   /// v4.15 #3 — owner CSS «Group 9» falloff, restated from the 402 frame:
   /// centre 52 @ 1.0 · ±1 42 @ 0.5 · ±2 35 @ 0.2 (flat beyond ±2 —
@@ -786,6 +808,16 @@ class _FlagsWheel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!_primed) {
+      // One extra build after this frame: by then the controller has
+      // dimensions and every item's falloff re-reads the REAL page.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _primed = true);
+      });
+    }
+    final controller = widget.controller;
+    final codes = widget.codes;
+
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final n = codes.length;
 
@@ -800,7 +832,7 @@ class _FlagsWheel extends StatelessWidget {
             final p = controller.position.haveDimensions
                 ? controller.page
                 : null;
-            if (p != null) onPageSettled(p.round());
+            if (p != null) widget.onPageSettled(p.round());
           }
           return false;
         },
@@ -808,8 +840,8 @@ class _FlagsWheel extends StatelessWidget {
           height: AethGeometry.flagSizeSelected * s,
           child: PageView.builder(
             controller: controller,
-            physics: locked ? const NeverScrollableScrollPhysics() : null,
-            onPageChanged: onPageChanged,
+            physics: widget.locked ? const NeverScrollableScrollPhysics() : null,
+            onPageChanged: widget.onPageChanged,
             itemCount: null, // unbounded both directions
             itemBuilder: (context, page) {
               final code = codes[page % n];
@@ -830,9 +862,9 @@ class _FlagsWheel extends StatelessWidget {
                         key: ValueKey<int>(page),
                         asset: AppAssets.flag(code),
                         size: size * s,
-                        onTap: onTapFlag == null
+                        onTap: widget.onTapFlag == null
                             ? null
-                            : () => onTapFlag!(page),
+                            : () => widget.onTapFlag!(page),
                       ),
                     ),
                   );

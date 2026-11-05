@@ -219,6 +219,11 @@ class AppStrings {
   // general page
   String get secAbout => _v['secAbout']!;
   String get appVersionLabel => _v['appVersionLabel']!;
+
+  /// v4.35 — the beta-stage value the version row shows (owner round 11:
+  /// «نسخه برنامه رو بنویس آزمایشی» — the real number stays in
+  /// pubspec/app_meta for the tests).
+  String get betaStage => _v['betaStage']!;
   String get telegramRow => _v['telegramRow']!;
   String get githubRow => _v['githubRow']!;
   String get secNotifications => _v['secNotifications']!;
@@ -585,6 +590,7 @@ class AppStrings {
       'coreRowDesc': 'فرگمنت، TLS، انتقال و موتور',
       'secAbout': 'دربارهٔ برنامه',
       'appVersionLabel': 'نسخهٔ برنامه',
+      'betaStage': 'آزمایشی',
       'telegramRow': 'کانال تلگرام',
       'githubRow': 'مخزن گیت‌هاب',
       'secNotifications': 'اعلان و رویداد',
@@ -848,6 +854,7 @@ class AppStrings {
       'coreRowDesc': 'Fragmentation, TLS, transport and engine',
       'secAbout': 'About the app',
       'appVersionLabel': 'App version',
+      'betaStage': 'Beta',
       'telegramRow': 'Telegram channel',
       'githubRow': 'GitHub repository',
       'secNotifications': 'Notifications & events',
@@ -1108,6 +1115,7 @@ class AppStrings {
       'coreRowDesc': 'Фрагментация, TLS, транспорт и движок',
       'secAbout': 'О приложении',
       'appVersionLabel': 'Версия приложения',
+      'betaStage': 'Бета-версия',
       'telegramRow': 'Канал Telegram',
       'githubRow': 'Репозиторий GitHub',
       'secNotifications': 'Уведомления и события',
@@ -1368,6 +1376,7 @@ class AppStrings {
       'coreRowDesc': '分片、TLS、传输与引擎',
       'secAbout': '关于应用',
       'appVersionLabel': '应用版本',
+      'betaStage': '测试版',
       'telegramRow': 'Telegram 频道',
       'githubRow': 'GitHub 仓库',
       'secNotifications': '通知与事件',

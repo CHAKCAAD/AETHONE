@@ -1617,6 +1617,17 @@ jobs:
           flutter build apk --release
           ls -la build/app/outputs/flutter-apk/
 
+      # v4.35 (owner round 11, the beta-release decree: «نسخه های مختلف cpu
+      # های مختلف و .. رو بیلد بگیریم») — one release APK per ABI on top of
+      # the universal: arm64-v8a / armeabi-v7a / x86_64, each carrying only
+      # its own jniLibs slice of the staged cores (~3x smaller installs for
+      # the followers' devices).
+      - name: Build per-ABI release APKs (v4.35 beta — one per CPU)
+        run: |
+          set -euo pipefail
+          flutter build apk --release --split-per-abi
+          ls -la build/app/outputs/flutter-apk/
+
       - name: Re-stage jniLibs arm64-only (owner rule for the debug build)
         run: |
           set -euo pipefail
@@ -1634,29 +1645,41 @@ jobs:
           flutter build apk --debug --dart-define=PREVIEW_MODE=true --target-platform android-arm64
           ls -la build/app/outputs/flutter-apk/
 
-      - name: Packaging gates on the release APK (zipalign -P 16 + apksigner)
+      - name: Packaging gates on every release APK (zipalign -P 16 + apksigner)
         run: |
           set -euo pipefail
-          APK=build/app/outputs/flutter-apk/app-release.apk
           BT="$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}"
-          "$BT/zipalign" -c -P 16 -v 4 "$APK" > zipalign-release.log 2>&1 \
-            || { echo "::error::zipalign -c -P 16 FAILED on the release APK"; tail -40 zipalign-release.log; exit 1; }
-          echo "zipalign -c -P 16 -v 4: PASS (build-tools ${BUILD_TOOLS_VERSION})"
-          "$BT/apksigner" verify --print-certs "$APK" | sed -n '1,3p'
-          echo "apksigner verify: PASS (debug-signed — test install ONLY, not a release signature)"
+          shopt -s nullglob
+          APKS=(
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-x86_64-release.apk
+          )
+          for APK in "${APKS[@]}"; do
+            [ -f "$APK" ] || { echo "::error::expected APK missing: $APK"; exit 1; }
+            "$BT/zipalign" -c -P 16 -v 4 "$APK" > zipalign-$(basename "$APK").log 2>&1 \
+              || { echo "::error::zipalign -c -P 16 FAILED on $APK"; tail -40 "zipalign-$(basename "$APK").log"; exit 1; }
+            "$BT/apksigner" verify --print-certs "$APK" | sed -n '1,3p'
+            echo "gate PASS: $(basename "$APK") (zipalign -P 16 + apksigner, build-tools ${BUILD_TOOLS_VERSION})"
+          done
+          echo "apksigner verify: PASS on all 4 (debug-signed — test install ONLY, not a release signature)"
 
       - name: Dist naming + sha256 manifest
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk "dist/aethone-ui-r${{ github.run_number }}-release.apk"
-          cp build/app/outputs/flutter-apk/app-debug.apk   "dist/aethone-ui-r${{ github.run_number }}-preview-debug.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk            "dist/aethone-ui-r${{ github.run_number }}-release-universal.apk"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk  "dist/aethone-arm64-v8a-r${{ github.run_number }}.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "dist/aethone-armeabi-v7a-r${{ github.run_number }}.apk"
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk     "dist/aethone-x86_64-r${{ github.run_number }}.apk"
+          cp build/app/outputs/flutter-apk/app-debug.apk              "dist/aethone-ui-r${{ github.run_number }}-preview-debug.apk"
           {
             echo "run_id=${{ github.run_id }}"
             echo "commit=${{ github.sha }}"
             echo "flutter=${FLUTTER_VERSION} agp=${AGP_VERSION} gradle_wrapper=${GRADLE_VERSION} build_tools=${BUILD_TOOLS_VERSION} jdk=${JDK_VERSION}"
             echo "application_id=com.chakcaad.aethone minSdk=24 (CANDIDATE, not proven) targetSdk=36"
-            echo "scope=M2 ENGINE WIRING (v4.20): release APK embeds the native cores (libaether.so + liblyrebird.so + libpsiphon.so [psiphon-tunnel-core — v4.19 fixed the v4.18 wrong-binary packaging] + libzeptun-jni.so; universal, 3 ABIs; extractNativeLibs=true). Real connect path: Aether in-process via C API + zeptun via VpnService JNI (FGS-first walk order) + end-to-end probe-RETRY gate with per-mode ready budgets (psiphon 210 s, tor 360 s — v4.20) + tor --tor-pt on the packaged lyrebird. The preview-debug APK (arm64-only) runs the PREVIEW_MODE simulator (debug builds only, by code)."
+            echo "scope=v4.35 BETA (round 11): universal release APK + per-ABI splits (arm64-v8a / armeabi-v7a / x86_64) embedding the native cores (libaether.so + liblyrebird.so + libpsiphon.so [psiphon-tunnel-core] + libzeptun-jni.so; extractNativeLibs=true). Real connect path: Aether in-process via C API + zeptun via VpnService JNI (FGS-first walk order) + end-to-end probe-RETRY gate with per-mode ready budgets (psiphon 210 s, tor 360 s — v4.20) + tor --tor-pt on the packaged lyrebird. The preview-debug APK (arm64-only) runs the PREVIEW_MODE simulator (debug builds only, by code)."
             echo "native_pins=aether@$(grep -o '"aether": "[0-9a-f]*"' native-out/native-arm64-v8a/manifest.json | cut -d'"' -f4) zeptun@$(grep -o '"zeptun": "[0-9a-f]*"' native-out/native-arm64-v8a/manifest.json | cut -d'"' -f4)"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > dist/BUILD_INFO.txt

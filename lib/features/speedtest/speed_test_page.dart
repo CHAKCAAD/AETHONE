@@ -338,10 +338,13 @@ class _TopTile extends StatelessWidget {
             color: AethColors.topTile,
             borderRadius:
                 BorderRadius.circular(AethGeometry.topTileRadius * s),
-            boxShadow: const [
+            // v4.35 (owner round 11, item 1): NO shadow in light mode —
+            // the color rides the palette (night rgba(0,0,0,0.25) 0 4 4 /
+            // light transparent) and fades with the 420 ms mode tween.
+            boxShadow: [
               BoxShadow(
-                color: Color(0x40000000), // rgba(0,0,0,0.25) 0 4 4
-                offset: Offset(0, 4),
+                color: AethColors.tileShadow,
+                offset: const Offset(0, 4),
                 blurRadius: 4,
               ),
             ],
@@ -469,13 +472,14 @@ class _DialZone extends StatelessWidget {
                     // v4.33 (owner round 9) — the gauge NEEDLE: the owner's
                     // own SVG («عقربه صفحه تست سرعت», 15×52, a
                     // #1AD995→transparent gradient), pivoted at the box's
-                    // centre and sweeping with the measured download speed —
-                    // WEST at zero, over the top, EAST at 100 Mbs («نباید
-                    // صرفا وسط دایره ثابت باشه، باید همراه با میزان دانلود
-                    // مثل یک عقربه بچرخه»). It tracks the LIVE value during
-                    // the download phase and HOLDS the final download average
-                    // afterwards; the frames' rest pose dims it to the track
-                    // colour. The 12-o'clock tick it replaces is gone.
+                    // centre and sweeping with the measured speed — WEST at
+                    // zero, over the top, EAST at 100 Mbs («نباید صرفا وسط
+                    // دایره ثابت باشه، باید همراه با میزان دانلود مثل یک
+                    // عقربه بچرخه»). v4.35 (item 6): it tracks the LIVE value
+                    // of the STREAMING phase (download OR upload) and returns
+                    // to the rest pose at every phase end — see
+                    // [_needleFraction]; the frames' rest pose dims it to the
+                    // track colour. The 12-o'clock tick it replaces is gone.
                     Positioned(
                       left: (AethGeometry.speedNeedleCx -
                               AethGeometry.speedNeedleW / 2) *
@@ -584,14 +588,23 @@ class _DialZone extends StatelessWidget {
     return v.toStringAsFixed(1);
   }
 
-  /// The needle's position on the 0..1 scale (of 100 Mbs): the LIVE value
-  /// while the download phase streams, the phase's final download average
-  /// after it (held through upload and the done pose), zero before any
-  /// measurement.
+  /// The needle's position on the 0..1 scale (of 100 Mbs) — v4.35 (owner
+  /// round 11, item 6: «وقتی میزان دانلود مشخص شد عقربه باید به حالت
+  /// عادیش برگرده و میزان آپلود رو بعدش اندازه بکیره؛ در حال حاضر عقربه
+  /// هرجا که تست دانلود تموم شه متوقف میشه و دیگه برای تست آپلود تکون
+  /// نمیخوره از اون وسط»): the needle tracks the LIVE value of whatever
+  /// phase is streaming — the download while it downloads, the upload
+  /// steps while it uploads — and returns to the REST pose (0, West) the
+  /// moment a phase ends (the engine zeroes [SpeedTestSnapshot.liveMbps]
+  /// at every phase boundary and steps it per completed upload post), so
+  /// it never freezes at the download's final position through the upload
+  /// phase, and parks at rest when the run is done.
   double _needleFraction() {
-    final v = snap.phase == SpeedTestPhase.download
-        ? snap.liveMbps
-        : (snap.downMbps ?? 0);
+    final v = switch (snap.phase) {
+      SpeedTestPhase.download => snap.liveMbps,
+      SpeedTestPhase.upload => snap.liveMbps,
+      _ => 0.0,
+    };
     return v.clamp(0, 100) / 100;
   }
 }
@@ -965,9 +978,12 @@ class _StartButton extends StatelessWidget {
                       height: AethGeometry.speedButtonIcon * s,
                       fit: BoxFit.contain,
                       colorFilter: ColorFilter.mode(
+                        // v4.35 (owner round 11, item 9): the REST glyph is
+                        // WHITE in BOTH modes (the owner's light CSS); the
+                        // running glyph stays the dark on-core green.
                         running
                             ? AethColors.onCoreDark
-                            : AethColors.textPrimary,
+                            : AethColors.speedIconRest,
                         BlendMode.srcIn,
                       ),
                     ),

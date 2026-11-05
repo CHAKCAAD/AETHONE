@@ -350,10 +350,13 @@ class _TileButton extends StatelessWidget {
             color: AethColors.topTile,
             borderRadius:
                 BorderRadius.circular(AethGeometry.topTileRadius * s),
-            boxShadow: const [
+            // v4.35 (owner round 11, item 1): NO shadow in light mode —
+            // the color rides the palette (night rgba(0,0,0,0.25) 0 4 4 /
+            // light transparent) and fades with the 420 ms mode tween.
+            boxShadow: [
               BoxShadow(
-                color: Color(0x40000000), // rgba(0,0,0,0.25) 0 4 4
-                offset: Offset(0, 4),
+                color: AethColors.tileShadow,
+                offset: const Offset(0, 4),
                 blurRadius: 4,
               ),
             ],

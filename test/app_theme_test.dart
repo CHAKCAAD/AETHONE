@@ -79,18 +79,23 @@ void main() {
       cmp('speedTrack', n.speedTrack, l.speedTrack);
       cmp('speedTrackLive', n.speedTrackLive, l.speedTrackLive);
       cmp('speedCoreRest', n.speedCoreRest, l.speedCoreRest);
-      cmp('speedIdleLayer', n.speedIdleLayer, l.speedIdleLayer);
+      // v4.35 (owner round 11, item 9): speedIdleLayer is DELIBERATELY
+      // mode-stable — the light rest button keeps the night rgba(17,0,0,α)
+      // inner layers (the owner's own CSS); it joins the carve-out below.
       cmp('speedTileJitter', n.speedTileJitter, l.speedTileJitter);
       cmp('speedTilePing', n.speedTilePing, l.speedTilePing);
       cmp('stepDim', n.stepDim, l.stepDim);
       cmp('obCtaBg', n.obCtaBg, l.obCtaBg);
+      cmp('tileShadow', n.tileShadow, l.tileShadow);
       expect(
         same,
         isEmpty,
         reason: 'fields identical in both modes carried no theme: $same',
       );
-      // The two deliberately mode-stable icon inks (CSS keeps both glyph
-      // families' colors in light mode) may match — they are not in `same`.
+      // Deliberately mode-stable fields (NOT in `same`): the two icon inks
+      // the CSS keeps in light mode, and — v4.35, item 9 — speedIdleLayer
+      // (the rgba(17,0,0,α) rest layers, identical by the owner's light
+      // CSS decree).
     });
   });
 

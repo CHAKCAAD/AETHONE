@@ -44,12 +44,19 @@ abstract final class AppAssets {
   static const String _flags = 'design/flags_png';
   static const String _protoPng = 'design/proto_icons_png';
 
-  // --- app logo: 1 = green (connected artwork, rotated), 2 = gradient
-  // facets (the brand mark behind the wordmark — v4.11, defect #14),
-  // 3 = clean white (tintable — used for BOTH hero states with the
-  // owner's rotation animation).
+  // --- app logo: 1 = green (connected artwork, rotated), 3 = clean white
+  // (tintable — used for BOTH hero states with the owner's rotation
+  // animation). 2 = the retired silver-gradient facets (superseded by the
+  // owner's round-11 mark below; the file stays committed untouched).
+  //
+  // v4.35 (owner round 11, item 3: «لوگوی زیرش در هر دو حالت باید رنگ سبز
+  // داشته باشه که فایل svg اون رو میزارم برات») — the mark behind the
+  // wordmark is the owner's own «آیکون بالای اپ» artwork: the same facet
+  // composition on a #1AD995→transparent GREEN gradient, committed under
+  // its owner-given name. It renders with its OWN colors in BOTH modes
+  // (theme-independent by construction — green at night AND in light).
   static const String appLogoConnected = '$_logo/1.svg';
-  static const String brandMark = '$_logo/2.svg';
+  static const String brandMark = '$_logo/آیکون بالای اپ.svg';
   static const String appLogoNeutralWhite = '$_logo/3.svg';
 
   // --- background patterns (red when disconnected, green when connected).

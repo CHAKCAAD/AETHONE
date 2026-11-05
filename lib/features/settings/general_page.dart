@@ -1,16 +1,17 @@
-/// «تنظیمات عمومی» — the general sub-page (v4.22): the honest About block
-/// (the real version const, the real Telegram channel, the real repo) and
-/// the notifications block, which today carries one honest coming-line
-/// instead of any fake toggle (the OS integration step owns it).
+/// «تنظیمات عمومی» — the general sub-page (v4.22). v4.35 (owner round 11,
+/// the beta-release round: «توی قسمت تنظیمات عمومی هم فعلا آدرس مخزن و
+/// کانال رو بردار و نسخه برنامه رو بنویس آزمایشی»): the About card now
+/// carries ONLY the version row, and its value reads the beta stage
+/// («آزمایشی») instead of the number — the repo/channel rows are dropped
+/// for the beta window (the real number stays in pubspec/app_meta, where
+/// the tests keep it honest).
 library;
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../connection/connection_store.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
-import '../../../core/app_meta.dart';
 import '../../../l10n/app_strings.dart';
 import 'settings_controls.dart';
 import 'subpage_frame.dart';
@@ -19,11 +20,6 @@ class GeneralSettingsPage extends StatelessWidget {
   const GeneralSettingsPage({super.key, required this.store});
 
   final ConnectionStore store;
-
-  Future<void> _openRepository() async {
-    final uri = Uri.parse(repositoryUrl);
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,23 +43,10 @@ class GeneralSettingsPage extends StatelessWidget {
                 keyId: 'app-version',
                 icon: AppAssets.iconSetting,
                 title: strings.appVersionLabel,
-                trailingValue: appVersion,
+                // v4.35 — the beta window shows the stage, not the number.
+                trailingValue: strings.betaStage,
                 chevron: false,
                 onTap: () {}, // a value row — not a navigation target
-              ),
-              const SubSectionDivider(),
-              SettingNavRow(
-                keyId: 'telegram',
-                icon: AppAssets.iconSend,
-                title: strings.telegramRow,
-                onTap: openTelegramChannel,
-              ),
-              const SubSectionDivider(),
-              SettingNavRow(
-                keyId: 'repository',
-                icon: AppAssets.logoGithub,
-                title: strings.githubRow,
-                onTap: _openRepository,
               ),
             ],
           ),

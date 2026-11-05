@@ -62,6 +62,7 @@ class AethPal {
     required this.speedIconPing,
     required this.stepDim,
     required this.obCtaBg,
+    required this.tileShadow,
   });
 
   /// Screen background — night `#141C16` (owner-declared) / light `#EDEDED`
@@ -163,6 +164,14 @@ class AethPal {
   /// light `#FFFFFF` (the CTA is a card; its label rides [textPrimary]).
   final Color obCtaBg;
 
+  /// The «Rectangle 9» top-tile drop shadow — night rgba(0,0,0,0.25)
+  /// 0 4 4 (the evidence-locked value), light FULLY TRANSPARENT (v4.35,
+  /// owner round 11, item 1: «دو دکمه بالای تمام صفحات در حالت لایت مود
+  /// نباید سایه‌ای داشته باشن»). During the mode tween the alpha lerps
+  /// 64 → 0, so the shadow fades out with the same 420 ms cross-fade as
+  /// every other surface.
+  final Color tileShadow;
+
   /// The standing night palette (the values every earlier build shipped).
   static const AethPal night = AethPal(
     bgScreen: Color(0xFF141C16),
@@ -190,6 +199,7 @@ class AethPal {
     speedIconPing: Color(0xFFE6D83A),
     stepDim: Color(0xFF15553B),
     obCtaBg: Color(0xFF0F1510),
+    tileShadow: Color(0x40000000), // rgba(0,0,0,0.25) 0 4 4
   );
 
   /// The owner-CSS light palette (plus the documented derivations).
@@ -209,8 +219,11 @@ class AethPal {
     sheetDescCard: Color(0xFFE4E7E5),
     speedTrack: Color(0xFFE0E0E0),
     speedTrackLive: Color(0xFFC8E9DA),
-    speedCoreRest: Color(0xFFFFFFFF),
-    speedIdleLayer: Color(0xFF141C16),
+    // v4.35 (owner round 11, item 9): the light-mode start button follows
+    // the owner's own CSS — core `#4C4C4C` (44 r17), the idle mid layers
+    // back on the rgba(17,0,0,α) family (SAME as night), a WHITE glyph.
+    speedCoreRest: Color(0xFF4C4C4C),
+    speedIdleLayer: Color(0xFF110000),
     speedIconDown: Color(0xFF00D589),
     speedIconUp: Color(0xFFE63946),
     speedTileJitter: Color(0x26008FD5), // 15 % of the jitter blue
@@ -219,6 +232,7 @@ class AethPal {
     speedIconPing: Color(0xFFE6D83A),
     stepDim: Color(0xFFCBE9DC),
     obCtaBg: Color(0xFFFFFFFF),
+    tileShadow: Color(0x00000000), // v4.35 — NO shadow in light mode
   );
 
   /// Field-for-field interpolation (the animation's per-frame work).
@@ -249,6 +263,7 @@ class AethPal {
         speedIconPing: Color.lerp(a.speedIconPing, b.speedIconPing, t)!,
         stepDim: Color.lerp(a.stepDim, b.stepDim, t)!,
         obCtaBg: Color.lerp(a.obCtaBg, b.obCtaBg, t)!,
+        tileShadow: Color.lerp(a.tileShadow, b.tileShadow, t)!,
       );
 }
 

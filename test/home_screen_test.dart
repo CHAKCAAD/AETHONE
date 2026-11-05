@@ -76,7 +76,15 @@ void main() {
     expect(tester.getSize(find.byKey(const ValueKey('location-band'))).height,
         0.0);
     // The v4.13 greyscale ColorFiltered is retired with the hide rule.
-    expect(find.byType(ColorFiltered), findsNothing);
+    // v4.35: the pattern layer now carries its own ColorFiltered (the
+    // round-11 alpha boost) OUTSIDE the band — scope to the band.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('location-band')),
+        matching: find.byType(ColorFiltered),
+      ),
+      findsNothing,
+    );
     expect(find.byType(BackdropFilter), findsNothing);
     // No flag pixel row is visible on the disconnected screen: the band's
     // content stays laid out behind a zero-height clip, so a drag never
@@ -503,7 +511,15 @@ void main() {
     expect(find.text('آلمان'), findsOneWidget);
     expect(find.text('90 ms'), findsOneWidget);
     // The centre flag is full colour — the greyscale filter is gone.
-    expect(find.byType(ColorFiltered), findsNothing);
+    // v4.35: scoped to the band (the pattern layer's own ColorFiltered
+    // boost lives outside it).
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('location-band')),
+        matching: find.byType(ColorFiltered),
+      ),
+      findsNothing,
+    );
   });
 
   // -------------------------------------------------------------------

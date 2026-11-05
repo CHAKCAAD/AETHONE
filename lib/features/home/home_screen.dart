@@ -310,9 +310,9 @@ class HomeScreen extends StatelessWidget {
                         // mid-chain, it names the in-flight candidate +
                         // its attempt count — the explicit, observable
                         // fallback chain (SMART_AUTO_SPEC §7.2).
-                        selectedProtocolIcon: AppAssets.protocolIcon(
-                          store.smartDisplayProtocol,
-                        ),
+                        // v4.35 — the panel takes the ProtocolId (the
+                        // glyph renderer owns the asset + theme ink).
+                        selectedProtocol: store.smartDisplayProtocol,
                         protocolLabel: store.smartAttempt != null && showScan
                             ? (store.smartAttempt!.measuring
                                   ? strings.smartMeasuringLabel(

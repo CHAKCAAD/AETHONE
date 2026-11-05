@@ -89,10 +89,15 @@ void main() {
       await tester.pumpWidget(_booth(GeneralSettingsPage(store: store)));
       await tester.pumpAndSettle();
 
+      // v4.35 (owner round 11, the beta round): the version row shows the
+      // STAGE, not the number («نسخه برنامه رو بنویس آزمایشی» — the fa
+      // booth renders betaStage «آزمایشی»); the repo/channel rows are
+      // dropped for the beta window. The number itself stays locked to
+      // pubspec by app_meta_test.
       expect(find.byKey(const ValueKey('nav-app-version')), findsOneWidget);
-      expect(find.text('4.25.0'), findsOneWidget); // == appVersion const
-      expect(find.byKey(const ValueKey('nav-telegram')), findsOneWidget);
-      expect(find.byKey(const ValueKey('nav-repository')), findsOneWidget);
+      expect(find.text('آزمایشی'), findsOneWidget); // == betaStage (fa)
+      expect(find.byKey(const ValueKey('nav-telegram')), findsNothing);
+      expect(find.byKey(const ValueKey('nav-repository')), findsNothing);
     });
   });
 

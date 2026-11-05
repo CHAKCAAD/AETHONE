@@ -23,13 +23,14 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
+import '../../shared/protocol_glyph.dart';
 
 class BottomPanel extends StatelessWidget {
   const BottomPanel({
     super.key,
     required this.connected,
     required this.style,
-    required this.selectedProtocolIcon,
+    required this.selectedProtocol,
     required this.protocolLabel,
     required this.downBytes,
     required this.upBytes,
@@ -41,7 +42,10 @@ class BottomPanel extends StatelessWidget {
 
   final bool connected;
   final MotionStyle style;
-  final String selectedProtocolIcon;
+
+  /// v4.35 — the committed protocol as an ID (the glyph renderer owns the
+  /// asset, the theme ink and the combined modes' drop shadow).
+  final ProtocolId selectedProtocol;
   final String protocolLabel;
   final int downBytes;
   final int upBytes;
@@ -67,7 +71,7 @@ class BottomPanel extends StatelessWidget {
         child: _CardsColumn(
           connected: connected,
           style: style,
-          selectedProtocolIcon: selectedProtocolIcon,
+          selectedProtocol: selectedProtocol,
           protocolLabel: protocolLabel,
           downBytes: downBytes,
           upBytes: upBytes,
@@ -84,7 +88,7 @@ class BottomPanel extends StatelessWidget {
             child: _CardsColumn(
               connected: connected,
               style: style,
-              selectedProtocolIcon: selectedProtocolIcon,
+              selectedProtocol: selectedProtocol,
               protocolLabel: protocolLabel,
               downBytes: downBytes,
               upBytes: upBytes,
@@ -115,7 +119,7 @@ class _CardsColumn extends StatelessWidget {
   const _CardsColumn({
     required this.connected,
     required this.style,
-    required this.selectedProtocolIcon,
+    required this.selectedProtocol,
     required this.protocolLabel,
     required this.downBytes,
     required this.upBytes,
@@ -124,7 +128,10 @@ class _CardsColumn extends StatelessWidget {
 
   final bool connected;
   final MotionStyle style;
-  final String selectedProtocolIcon;
+
+  /// v4.35 — the committed protocol as an ID (the glyph renderer owns the
+  /// asset, the theme ink and the combined modes' drop shadow).
+  final ProtocolId selectedProtocol;
   final String protocolLabel;
   final int downBytes;
   final int upBytes;
@@ -137,7 +144,7 @@ class _CardsColumn extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         ProtocolCard(
-          iconAsset: selectedProtocolIcon,
+          protocol: selectedProtocol,
           label: protocolLabel,
           onTap: onProtocolCardTap,
         ),
@@ -169,26 +176,25 @@ class _CardsColumn extends StatelessWidget {
   }
 }
 
-/// Protocol selector card — [white logo] [name centered in the remaining
-/// space] [white forward chevron]. The logo renders straight on the card
-/// (the reference has NO backing box).
+/// Protocol selector card — [logo] [name centered in the remaining space]
+/// [white forward chevron]. The logo renders straight on the card (the
+/// reference has NO backing box).
 ///
-/// v4.17 — owner: «وقتی پروتکل تور رو انتخاب میکنی توی صفحه اصلی آیکونش به
-/// رنگ مشکی نمایش داده میشه که باید به رنگ سفید نمایش داده بشه». The
-/// Tor/Psiphon RASTER logos carry BLACK ink (the تور.png art is pure
-/// #000000), which vanishes into the dark card; their SVG siblings already
-/// ship white/native artwork. The raster icons therefore tint WHITE
-/// (BlendMode.srcIn) — the same treatment the sheet's glyphs get — while
-/// the SVGs keep their native colors.
+/// v4.35 (owner round 11, items 4/5) — the logo renders through the shared
+/// [ProtocolGlyph]: theme ink (white at night / #141C16 in light) and the
+/// combined modes' rebuilt drop shadow. (v4.17 history: the Tor/Psiphon
+/// raster logos carry BLACK ink and were tinted white; the chain SVGs
+/// rendered filter-less white art — both now own their theme treatment in
+/// one place.)
 class ProtocolCard extends StatelessWidget {
   const ProtocolCard({
     super.key,
-    required this.iconAsset,
+    required this.protocol,
     required this.label,
     required this.onTap,
   });
 
-  final String iconAsset;
+  final ProtocolId protocol;
   final String label;
   final VoidCallback onTap;
 
@@ -214,21 +220,8 @@ class ProtocolCard extends StatelessWidget {
                 width: AethGeometry.protocolLogoSize * s,
                 height: AethGeometry.protocolLogoSize * s,
                 child: Center(
-                  // v4.17: raster logos (tor/psiphon) tint WHITE — their
-                  // native ink is black and drowned on the dark card.
-                  child: AppAssets.isRasterAsset(iconAsset)
-                      ? Image.asset(
-                          iconAsset,
-                          height: 24 * s,
-                          fit: BoxFit.contain,
-                          color: AethColors.textPrimary,
-                          colorBlendMode: BlendMode.srcIn,
-                        )
-                      : SvgPicture.asset(
-                          iconAsset,
-                          height: 24 * s,
-                          fit: BoxFit.contain,
-                        ),
+                  // v4.35 — the shared theme-aware glyph (ink + shadow).
+                  child: ProtocolGlyph(id: protocol, size: 24 * s),
                 ),
               ),
               Expanded(

@@ -3,7 +3,7 @@ description: >-
   AETHONE — cross-platform VPN client. Flutter UI layer; network engines are
   Aether (Rust, WARP client) and zeptun (Zig, userspace TUN router).
 publish_to: none
-version: 4.25.0+1
+version: 4.35.0+1
 
 environment:
   sdk: ^3.13.0
@@ -63,6 +63,8 @@ flutter:
     - design/آیکون اپ/1.svg
     - design/آیکون اپ/2.svg
     - design/آیکون اپ/3.svg
+    # v4.35 — the owner's round-11 green mark behind the wordmark (item 3).
+    - design/آیکون اپ/آیکون بالای اپ.svg
     # --- protocol logos (design/آیکون پروتکل ها) — Tor/Psiphon are
     # pre-rendered PNGs (v4.10: their SVGs embed hidden tracing rasters that
     # flutter_svg renders partially); the original SVGs stay committed as the

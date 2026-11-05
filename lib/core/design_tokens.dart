@@ -65,9 +65,20 @@ abstract final class AethColors {
   /// (v4.11 + v4.34). Theme-dependent.
   static Color get topTile => AethThemeSync.palette.topTile;
 
+  /// The «Rectangle 9» top-tile drop shadow — night rgba(0,0,0,0.25)
+  /// 0 4 4 / light transparent (v4.35, owner round 11 item 1: the two top
+  /// buttons carry NO shadow in light mode). Theme-dependent.
+  static Color get tileShadow => AethThemeSync.palette.tileShadow;
+
   /// Dark stroke of the on-core icons per the owner Figma CSS
   /// (Activity 4 vector: border 1.5px #0D4D36).
   static const Color onCoreDark = Color(0xFF0D4D36);
+
+  /// v4.35 (owner round 11, item 9): the speed-test start button's REST
+  /// glyph — WHITE in BOTH modes (the owner's light-mode CSS «border: 1.5px
+  /// solid #FFFFFF»; night was already white). Const by decree: it never
+  /// rides the palette lerp, the running glyph stays [onCoreDark].
+  static const Color speedIconRest = Color(0xFFFFFFFF);
 
   /// Protocol-logo box inside the protocol card — night `#2D323D` (crop
   /// read) / light `#E8ECEA`. Theme-dependent (v4.34).
@@ -262,7 +273,12 @@ abstract final class AethGeometry {
   /// straight cut. New anchor: the art's end runs 25 canvas rows (~13 ref
   /// px) BELOW the screen bottom, so the pattern flows off the bottom edge
   /// and no end edge is ever visible on screen («بچسبه به پایین»).
-  static const double patternScale = 0.6;
+  // v4.35 (owner round 11, item 8: «حالت‌های سبز و قرمز پترن‌های صفحات رو
+  // کمی پر رنگ‌تر و بزرگ‌تر کن») — 0.6 → 0.7: the canvases grow back
+  // ~17 % (a bit bigger, the v4.12 40 % cut restored partially), and the
+  // paint adds an alpha ×1.6 lift (see pattern_sides.dart) so the soft
+  // blurred strokes read stronger in BOTH color states.
+  static const double patternScale = 0.7;
   static const double patternLeftAspect = 1232 / 456; // h/w of the canvas
   static const double patternRightAspect = 1178 / 464;
   static const double patternLeftAnchorBottom = 809 / 1232;
