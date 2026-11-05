@@ -245,6 +245,26 @@ class AethoneVpnService : VpnService() {
                 return true
             }
         }
+        // v4.29 — the cold-start adoption (run #53 on the apk-smoke gate:
+        // «Builder.establish() returned null» DESPITE the granted
+        // ACTIVATE_VPN appop). establish()'s FIRST gate is system-side
+        // in-memory state, not the appop: after a system_server boot (or
+        // any start that skipped the Dart walk's prepareVpn leg) Vpn's
+        // mOwnerUID is still the legacy-VPN uid and establish() honestly
+        // returns null — AOSP Vpn.java: «if (Binder.getCallingUid() !=
+        // mOwnerUID) return null;» BEFORE the appop check. One prepare()
+        // call fixes the state ITSELF: with consent already granted,
+        // VpnService.prepare() adopts our package system-side
+        // (Vpn.prepare → prepareInternal → mOwnerUID = our uid) and
+        // returns null — no dialog. It returns an INTENT only when consent
+        // is genuinely missing (establish would refuse anyway); the Dart
+        // walk's own prepareVpn leg surfaces the dialog there. On the
+        // normal connected path this call is a pure no-op (already the
+        // current prepared package → prepare returns true → null intent).
+        if (VpnService.prepare(this) != null) {
+            Log.e(TAG, "consent missing (prepare returned an intent) — refusing to establish")
+            return false
+        }
         val builder = Builder()
             .setSession("AETHONE")
             .setMtu(1500)

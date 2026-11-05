@@ -429,3 +429,32 @@ in five shapes incl. the word-boundary garbage case, the Onionoo document
 parse incl. malformed documents, the sanitizer) + the v4.28 updates in
 test/v419_device_test.dart (the tor-exit REAL set, live-set overrides,
 autoEntry now reverse-only) and the store live-set application paths.
+
+## Gate round — CI v4.29 «the cold start may actually start» (runs #51-#53)
+
+Two independent fixes, both proven by the gate itself:
+
+1. **adb elevation (eae13d6).** Runs #51/#52 died at the gate's FIRST adb
+   call — «Error: Requires permission not exported from uid 10213», exit
+   255 before the 120 s assert loop ever ran. AethoneVpnService is
+   exported=false + BIND_VPN_SERVICE-guarded (correct for production), so
+   the shell uid may not cold-start it. Fix, harness-side only: `adb
+   root` on the pinned userdebug google_apis image + fail-closed uid==0
+   verification. The app's security posture is untouched.
+
+2. **the prepare() adoption (this commit).** Run #53 reached the REAL
+   packaged path — the zeptun pre-flight loaded `libzeptun-jni` inside
+   the release APK (NO `NoClassDefFoundError`, NO `zeptun-load-failed`:
+   the owner's round-5 class is closed at the packaging level) — and then
+   died honestly on `Builder.establish() == null` DESPITE `ACTIVATE_VPN:
+   allow`. Root cause in AOSP Vpn.java: establish()'s FIRST gate is
+   `Binder.getCallingUid() != mOwnerUID` — system-side in-memory state
+   that only a `prepare()`/consent call adopts (→ prepareInternal); the
+   appop is only the SECOND gate. The Dart walk always calls prepareVpn
+   before startVpn (why real devices never see this), but a cold start
+   that skips the walk — the gate, and any always-on/external start after
+   a system_server boot — hits the un-adopted state. Fix: startTunnel()
+   now calls `VpnService.prepare(this)` before establish(); with consent
+   granted it is a silent system-side adoption and returns null (no
+   dialog); when consent is genuinely missing it returns the dialog
+   intent and the service refuses to establish honestly.
