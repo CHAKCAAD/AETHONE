@@ -31,6 +31,10 @@ PT_PATCHED_SHA256="3fbee02f78a4613a1452c32037c78c9d3a51ea4cb84edd8c4ebe808c023c4
 # base of pt-build-pin.patch. The desktop legs verify the clone against this
 # pin before installing the vendored patched copy (fail-closed on drift).
 PT_PRISTINE_SHA256="78eb66356edd92e6cd847637afa65022a595b30b81fd50ed69dba8960c0ab052"
+# v4.36f: the CRLF variant of the PATCHED content — the state the git-apply
+# era could leave in a restored cache (proven on the runner in run 42189918027:
+# the v4.36b postimage). Recognized and replaced from the blob; never trusted.
+PT_PATCHED_CRLF_SHA256="fd0d9aba0d2fc838a84f2ad1d8278e2b47786d4405007624b76c7fcab1e74a49"
 
 OS=""; SRC_CACHE=""; OUT=""
 while [ $# -gt 0 ]; do
@@ -50,12 +54,6 @@ case "$OS" in
 esac
 die() { echo "FATAL: $*" >&2; exit 1; }
 require_file() { [ -f "$1" ] || die "expected build output missing: $1"; }
-lf() { # normalize a text file to LF in place; silent no-op on already-LF input
-  if grep -q $'\r' "$1"; then
-    echo "  [lf] $(basename "$1"): CRLF -> LF"
-    sed -i 's/\r$//' "$1"
-  fi
-}
 
 : "${AETHER_REPO:=https://github.com/CluvexStudio/Aether.git}"
 : "${AETHER_SHA:=d58f9d568083129ce2c767c85054021eb3ee6a38}"
@@ -233,46 +231,61 @@ echo "== [3/4] lyrebird via Aether pt-build.sh @ $AETHER_SHA (pin $LYREBIRD_PIN 
 PT_LYREBIRD_PROOF_FILE="$SRC_CACHE/lyrebird-source-proof.json"
 rm -f "$PT_LYREBIRD_PROOF_FILE"
 export PT_LYREBIRD_PROOF_FILE
-# v4.36e: the desktop legs install the pin-hardened pt-build.sh from a
-# VENDORED, sha256-pinned copy (scripts/pt-build.patched.sh) instead of
-# running `git apply` against the clone.
+# v4.36f: the DESKTOP legs install the pin-hardened pt-build.sh from the
+# COMMITTED BLOB of scripts/pt-build.patched.sh (`git show HEAD:…`), never
+# from the working tree, and never through `git apply`.
 #
-# Why: four CI windows rounds (runs 42189918027 / 42192566257 / 42196456428 /
-# 42200227017 = v4.36…v4.36d) exhausted every EOL/config combination —
-# v4.36d had a byte-identical LF patch + LF preimage + autocrlf=false and
-# Git for Windows' `git apply` STILL refused the first hunk (@@ -156,14 @@)
-# where every Linux git (CI and sandbox) applies the same bytes cleanly.
-# The git build on the windows runner is the only variable left and it is
-# not one we can pin — so the desktop legs stop asking git to patch text.
+# Run 42203317747 (v4.36e) delivered the decisive proof: the vendored file
+# — committed as pure LF, byte-exact the pin — hashed to fd0d9aba… (the CRLF
+# variant) ON THE RUNNER, and the lf() repair never fired. Unified mechanism,
+# now proven across all five windows rounds:
 #
-# The new flow is byte-deterministic by construction on every runner:
-#   1. the clone's pt-build.sh is verified against PT_PRISTINE_SHA256 — the
-#      exact derivation base of the patch (or it already matches the patched
-#      pin — a cache that restored an installed tree);
-#   2. the vendored copy is verified against PT_PATCHED_SHA256 — the SAME
-#      pin the employer accepted for the patched content;
-#   3. it is copied over and re-verified.
+#   * actions/checkout on the windows runner smudges text files to CRLF in
+#     the working tree (LF blob → CRLF tree). That has been true all along:
+#     pt-build-pin.patch was CRLF in the working tree in every run — which
+#     is why git apply failed on the LF clone (v4.36c/d) and succeeded on
+#     the CRLF clone (v4.36b), and why the v4.36d "normalize the patch"
+#     guards were no-ops: grep/sed on git-bash CANNOT SEE \r (they read
+#     through a text-mode layer), while sha256sum reports the true bytes.
+#     Working-tree reads of ANY text file are therefore untrustworthy on
+#     that runner, and grep/sed-based CRLF repair is impossible there.
+#   * The clone (clone_pin, explicit -c core.autocrlf=false) IS raw-LF —
+#     proven by the pristine pin matching and by every apply that did match.
+#
+# The new flow takes the vendored bytes from the git object database
+# (git show HEAD:scripts/pt-build.patched.sh — a raw blob dump, no eol
+# filters, no working tree) and verifies by sha256, which sees true bytes
+# on every platform:
+#   1. the clone's pt-build.sh is verified against PT_PRISTINE_SHA256 (the
+#      exact derivation base) — or it already matches the patched pin (a
+#      cache that restored an installed tree), or it is the known CRLF
+#      variant the git-apply era could leave behind (fd0d9aba… — replaced,
+#      not trusted);
+#   2. the patched script is materialized from the blob into the clone;
+#   3. the result is re-verified against PT_PATCHED_SHA256 — fail-closed.
 # scripts/pt-build-pin.patch stays in the repo as the derivation record and
 # remains the mechanism on the Android legs (build_native.sh untouched —
-# ubuntu git applies it cleanly, proven by every green android run).
-lf "$AETHER_SRC/pt-build.sh"
+# ubuntu neither smudges the checkout nor the patch; every android run is
+# green through that path).
 cur_sha=$(sha256sum "$AETHER_SRC/pt-build.sh" | cut -d' ' -f1)
-PT_PATCHED="$SCRIPT_DIR/pt-build.patched.sh"
-[ -f "$PT_PATCHED" ] || die "vendored patched pt-build.sh missing: $PT_PATCHED"
-lf "$PT_PATCHED"
-vendored_sha=$(sha256sum "$PT_PATCHED" | cut -d' ' -f1)
-[ "$vendored_sha" = "$PT_PATCHED_SHA256" ] \
-  || die "vendored patched pt-build.sh sha256 mismatch: $vendored_sha (expected the pin $PT_PATCHED_SHA256)"
 if [ "$cur_sha" = "$PT_PATCHED_SHA256" ]; then
   echo "pt-build.sh already carries the pin-hardened patch (cached tree)"
 elif [ "$cur_sha" = "$PT_PRISTINE_SHA256" ]; then
-  cp "$PT_PATCHED" "$AETHER_SRC/pt-build.sh"
-  echo "pt-build.sh: installed the vendored pin-hardened copy ($PT_PATCHED)"
+  echo "pt-build.sh: verified against the pristine derivation base (sha256 $PT_PRISTINE_SHA256)"
+elif [ "$cur_sha" = "$PT_PATCHED_CRLF_SHA256" ]; then
+  echo "pt-build.sh: recognized as the CRLF variant the git-apply era could leave in a cache — replacing from the blob"
 else
-  die "pt-build.sh in the clone matches neither the pinned pristine base ($PT_PRISTINE_SHA256) nor the pinned patched content ($PT_PATCHED_SHA256): $cur_sha"
+  die "pt-build.sh in the clone matches none of the pinned states (pristine $PT_PRISTINE_SHA256 / patched $PT_PATCHED_SHA256 / legacy-CRLF $PT_PATCHED_CRLF_SHA256): $cur_sha"
+fi
+if [ "$cur_sha" = "$PT_PATCHED_SHA256" ]; then
+  echo "pt-build.sh: keeping the installed copy (byte-identical to the blob)"
+else
+  git -C "$SCRIPT_DIR" show "HEAD:scripts/pt-build.patched.sh" > "$AETHER_SRC/pt-build.sh" \
+    || die "git show failed to materialize HEAD:scripts/pt-build.patched.sh"
+  echo "pt-build.sh: installed from the committed blob (raw bytes, no working tree)"
 fi
 patched_sha=$(sha256sum "$AETHER_SRC/pt-build.sh" | cut -d' ' -f1)
-[ "$patched_sha" = "$PT_PATCHED_SHA256" ] || die "patched pt-build.sh sha256 mismatch: $patched_sha"
+[ "$patched_sha" = "$PT_PATCHED_SHA256" ] || die "patched pt-build.sh sha256 mismatch: $patched_sha (the blob materialization did not produce the pinned bytes)"
 (
   cd "$AETHER_SRC"
   bash pt-build.sh "$GOOS" "$GOARCH" "$OUT/aether/pt" "" ""
