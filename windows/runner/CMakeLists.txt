@@ -51,3 +51,10 @@ add_dependencies(${BINARY_NAME} flutter_assemble)
 target_include_directories(${BINARY_NAME} PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/../.."
   "${CMAKE_CURRENT_SOURCE_DIR}/../../native/zeptun/include")
+
+# v4.36i: the bounded core-log capture uses ISO-C fopen (rotating appends —
+# the same calls the linux leg compiles clean). MSVC flags fopen as C4996
+# (deprecation, "consider fopen_s"), and the template's /WX turns it fatal.
+# Silence it for THIS file only — /W4 /WX stay fully armed everywhere else.
+set_source_files_properties("../../desktop_shared/desktop_engine.cpp" PROPERTIES
+  COMPILE_DEFINITIONS "_CRT_SECURE_NO_WARNINGS")
