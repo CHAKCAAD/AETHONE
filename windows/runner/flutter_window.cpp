@@ -30,7 +30,10 @@ bool FlutterWindow::OnCreate() {
 
   // v4.36 — the aethone/engine channel (the MainActivity twin): registered
   // after the plugins, exactly like Android's configureFlutterEngine order.
-  aethone::RegisterEngineChannel(flutter_controller_->engine()->registrar());
+  // v4.36h: 3.47 embedding — the registrar ref comes from the engine's
+  // PluginRegistry surface (engine()->registrar() no longer exists).
+  aethone::RegisterEngineChannel(
+      flutter_controller_->engine()->GetRegistrarForPlugin("aethone_engine"));
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {

@@ -5,47 +5,82 @@
 //
 // Registered from FlutterWindow::OnCreate right after RegisterPlugins() —
 // the same ordering as Android's configureFlutterEngine.
+//
+// v4.36h: rewritten for the 3.47 C++ embedding. The old convenience accessors
+// (IsInt/IntValue/IsBool/BoolValue/IsMap) are gone from EncodableValue, and
+// the local `EncodableMap = std::map<std::string, …>` alias never matched the
+// engine's `EncodableMap = std::map<EncodableValue, EncodableValue>` — so the
+// file had never actually compiled on a hosted runner. The engine headers
+// bless exactly one access pattern (see encodable_value.h):
+//   std::holds_alternative<T>(value) / std::get<T>(value)
+// LongValue() covers both int32_t and int64_t (Dart ints arrive as either).
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar.h>
 #include <flutter/standard_method_codec.h>
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
+#include <variant>
 
 #include "desktop_shared/desktop_engine.h"
 #include "engine_channel_windows.h"
 
 namespace {
 
-using EncodableMap =
-    std::map<std::string, flutter::EncodableValue>;
-
 flutter::MethodChannel<flutter::EncodableValue>* g_channel = nullptr;
 
-int ArgInt(const EncodableMap& args, const char* key, int fallback) {
-  const auto it = args.find(key);
-  if (it == args.end() || !it->second.IsInt()) return fallback;
-  return static_cast<int>(it->second.IntValue());
+// Map lookup by string key — EncodableMap keys are EncodableValue, so the
+// key is constructed rather than converted.
+const flutter::EncodableValue* ArgValue(const flutter::EncodableMap& args,
+                                        const char* key) {
+  const auto it = args.find(flutter::EncodableValue(key));
+  return it == args.end() ? nullptr : &it->second;
 }
 
-bool ArgBool(const EncodableMap& args, const char* key, bool fallback) {
-  const auto it = args.find(key);
-  if (it == args.end() || !it->second.IsBool()) return fallback;
-  return it->second.BoolValue();
+int ArgInt(const flutter::EncodableMap& args, const char* key, int fallback) {
+  const flutter::EncodableValue* v = ArgValue(args, key);
+  if (v == nullptr) return fallback;
+  if (std::holds_alternative<int32_t>(*v) ||
+      std::holds_alternative<int64_t>(*v)) {
+    return static_cast<int>(v->LongValue());
+  }
+  return fallback;
+}
+
+bool ArgBool(const flutter::EncodableMap& args, const char* key,
+             bool fallback) {
+  const flutter::EncodableValue* v = ArgValue(args, key);
+  if (v == nullptr) return fallback;
+  if (std::holds_alternative<bool>(*v)) return std::get<bool>(*v);
+  return fallback;
+}
+
+// Outgoing map setters (EncodableValue's conversion constructors are
+// explicit in 3.47 — every value is direct-initialized with its exact type).
+void SetStr(flutter::EncodableMap& m, const char* key, std::string value) {
+  m[flutter::EncodableValue(key)] =
+      flutter::EncodableValue(std::move(value));
+}
+void SetInt(flutter::EncodableMap& m, const char* key, int64_t value) {
+  m[flutter::EncodableValue(key)] = flutter::EncodableValue(value);
+}
+void SetBool(flutter::EncodableMap& m, const char* key, bool value) {
+  m[flutter::EncodableValue(key)] = flutter::EncodableValue(value);
 }
 
 // Emits one tunnel event (the EngineBridge.emit twin). All handlers run on
 // the Win32 message loop thread — the same single-thread discipline.
 void Emit(const char* event, int port, const char* reason, int session) {
   if (g_channel == nullptr) return;
-  EncodableMap args;
-  args["event"] = flutter::EncodableValue(std::string(event));
-  args["port"] = flutter::EncodableValue(static_cast<int64_t>(port));
+  flutter::EncodableMap args;
+  SetStr(args, "event", event);
+  SetInt(args, "port", port);
   if (reason != nullptr) {
-    args["reason"] = flutter::EncodableValue(std::string(reason));
+    SetStr(args, "reason", reason);
   }
-  args["session"] = flutter::EncodableValue(static_cast<int64_t>(session));
+  SetInt(args, "session", session);
   g_channel->InvokeMethod(
       "onTunnelEvent",
       std::make_unique<flutter::EncodableValue>(args));
@@ -56,29 +91,30 @@ void HandleMethodCall(
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
   const std::string& name = call.method_name();
   const flutter::EncodableValue* raw_args = call.arguments();
-  EncodableMap args;
-  if (raw_args != nullptr && raw_args->IsMap()) {
-    args = std::get<EncodableMap>(*raw_args);
+  flutter::EncodableMap args;
+  if (raw_args != nullptr &&
+      std::holds_alternative<flutter::EncodableMap>(*raw_args)) {
+    args = std::get<flutter::EncodableMap>(*raw_args);
   }
 
   if (name == "paths") {
     const aethone::DesktopPaths& p = aethone::Paths();
-    EncodableMap out;
-    out["filesDir"] = flutter::EncodableValue(p.filesDir);
+    flutter::EncodableMap out;
+    SetStr(out, "filesDir", p.filesDir);
     // The Dart layer builds `<nativeLibraryDir>/liblyrebird.so` when the
     // explicit paths are absent — keep pointing it somewhere honest even
     // though the desktop always answers the explicit fields below.
-    out["nativeLibraryDir"] = flutter::EncodableValue(p.exeDir);
-    out["lyrebirdPath"] = flutter::EncodableValue(p.lyrebirdBin);
-    out["psiphonPath"] = flutter::EncodableValue(p.psiphonBin);
+    SetStr(out, "nativeLibraryDir", p.exeDir);
+    SetStr(out, "lyrebirdPath", p.lyrebirdBin);
+    SetStr(out, "psiphonPath", p.psiphonBin);
     result->Success(flutter::EncodableValue(out));
     return;
   }
   if (name == "prepareVpn") {
     // Desktop: no OS consent dialog — privilege is enforced at TUN open and
     // surfaces as the honest zeptun error when elevated rights are missing.
-    EncodableMap out;
-    out["needsPermission"] = flutter::EncodableValue(false);
+    flutter::EncodableMap out;
+    SetBool(out, "needsPermission", false);
     result->Success(flutter::EncodableValue(out));
     return;
   }
@@ -113,19 +149,21 @@ void HandleMethodCall(
   }
   if (name == "vpnStatus") {
     const aethone::TunnelCounters c = aethone::ReadTunnelCounters();
-    EncodableMap out;
-    out["running"] = flutter::EncodableValue(c.running);
-    out["port"] = c.running
-                      ? flutter::EncodableValue(static_cast<int64_t>(c.port))
-                      : flutter::EncodableValue();
+    flutter::EncodableMap out;
+    SetBool(out, "running", c.running);
+    if (c.running) {
+      SetInt(out, "port", c.port);
+    } else {
+      out[flutter::EncodableValue("port")] = flutter::EncodableValue();
+    }
     result->Success(flutter::EncodableValue(out));
     return;
   }
   if (name == "zeptunCounters") {
     const aethone::TunnelCounters c = aethone::ReadTunnelCounters();
-    EncodableMap out;
-    out["rxBytes"] = flutter::EncodableValue(static_cast<int64_t>(c.rxBytes));
-    out["txBytes"] = flutter::EncodableValue(static_cast<int64_t>(c.txBytes));
+    flutter::EncodableMap out;
+    SetInt(out, "rxBytes", static_cast<int64_t>(c.rxBytes));
+    SetInt(out, "txBytes", static_cast<int64_t>(c.txBytes));
     result->Success(flutter::EncodableValue(out));
     return;
   }
@@ -135,9 +173,8 @@ void HandleMethodCall(
     return;
   }
   if (name == "getCoreJob") {
-    EncodableMap out;
-    out["job"] =
-        flutter::EncodableValue(static_cast<int64_t>(aethone::GetCoreJob()));
+    flutter::EncodableMap out;
+    SetInt(out, "job", aethone::GetCoreJob());
     result->Success(flutter::EncodableValue(out));
     return;
   }
@@ -158,9 +195,9 @@ void HandleMethodCall(
     return;
   }
   if (name == "coreHoldStatus") {
-    EncodableMap out;
-    out["running"] = flutter::EncodableValue(false);
-    out["port"] = flutter::EncodableValue();
+    flutter::EncodableMap out;
+    SetBool(out, "running", false);
+    out[flutter::EncodableValue("port")] = flutter::EncodableValue();
     result->Success(flutter::EncodableValue(out));
     return;
   }
@@ -168,9 +205,9 @@ void HandleMethodCall(
     const int tail = ArgInt(args, "tail", 64 * 1024);
     int64_t total = 0;
     const std::string text = aethone::ReadCoreLogTail(tail, &total);
-    EncodableMap out;
-    out["text"] = flutter::EncodableValue(text);
-    out["totalBytes"] = flutter::EncodableValue(static_cast<int64_t>(total));
+    flutter::EncodableMap out;
+    SetStr(out, "text", text);
+    SetInt(out, "totalBytes", total);
     result->Success(flutter::EncodableValue(out));
     return;
   }
@@ -186,15 +223,21 @@ void HandleMethodCall(
 
 namespace aethone {
 
-void RegisterEngineChannel(flutter::PluginRegistrar* registrar) {
+void RegisterEngineChannel(FlutterDesktopPluginRegistrarRef registrar) {
   if (registrar == nullptr) return;
+  // v4.36h: the 3.47 embedding vends typed registrars through the manager —
+  // the exact pattern the pinned url_launcher_windows plugin uses
+  // (engine()->registrar() was removed from the embedding).
+  flutter::PluginRegistrar* plugin_registrar =
+      flutter::PluginRegistrarManager::GetInstance()
+          ->GetRegistrar<flutter::PluginRegistrar>(registrar);
   // A static unique_ptr parks the channel for the life of the process (the
   // runner never tears it down before exit — Unregister only nulls the
   // emitting pointer).
   static std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       parked;
   parked = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-      registrar->messenger(), "aethone/engine",
+      plugin_registrar->messenger(), "aethone/engine",
       &flutter::StandardMethodCodec::GetInstance());
   parked->SetMethodCallHandler(
       [](const auto& call, auto result) {

@@ -2244,12 +2244,19 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           tar -czf "dist/aethone-linux-x86_64-r${{ github.run_number }}.tar.gz" -C build/linux/x64/release bundle
+          # v4.36h: compute the pins BEFORE the heredoc-style block. The old
+          # one-liner nested python inside $() with backslash-escaped quotes
+          # ("$(python3 -c \"...\")"), which bash parses with quote state OFF
+          # — the python ';' acted as a command separator and `print(` became
+          # "unexpected token '('" (run 42209622531, linux bundle dist step).
+          # Plain double quotes outside / single quotes inside: no nesting.
+          native_pins=$(python3 -c "import json; m = json.load(open('native-out/desktop-native-linux-x86_64/manifest.json')); print('aether@' + m['pins']['aether'] + ' zeptun@' + m['pins']['zeptun'])")
           {
             echo "run_id=${{ github.run_id }}"
             echo "commit=${{ github.sha }}"
             echo "flutter=${FLUTTER_VERSION}"
             echo "scope=v4.36 DESKTOP BETA (owner round 12): Linux x86_64 app bundle, same look & size as Android (402x874 window), engines embedded (bundle/lib/libaether.so + libzeptun.so; lyrebird + psiphon child cores at the bundle root). Real connect path: Aether in-process via C API (aether_core_start) driven by desktop_shared/desktop_engine + linux/runner/engine_channel_linux.cc on the SAME aethone/engine channel surface; the app marks itself AETHONE_DESKTOP_ENGINE=1. Tunnel mode needs root on Linux (honest zeptun permission error otherwise); proxy mode runs unprivileged."
-            echo "native_pins=$(python3 -c \"import json;m=json.load(open('native-out/desktop-native-linux-x86_64/manifest.json'));print('aether@'+m['pins']['aether'],'zeptun@'+m['pins']['zeptun'])\")"
+            echo "native_pins=${native_pins}"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > dist/BUILD_INFO.txt
           sha256sum dist/*.tar.gz | tee dist/SHA256SUMS.txt

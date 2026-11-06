@@ -44,7 +44,10 @@ add_dependencies(${BINARY_NAME} flutter_assemble)
 
 # v4.36 desktop round: the shared engine layer (../../desktop_shared) and the
 # frozen zeptun C header (native/zeptun/include/zeptun.h at pin 08a1ab05).
-# CMAKE_CURRENT_SOURCE_DIR is <repo>/windows/runner — the repo root is two up.
+# CMAKE_CURRENT_SOURCE_DIR is <repo>/windows/runner — the repo root is TWO
+# levels up (runner -> windows -> root). v4.36h: was three levels (one above
+# the repo), so MSVC never found zeptun.h (C1083) while the linux leg —
+# whose CMakeLists resolves the same header through CMAKE_SOURCE_DIR — did.
 target_include_directories(${BINARY_NAME} PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/../.."
-  "${CMAKE_CURRENT_SOURCE_DIR}/../../../native/zeptun/include")
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../native/zeptun/include")

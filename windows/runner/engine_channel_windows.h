@@ -2,15 +2,16 @@
 // the Win32 runner (v4.36 desktop round). See engine_channel_windows.cpp.
 #pragma once
 
-namespace flutter {
-class PluginRegistrar;
-}
+#include <flutter_plugin_registrar.h>  // FlutterDesktopPluginRegistrarRef (C API)
 
 namespace aethone {
 
 // Call from FlutterWindow::OnCreate after RegisterPlugins(...) — the Android
 // ordering (configureFlutterEngine: plugins first, then the channel).
-void RegisterEngineChannel(flutter::PluginRegistrar* registrar);
+// v4.36h: takes the C-API registrar ref — what
+// FlutterEngine::GetRegistrarForPlugin() returns in the 3.47 embedding
+// (engine()->registrar() no longer exists there).
+void RegisterEngineChannel(FlutterDesktopPluginRegistrarRef registrar);
 
 // Drops the channel (window teardown).
 void UnregisterEngineChannel();
