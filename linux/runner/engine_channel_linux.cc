@@ -49,8 +49,12 @@ gboolean EmitIdle(gpointer data) {
   return FALSE;  // one-shot
 }
 
-// The engine layer's sink — invoked on the HELPER WORKER thread.
-void TunnelEventSink(void*, const aethone::TunnelEvent& event) {
+// The engine layer's sink — invoked on the HELPER WORKER thread. Named
+// OnTunnelEvent (NOT TunnelEventSink): that name is the callback TYPE alias
+// in desktop_engine.h's namespace aethone, and inside namespace aethone the
+// alias hides this file-scope function — passing it unqualified is a hard
+// compile error (run 42282415458, clang: "unexpected type name").
+void OnTunnelEvent(void*, const aethone::TunnelEvent& event) {
   IdleBox* box = new IdleBox();
   box->event = event.up ? "up" : "down";
   box->reason = event.reason;
@@ -328,7 +332,9 @@ void RegisterEngineChannel(FlEngine* engine) {
                                             nullptr, nullptr);
   // v4.37 — the helper-mode tunnel completes asynchronously (the Polkit
   // dialog); its events arrive on this sink from the worker thread.
-  SetTunnelEventSink(TunnelEventSink, nullptr);
+  // OnTunnelEvent (file scope), NOT the same-named type alias hidden inside
+  // this namespace.
+  SetTunnelEventSink(OnTunnelEvent, nullptr);
 }
 
 void UnregisterEngineChannel() {

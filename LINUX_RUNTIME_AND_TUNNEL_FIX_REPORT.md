@@ -343,6 +343,29 @@ stays informed. Reproduced all 8 locally with `g++ -Wall -Wextra -Wunused-const-
 -Werror` (GCC runs the check when asked explicitly), then green on the same set; link
 green; `--version` prints; unprivileged `serve`/`--selftest` still refuse (rc=2).
 
+**v4.38b fixup (run 42282415458, the v4.38a re-flight):** the helper now compiled
+clean — and the bundle leg advanced to the NEXT never-compiled TU:
+`linux/runner/engine_channel_linux.cc:331`,
+`SetTunnelEventSink(TunnelEventSink, nullptr)` — a hard error («unexpected type
+name 'TunnelEventSink': expected expression»). Root cause: the v4.37 code named the
+runner's anonymous-namespace sink function exactly like the callback TYPE alias
+`aethone::TunnelEventSink` (desktop_engine.h); inside `namespace aethone` the alias
+hides the file-scope function, so the argument resolved to a type, not the function.
+Every other TU was green in that run (14 green, this one failure + its two
+dependents; desktop_engine.cpp and the helper compiled clean). Fix: the function is
+now `OnTunnelEvent` (windows' twin is `Emit`; the trap is documented at both sites).
+The round's local verification had never compiled this TU (no Flutter SDK/GTK dev
+headers in the sandbox) — so this fixup also adds the missing gate:
+`scripts/syntax_check_linux_runner.sh` — a full-TU `g++ -fsyntax-only -Wall -Wextra
+-Werror` over the file against a signature-faithful stub of the pinned
+flutter_linux.h (3.47.9) `Fl*` surface + the real glib/gio headers, catching every
+name-resolution/hiding/overload/type error the real header would. Red-tested: the
+pre-fix line fails the gate (g++: «expected primary-expression before ','»); the
+fixed file passes with zero warnings. All runner↔engine calls verified against
+desktop_engine.h's declarations (StartTunnel/StartTunnelAsync 4-arg,
+VerifyTunnelPath → TunnelPathProbe, TunnelPrivilegeViaHelper, TunnelEvent fields,
+the sink signature).
+
 ## 10. CI gates (this round's run — recorded after the push)
 
 The workflow_dispatch run on this commit executes, all fail-closed:
