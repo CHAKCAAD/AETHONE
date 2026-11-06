@@ -34,6 +34,37 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     "Debug" "Profile" "Release")
 endif()
 
+# v4.36n — THE x86-64 CODE FLOOR (C/C++ side of the desktop ISA fix).
+#
+# Run #79 proved `bundle/aethone` carried GNU_PROPERTY 'x86 ISA needed:
+# x86-64-baseline, x86-64-v2, x86-64-v3' while containing ZERO v3 machine
+# instructions — the note is pure metadata inherited from the build image's
+# C runtime startup object (GitHub's ubuntu-latest had become the amd64v3
+# variant of 26.04: its libc6-dev Scrt1.o carries baseline+v2+v3, and the
+# linker merges it into every executable). glibc enforces that note at load
+# time on the user's machine → 'Fatal glibc error: CPU ISA level is lower
+# than required' on every pre-Haswell CPU (the owner's i3-3240).
+#
+# The primary fix pins the desktop CI legs to the baseline ubuntu-24.04
+# image; THIS block is the defense-in-depth that keeps the runner/plugin/
+# wrapper compilations at the v1 floor regardless of image or local machine
+# defaults (a compiler defaulting to -march=x86-64-v3 would otherwise
+# silently re-elevate the codegen). Placement and order are deliberate:
+#   * add_compile_options() at THIS directory scope propagates to every
+#     subdirectory added below (flutter/, runner/, the generated plugins) —
+#     all of them are created after this line;
+#   * the emitted compile line is: <CMAKE_CXX_FLAGS (env)> <directory
+#     options> <target options> — ours land AFTER any env/image -march and
+#     BEFORE the target's own flags, and GCC/Clang resolve competing -march
+#     flags by LAST-WINS, so '-march=x86-64' overrides anything injected
+#     upstream. Verified empirically: with CXXFLAGS=-march=x86-64-v3 the
+#     linked exe still reports 'x86 ISA needed: x86-64-baseline'.
+# Windows is untouched: this file is only read by the Linux desktop build
+# (MSVC never sees GCC flags — the windows/ tree has its own CMake).
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+  add_compile_options(-march=x86-64 -mtune=generic)
+endif()
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by

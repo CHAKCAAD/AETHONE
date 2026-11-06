@@ -387,10 +387,14 @@ if [ "$OS" = "linux" ]; then
   isa_gate() { # file
     local f="$1" notes bad
     [ -f "$f" ] || die "x86 ISA gate: expected artifact missing: $f"
-    notes=$(readelf --notes --wide "$f" 2>/dev/null | grep -o 'x86 ISA needed: [^ ,]*' || true)
-    bad=$(printf '%s\n' "$notes" | grep 'x86-64-v[2-4]' || true)
+    # v4.36n: readelf prints ALL ISA levels on ONE line ('x86 ISA needed:
+    # x86-64-baseline, x86-64-v2, x86-64-v3'). The old '[^ ,]*' pattern
+    # truncated at the first comma and would have MISSED elevated levels —
+    # grep the whole line, then look for v[2-4] inside it.
+    notes=$(readelf --notes --wide "$f" 2>/dev/null | grep -oE 'x86 ISA needed:.*' || true)
+    bad=$(printf '%s\n' "$notes" | grep -o 'x86-64-v[2-4]' | sort -u | tr '\n' ' ' || true)
     if [ -n "$bad" ]; then
-      die "x86 ISA gate FAILED: $f requires $(printf '%s' "$bad" | head -n1) — the build regressed past the x86-64 floor (rebuild with -Dcpu=baseline / GOAMD64=v1)"
+      die "x86 ISA gate FAILED: $f requires ${bad}— the build regressed past the x86-64 floor (rebuild with -Dcpu=baseline / GOAMD64=v1)"
     fi
     if [ -n "$notes" ]; then
       echo "[isa-gate] $f: $notes (within the x86-64-v1 floor)"

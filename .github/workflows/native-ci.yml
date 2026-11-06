@@ -2034,7 +2034,16 @@ jobs:
   # =========================================================================
   desktop-native:
     name: "Desktop native (${{ matrix.os }}-x86_64)"
-    runs-on: ${{ matrix.os == 'linux' && 'ubuntu-latest' || 'windows-latest' }}
+    # v4.36n: the linux leg MUST build on the BASELINE amd64 image. The
+    # ubuntu-latest pool had become the amd64v3 variant of 26.04 (r79 log:
+    # `ninja-build_1.13.2-1_amd64v3.deb`): its libc6-dev stamps every
+    # linked executable with GNU_PROPERTY x86-64-v2+v3 via Scrt1.o, which
+    # glibc enforces on the user's machine ('CPU ISA level is lower than
+    # required' — the owner's Ivy Bridge report). ubuntu-24.04 is the
+    # baseline amd64 LTS image; pinning it keeps the toolchain, the CRT and
+    # the glibc headers at the x86-64-v1 floor (and caps the required
+    # GLIBC symbol versions at the 2.39 era instead of 2.43).
+    runs-on: ${{ matrix.os == 'linux' && 'ubuntu-24.04' || 'windows-latest' }}
     timeout-minutes: 50
     strategy:
       fail-fast: false
@@ -2154,7 +2163,14 @@ jobs:
   desktop-bundle:
     name: "Desktop bundle (${{ matrix.os }})"
     needs: [flutter-ui, desktop-native]
-    runs-on: ${{ matrix.os == 'linux' && 'ubuntu-latest' || 'windows-latest' }}
+    # v4.36n: same image pin as desktop-native — the linux leg LINKS
+    # bundle/aethone here, so the amd64v3 CRT of the ubuntu-latest pool
+    # would stamp the shipped executable with x86-64-v3 (run #79 proved
+    # it: 'x86 ISA needed: x86-64-baseline, x86-64-v2, x86-64-v3' with
+    # ZERO v3 machine instructions — pure CRT metadata). Baseline image
+    # + the linux/CMakeLists.txt -march=x86-64 floor + the fail-closed
+    # ISA gate step below keep the shipped artifact at v1.
+    runs-on: ${{ matrix.os == 'linux' && 'ubuntu-24.04' || 'windows-latest' }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -2216,10 +2232,84 @@ jobs:
           ldd "$B/lib/libaether.so" | tee /tmp/ldd-aether.txt
           ldd "$B/lib/libzeptun.so" | tee /tmp/ldd-zeptun.txt
           ! grep -q "not found" /tmp/ldd-aether.txt /tmp/ldd-zeptun.txt || { echo "::error::unresolved library deps"; exit 1; }
-          # v4.36k: informational only — Google's prebuilt engine is the one
-          # piece we do not compile, so record whether IT carries an x86 ISA
-          # requirement (the desktop-native gate already proved OUR elves).
-          echo "== libflutter ISA note (informational) =="; readelf --notes --wide "$B/lib/libflutter_linux_gtk.so" | grep -o 'x86 ISA needed: [^ ,]*' || echo "no x86 ISA note in libflutter_linux_gtk.so"
+          # (the per-ELF fail-closed ISA gate + full ldd pass now run in
+          # their own step right below — v4.36k's informational libflutter
+          # note check is superseded by it.)
+
+      # v4.36n: THE desktop x86-64 ISA gate — fail-closed over EVERY ELF in
+      # the bundle, between the Flutter build and the tar packaging. Run #79
+      # shipped bundle/aethone with 'x86 ISA needed: baseline,v2,v3' (the
+      # amd64v3 runner image's Scrt1.o — proven object-level: the amd64v3
+      # libc6-dev_2.43-2ubuntu2 deb carries exactly that note in Scrt1.o,
+      # the plain-amd64 build of the SAME glibc version carries baseline
+      # only) and the app died on the owner's Ivy Bridge with glibc's
+      # 'CPU ISA level is lower than required'. The image is now pinned to
+      # baseline 24.04 and linux/CMakeLists.txt pins -march=x86-64; THIS
+      # gate proves the FINAL artifact — every ELF that lands in the user's
+      # tarball, ours, Google's or a plugin's — stays at the v1 floor, or
+      # the leg dies before the artifact is packed.
+      # NOTE the note-parsing regex: readelf prints ALL levels on one line
+      # ('x86 ISA needed: x86-64-baseline, x86-64-v2, x86-64-v3'); a
+      # '[^ ,]*' pattern truncates at the first comma and misses the
+      # elevated levels — grep the WHOLE line, then look for v[2-4].
+      - name: x86-64 ISA gate (fail-closed — every bundled ELF, before packaging)
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          B="build/linux/x64/release/bundle"
+          command -v readelf >/dev/null || { echo "::error::readelf missing"; exit 1; }
+          MUST="aethone lib/libapp.so lib/libflutter_linux_gtk.so lib/libaether.so lib/libzeptun.so lib/libdartjni.so lib/liburl_launcher_linux_plugin.so lyrebird psiphon"
+          for f in $MUST; do
+            [ -f "$B/$f" ] || { echo "::error::ISA gate: expected bundle ELF missing: $f"; exit 1; }
+          done
+          mapfile -t ELFS < <(find "$B" -type f -exec file {} + | grep 'ELF ' | cut -d: -f1 | sort)
+          [ "${#ELFS[@]}" -ge 9 ] || { echo "::error::ISA gate: expected at least 9 ELF files, found ${#ELFS[@]}"; exit 1; }
+          FAIL=0
+          for f in "${ELFS[@]}"; do
+            notes=$(readelf --notes --wide "$f" 2>/dev/null | grep -oE 'x86 ISA needed:.*' || true)
+            bad=$(printf '%s\n' "$notes" | grep -o 'x86-64-v[2-4]' | sort -u | tr '\n' ' ' || true)
+            if [ -n "$bad" ]; then
+              echo "::error::ISA gate FAILED: $f requires ${bad}— above the x86-64-v1 floor; glibc refuses it at load time on every pre-Haswell CPU"
+              FAIL=1
+            else
+              echo "[isa-gate] $f: ${notes:-no ISA property (baseline)}"
+            fi
+          done
+          [ "$FAIL" -eq 0 ] || exit 1
+          # Full-dependency proof for every dynamic ELF (GTK dev libs are
+          # installed on this leg; the bundle's own libs resolve via the
+          # RPATH $ORIGIN/lib). Static Go cores print 'not a dynamic
+          # executable' — expected for lyrebird/psiphon.
+          # ONE documented exception: libdartjni.so (the jni package's
+          # native asset) links libjvm.so — a JRE-provided library, never on
+          # the runner and NOT needed at app startup (the plugin is dormant
+          # on desktop; the r79/r80 smoke boots prove the app runs without
+          # it). Every OTHER dependency of every ELF must resolve.
+          for f in "${ELFS[@]}"; do
+            if ldd "$f" >/tmp/ldd.out 2>&1; then
+              if grep -v 'libjvm.so' /tmp/ldd.out | grep -q "not found"; then echo "::error::unresolved dependency in $f"; cat /tmp/ldd.out; exit 1; fi
+              echo "[ldd] $f: all dependencies resolve (libjvm.so excepted for the dormant JNI asset)"
+            else
+              grep -q "not a dynamic executable" /tmp/ldd.out || { echo "::error::ldd failed on $f"; cat /tmp/ldd.out; exit 1; }
+              echo "[ldd] $f: static (no dynamic dependencies)"
+            fi
+          done
+          # REPORT-ONLY machine-code census (NOT a gate): v3-class
+          # instruction SITES are expected inside CPUID runtime-dispatched
+          # kernels — BoringSSL (libaether.so), Go stdlib crypto (lyrebird,
+          # psiphon), Skia/Impeller (Google's prebuilt engine), and LLVM's
+          # tzcnt encoding inside libzeptun.so (REP+BSF: executes as bsf on
+          # non-BMI CPUs — a guarded fallback, not a v3 requirement). The
+          # load-time guarantee is the property gate above; the counts are
+          # the audit trail. Full dispatch audit:
+          # LINUX_CPU_COMPATIBILITY_REPORT.md.
+          echo "== v3-class instruction census (report-only; runtime-dispatched kernels) =="
+          for f in "${ELFS[@]}"; do
+            n=$(objdump -d --no-show-raw-insn "$f" 2>/dev/null | grep -cE '%ymm|%zmm|(^|[[:space:]])(lzcnt|tzcnt|andn|bextr|blsi|blsmsk|blsr|mulx|pdep|pext|shlx|shrx|sarx|rorx|vfmadd[0-9]*|movbe)([[:space:]]|$)' || true)
+            echo "[isa-census] $f: ${n:-0} sites"
+          done
+          echo "ISA gate PASS: every bundled ELF at the x86-64-v1 floor; all dynamic deps resolve"
 
       - name: Stage engines + build the Windows bundle
         if: matrix.os == 'windows'
@@ -2251,6 +2341,88 @@ jobs:
           cp "$SRC/aether/pt/psiphon-tunnel-core.exe"   "$B/psiphon.exe"
           echo "staged windows bundle:"; find "$B" -maxdepth 2 -type f -printf '%p  %s bytes\n' | sort
 
+      # v4.36n: the Windows twin of the ISA gate — REAL machine-code
+      # analysis of every PE with llvm-objdump (LLVM is preinstalled on the
+      # windows-2025 image). Windows has no load-time ISA property: a v3
+      # instruction only faults (STATUS_ILLEGAL_INSTRUCTION) when EXECUTED,
+      # so the policy is per-component, from the r79 dispatch audit (see
+      # LINUX_CPU_COMPATIBILITY_REPORT.md):
+      #   * ZERO v3 sites — data/app.so (Dart AOT: gen_snapshot baseline)
+      #     and dartjni.dll (native-assets clang baseline);
+      #   * tzcnt-only — zeptun.dll (-Dcpu=baseline; LLVM emits the tzcnt
+      #     ENCODING for @ctz, which decodes as plain bsf on non-BMI CPUs —
+      #     guarded fallback, not a v3 requirement; any ymm/BMI/FMA is a
+      #     real regression);
+      #   * ENVELOPE — aethone.exe and url_launcher_windows_plugin.dll must
+      #     carry ONLY the MSVC STL __std_ helpers, which live behind the
+      #     __isa_available runtime CPUID dispatch (r79: 107 and 36 sites;
+      #     guard verified at the 'cmp $0x2,%eax / cmp $0x1,%eax' diamond).
+      #     A compile-flag regression (/arch:AVX2, /O2 with AVX2 vectorized
+      #     app code) multiplies the count ~10x — the ceilings are the
+      #     tripwire, and the dispatch diamond must be present;
+      #   * REPORTED — flutter_windows.dll (Skia/Impeller, Google),
+      #     aether.dll (BoringSSL OPENSSL_ia32cap dispatch), wintun.dll
+      #     (WireGuard, feature-bit-tested paths), lyrebird.exe +
+      #     psiphon.exe (Go stdlib crypto asm, internal/cpu dispatch) all
+      #     legitimately contain CPUID-dispatched v3 kernels — counted,
+      #     never gated; their dispatch was verified in the r79 audit.
+      # Unknown PEs fail the audit: a new file without a policy is a gap.
+      - name: PE ISA audit (x86_64 — llvm-objdump machine-code analysis)
+        if: matrix.os == 'windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          B="build/windows/x64/runner/Release"
+          OD="$(command -v llvm-objdump || true)"
+          [ -n "$OD" ] || { echo "::error::llvm-objdump not found on the runner — the PE audit cannot run (fail-closed)"; exit 1; }
+          "$OD" --version | head -1
+          V3='(%ymm|%zmm|(^|[[:space:]])(lzcnt|andn|bextr|blsi|blsmsk|blsr|mulx|pdep|pext|shlx|shrx|sarx|rorx|vfmadd[0-9]*[a-z]*|vfmsub[0-9]*[a-z]*|movbe)([[:space:]]|$))'
+          TZ='(^|[[:space:]])tzcnt([[:space:]]|$)'
+          count()  { "$OD" -d --no-show-raw-insn "$1" 2>/dev/null | grep -cE "$V3" || true; }
+          counttz() { "$OD" -d --no-show-raw-insn "$1" 2>/dev/null | grep -cE "$TZ" || true; }
+          audit() { # relpath policy ceiling
+            local f="$1" policy="$2" ceiling="${3:-}"
+            [ -f "$B/$f" ] || { echo "::error::PE audit: expected file missing: $f"; exit 1; }
+            local n tz
+            n=$(count "$B/$f"); tz=$(counttz "$B/$f")
+            echo "[pe-audit] $f: v3 sites=$n tzcnt sites=$tz (policy: $policy)"
+            case "$policy" in
+              zero)
+                [ "$n" -eq 0 ] || { echo "::error::PE audit FAILED: $f contains $n v3 instruction sites — this component must be baseline-only"; exit 1; } ;;
+              tzonly)
+                [ "$n" -eq 0 ] || { echo "::error::PE audit FAILED: $f contains $n non-tzcnt v3 sites — zig -Dcpu=baseline must not emit them"; exit 1; } ;;
+              envelope)
+                [ "$n" -le "$ceiling" ] || { echo "::error::PE audit FAILED: $f v3 sites $n > ceiling $ceiling (MSVC STL dispatch envelope breached — check for /arch:AVX2)"; exit 1; }
+                if [ "$n" -gt 0 ]; then
+                  # Dispatch evidence, two legitimate MSVC shapes (both seen
+                  # and guard-verified in the r79 audit): (a) call
+                  # __isa_available_init + 'cmp $0x2,%eax' diamond
+                  # (aethone.exe), (b) rip-relative feature-word load +
+                  # 'test $0x20,%al' AVX2 bit test (url_launcher plugin).
+                  d=$("$OD" -d --no-show-raw-insn "$B/$f" | grep -cE 'cmp[^#]*\$0x2,[[:space:]]*%eax|test[[:space:]]+\$0x20,%al' || true)
+                  [ "$d" -ge 1 ] || { echo "::error::PE audit FAILED: $f has $n v3 sites but neither __isa_available dispatch shape (cmp \$0x2,%eax diamond or the \$0x20 AVX2 feature-bit test)"; exit 1; }
+                fi ;;
+              report) : ;;
+            esac
+          }
+          audit "data/app.so"                        zero
+          audit "dartjni.dll"                         zero
+          audit "zeptun.dll"                          tzonly
+          audit "aethone.exe"                         envelope 400
+          audit "url_launcher_windows_plugin.dll"     envelope 200
+          audit "flutter_windows.dll"                 report
+          audit "aether.dll"                          report
+          audit "wintun.dll"                          report
+          audit "lyrebird.exe"                        report
+          audit "psiphon.exe"                         report
+          while IFS= read -r f; do
+            case "$f" in
+              aethone.exe|flutter_windows.dll|url_launcher_windows_plugin.dll|dartjni.dll|aether.dll|zeptun.dll|wintun.dll|lyrebird.exe|psiphon.exe|data/app.so) ;;
+              *) echo "::error::PE audit: unlisted PE in the bundle: $f — add a policy before shipping"; exit 1 ;;
+            esac
+          done < <(find "$B" -type f \( -name '*.dll' -o -name '*.exe' -o -name '*.so' \) | sed "s|^$B/||")
+          echo "PE audit PASS: zero-tolerance components clean; MSVC components inside the __isa_available dispatch envelope; dispatched kernels counted"
+
       - name: Dist naming + sha256 manifest (Linux)
         if: matrix.os == 'linux'
         shell: bash
@@ -2271,6 +2443,7 @@ jobs:
             echo "flutter=${FLUTTER_VERSION}"
             echo "scope=v4.36 DESKTOP BETA (owner round 12): Linux x86_64 app bundle, same look & size as Android (402x874 window), engines embedded (bundle/lib/libaether.so + libzeptun.so; lyrebird + psiphon child cores at the bundle root). Real connect path: Aether in-process via C API (aether_core_start) driven by desktop_shared/desktop_engine + linux/runner/engine_channel_linux.cc on the SAME aethone/engine channel surface; the app marks itself AETHONE_DESKTOP_ENGINE=1. Tunnel mode needs root on Linux (honest zeptun permission error otherwise); proxy mode runs unprivileged."
             echo "native_pins=${native_pins}"
+            echo "x86_isa_floor=x86-64-v1 (built on the baseline ubuntu-24.04 image; runner+plugins pinned to -march=x86-64 -mtune=generic; fail-closed readelf gate over every bundled ELF — see LINUX_CPU_COMPATIBILITY_REPORT.md)"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > dist/BUILD_INFO.txt
           sha256sum dist/*.tar.gz | tee dist/SHA256SUMS.txt
@@ -2292,6 +2465,7 @@ jobs:
           "flutter=${{ env.FLUTTER_VERSION }}" | Add-Content dist/BUILD_INFO.txt
           "scope=v4.36 DESKTOP BETA (owner round 12): Windows x86_64 app bundle, same look & size as Android (402x874 window), engines embedded beside aethone.exe (aether.dll + zeptun.dll + the pinned wintun.dll adapter + lyrebird.exe + psiphon.exe). The exe manifest ships requireAdministrator (Wintun adapter + strict-route WFP need elevation). The -only family tunnel legs are refused up-front (platformLimit) - every other mode tunnels through the WARP-exclude route." | Add-Content dist/BUILD_INFO.txt
           "native_pins=aether@$($pins.pins.aether) zeptun@$($pins.pins.zeptun)" | Add-Content dist/BUILD_INFO.txt
+          "x86_isa_floor=x86-64 baseline (llvm-objdump machine-code audit in CI; v3-class instructions exist only inside CPUID runtime-dispatched kernels — MSVC STL/Skia/BoringSSL/Go crypto; see LINUX_CPU_COMPATIBILITY_REPORT.md)" | Add-Content dist/BUILD_INFO.txt
           "recorded_at=$(Get-Date -AsUTC -Format 'yyyy-MM-ddTHH:mm:ssZ')" | Add-Content dist/BUILD_INFO.txt
           Get-FileHash dist/*.zip -Algorithm SHA256 | ForEach-Object { "{0}  {1}" -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } | Set-Content dist/SHA256SUMS.txt
           Get-Content dist/SHA256SUMS.txt
@@ -2337,7 +2511,10 @@ jobs:
   desktop-smoke:
     name: "Desktop smoke (linux bundle under Xvfb)"
     needs: desktop-bundle
-    runs-on: ubuntu-latest
+    # v4.36n: same baseline-image pin — the smoke must run the shipped
+    # bundle against the same (baseline) userland the fix targets, and it
+    # re-proves the ISA floor on the artifact AFTER the tar round-trip.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout AETHONE repository
@@ -2376,6 +2553,14 @@ jobs:
           tar -xzf smoke/aethone-linux-x86_64-*.tar.gz -C /tmp
           B="/tmp/bundle"
           [ -x "$B/aethone" ] || { echo "::error::bundle/aethone missing"; exit 1; }
+          # v4.36n: re-prove the shipped artifact's ISA floor AFTER the tar
+          # round-trip (the build-time gate proved it pre-pack). Whole-line
+          # note parsing — a '[^ ,]*' pattern truncates at the first comma
+          # and would miss 'baseline, v2, v3'.
+          notes=$(readelf --notes --wide "$B/aethone" 2>/dev/null | grep -oE 'x86 ISA needed:.*' || true)
+          bad=$(printf '%s\n' "$notes" | grep -o 'x86-64-v[2-4]' || true)
+          [ -z "$bad" ] || { echo "::error::shipped bundle/aethone requires ${bad}— ISA regression after packaging"; exit 1; }
+          echo "[isa-gate] shipped bundle/aethone: ${notes:-no ISA property (baseline)}"
           export XDG_DATA_HOME=/tmp/aethone-smoke-data
           export LIBGL_ALWAYS_SOFTWARE=1
           rm -rf "$XDG_DATA_HOME"; mkdir -p "$XDG_DATA_HOME"
@@ -2472,6 +2657,9 @@ jobs:
           fu="${{ needs.flutter-ui.result }}"
           aa="${{ needs.android-apk.result }}"
           as="${{ needs.apk-smoke.result }}"
+          dn="${{ needs.desktop-native.result }}"
+          db="${{ needs.desktop-bundle.result }}"
+          ds="${{ needs.desktop-smoke.result }}"
           echo "native-build : $nb"
           echo "elf-inspect  : $ei"
           echo "runtime-smoke: $rs"
@@ -2534,6 +2722,24 @@ jobs:
             failure|cancelled) echo "  -> android apk: FAILED (see aethone-apk-r* artifact / job log)" ;;
             skipped) echo "  -> android apk: NOT RUN (NOT TESTED)" ;;
             *) echo "  -> android apk: $aa (NOT TESTED)" ;;
+          esac
+          case "$dn" in
+            success) echo "  -> desktop native: PASS (linux leg on the BASELINE ubuntu-24.04 image + windows leg: libaether/libzeptun/lyrebird/psiphon at the frozen pins, zig -Dcpu=baseline + GOAMD64=v1 + rustc baseline, fail-closed ISA gate at build time — the amd64v3 runner-image CRT that stamped run #79's executables with x86-64-v3 is out of the path)" ;;
+            failure|cancelled) echo "  -> desktop native: FAILED (see build-status-desktop-native-* artifacts)" ;;
+            skipped) echo "  -> desktop native: NOT RUN (NOT TESTED)" ;;
+            *) echo "  -> desktop native: $dn (NOT TESTED)" ;;
+          esac
+          case "$db" in
+            success) echo "  -> desktop bundle: PASS (linux leg: runner+plugins compiled with -march=x86-64 -mtune=generic on ubuntu-24.04, fail-closed readelf gate over EVERY bundled ELF at the x86-64-v1 floor + full ldd resolution proof, before packaging; windows leg: llvm-objdump machine-code PE audit — zero-tolerance components clean, MSVC components inside the __isa_available dispatch envelope)" ;;
+            failure|cancelled) echo "  -> desktop bundle: FAILED (ISA gate or build — see job log; no artifact ships past a failed gate)" ;;
+            skipped) echo "  -> desktop bundle: NOT RUN (NOT TESTED)" ;;
+            *) echo "  -> desktop bundle: $db (NOT TESTED)" ;;
+          esac
+          case "$ds" in
+            success) echo "  -> desktop smoke: PASS (the shipped tarball boots under Xvfb on ubuntu-24.04: app alive past 12 s, Impeller/llvmpipe up, core-log capture installed with the session header, libaether/libzeptun deps resolve, shipped bundle/aethone ISA floor re-proved after the tar round-trip)" ;;
+            failure|cancelled) echo "  -> desktop smoke: FAILED (see build-status-desktop-smoke artifact / captured core-log in the job log)" ;;
+            skipped) echo "  -> desktop smoke: NOT RUN (NOT TESTED)" ;;
+            *) echo "  -> desktop smoke: $ds (NOT TESTED)" ;;
           esac
           echo ""
           echo "--- REAL per-ABI build results (uploaded by the legs themselves) ---"
@@ -2625,7 +2831,31 @@ jobs:
               build-tools 36.0.0, sha256 manifest. The APK is UI-ONLY — no
               engine is wired (M2) and the release app honestly reports
               engineNotWired on connect. CI never installs or launches it.
+            - desktop bundles v4.36n (Linux + Windows x86_64): Linux — the
+              runner, plugins and native assets compiled with
+              -march=x86-64 -mtune=generic on the BASELINE ubuntu-24.04
+              image (the amd64v3 ubuntu-latest pool stamped run #79's
+              bundle/aethone with GNU_PROPERTY x86-64-v2+v3 via its glibc
+              Scrt1.o — the exact object-level root cause of the owner's
+              'CPU ISA level is lower than required' on Ivy Bridge); a
+              fail-closed readelf gate proves EVERY bundled ELF stays at
+              the x86-64-v1 floor and every dynamic dependency resolves
+              BEFORE packaging; the smoke re-proves the floor on the
+              untarred artifact and boots it under Xvfb (llvmpipe).
+              Windows — llvm-objdump machine-code audit of every PE
+              (zero-tolerance: app.so/dartjni.dll; tzcnt-only: zeptun.dll;
+              __isa_available-dispatch envelope: aethone.exe/
+              url_launcher_windows_plugin.dll; counted:
+              flutter_windows.dll/aether.dll/wintun.dll/lyrebird.exe/
+              psiphon.exe). Full audit: LINUX_CPU_COMPATIBILITY_REPORT.md.
           --- NOT TESTED BY THIS RUN (stays BLOCKED / NOT TESTED — decision N2) ---
+            - execution on a REAL pre-Haswell CPU (the owner's i3-3240 Ivy
+              Bridge class): the Linux floor is proven statically (readelf
+              property gate on every ELF) and dynamically on AVX2-capable
+              CI hardware (Xvfb smoke); CI has no pre-2013 CPU — the
+              owner's machine remains the real-device test. Windows on
+              no-AVX2 hardware: static llvm-objdump audit + dispatch
+              verification only — NOT TESTED on real hardware.
             - real-device tests: connection, lifecycle, UDP, memory, battery
               (emulator cannot substitute — runtime smoke is CI evidence only)
             - arm64-v8a / armeabi-v7a runtime execution (static-only this phase)
@@ -2674,8 +2904,11 @@ jobs:
           fu="${{ needs.flutter-ui.result }}"
           aa="${{ needs.android-apk.result }}"
           as="${{ needs.apk-smoke.result }}"
-          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ] || [ "$zt" != "success" ] || [ "$fu" != "success" ] || [ "$aa" != "success" ] || [ "$as" != "success" ]; then
-            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt zig-test=$zt flutter-ui=$fu android-apk=$aa apk-smoke=$as"
+          dn="${{ needs.desktop-native.result }}"
+          db="${{ needs.desktop-bundle.result }}"
+          ds="${{ needs.desktop-smoke.result }}"
+          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ] || [ "$zt" != "success" ] || [ "$fu" != "success" ] || [ "$aa" != "success" ] || [ "$as" != "success" ] || [ "$dn" != "success" ] || [ "$db" != "success" ] || [ "$ds" != "success" ]; then
+            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt zig-test=$zt flutter-ui=$fu android-apk=$aa apk-smoke=$as desktop-native=$dn desktop-bundle=$db desktop-smoke=$ds"
             exit 1
           fi
-          echo "PIPELINE GREEN (11/11: 3 build legs + elf-inspect + runtime-smoke + cargo-test + go-test + zig-test + flutter-ui + android-apk + apk-smoke)"
+          echo "PIPELINE GREEN (16/16: 3 android build legs + elf-inspect + runtime-smoke + cargo-test + go-test + zig-test + flutter-ui + android-apk + apk-smoke + desktop-native(linux+windows) + desktop-bundle(linux+windows) + desktop-smoke)"
