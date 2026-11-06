@@ -2216,6 +2216,10 @@ jobs:
           ldd "$B/lib/libaether.so" | tee /tmp/ldd-aether.txt
           ldd "$B/lib/libzeptun.so" | tee /tmp/ldd-zeptun.txt
           ! grep -q "not found" /tmp/ldd-aether.txt /tmp/ldd-zeptun.txt || { echo "::error::unresolved library deps"; exit 1; }
+          # v4.36k: informational only — Google's prebuilt engine is the one
+          # piece we do not compile, so record whether IT carries an x86 ISA
+          # requirement (the desktop-native gate already proved OUR elves).
+          echo "== libflutter ISA note (informational) =="; readelf --notes --wide "$B/lib/libflutter_linux_gtk.so" | grep -o 'x86 ISA needed: [^ ,]*' || echo "no x86 ISA note in libflutter_linux_gtk.so"
 
       - name: Stage engines + build the Windows bundle
         if: matrix.os == 'windows'

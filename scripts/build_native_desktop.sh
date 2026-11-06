@@ -36,6 +36,21 @@ PT_PRISTINE_SHA256="78eb66356edd92e6cd847637afa65022a595b30b81fd50ed69dba8960c0a
 # the v4.36b postimage). Recognized and replaced from the blob; never trusted.
 PT_PATCHED_CRLF_SHA256="fd0d9aba0d2fc838a84f2ad1d8278e2b47786d4405007624b76c7fcab1e74a49"
 
+# v4.36k — THE x86-64 FLOOR (owner report: the desktop bundles die on
+# weaker CPUs with glibc's 'Fatal glibc error: CPU ISA level is lower than
+# required'). Every compiler in this script is pinned to the lowest x86-64
+# compatibility level (SSE2 — every AMD64 CPU ever shipped):
+#   * zig  -Dcpu=baseline (zeptun)  — zig's default for a native build is
+#     the RUNNER's CPU model: Azure Xeons with AVX2 + AVX-512. The shipped
+#     .so/.dll carried those instructions plus, on Linux, the GNU_PROPERTY
+#     x86 ISA note — exactly what glibc enforces at load time.
+#   * Go   GOAMD64=v1 (lyrebird + psiphon) — Go's documented amd64 floor.
+#   * rustc stays on its default (baseline x86-64) — see the aether step.
+# The linux leg additionally PROVES it: a fail-closed readelf gate rejects
+# any shipped ELF whose 'x86 ISA needed' note goes past v1. The Android
+# legs (build_native.sh) are untouched — different script, different
+# architectures, no x86-64 in sight.
+
 OS=""; SRC_CACHE=""; OUT=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -101,6 +116,10 @@ else
   RUST_TARGET="x86_64-unknown-linux-gnu"
 fi
 export GOOS GOARCH
+# v4.36k: exported at script scope so the vendored pt-build.sh inherits it
+# for lyrebird — it sets GOOS/GOARCH/GOARM/CGO_ENABLED but never GOAMD64,
+# so an inherited v1 is the effective floor (and beats any go-env default).
+export GOAMD64=v1
 
 echo "== build_native_desktop: os=$OS rust-target=$RUST_TARGET zig=$("$ZIG" version) =="
 mkdir -p "$SRC_CACHE" "$OUT"
@@ -130,7 +149,14 @@ clone_pin "$ZEPTUN_REPO" "$ZEPTUN_SHA" "$ZEPTUN_SRC"
   # Host-target build: installs zig-out/lib/<libzeptun.so|zeptun.dll> + the
   # static lib + the CLI + include/zeptun.h. ReleaseFast mirrors the Android
   # build's optimize mode.
-  "$ZIG" build -Doptimize=ReleaseFast
+  #
+  # v4.36k: -Dcpu=baseline clamps codegen to the x86-64 floor (SSE2).
+  # build.zig uses standardTargetOptions, so -Dcpu is a registered option.
+  # The TARGET stays native (same libc/MSVC linkage as every previous run —
+  # no new failure mode); only the CPU model is pinned down. Without this,
+  # zig compiles for the runner's Xeon (AVX2 + AVX-512), and glibc refuses
+  # the .so on any weaker CPU: 'CPU ISA level is lower than required'.
+  "$ZIG" build -Doptimize=ReleaseFast -Dcpu=baseline
 )
 ZLIB="$ZEPTUN_SRC/zig-out/$ZLIB_DIR/$LIBZEPTUN"
 require_file "$ZLIB"
@@ -233,6 +259,12 @@ PY_BORING_SYS
   done
   echo "Total stale boring-sys cache entries removed: $removed"
 
+  # v4.36k ISA note: rustc needs no flag here — its default codegen for both
+  # host targets is baseline x86-64 (SSE2, no elevated ISA note in the ELF).
+  # Deliberately NOT exporting RUSTFLAGS: aether's .cargo/config.toml pins
+  # target-feature=+crt-static for x86_64-pc-windows-msvc (the VCRUNTIME140
+  # fix), and an env RUSTFLAGS would clobber the config file wholesale and
+  # quietly reintroduce that bug.
   cargo build --release --locked --features tor --target "$RUST_TARGET"
   cdylib="target/$RUST_TARGET/release/$LIBAETHER"
   [ -f "$cdylib" ] || die "aether cdylib missing: $cdylib (expected from the same cargo build)"
@@ -334,11 +366,44 @@ PSIPHON_SRC="$SRC_CACHE/psiphon-fork"
 clone_pin "$PSIPHON_FORK_REPO" "$PSIPHON_FORK_SHA" "$PSIPHON_SRC"
 (
   cd "$PSIPHON_SRC"
-  export GOOS="$GOOS" GOARCH="$GOARCH" GOARM="" CGO_ENABLED=0 GOFLAGS=-mod=vendor GOTOOLCHAIN=local
+  # v4.36k: GOAMD64=v1 restated explicitly (the script-scope export already
+  # carries it — this line is the self-documenting proof at the build site).
+  export GOOS="$GOOS" GOARCH="$GOARCH" GOARM="" GOAMD64=v1 CGO_ENABLED=0 GOFLAGS=-mod=vendor GOTOOLCHAIN=local
   mkdir -p "$OUT/aether/pt"
   go build -trimpath -ldflags "-s -w" -o "$OUT/aether/pt/psiphon-tunnel-core$EXE" ./ConsoleClient
   [ -f "$OUT/aether/pt/psiphon-tunnel-core$EXE" ] || die "psiphon-tunnel-core missing after go build"
 )
+
+# ------------------------------------------------- x86 ISA gate (linux, fail-closed) ----
+# v4.36k: glibc enforces the ELF's GNU_PROPERTY 'x86 ISA needed' note at
+# load time — a v2+ requirement (SSE4.2/AVX2/AVX-512) is exactly what kills
+# the bundle on a weaker CPU with 'CPU ISA level is lower than required'.
+# The build flags above keep every artifact at the v1 floor; this gate
+# PROVES it on every shipped ELF and fails the leg on any regression.
+# (git-bash has no readelf, so the ELF proof runs on the linux leg — the
+# windows leg builds from the same flags in the same script.)
+if [ "$OS" = "linux" ]; then
+  command -v readelf >/dev/null 2>&1 || die "readelf not found — cannot run the x86 ISA gate"
+  isa_gate() { # file
+    local f="$1" notes bad
+    [ -f "$f" ] || die "x86 ISA gate: expected artifact missing: $f"
+    notes=$(readelf --notes --wide "$f" 2>/dev/null | grep -o 'x86 ISA needed: [^ ,]*' || true)
+    bad=$(printf '%s\n' "$notes" | grep 'x86-64-v[2-4]' || true)
+    if [ -n "$bad" ]; then
+      die "x86 ISA gate FAILED: $f requires $(printf '%s' "$bad" | head -n1) — the build regressed past the x86-64 floor (rebuild with -Dcpu=baseline / GOAMD64=v1)"
+    fi
+    if [ -n "$notes" ]; then
+      echo "[isa-gate] $f: $notes (within the x86-64-v1 floor)"
+    else
+      echo "[isa-gate] $f: no x86 ISA requirement note (baseline)"
+    fi
+  }
+  isa_gate "$OUT/zeptun/libzeptun.so"
+  isa_gate "$OUT/aether/libaether.so"
+  isa_gate "$OUT/aether/pt/lyrebird"
+  isa_gate "$OUT/aether/pt/psiphon-tunnel-core"
+  echo "[isa-gate] GOAMD64=$(go env GOAMD64 2>/dev/null || echo v1) (go env at gate time)"
+fi
 
 # ---------------------------------------------------------------- manifest ----
 MANIFEST="$OUT/manifest.json"

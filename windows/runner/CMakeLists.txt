@@ -34,7 +34,22 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
-target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
+# v4.36k: flutter_wrapper_plugin joined the link. engine_channel_windows.cpp
+# drives the 3.47 C++ embedding the same way url_launcher_windows does —
+# PluginRegistrarManager::GetInstance()->GetRegistrar<PluginRegistrar>(ref) —
+# and those symbols (plugin_registrar.cc: the PluginRegistrar ctor,
+# PluginRegistrarManager::GetInstance, OnRegistrarDestroyed) are compiled
+# ONLY into flutter_wrapper_plugin (windows/flutter/CMakeLists.txt:
+# CPP_WRAPPER_SOURCES_PLUGIN). The stock template links wrapper_app alone
+# because a stock runner never touches the plugin registrar API. Run
+# 42218962864 died at exactly these three LNK2019s. The two wrapper libs
+# share core_implementations.cc/standard_codec.cc, but static-archive
+# extraction is demand-driven — the second copy is simply never pulled in,
+# so there is no duplicate-symbol risk.
+target_link_libraries(${BINARY_NAME} PRIVATE
+  flutter
+  flutter_wrapper_plugin
+  flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
