@@ -58,3 +58,14 @@ target_include_directories(${BINARY_NAME} PRIVATE
 # Silence it for THIS file only — /W4 /WX stay fully armed everywhere else.
 set_source_files_properties("../../desktop_shared/desktop_engine.cpp" PROPERTIES
   COMPILE_DEFINITIONS "_CRT_SECURE_NO_WARNINGS")
+
+# v4.36j: the LNK1327 manifest-merge conflict (run 42216088653, and the same
+# first-flight failure flutter/flutter#98416 hit): link.exe's generated
+# manifest carries the DEFAULT UAC fragment (asInvoker) while
+# runner.exe.manifest ships requireAdministrator — mt.exe refuses to merge
+# ("Values of attribute 'level' not equal in different manifest snippets")
+# and LINK reports — and hides — "failure during running mt.exe". The
+# matching /MANIFESTUAC makes the linker fragment agree with the file, so
+# the merge has two identical entries. Elevation itself still comes from the
+# file (the flag is the agreement, not the source of truth).
+target_link_options(${BINARY_NAME} PRIVATE "/MANIFESTUAC:level='requireAdministrator'")
