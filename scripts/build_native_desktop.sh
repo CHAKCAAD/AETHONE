@@ -25,7 +25,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PT_PATCH="$SCRIPT_DIR/pt-build-pin.patch"
+# The pin the employer accepted for the PATCHED pt-build.sh content (LF).
 PT_PATCHED_SHA256="3fbee02f78a4613a1452c32037c78c9d3a51ea4cb84edd8c4ebe808c023c4b88"
+# v4.36e: the pristine pt-build.sh @ AETHER d58f9d56 — the exact derivation
+# base of pt-build-pin.patch. The desktop legs verify the clone against this
+# pin before installing the vendored patched copy (fail-closed on drift).
+PT_PRISTINE_SHA256="78eb66356edd92e6cd847637afa65022a595b30b81fd50ed69dba8960c0ab052"
 
 OS=""; SRC_CACHE=""; OUT=""
 while [ $# -gt 0 ]; do
@@ -45,6 +50,12 @@ case "$OS" in
 esac
 die() { echo "FATAL: $*" >&2; exit 1; }
 require_file() { [ -f "$1" ] || die "expected build output missing: $1"; }
+lf() { # normalize a text file to LF in place; silent no-op on already-LF input
+  if grep -q $'\r' "$1"; then
+    echo "  [lf] $(basename "$1"): CRLF -> LF"
+    sed -i 's/\r$//' "$1"
+  fi
+}
 
 : "${AETHER_REPO:=https://github.com/CluvexStudio/Aether.git}"
 : "${AETHER_SHA:=d58f9d568083129ce2c767c85054021eb3ee6a38}"
@@ -222,39 +233,43 @@ echo "== [3/4] lyrebird via Aether pt-build.sh @ $AETHER_SHA (pin $LYREBIRD_PIN 
 PT_LYREBIRD_PROOF_FILE="$SRC_CACHE/lyrebird-source-proof.json"
 rm -f "$PT_LYREBIRD_PROOF_FILE"
 export PT_LYREBIRD_PROOF_FILE
-# v4.36d: the patch exchange must be byte-deterministic on every runner.
-# Forensics from the three failed windows legs (runs 42189918027 /
-# 42192566257 / 42196456428):
-#   * v4.36b (no -c flags): the clone handed git apply a CRLF preimage and
-#     autocrlf=true (git-bash system default) read the patch as CRLF — the
-#     contexts matched, the postimage was written smudged, and the patched
-#     file hashed to fd0d9aba… = the CRLF variant of the pinned content
-#     (proven: sed 's/$/\r/' over the pinned LF file reproduces it exactly).
-#   * v4.36c (autocrlf pinned ONLY on the clone side): fresh LF preimage,
-#     but `git apply` still ran under the system autocrlf=true, which read
-#     the patch as CRLF — LF context lines carrying \r vs an LF preimage
-#     mismatched and the FIRST hunk (@@ -156,14 @@) died.
-# The fix normalizes every side of the exchange to LF and pins the apply
-# itself to autocrlf=false. Every guard below is a NO-OP on Linux (inputs
-# are already LF there), so the Linux desktop leg is unchanged; the Android
-# legs (scripts/build_native.sh — untouched, ubuntu default autocrlf=false)
-# are unaffected by design.
-if grep -q $'\r' "$PT_PATCH"; then
-  echo "pt-build-pin.patch: normalizing CRLF -> LF (git-bash checkout artifact)"
-  sed -i 's/\r$//' "$PT_PATCH"
-fi
-if grep -q $'\r' "$AETHER_SRC/pt-build.sh"; then
-  echo "pt-build.sh preimage: normalizing CRLF -> LF (clone/smudge artifact)"
-  sed -i 's/\r$//' "$AETHER_SRC/pt-build.sh"
-fi
-if grep -q "AETHONE (N8 pin hardening" "$AETHER_SRC/pt-build.sh"; then
-  echo "pt-build.sh already carries the pin-hardening patch (cached tree)"
+# v4.36e: the desktop legs install the pin-hardened pt-build.sh from a
+# VENDORED, sha256-pinned copy (scripts/pt-build.patched.sh) instead of
+# running `git apply` against the clone.
+#
+# Why: four CI windows rounds (runs 42189918027 / 42192566257 / 42196456428 /
+# 42200227017 = v4.36…v4.36d) exhausted every EOL/config combination —
+# v4.36d had a byte-identical LF patch + LF preimage + autocrlf=false and
+# Git for Windows' `git apply` STILL refused the first hunk (@@ -156,14 @@)
+# where every Linux git (CI and sandbox) applies the same bytes cleanly.
+# The git build on the windows runner is the only variable left and it is
+# not one we can pin — so the desktop legs stop asking git to patch text.
+#
+# The new flow is byte-deterministic by construction on every runner:
+#   1. the clone's pt-build.sh is verified against PT_PRISTINE_SHA256 — the
+#      exact derivation base of the patch (or it already matches the patched
+#      pin — a cache that restored an installed tree);
+#   2. the vendored copy is verified against PT_PATCHED_SHA256 — the SAME
+#      pin the employer accepted for the patched content;
+#   3. it is copied over and re-verified.
+# scripts/pt-build-pin.patch stays in the repo as the derivation record and
+# remains the mechanism on the Android legs (build_native.sh untouched —
+# ubuntu git applies it cleanly, proven by every green android run).
+lf "$AETHER_SRC/pt-build.sh"
+cur_sha=$(sha256sum "$AETHER_SRC/pt-build.sh" | cut -d' ' -f1)
+PT_PATCHED="$SCRIPT_DIR/pt-build.patched.sh"
+[ -f "$PT_PATCHED" ] || die "vendored patched pt-build.sh missing: $PT_PATCHED"
+lf "$PT_PATCHED"
+vendored_sha=$(sha256sum "$PT_PATCHED" | cut -d' ' -f1)
+[ "$vendored_sha" = "$PT_PATCHED_SHA256" ] \
+  || die "vendored patched pt-build.sh sha256 mismatch: $vendored_sha (expected the pin $PT_PATCHED_SHA256)"
+if [ "$cur_sha" = "$PT_PATCHED_SHA256" ]; then
+  echo "pt-build.sh already carries the pin-hardened patch (cached tree)"
+elif [ "$cur_sha" = "$PT_PRISTINE_SHA256" ]; then
+  cp "$PT_PATCHED" "$AETHER_SRC/pt-build.sh"
+  echo "pt-build.sh: installed the vendored pin-hardened copy ($PT_PATCHED)"
 else
-  git -C "$AETHER_SRC" -c core.autocrlf=false apply --whitespace=nowarn "$PT_PATCH"
-fi
-if grep -q $'\r' "$AETHER_SRC/pt-build.sh"; then
-  echo "patched pt-build.sh: normalizing CRLF -> LF (apply-time smudge artifact)"
-  sed -i 's/\r$//' "$AETHER_SRC/pt-build.sh"
+  die "pt-build.sh in the clone matches neither the pinned pristine base ($PT_PRISTINE_SHA256) nor the pinned patched content ($PT_PATCHED_SHA256): $cur_sha"
 fi
 patched_sha=$(sha256sum "$AETHER_SRC/pt-build.sh" | cut -d' ' -f1)
 [ "$patched_sha" = "$PT_PATCHED_SHA256" ] || die "patched pt-build.sh sha256 mismatch: $patched_sha"
@@ -308,7 +323,7 @@ MANIFEST="$OUT/manifest.json"
   echo "    \"aether\": \"$AETHER_SHA\","
   echo "    \"zeptun\": \"$ZEPTUN_SHA\","
   echo "    \"psiphon_fork\": \"$PSIPHON_FORK_SHA\","
-  echo "    \"lyrebird\": \"$LYREBIRD_PIN (enforced by scripts/pt-build-pin.patch @ $AETHER_SHA)\""
+  echo "    \"lyrebird\": \"$LYREBIRD_PIN (desktop: vendored scripts/pt-build.patched.sh, sha256 $PT_PATCHED_SHA256; derivation scripts/pt-build-pin.patch @ AETHER $AETHER_SHA)\""
   echo "  },"
   echo '  "artifacts": ['
   first=1
