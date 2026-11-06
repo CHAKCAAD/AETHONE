@@ -2592,14 +2592,20 @@ jobs:
       - name: Privilege helper selftest (TUN + routes + rules, as root)
         run: |
           set -euo pipefail
-          B="$(tar -tzf smoke/aethone-linux-x86_64-*.tar.gz | head -1 | cut -d/ -f1)"
+          # v4.38c: NO `tar -t | head -1` here — under `set -o pipefail`
+          # head's early exit SIGPIPEs tar ("tar: stdout: write error",
+          # run 42287214107, exit 2 before the selftest ever ran). The
+          # dist step packs `-C build/linux/x64/release bundle`, so the
+          # top-level dir is the constant `bundle` — the same hardcode
+          # the proven v4.36m smoke steps below use.
           tar -xzf smoke/aethone-linux-x86_64-*.tar.gz -C /tmp
-          [ -x "/tmp/$B/aethone-tunnel-helper" ] || { echo "::error::aethone-tunnel-helper missing from the shipped bundle"; exit 1; }
-          [ -f "/tmp/$B/com.chakcaad.aethone.tunnel-helper.policy" ] || { echo "::error::the Polkit action file is missing from the shipped bundle"; exit 1; }
+          B="/tmp/bundle"
+          [ -x "$B/aethone-tunnel-helper" ] || { echo "::error::aethone-tunnel-helper missing from the shipped bundle"; exit 1; }
+          [ -f "$B/com.chakcaad.aethone.tunnel-helper.policy" ] || { echo "::error::the Polkit action file is missing from the shipped bundle"; exit 1; }
           # ensure the TUN device exists (usually present on the hosted VMs)
           sudo modprobe tun 2>/dev/null || true
           [ -c /dev/net/tun ] || sudo mknod /dev/net/tun c 10 200
-          sudo -n /tmp/$B/aethone-tunnel-helper --selftest
+          sudo -n "$B/aethone-tunnel-helper" --selftest
           echo "helper selftest PASS"
 
       - name: Boot the bundle under Xvfb (fail-closed assertions)

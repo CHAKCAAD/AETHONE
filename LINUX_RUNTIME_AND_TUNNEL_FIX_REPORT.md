@@ -366,6 +366,29 @@ desktop_engine.h's declarations (StartTunnel/StartTunnelAsync 4-arg,
 VerifyTunnelPath → TunnelPathProbe, TunnelPrivilegeViaHelper, TunnelEvent fields,
 the sink signature).
 
+**v4.38c fixup (run 42287214107, the v4.38b re-flight):** both bundle legs GREEN
+— the [[maybe_unused]] fix and the OnTunnelEvent rename held, and the linux
+bundle leg built the helper + the runner for the first time. 14 of 16 legs
+green; the next never-run layer failed: the NEW v4.37 selftest step died at its
+first line, `B="$(tar -tzf … | head -1 | cut -d/ -f1)"` — «tar: stdout: write
+error», exit 2 under `set -o pipefail`, before the selftest itself ever ran.
+Root cause (reproduced locally against the REAL r84 bundle artifact, 23,658-byte
+listing / 377 entries): `head -1` exits after the first line while tar keeps
+streaming the listing; tar's next write hits the closed reader → EPIPE →
+exit 141/2, and pipefail promotes it to the step's status. A size-independent
+race (the listing is far below the 64 KB pipe buffer — the EPIPE lands on tar's
+own stdio flush cadence), which is why the identical-shaped `find | head -1`
+(single match) and `objdump --version | head -1` (tiny output) steps elsewhere
+in the workflow have never tripped. The line was also unnecessary: the dist step
+packs `-C build/linux/x64/release bundle`, so the top-level dir is the constant
+`bundle` — the same hardcode the proven v4.36m smoke steps use. Fix: extract
+first, `B="/tmp/bundle"` (workflow only; no shipped code touched). The fixed
+step's logic verified locally against the real r84 tarball: extraction, helper
+executable + policy present, `--version` prints — plus, per the honest record:
+the smoke BOOT step after it has not run since the v4.38 runner changes (it
+green in v4.36n; the only boot-path change since is the one-line sink
+registration — a function-pointer store).
+
 ## 10. CI gates (this round's run — recorded after the push)
 
 The workflow_dispatch run on this commit executes, all fail-closed:
