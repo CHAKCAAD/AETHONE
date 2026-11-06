@@ -2305,8 +2305,11 @@ jobs:
           # the audit trail. Full dispatch audit:
           # LINUX_CPU_COMPATIBILITY_REPORT.md.
           echo "== v3-class instruction census (report-only; runtime-dispatched kernels) =="
+          # Same tool-portable pattern as the Windows PE audit (GNU vs llvm
+          # objdump suffix/space differences; andnpd excluded — SSE2).
+          V3C='(%ymm|%zmm|(^|[[:space:]])(lzcnt|tzcnt|andn|bextr|blsi|blsmsk|blsr|mulx|pdep|pext|shlx|shrx|sarx|rorx|movbe)[bwlq]?([[:space:]]|$)|(^|[[:space:]])vfmadd[0-9]*[a-z]*([[:space:]]|$)|(^|[[:space:]])vfmsub[0-9]*[a-z]*([[:space:]]|$))'
           for f in "${ELFS[@]}"; do
-            n=$(objdump -d --no-show-raw-insn "$f" 2>/dev/null | grep -cE '%ymm|%zmm|(^|[[:space:]])(lzcnt|tzcnt|andn|bextr|blsi|blsmsk|blsr|mulx|pdep|pext|shlx|shrx|sarx|rorx|vfmadd[0-9]*|movbe)([[:space:]]|$)' || true)
+            n=$(objdump -d --no-show-raw-insn "$f" 2>/dev/null | grep -cE "$V3C" || true)
             echo "[isa-census] $f: ${n:-0} sites"
           done
           echo "ISA gate PASS: every bundled ELF at the x86-64-v1 floor; all dynamic deps resolve"
@@ -2376,8 +2379,14 @@ jobs:
           OD="$(command -v llvm-objdump || true)"
           [ -n "$OD" ] || { echo "::error::llvm-objdump not found on the runner — the PE audit cannot run (fail-closed)"; exit 1; }
           "$OD" --version | head -1
-          V3='(%ymm|%zmm|(^|[[:space:]])(lzcnt|andn|bextr|blsi|blsmsk|blsr|mulx|pdep|pext|shlx|shrx|sarx|rorx|vfmadd[0-9]*[a-z]*|vfmsub[0-9]*[a-z]*|movbe)([[:space:]]|$))'
-          TZ='(^|[[:space:]])tzcnt([[:space:]]|$)'
+          # Tool-portable patterns: GNU objdump prints suffixless mnemonics
+          # ('test $0x20,%al'), llvm-objdump prints size-suffixed ones with a
+          # space after the comma ('testb $0x20, %al') — the r80 first flight
+          # failed on exactly that difference. Optional [bwlq]? suffix +
+          # comma-space tolerance matches both; andnpd (SSE2) is excluded
+          # because 'p' is not a size suffix.
+          V3='(%ymm|%zmm|(^|[[:space:]])(lzcnt|andn|bextr|blsi|blsmsk|blsr|mulx|pdep|pext|shlx|shrx|sarx|rorx|movbe)[bwlq]?([[:space:]]|$)|(^|[[:space:]])vfmadd[0-9]*[a-z]*([[:space:]]|$)|(^|[[:space:]])vfmsub[0-9]*[a-z]*([[:space:]]|$))'
+          TZ='(^|[[:space:]])tzcnt[bwlq]?([[:space:]]|$)'
           count()  { "$OD" -d --no-show-raw-insn "$1" 2>/dev/null | grep -cE "$V3" || true; }
           counttz() { "$OD" -d --no-show-raw-insn "$1" 2>/dev/null | grep -cE "$TZ" || true; }
           audit() { # relpath policy ceiling
@@ -2399,8 +2408,16 @@ jobs:
                   # __isa_available_init + 'cmp $0x2,%eax' diamond
                   # (aethone.exe), (b) rip-relative feature-word load +
                   # 'test $0x20,%al' AVX2 bit test (url_launcher plugin).
-                  d=$("$OD" -d --no-show-raw-insn "$B/$f" | grep -cE 'cmp[^#]*\$0x2,[[:space:]]*%eax|test[[:space:]]+\$0x20,%al' || true)
-                  [ "$d" -ge 1 ] || { echo "::error::PE audit FAILED: $f has $n v3 sites but neither __isa_available dispatch shape (cmp \$0x2,%eax diamond or the \$0x20 AVX2 feature-bit test)"; exit 1; }
+                  # Suffix/space tolerant for GNU vs llvm-objdump output.
+                  d=$("$OD" -d --no-show-raw-insn "$B/$f" | grep -cE 'cmp[a-z]*[^#]*\$0x2,[[:space:]]*%eax|test[a-z]*[[:space:]]+\$0x20,[[:space:]]*%al' || true)
+                  if [ "$d" -lt 1 ]; then
+                    echo "::error::PE audit FAILED: $f has $n v3 sites but neither __isa_available dispatch shape (cmp \$0x2,%eax diamond or the \$0x20 AVX2 feature-bit test)"
+                    # self-diagnosis: dump the guard context of the first
+                    # v3 site so the failure explains itself in the log
+                    echo "--- first v3-site context (last 20 lines before/after) ---"
+                    "$OD" -d --no-show-raw-insn "$B/$f" | grep -B20 -m1 -E "$V3" || true
+                    exit 1
+                  fi
                 fi ;;
               report) : ;;
             esac
