@@ -54,3 +54,9 @@ Thumbs.db
 /out/
 /.srccache/
 /.tools/
+
+# --- v4.36 desktop round: local native/engine build scratch (never commit) ---
+.out-desktop/
+.srccache*/
+# local validation bundles staged by hand
+/native-out/

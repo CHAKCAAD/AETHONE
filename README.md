@@ -1,10 +1,50 @@
-# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.9**, Android APK packaging added)
+# AETHONE — Phase 2 CI Artifacts (report v4 bundle — **v4.36**, Linux & Windows desktop added)
 
 Deliverable of directive 6 of report v3: *"start the next phase with GitHub Actions
 setup and the initial native build."* — revised after the employer's reviews of
 bundle v1, v2, v3, v4, the v4.1 addendum, v4.2 and v4.3 (2026-10-31 / 2026-11-01). No frozen
 pin (source commits, Rust/Go/Zig versions, NDK r26d, API 29, three-ABI matrix, N1–N8)
 was changed in v4.2, v4.3, v4.4, v4.5, v4.6, v4.7, v4.8 or v4.9.
+
+## v4.36 — the desktop round: Linux & Windows output, same look & size (2026-11-06)
+
+Owner decree: «حالا میخوام با همین ضاهر و اندازه برای لینوکس و ویندوز هم خروجی
+بگیرم ببین چه کدهایی کم داره و چیکار باید کرد هرکاری لازمه انجام بده بدون اینکه
+در عملکرد نسخه اندروید اختلالی ایجاد بشه». Delivered with **zero frozen-pin
+changes** and **zero disturbance to the Android legs** (their matrix, commands
+and artifacts are byte-identical; the desktop legs are purely additive):
+
+* **`desktop-native` (ubuntu + windows matrix)** — host-target builds of the
+  same pins via `scripts/build_native_desktop.sh`: aether cdylib
+  (`libaether.so` / `aether.dll`), zeptun shared ReleaseFast
+  (`libzeptun.so` / `zeptun.dll`) + the pinned `wintun.dll` adapter on
+  Windows, lyrebird and psiphon-tunnel-core at their pins (the git path).
+* **`desktop-bundle` (per-OS)** — `flutter build linux/windows --release`
+  with the engines staged into the bundle; the runner opens the SAME
+  402x874 phone frame the Android app renders (the design package's own
+  frame). Artifacts: `aethone-linux-x86_64-r<N>.tar.gz`,
+  `aethone-windows-x86_64-r<N>.zip` (+ SHA256SUMS + BUILD_INFO).
+* **`desktop-smoke`** — untars the REAL linux artifact and boots it under
+  Xvfb: the process must stay alive, the bounded core-log capture must
+  install, and every bundled library must resolve (`ldd`).
+* **Runner glue** — `desktop_shared/desktop_engine.{h,cpp}` (the Kotlin
+  twin) + `linux/runner/engine_channel_linux.cc` (FlMethodChannel) +
+  `windows/runner/engine_channel_windows.cpp` (flutter::MethodChannel).
+  The Dart `PlatformEngineAdapter` runs UNCHANGED; a real desktop app marks
+  itself `AETHONE_DESKTOP_ENGINE=1` before the engine starts, so the linux
+  TEST hosts keep the legacy `engineNotWired` path (all 234 tests green,
+  the v4.26 resume suite semantics intact — proven locally before push).
+* **Honest platform limits, documented not hidden**: Linux tunnel mode needs
+  root (CAP_NET_ADMIN; the app surfaces zeptun's permission error verbatim),
+  proxy mode runs unprivileged; on Windows the `-only` family tunnel legs are
+  refused up-front (`platformLimit`) — every other mode tunnels through the
+  WARP-exclude route; the Windows exe ships `requireAdministrator` (Wintun
+  adapter + strict-route WFP need elevation).
+* Local validation before push: `flutter analyze` clean, 234/234 tests green,
+  both runners compile+link into real bundles, `ldd` clean, native engines
+  built at the frozen pins with all proofs; the boot smoke reaches the
+  flutter engine's EGL step identically to a stock app (sandbox mesa limit —
+  the hosted runners carry a real mesa).
 
 ## v4.9 — android-apk job: first installable APK, UI step 1 scope (2026-11-02)
 

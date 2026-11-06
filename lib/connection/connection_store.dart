@@ -57,11 +57,23 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   ///  1. PREVIEW_MODE (debug CI builds only) → the honest simulator;
   ///  2. Android → the REAL platform adapter (embedded Aether via FFI +
   ///     zeptun via the VpnService JNI bridge);
-  ///  3. everything else (desktop, tests, web) → fails honestly with
+  ///  3. v4.36 (desktop round): a REAL Linux or Windows APP engages the SAME
+  ///     adapter — its runner implements the identical `aethone/engine`
+  ///     channel surface in C++ and marks the process with the
+  ///     AETHONE_DESKTOP_ENGINE=1 environment flag (set before the engine
+  ///     starts). The flag keeps the TEST hosts (which run on Linux too but
+  ///     never set it) on the old honest engineNotWired path, so the v4.26
+  ///     resume-window suite keeps its exact semantics. The Android branch
+  ///     is byte-identical to before;
+  ///  4. everything else (other desktops, tests, web) → fails honestly with
   ///     `engineNotWired` instead of ever pretending to be connected.
+  static bool get _desktopAppEngaged =>
+      (Platform.isLinux || Platform.isWindows) &&
+      Platform.environment['AETHONE_DESKTOP_ENGINE'] == '1';
+
   static EngineAdapter _defaultEngine(SmartScorecard scorecard) {
     if (PreviewEngineAdapter.allowed) return PreviewEngineAdapter();
-    if (!kIsWeb && Platform.isAndroid) {
+    if (!kIsWeb && (Platform.isAndroid || _desktopAppEngaged)) {
       return PlatformEngineAdapter(scorecard: scorecard);
     }
     return EngineNotWiredAdapter();

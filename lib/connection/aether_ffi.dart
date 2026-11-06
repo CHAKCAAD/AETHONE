@@ -21,6 +21,7 @@ library;
 
 import 'dart:convert';
 import 'dart:ffi';
+import 'dart:io' show Platform;
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
@@ -78,19 +79,27 @@ class AetherCore implements AetherCoreApi {
 
   static AetherCore? _instance;
 
+  /// The embedded core's file name on THIS platform (v4.36 desktop round):
+  /// Android and Linux both load `libaether.so` (the Android name stays
+  /// byte-identical — the desktop change must never disturb it); Windows
+  /// cdylibs are named `aether.dll` by cargo.
+  static String get _libraryName =>
+      Platform.isWindows ? 'aether.dll' : 'libaether.so';
+
   /// Opens (or returns the already-open) embedded core. Throws
-  /// [AetherFfiException] with code `libraryMissing` when `libaether.so` is
+  /// [AetherFfiException] with code `libraryMissing` when the cdylib is
   /// not packaged in this build.
   static AetherCore open() {
     final existing = _instance;
     if (existing != null) return existing;
+    final name = _libraryName;
     final DynamicLibrary lib;
     try {
-      lib = DynamicLibrary.open('libaether.so');
+      lib = DynamicLibrary.open(name);
     } catch (e) {
       throw AetherFfiException(
         'libraryMissing',
-        'libaether.so could not be opened (is the native core packaged in '
+        '$name could not be opened (is the native core packaged in '
         'this build?): $e',
       );
     }

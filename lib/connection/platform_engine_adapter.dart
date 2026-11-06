@@ -90,6 +90,8 @@ class AetherArguments {
     CoreSettings? core,
     required String filesDir,
     required String nativeLibraryDir,
+    String? lyrebirdPath,
+    String? psiphonPath,
   }) {
     final overlay = chain;
     final modeId = effectiveMode(protocol, overlay);
@@ -142,6 +144,10 @@ class AetherArguments {
     // reports over the PT protocol, so an over-claim costs one failed
     // bridge, never a fake exit.
     if (overlay != null && overlay.isTor) {
+      // v4.36 — the desktop runners resolve the binary's own name
+      // (lyrebird / lyrebird.exe beside the executable); Android keeps the
+      // jniLibs name verbatim (liblyrebird.so, extractNativeLibs).
+      final lyrebird = lyrebirdPath ?? '$nativeLibraryDir/liblyrebird.so';
       for (final pt in const [
         'obfs4',
         'snowflake',
@@ -150,7 +156,7 @@ class AetherArguments {
         'obfs3',
         'scramblesuit',
       ]) {
-        args.addAll(['--tor-pt', '$pt=$nativeLibraryDir/liblyrebird.so']);
+        args.addAll(['--tor-pt', '$pt=$lyrebird']);
       }
       // Explicit (not the warp.toml-sibling default) so tests + logs read
       // the same path the core uses.
@@ -166,8 +172,11 @@ class AetherArguments {
     // client; fixed in v4.19 (owner device test: «از کارکرد تور و سایفون
     // مطمن نیستم»).
     if (overlay != null && overlay.isPsiphon) {
+      // v4.36 — same desktop resolution as the tor PT above; Android keeps
+      // libpsiphon.so verbatim.
+      final psiphon = psiphonPath ?? '$nativeLibraryDir/libpsiphon.so';
       args.addAll([
-        '--psiphon-bin', '$nativeLibraryDir/libpsiphon.so',
+        '--psiphon-bin', psiphon,
         '--psiphon-dir', '$filesDir/aether/psiphon',
       ]);
     }
@@ -1038,6 +1047,27 @@ class PlatformEngineAdapter implements EngineAdapter {
     _activeMode = config.connectionMode;
     _activePort = mode.socksEndpoint.port + portOffset;
 
+    // v4.36 — the honest Windows desktop limit (documented, not hidden):
+    // the `-only` family modes (tor-only / psiphon-only) dial the internet
+    // DIRECTLY — no WARP carrier to ride on — and zeptun's Windows routing
+    // cannot exempt the app's own unmarked sockets from the TUN default
+    // route the way Android's VpnService exempts the app uid (and Linux the
+    // exclude_uid rule does): the tunnel would loop back into itself. The
+    // walk fails BEFORE starting anything; the same family keeps working
+    // through those cores in proxy mode, and every other mode (plain WARP
+    // legs + the chain families, whose inner legs ride the WARP carrier)
+    // tunnels fine on Windows.
+    if (tunnel &&
+        Platform.isWindows &&
+        (overlay == ProtocolId.torOnly || overlay == ProtocolId.psiphonOnly)) {
+      fail(
+        'platformLimit',
+        'the whole-device tunnel for this family needs a direct internet '
+        'leg the Windows routing cannot exempt yet — use proxy mode for it',
+      );
+      return false;
+    }
+
     // v4.21 — bind-race guard: after a previous session, wait until its
     // SOCKS port actually refuses connections before the new coreStart
     // (the old job's abort is asynchronous on the Rust runtime).
@@ -1209,6 +1239,8 @@ class PlatformEngineAdapter implements EngineAdapter {
         core: effectiveCore,
         filesDir: paths.filesDir,
         nativeLibraryDir: paths.nativeLibraryDir,
+        lyrebirdPath: paths.lyrebirdPath,
+        psiphonPath: paths.psiphonPath,
       ),
     );
     // v4.26 — record the job id on the PROCESS side (Kotlin companion):
@@ -1648,6 +1680,8 @@ class PlatformEngineAdapter implements EngineAdapter {
     return _PlatformPaths(
       filesDir: raw['filesDir'] as String? ?? '',
       nativeLibraryDir: raw['nativeLibraryDir'] as String? ?? '',
+      lyrebirdPath: raw['lyrebirdPath'] as String?,
+      psiphonPath: raw['psiphonPath'] as String?,
     );
   }
 
@@ -2069,7 +2103,15 @@ class PlatformEngineAdapter implements EngineAdapter {
   ///  * the durable job id is adopted so the resumed session's disconnect
   ///    actually cancels the core (see [_adoptDurableJob]).
   Future<void> _resyncAfterRestart({bool force = false}) async {
-    if (!Platform.isAndroid && !force) return;
+    // v4.36 — a REAL desktop app (its runner sets the
+    // AETHONE_DESKTOP_ENGINE=1 env flag before the engine starts) answers
+    // the same `aethone/engine` surface, so the honest resume runs there
+    // too. The TEST hosts never set the flag, keeping the v4.26
+    // resume-window suite's semantics exactly as shipped. Android untouched.
+    final desktop =
+        (Platform.isLinux || Platform.isWindows) &&
+        Platform.environment['AETHONE_DESKTOP_ENGINE'] == '1';
+    if (!Platform.isAndroid && !desktop && !force) return;
     // v4.21 — never race a user-initiated walk: bind() can fire while an
     // activity recreation spins up a fresh engine, and a zombie probe here
     // used to stop the LIVE session's VPN service mid-walk.
@@ -2170,10 +2212,21 @@ class PlatformEngineAdapter implements EngineAdapter {
 }
 
 class _PlatformPaths {
-  const _PlatformPaths({required this.filesDir, required this.nativeLibraryDir});
+  const _PlatformPaths({
+    required this.filesDir,
+    required this.nativeLibraryDir,
+    this.lyrebirdPath,
+    this.psiphonPath,
+  });
 
   final String filesDir;
   final String nativeLibraryDir;
+
+  /// v4.36 — optional platform-resolved child-core paths (null on Android:
+  /// the Kotlin channel answers only the two legacy fields, so the Android
+  /// arg strings stay exactly as before).
+  final String? lyrebirdPath;
+  final String? psiphonPath;
 }
 
 /// v4.34 — a connected candidate of the SMART tour: which tile ran, which

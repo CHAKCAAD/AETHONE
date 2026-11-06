@@ -16,6 +16,9 @@ pin was altered.**
 | `evidence/transfer/` | THIS transfer's evidence: security scan report, vendored archive hashes, excluded-fonts license record, scanner tool, SHA256 manifest | Transfer v4.4 |
 | `design/` | Client design package: app icons, app icon library, protocol icons, 266 flag SVGs + mapping guide, background pattern, page references (home / speed test / settings / onboarding) | Client design package |
 | `native/` | Exact `git archive` exports of the three native components at their frozen pins (see below) | Frozen pins (N1/N8) |
+| `linux/`, `windows/` | v4.36 desktop runners (Flutter `flutter create` templates + the `aethone/engine` channel glue + the 402x874 phone-frame window) | New (v4.36) |
+| `desktop_shared/` | v4.36 platform-independent engine layer (the Kotlin twin): paths, zeptun TOML, bounded core-log capture, tunnel lifecycle — shared by both desktop runners | New (v4.36) |
+| `scripts/build_native_desktop.sh` | Host-target builds of the SAME frozen pins for Linux/Windows (aether cdylib, zeptun shared, lyrebird, psiphon; wintun.dll on Windows) | New (v4.36) |
 | `rust-toolchain.toml` | Rust toolchain pin for this repository | CI package v4.4 |
 | `README.md` | CI package v4.4 README (bundle description + version history) | CI package v4.4 |
 | `.gitignore` | Flutter/Android/secrets ignores (anchored; machine-verified to match nothing on this branch) | New (transfer v4.4) |
@@ -84,3 +87,21 @@ AETHONE pin target (N1 decision — recorded deviation from Aether's own
 ثبت شده است؛ انتقال آن بر عهدهٔ مالک پروژه است. هیچ Secret یا
 Keystore‌ای منتقل نشده (اسکن ماشینی در `evidence/transfer/`). تنها همین
 شاخه Push می‌شود و هیچ Merge به main انجام نمی‌شود.
+
+
+## v4.36 — دسکتاپ (لینوکس و ویندوز)
+
+خروجی دسکتاپ با **همان ظاهر و اندازه** نسخه اندروید (پنجره ۴۰۲×۸۷۴، همان
+پکیج طراحی) و **بدون هیچ اختلالی در اندروید** اضافه شد:
+
+* `desktop_shared/desktop_engine.{h,cpp}` — دوقلوی C++ِ همان لایه کاتلین
+  (paths / prepareVpn / startVpn / vpnStatus / zeptunCounters / coreJob /
+  readCoreLog)؛ کانال `aethone/engine` در هر دو رانر با همین سطح پیاده شده
+  تا `PlatformEngineAdapter` دارت **بدون تغییر** اجرا شود.
+* اپ دسکتاپ واقعی خودش را با متغیر محیطی `AETHONE_DESKTOP_ENGINE=1` علامت
+  می‌زند (پیش از استارت موتور)؛ میزبان‌های تست هرگز این متغیر را نمی‌گذارند
+  پس مسیر legacy (engineNotWired) و تمام ۲۳۴ تست دقیقاً مثل قبل سبز می‌مانند.
+* رانر لینوکس: تونل کامل با `exclude_uid` (خود اپ از تونل مستثنا)؛ رانر
+  ویندوز: مسیر `exclude` استخرهای WARP (پروتکل‌های `-only` در ویندوز با
+  کد صادقانه `platformLimit` رد می‌شوند). تونل لینوکس به root نیاز دارد —
+  خطای zeptun عیناً به کاربر نشان داده می‌شود.

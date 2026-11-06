@@ -21,6 +21,36 @@
 # every Actions pin: evidence/actions_pins_raw_evidence.txt (v3).
 # actionlint 1.7.7 exit 0 on THIS exact file: evidence/validation_log.txt (v4).
 #
+# v4.36 changes (2026-11-06) — THE DESKTOP ROUND (owner decree: «حالا میخوام
+#   با همین ضاهر و اندازه برای لینوکس و ویندوز هم خروجی بگیریم»), same
+#   look & size (402x874 — the design package's own phone frame), ZERO
+#   Android disturbance (env-flag gated; Android args byte-identical):
+#   * New jobs desktop-native (ubuntu + windows matrix, host-target builds
+#     at the SAME frozen pins via scripts/build_native_desktop.sh — no NDK,
+#     no cargo-ndk: aether cdylib [libaether.so / aether.dll], zeptun
+#     ReleaseFast shared [libzeptun.so / zeptun.dll + the pinned wintun.dll
+#     adapter], lyrebird + psiphon-tunnel-core at their pins).
+#   * New jobs desktop-bundle (per-OS): flutter build linux/windows
+#     --release with the engines staged INTO the bundle (linux: bundle/lib
+#     + bundle-root child cores; windows: beside aethone.exe), dist
+#     tar.gz/zip + SHA256SUMS + BUILD_INFO.
+#   * New job desktop-smoke (ubuntu): xvfb boot of the REAL bundle — the
+#     process must stay alive, the bounded core-log capture must install,
+#     ldd must resolve every bundled library.
+#   * Runner glue: desktop_shared/desktop_engine.{h,cpp} (the Kotlin twin —
+#     paths/prepareVpn/startVpn/stopVpn/vpnStatus/zeptunCounters/coreJob/
+#     coreLog) + linux/runner/engine_channel_linux.cc (FlMethodChannel) +
+#     windows/runner/engine_channel_windows.cpp (flutter::MethodChannel).
+#     The Dart adapter runs UNCHANGED; a real desktop app marks itself
+#     with AETHONE_DESKTOP_ENGINE=1 (set by the runners before the engine
+#     starts) so the LINUX TEST HOSTS keep the legacy engineNotWired path
+#     (all 234 tests stay green, v4.26 resume suite semantics intact).
+#   * Honest platform limits, documented not hidden: Linux tunnel mode
+#     needs root (CAP_NET_ADMIN for /dev/net/tun — the app surfaces
+#     zeptun's permission error verbatim); Windows `-only` family tunnel
+#     legs are refused up-front on the Dart side (fail code platformLimit)
+#     — the WARP-exclude route covers every other mode.
+#
 # v4.18 changes (2026-11-03) — M2 ENGINE WIRING (cores -> UI), NO frozen pin
 #   changed (N1/N8 untouched; the same source trees build the same binaries):
 #   * build_native.sh v5 exports the Aether CDYLIB too
@@ -323,6 +353,9 @@ env:
   GO_VERSION:        "1.26.3"     # fork go.mod: `toolchain go1.26.3`; GOTOOLCHAIN=local forbids silent switches
   ZIG_VERSION:       "0.16.0"     # zeptun 1.1.3 requirement (README: "Zig 0.16.0 is the only requirement")
   ZIG_SHA256_X86_64: 70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+  # v4.36 desktop round — the same Zig pin for the WINDOWS runner (zip form);
+  # sha256 computed from the artifact at download time (ziglang.org, 2026-11-06).
+  ZIG_SHA256_X86_64_WINDOWS: 68659eb5f1e4eb1437a722f1dd889c5a322c9954607f5edcf337bc3684a75a7e
   # NDK r26d is pinned as TWO forms of the SAME frozen version (N8 — NO version change):
   #   NDK_VERSION      = release identifier -> the ONLY valid form for nttld/setup-ndk's
   #                      `ndk-version` input: its pinned getDownloadUrl() builds
@@ -1984,9 +2017,375 @@ jobs:
   # CI results and real-device results stay SEPARATE (decision N2).
   # v4.28: the new apk-smoke leg joins the needs list (11 legs total).
   # =========================================================================
+  # =========================================================================
+  # v4.36 — Job desktop-native: HOST-target builds of the SAME frozen pins
+  # for the desktop round (owner: «حالا میخوام با همین ضاهر و اندازه برای
+  # لینوکس و ویندوز هم خروجی بگیریم»). NO NDK, NO cargo-ndk — the same
+  # sources build host libraries through scripts/build_native_desktop.sh:
+  #   * aether cdylib (in-process C API) — libaether.so / aether.dll;
+  #   * zeptun shared ReleaseFast — libzeptun.so / zeptun.dll (the FFI layer
+  #     the desktop runners drive through native/zeptun/include/zeptun.h) +
+  #     the pinned wintun.dll adapter on Windows (vendored at the pin);
+  #   * lyrebird + psiphon-tunnel-core at their pins (the git path —
+  #     gitlab.torproject.org is reachable from the hosted runners; the
+  #     run-#59 android legs prove the same pt-build.sh flow).
+  # The Android legs are untouched (their matrix, pins and commands are
+  # byte-identical to before) — the desktop legs are purely additive.
+  # =========================================================================
+  desktop-native:
+    name: "Desktop native (${{ matrix.os }}-x86_64)"
+    runs-on: ${{ matrix.os == 'linux' && 'ubuntu-latest' || 'windows-latest' }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [linux, windows]
+    env:
+      SRC_CACHE: ${{ github.workspace }}/.srccache
+      OUT_DIR: ${{ github.workspace }}/out/desktop-${{ matrix.os }}-x86_64
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Restore source caches (frozen SHAs)
+        uses: actions/cache@0057852bfaa89a56745cba7c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ env.SRC_CACHE }}
+          key: srccache-${{ env.AETHER_SHA }}-${{ env.ZEPTUN_SHA }}-${{ env.PSIPHON_FORK_SHA }}
+
+      - name: Install Rust toolchain (exact pin — host target)
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # branch stable @ 2026-10-31
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Install Go toolchain (exact pin)
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install Zig toolchain (Linux — exact pin + sha256, tar.xz)
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIG_PREFIX="$RUNNER_TEMP/.tools/zig"
+          url="https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
+          curl -fsSL "$url" -o /tmp/zig.tar.xz
+          echo "${ZIG_SHA256_X86_64}  /tmp/zig.tar.xz" | sha256sum -c -
+          rm -rf "$ZIG_PREFIX" && mkdir -p "$ZIG_PREFIX"
+          tar -xJf /tmp/zig.tar.xz -C "$ZIG_PREFIX" --strip-components=1
+          "$ZIG_PREFIX/zig" version
+
+      - name: Install Zig toolchain (Windows — exact pin + sha256, zip)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $prefix = "$env:RUNNER_TEMP/.tools/zig"
+          $url = "https://ziglang.org/download/$env:ZIG_VERSION/zig-x86_64-windows-$env:ZIG_VERSION.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP/zig.zip"
+          $hash = (Get-FileHash "$env:RUNNER_TEMP/zig.zip" -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:ZIG_SHA256_X86_64_WINDOWS) {
+            Write-Host "::error::zig zip sha256 mismatch: $hash"
+            exit 1
+          }
+          if (Test-Path $prefix) { Remove-Item -Recurse -Force $prefix }
+          Expand-Archive "$env:RUNNER_TEMP/zig.zip" -DestinationPath "$env:RUNNER_TEMP/.tools"
+          # the zip carries one top-level zig-*/ dir — flatten it
+          Get-ChildItem "$env:RUNNER_TEMP/.tools" -Directory -Filter "zig-*" |
+            ForEach-Object { Get-ChildItem $_ | Move-Item -Destination $prefix }
+          & "$prefix/zig.exe" version
+
+      - name: Build all desktop native components (${{ matrix.os }})
+        shell: bash
+        env:
+          # git-bash needs the explicit .exe suffix for the -x test in the script
+          ZIG: ${{ runner.temp }}/.tools/zig/zig${{ matrix.os == 'windows' && '.exe' || '' }}
+        run: |
+          set -euo pipefail
+          bash scripts/build_native_desktop.sh \
+            --os "${{ matrix.os }}" \
+            --src-cache "$SRC_CACHE" \
+            --out "$OUT_DIR"
+
+      - name: Upload native artifacts (desktop)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-desktop-${{ matrix.os }}-x86_64
+          path: ${{ env.OUT_DIR }}
+          if-no-files-found: warn
+
+      - name: Record leg status (real result, uploaded even on failure)
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p status
+          {
+            echo "job=desktop-native"
+            echo "status=${{ job.status }}"
+            echo "run_id=${{ github.run_id }}"
+            echo "os=${{ matrix.os }}"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > status/build-status-desktop-native-${{ matrix.os }}.txt
+          cat status/build-status-desktop-native-${{ matrix.os }}.txt
+
+      - name: Upload leg status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: build-status-desktop-native-${{ matrix.os }}
+          path: status/build-status-desktop-native-${{ matrix.os }}.txt
+          if-no-files-found: error
+
+  # =========================================================================
+  # v4.36 — Job desktop-bundle: the Linux and Windows APP bundles (same
+  # look & size: the runner opens the 402x874 window the Android app
+  # renders — the design package's own phone frame). The engines are
+  # staged INTO the bundle exactly where desktop_shared/desktop_engine.cpp
+  # (Paths()) resolves them:
+  #   * Linux   bundle/lib/{libaether.so,libzeptun.so} + bundle-root
+  #              lyrebird/psiphon child cores;
+  #   * Windows aether.dll/zeptun.dll/wintun.dll/lyrebird.exe/psiphon.exe
+  #              beside aethone.exe.
+  # =========================================================================
+  desktop-bundle:
+    name: "Desktop bundle (${{ matrix.os }})"
+    needs: [flutter-ui, desktop-native]
+    runs-on: ${{ matrix.os == 'linux' && 'ubuntu-latest' || 'windows-latest' }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [linux, windows]
+    env:
+      FLUTTER_VERSION: "3.47.9"
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install Linux desktop prerequisites (GTK headers)
+        if: matrix.os == 'linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q libgtk-3-dev ninja-build
+
+      - name: Install Flutter (exact pin)
+        uses: subosito/flutter-action@e938fdf56512cc96ef2f93601a5a40bde3801046 # v2.19.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Toolchain proof (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter --version
+          actual="$(flutter --version | awk '/^Flutter /{print $2}')"
+          [ "$actual" = "$FLUTTER_VERSION" ] || { echo "::error::flutter $actual != pinned $FLUTTER_VERSION"; exit 1; }
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Download desktop native artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: native-out
+          pattern: native-desktop-*
+
+      - name: Stage engines + build the Linux bundle
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="native-out/native-desktop-linux-x86_64"
+          [ -d "$SRC" ] || { echo "::error::linux desktop native artifact missing"; exit 1; }
+          flutter build linux --release
+          B="build/linux/x64/release/bundle"
+          for f in aether/libaether.so zeptun/libzeptun.so aether/pt/lyrebird aether/pt/psiphon-tunnel-core; do
+            [ -f "$SRC/$f" ] || { echo "::error::$f missing from the desktop native artifact"; exit 1; }
+          done
+          cp "$SRC/aether/libaether.so"            "$B/lib/libaether.so"
+          cp "$SRC/zeptun/libzeptun.so"            "$B/lib/libzeptun.so"
+          cp "$SRC/aether/pt/lyrebird"             "$B/lyrebird";  chmod +x "$B/lyrebird"
+          cp "$SRC/aether/pt/psiphon-tunnel-core"  "$B/psiphon";   chmod +x "$B/psiphon"
+          echo "staged linux bundle:"; find "$B" -maxdepth 2 -type f -printf '%p  %s bytes\n' | sort
+          ldd "$B/lib/libaether.so" | tee /tmp/ldd-aether.txt
+          ldd "$B/lib/libzeptun.so" | tee /tmp/ldd-zeptun.txt
+          ! grep -q "not found" /tmp/ldd-aether.txt /tmp/ldd-zeptun.txt || { echo "::error::unresolved library deps"; exit 1; }
+
+      - name: Stage engines + build the Windows bundle
+        if: matrix.os == 'windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="native-out/native-desktop-windows-x86_64"
+          [ -d "$SRC" ] || { echo "::error::windows desktop native artifact missing"; exit 1; }
+          flutter build windows --release
+          B="build/windows/x64/Release/Runner"
+          for f in aether/aether.dll zeptun/zeptun.dll zeptun/wintun.dll aether/pt/lyrebird.exe aether/pt/psiphon-tunnel-core.exe; do
+            [ -f "$SRC/$f" ] || { echo "::error::$f missing from the desktop native artifact"; exit 1; }
+          done
+          cp "$SRC/aether/aether.dll"                   "$B/aether.dll"
+          cp "$SRC/zeptun/zeptun.dll"                   "$B/zeptun.dll"
+          cp "$SRC/zeptun/wintun.dll"                   "$B/wintun.dll"
+          cp "$SRC/zeptun/wintun-LICENSE.txt"           "$B/wintun-LICENSE.txt"
+          cp "$SRC/aether/pt/lyrebird.exe"              "$B/lyrebird.exe"
+          cp "$SRC/aether/pt/psiphon-tunnel-core.exe"   "$B/psiphon.exe"
+          echo "staged windows bundle:"; find "$B" -maxdepth 2 -type f -printf '%p  %s bytes\n' | sort
+
+      - name: Dist naming + sha256 manifest (Linux)
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          tar -czf "dist/aethone-linux-x86_64-r${{ github.run_number }}.tar.gz" -C build/linux/x64/release bundle
+          {
+            echo "run_id=${{ github.run_id }}"
+            echo "commit=${{ github.sha }}"
+            echo "flutter=${FLUTTER_VERSION}"
+            echo "scope=v4.36 DESKTOP BETA (owner round 12): Linux x86_64 app bundle, same look & size as Android (402x874 window), engines embedded (bundle/lib/libaether.so + libzeptun.so; lyrebird + psiphon child cores at the bundle root). Real connect path: Aether in-process via C API (aether_core_start) driven by desktop_shared/desktop_engine + linux/runner/engine_channel_linux.cc on the SAME aethone/engine channel surface; the app marks itself AETHONE_DESKTOP_ENGINE=1. Tunnel mode needs root on Linux (honest zeptun permission error otherwise); proxy mode runs unprivileged."
+            echo "native_pins=$(python3 -c \"import json;m=json.load(open('native-out/native-desktop-linux-x86_64/manifest.json'));print('aether@'+m['pins']['aether'],'zeptun@'+m['pins']['zeptun'])\")"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > dist/BUILD_INFO.txt
+          sha256sum dist/*.tar.gz | tee dist/SHA256SUMS.txt
+
+      - name: Dist naming + sha256 manifest (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $B = "build/windows/x64/Release/Runner"
+          Compress-Archive -Path "$B/*" -DestinationPath "dist/aethone-windows-x86_64-r${{ github.run_number }}.zip" -Force
+          $pins = Get-Content native-out/native-desktop-windows-x86_64/manifest.json | ConvertFrom-Json
+          "run_id=${{ github.run_id }}" | Set-Content dist/BUILD_INFO.txt
+          "commit=${{ github.sha }}" | Add-Content dist/BUILD_INFO.txt
+          "flutter=${{ env.FLUTTER_VERSION }}" | Add-Content dist/BUILD_INFO.txt
+          "scope=v4.36 DESKTOP BETA (owner round 12): Windows x86_64 app bundle, same look & size as Android (402x874 window), engines embedded beside aethone.exe (aether.dll + zeptun.dll + the pinned wintun.dll adapter + lyrebird.exe + psiphon.exe). The exe manifest ships requireAdministrator (Wintun adapter + strict-route WFP need elevation). The -only family tunnel legs are refused up-front (platformLimit) - every other mode tunnels through the WARP-exclude route." | Add-Content dist/BUILD_INFO.txt
+          "native_pins=aether@$($pins.pins.aether) zeptun@$($pins.pins.zeptun)" | Add-Content dist/BUILD_INFO.txt
+          "recorded_at=$(Get-Date -AsUTC -Format 'yyyy-MM-ddTHH:mm:ssZ')" | Add-Content dist/BUILD_INFO.txt
+          Get-FileHash dist/*.zip -Algorithm SHA256 | ForEach-Object { "{0}  {1}" -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } | Set-Content dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt
+
+      - name: Upload desktop bundle artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aethone-desktop-r${{ github.run_number }}-${{ matrix.os }}
+          path: dist/
+          if-no-files-found: error
+
+      - name: Record bundle status (real result, uploaded even on failure)
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p status
+          {
+            echo "job=desktop-bundle"
+            echo "status=${{ job.status }}"
+            echo "run_id=${{ github.run_id }}"
+            echo "os=${{ matrix.os }}"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > status/build-status-desktop-bundle-${{ matrix.os }}.txt
+          cat status/build-status-desktop-bundle-${{ matrix.os }}.txt
+
+      - name: Upload bundle status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: build-status-desktop-bundle-${{ matrix.os }}
+          path: status/build-status-desktop-bundle-${{ matrix.os }}.txt
+          if-no-files-found: error
+
+  # =========================================================================
+  # v4.36 — Job desktop-smoke: the BUNDLE-level gate for the desktop round
+  # (the apk-smoke twin). Install nothing — untar the REAL artifact, boot it
+  # under Xvfb, and require: (1) the process stays alive; (2) the bounded
+  # core-log capture installed (<XDG_DATA_HOME>/aethone/logs/core-log.txt
+  # exists with the session header); (3) every bundled library resolves.
+  # The hosted ubuntu image carries a real mesa/EGL (works under Xvfb —
+  # proven by the stock-app control that isolated the analysis sandbox).
+  # =========================================================================
+  desktop-smoke:
+    name: "Desktop smoke (linux bundle under Xvfb)"
+    needs: desktop-bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Download the linux bundle artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: smoke
+          name: aethone-desktop-r${{ github.run_number }}-linux
+
+      - name: Install Xvfb + runtime prerequisites
+        run: sudo apt-get update -q && sudo apt-get install -y -q xvfb libegl1
+
+      - name: Boot the bundle under Xvfb (fail-closed assertions)
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -xzf smoke/aethone-linux-x86_64-*.tar.gz -C /tmp
+          B="/tmp/bundle"
+          [ -x "$B/aethone" ] || { echo "::error::bundle/aethone missing"; exit 1; }
+          export XDG_DATA_HOME=/tmp/aethone-smoke-data
+          rm -rf "$XDG_DATA_HOME"; mkdir -p "$XDG_DATA_HOME"
+          Xvfb :77 -screen 0 402x874x24 -nolisten tcp >/dev/null 2>&1 &
+          XVFB=$!
+          sleep 2
+          kill -0 $XVFB || { echo "::error::Xvfb failed to start"; exit 1; }
+          DISPLAY=:77 timeout 25 "$B/aethone" >/tmp/smoke.out 2>/tmp/smoke.err &
+          APP=$!
+          sleep 12
+          if ! kill -0 $APP 2>/dev/null; then
+            echo "::error::the desktop app died within 12 s"
+            echo "--- stderr ---"; head -c 2000 /tmp/smoke.err || true
+            echo "--- stdout ---"; head -c 1000 /tmp/smoke.out || true
+            exit 1
+          fi
+          LOG="$XDG_DATA_HOME/aethone/logs/core-log.txt"
+          [ -f "$LOG" ] || { echo "::error::core-log capture did not install"; exit 1; }
+          grep -q "AETHONE session" "$LOG" || { echo "::error::session header missing from the capture"; exit 1; }
+          for lib in libaether.so libzeptun.so; do
+            if ldd "$B/lib/$lib" 2>/dev/null | grep -q "not found"; then
+              echo "::error::unresolved dependency in $lib"; ldd "$B/lib/$lib"; exit 1
+            fi
+          done
+          echo "desktop smoke PASS: app alive, capture installed, libs resolve"
+          kill $APP $XVFB 2>/dev/null || true
+
+      - name: Record smoke status (real result, uploaded even on failure)
+        if: always()
+        run: |
+          mkdir -p status
+          {
+            echo "job=desktop-smoke"
+            echo "status=${{ job.status }}"
+            echo "run_id=${{ github.run_id }}"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > status/build-status-desktop-smoke.txt
+          cat status/build-status-desktop-smoke.txt
+
+      - name: Upload smoke status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: build-status-desktop-smoke
+          path: status/build-status-desktop-smoke.txt
+          if-no-files-found: error
+
   status-summary:
     name: Status summary (real CI results vs NOT TESTED)
-    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui, android-apk, apk-smoke]
+    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui, android-apk, apk-smoke, desktop-native, desktop-bundle, desktop-smoke]
     if: always()
     runs-on: ubuntu-latest
     steps:
