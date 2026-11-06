@@ -2114,7 +2114,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: native-desktop-${{ matrix.os }}-x86_64
+          name: desktop-native-${{ matrix.os }}-x86_64
           path: ${{ env.OUT_DIR }}
           if-no-files-found: warn
 
@@ -2194,14 +2194,14 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: native-out
-          pattern: native-desktop-*
+          pattern: desktop-native-*
 
       - name: Stage engines + build the Linux bundle
         if: matrix.os == 'linux'
         shell: bash
         run: |
           set -euo pipefail
-          SRC="native-out/native-desktop-linux-x86_64"
+          SRC="native-out/desktop-native-linux-x86_64"
           [ -d "$SRC" ] || { echo "::error::linux desktop native artifact missing"; exit 1; }
           flutter build linux --release
           B="build/linux/x64/release/bundle"
@@ -2222,7 +2222,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SRC="native-out/native-desktop-windows-x86_64"
+          SRC="native-out/desktop-native-windows-x86_64"
           [ -d "$SRC" ] || { echo "::error::windows desktop native artifact missing"; exit 1; }
           flutter build windows --release
           B="build/windows/x64/Release/Runner"
@@ -2249,7 +2249,7 @@ jobs:
             echo "commit=${{ github.sha }}"
             echo "flutter=${FLUTTER_VERSION}"
             echo "scope=v4.36 DESKTOP BETA (owner round 12): Linux x86_64 app bundle, same look & size as Android (402x874 window), engines embedded (bundle/lib/libaether.so + libzeptun.so; lyrebird + psiphon child cores at the bundle root). Real connect path: Aether in-process via C API (aether_core_start) driven by desktop_shared/desktop_engine + linux/runner/engine_channel_linux.cc on the SAME aethone/engine channel surface; the app marks itself AETHONE_DESKTOP_ENGINE=1. Tunnel mode needs root on Linux (honest zeptun permission error otherwise); proxy mode runs unprivileged."
-            echo "native_pins=$(python3 -c \"import json;m=json.load(open('native-out/native-desktop-linux-x86_64/manifest.json'));print('aether@'+m['pins']['aether'],'zeptun@'+m['pins']['zeptun'])\")"
+            echo "native_pins=$(python3 -c \"import json;m=json.load(open('native-out/desktop-native-linux-x86_64/manifest.json'));print('aether@'+m['pins']['aether'],'zeptun@'+m['pins']['zeptun'])\")"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > dist/BUILD_INFO.txt
           sha256sum dist/*.tar.gz | tee dist/SHA256SUMS.txt
@@ -2262,7 +2262,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           $B = "build/windows/x64/Release/Runner"
           Compress-Archive -Path "$B/*" -DestinationPath "dist/aethone-windows-x86_64-r${{ github.run_number }}.zip" -Force
-          $pins = Get-Content native-out/native-desktop-windows-x86_64/manifest.json | ConvertFrom-Json
+          $pins = Get-Content native-out/desktop-native-windows-x86_64/manifest.json | ConvertFrom-Json
           "run_id=${{ github.run_id }}" | Set-Content dist/BUILD_INFO.txt
           "commit=${{ github.sha }}" | Add-Content dist/BUILD_INFO.txt
           "flutter=${{ env.FLUTTER_VERSION }}" | Add-Content dist/BUILD_INFO.txt

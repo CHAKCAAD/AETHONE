@@ -84,10 +84,16 @@ mkdir -p "$SRC_CACHE" "$OUT"
 
 clone_pin() { # repo sha dir
   local repo="$1" sha="$2" dir="$3"
+  # v4.36b: core.autocrlf=false keeps the working tree byte-identical to the
+  # committed blobs (LF). On the git-bash runner the default autocrlf=true
+  # converts pt-build.sh to CRLF, so the patched sha256 check (which pins the
+  # LF content) failed — and bash itself needs LF scripts to run. The android
+  # legs (build_native.sh) stay untouched; on ubuntu the default is already
+  # false.
   if [ ! -d "$dir/.git" ]; then
-    git clone --filter=blob:none "$repo" "$dir"
+    git -c core.autocrlf=false clone --filter=blob:none "$repo" "$dir"
   fi
-  git -C "$dir" checkout "$sha"
+  git -C "$dir" -c core.autocrlf=false checkout "$sha"
   [ "$(git -C "$dir" rev-parse HEAD)" = "$sha" ] || { echo "pin mismatch in $dir" >&2; exit 1; }
 }
 
