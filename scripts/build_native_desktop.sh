@@ -54,6 +54,20 @@ case "$OS" in
 esac
 die() { echo "FATAL: $*" >&2; exit 1; }
 require_file() { [ -f "$1" ] || die "expected build output missing: $1"; }
+# v4.36g: hash via stdin redirect, never by file name. GNU sha256sum prefixes
+# its output line with a '\' escape marker when the FILE NAME contains a
+# backslash — and on the windows runner SRC_CACHE/OUT are D:\… paths
+# (github.workspace), so `sha256sum "$file" | cut -d' ' -f1` returned
+# "\78eb66…" and the pinned-state gate rejected a PRISTINE clone
+# (run 42206207619, byte-dumped from the log: `): \78eb66…`). Hashing the
+# redirect emits NO file name — no escaping possible — and reads the same
+# bytes on every platform. The leading-backslash strip stays as a defensive
+# net for any future named-file call path.
+sha256_of() {
+  local h
+  h=$(sha256sum < "$1" | cut -d' ' -f1)
+  printf '%s' "${h#\\}"
+}
 
 : "${AETHER_REPO:=https://github.com/CluvexStudio/Aether.git}"
 : "${AETHER_SHA:=d58f9d568083129ce2c767c85054021eb3ee6a38}"
@@ -267,7 +281,7 @@ export PT_LYREBIRD_PROOF_FILE
 # remains the mechanism on the Android legs (build_native.sh untouched —
 # ubuntu neither smudges the checkout nor the patch; every android run is
 # green through that path).
-cur_sha=$(sha256sum "$AETHER_SRC/pt-build.sh" | cut -d' ' -f1)
+cur_sha=$(sha256_of "$AETHER_SRC/pt-build.sh")
 if [ "$cur_sha" = "$PT_PATCHED_SHA256" ]; then
   echo "pt-build.sh already carries the pin-hardened patch (cached tree)"
 elif [ "$cur_sha" = "$PT_PRISTINE_SHA256" ]; then
@@ -284,7 +298,7 @@ else
     || die "git show failed to materialize HEAD:scripts/pt-build.patched.sh"
   echo "pt-build.sh: installed from the committed blob (raw bytes, no working tree)"
 fi
-patched_sha=$(sha256sum "$AETHER_SRC/pt-build.sh" | cut -d' ' -f1)
+patched_sha=$(sha256_of "$AETHER_SRC/pt-build.sh")
 [ "$patched_sha" = "$PT_PATCHED_SHA256" ] || die "patched pt-build.sh sha256 mismatch: $patched_sha (the blob materialization did not produce the pinned bytes)"
 (
   cd "$AETHER_SRC"
@@ -357,7 +371,7 @@ zeptun/zeptun.h|zeptun|zeptun-header"
   fi
   echo "$list" | while IFS='|' read -r rel group component; do
     [ -f "$OUT/$rel" ] || { echo "MISSING artifact: $OUT/$rel" >&2; exit 1; }
-    sha=$(sha256sum "$OUT/$rel" | cut -d' ' -f1)
+    sha=$(sha256_of "$OUT/$rel")
     [ $first -eq 1 ] || echo ','
     first=0
     echo "    {\"path\": \"$rel\", \"group\": \"$group\", \"component\": \"$component\", \"sha256\": \"$sha\", \"bytes\": $(wc -c <"$OUT/$rel")}"
