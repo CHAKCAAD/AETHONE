@@ -2229,7 +2229,17 @@ jobs:
           SRC="native-out/desktop-native-windows-x86_64"
           [ -d "$SRC" ] || { echo "::error::windows desktop native artifact missing"; exit 1; }
           flutter build windows --release
-          B="build/windows/x64/Release/Runner"
+          # v4.36l: the flutter tool's own output line is
+          # '√ Built build\windows\x64\runner\Release\aethone.exe' — runner
+          # FIRST, config SECOND. The v4.36 first-flight step had the two
+          # segments swapped (…/Release/Runner) and never noticed: every
+          # earlier run died inside `flutter build windows` itself, before
+          # the first cp (run 42223063873: exe linked clean, then 'cp:
+          # cannot create regular file … No such file or directory').
+          # Fail closed with a listing if the layout ever shifts again.
+          B="build/windows/x64/runner/Release"
+          [ -d "$B" ] || { echo "::error::runner output dir missing: $B"; find build/windows/x64 -maxdepth 3 -type d 2>/dev/null || true; exit 1; }
+          [ -f "$B/aethone.exe" ] || { echo "::error::aethone.exe missing under $B"; exit 1; }
           for f in aether/aether.dll zeptun/zeptun.dll zeptun/wintun.dll aether/pt/lyrebird.exe aether/pt/psiphon-tunnel-core.exe; do
             [ -f "$SRC/$f" ] || { echo "::error::$f missing from the desktop native artifact"; exit 1; }
           done
@@ -2271,7 +2281,10 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          $B = "build/windows/x64/Release/Runner"
+          # v4.36l: same segment-order fix as the staging step — runner/Release,
+          # not Release/Runner (the flutter 3.47 tool's own output line).
+          $B = "build/windows/x64/runner/Release"
+          if (-not (Test-Path "$B/aethone.exe")) { Write-Host "::error::aethone.exe missing under $B"; exit 1 }
           Compress-Archive -Path "$B/*" -DestinationPath "dist/aethone-windows-x86_64-r${{ github.run_number }}.zip" -Force
           $pins = Get-Content native-out/desktop-native-windows-x86_64/manifest.json | ConvertFrom-Json
           "run_id=${{ github.run_id }}" | Set-Content dist/BUILD_INFO.txt
