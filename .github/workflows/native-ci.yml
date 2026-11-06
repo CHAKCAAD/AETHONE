@@ -1517,6 +1517,17 @@ jobs:
       - name: Unit + widget tests
         run: flutter test
 
+      # v4.38 — the psiphon tunnel data-path root cause, as a gate: the
+      # byte-level replay of zeptun's handshake styles against a faithful
+      # port of psiphon-tunnel-core's goptlib accept path (the
+      # socksFlushReadBuffer leftover check that killed every pipelined
+      # flow). Fails if either side of the claim drifts: the pipelined and
+      # optimistic styles MUST be rejected, the strict/sequential style
+      # MUST be served — the exact contract of the `socksStrict` zeptun
+      # TOML lines (psiphonChain/psiphonOnly only).
+      - name: Psiphon SOCKS handshake contract (byte-level proof)
+        run: python3 scripts/psiphon_socks_pipeline_check.py
+
       - name: Record test status (real result, uploaded even on failure)
         if: always()
         run: |
@@ -2259,10 +2270,15 @@ jobs:
           set -euo pipefail
           B="build/linux/x64/release/bundle"
           command -v readelf >/dev/null || { echo "::error::readelf missing"; exit 1; }
-          MUST="aethone lib/libapp.so lib/libflutter_linux_gtk.so lib/libaether.so lib/libzeptun.so lib/libdartjni.so lib/liburl_launcher_linux_plugin.so lyrebird psiphon"
+          MUST="aethone aethone-tunnel-helper lib/libapp.so lib/libflutter_linux_gtk.so lib/libaether.so lib/libzeptun.so lib/libdartjni.so lib/liburl_launcher_linux_plugin.so lyrebird psiphon"
           for f in $MUST; do
             [ -f "$B/$f" ] || { echo "::error::ISA gate: expected bundle ELF missing: $f"; exit 1; }
           done
+          # v4.37 — the privilege helper ships in the bundle root beside its
+          # Polkit action file (installed system-wide on first connect).
+          [ -f "$B/com.chakcaad.aethone.tunnel-helper.policy" ] || { echo "::error::the Polkit action file is missing from the bundle"; exit 1; }
+          [ -x "$B/aethone-tunnel-helper" ] || { echo "::error::aethone-tunnel-helper is not executable in the bundle"; exit 1; }
+          "$B/aethone-tunnel-helper" --version || { echo "::error::aethone-tunnel-helper --version failed"; exit 1; }
           mapfile -t ELFS < <(find "$B" -type f -exec file {} + | grep 'ELF ' | cut -d: -f1 | sort)
           [ "${#ELFS[@]}" -ge 9 ] || { echo "::error::ISA gate: expected at least 9 ELF files, found ${#ELFS[@]}"; exit 1; }
           FAIL=0
@@ -2458,7 +2474,7 @@ jobs:
             echo "run_id=${{ github.run_id }}"
             echo "commit=${{ github.sha }}"
             echo "flutter=${FLUTTER_VERSION}"
-            echo "scope=v4.36 DESKTOP BETA (owner round 12): Linux x86_64 app bundle, same look & size as Android (402x874 window), engines embedded (bundle/lib/libaether.so + libzeptun.so; lyrebird + psiphon child cores at the bundle root). Real connect path: Aether in-process via C API (aether_core_start) driven by desktop_shared/desktop_engine + linux/runner/engine_channel_linux.cc on the SAME aethone/engine channel surface; the app marks itself AETHONE_DESKTOP_ENGINE=1. Tunnel mode needs root on Linux (honest zeptun permission error otherwise); proxy mode runs unprivileged."
+            echo "scope=v4.38 RUNTIME ROUND + PSIPHON DATA FIX: Linux x86_64 app bundle, same look & size as Android (402x874 window), engines embedded (bundle/lib/libaether.so + libzeptun.so; lyrebird + psiphon child cores at the bundle root). Tunnel privilege: the bundled aethone-tunnel-helper + Polkit action install system-wide on first connect (one pkexec prompt); the GUI runs as the normal user, only the TUN/routes/resolved operations run elevated (SCM_RIGHTS fd handoff, uid-0 end-to-end tunnel verification before Connected). Proxy mode stays unprivileged. Aether runs fully non-interactive (explicit -4/-6/--dual, --h2/--h3, --quick-reconnect). Root-run still works (direct path). Psiphon tunnel modes (chain/only) now configure zeptun with pipeline=false + optimistic_data=false — its goptlib SOCKS server rejects pipelined bytes, which is what killed the psiphon tunnel data path in every version while proxy mode worked (byte-level gate: scripts/psiphon_socks_pipeline_check.py; Android/Windows/desktop builders share the same socksStrict flag)."
             echo "native_pins=${native_pins}"
             echo "x86_isa_floor=x86-64-v1 (built on the baseline ubuntu-24.04 image; runner+plugins pinned to -march=x86-64 -mtune=generic; fail-closed readelf gate over every bundled ELF — see LINUX_CPU_COMPATIBILITY_REPORT.md)"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -2563,6 +2579,29 @@ jobs:
       - name: Install Xvfb + headless-GL runtime prerequisites
         run: sudo apt-get update -q && sudo apt-get install -y -q xvfb libegl1 libegl-mesa0 libgles2 libgl1-mesa-dri
 
+      # v4.37 — the REAL privilege-path gate: run the shipped helper's
+      # selftest as root on the runner. It brings the whole privileged
+      # half of the tunnel up for real (/dev/net/tun TUNSETIFF, address
+      # 172.19.0.1/30, MTU/txqueuelen, the table-2022 default route, the
+      # four policy rules 9000/9004/9005/9009), VERIFIES them by reading
+      # them back, tears them down, and verifies the teardown left nothing
+      # behind (no rules, no interface). No polkit needed — sudo runs the
+      # helper directly; the pkexec layer is exercised on the owner's
+      # desktop (the socket/SO_PEERCRED protocol is covered by the same
+      # binary). FAIL-CLOSED.
+      - name: Privilege helper selftest (TUN + routes + rules, as root)
+        run: |
+          set -euo pipefail
+          B="$(tar -tzf smoke/aethone-linux-x86_64-*.tar.gz | head -1 | cut -d/ -f1)"
+          tar -xzf smoke/aethone-linux-x86_64-*.tar.gz -C /tmp
+          [ -x "/tmp/$B/aethone-tunnel-helper" ] || { echo "::error::aethone-tunnel-helper missing from the shipped bundle"; exit 1; }
+          [ -f "/tmp/$B/com.chakcaad.aethone.tunnel-helper.policy" ] || { echo "::error::the Polkit action file is missing from the shipped bundle"; exit 1; }
+          # ensure the TUN device exists (usually present on the hosted VMs)
+          sudo modprobe tun 2>/dev/null || true
+          [ -c /dev/net/tun ] || sudo mknod /dev/net/tun c 10 200
+          sudo -n /tmp/$B/aethone-tunnel-helper --selftest
+          echo "helper selftest PASS"
+
       - name: Boot the bundle under Xvfb (fail-closed assertions)
         shell: bash
         run: |
@@ -2606,6 +2645,12 @@ jobs:
               echo "::error::unresolved dependency in $lib"; ldd "$B/lib/$lib"; exit 1
             fi
           done
+          # v4.37 — the helper's own ISA floor, re-proven post-tar like the
+          # main binary (it is a shipped ELF the owner's CPU must accept).
+          hnotes=$(readelf --notes --wide "$B/aethone-tunnel-helper" 2>/dev/null | grep -oE 'x86 ISA needed:.*' || true)
+          hbad=$(printf '%s\n' "$hnotes" | grep -o 'x86-64-v[2-4]' || true)
+          [ -z "$hbad" ] || { echo "::error::aethone-tunnel-helper requires ${hbad}— ISA regression"; exit 1; }
+          echo "[isa-gate] shipped aethone-tunnel-helper: ${hnotes:-no ISA property (baseline)}"
           echo "desktop smoke PASS: app alive, capture installed, libs resolve"
           kill $APP $XVFB 2>/dev/null || true
 

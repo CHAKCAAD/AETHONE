@@ -326,7 +326,14 @@ void main() {
       expect(args, isNot(contains('--tor-bridge')));
     });
 
-    test('IP version: v6 → -6, dual → --dual, default v4 → neither', () {
+    // v4.37 — the NON-INTERACTIVE decree: the IP version is EXPLICIT for
+    // every value (an unset AETHER_IP made the core prompt stdin when the
+    // app was launched from a terminal — «IP version to scan:»).
+    test('IP version: v4 → -4, v6 → -6, dual → --dual (all explicit)', () {
+      expect(
+        build(core: CoreSettings()..ipVersion = IpVersion.v4),
+        contains('-4'),
+      );
       expect(
         build(core: CoreSettings()..ipVersion = IpVersion.v6),
         contains('-6'),
@@ -336,8 +343,38 @@ void main() {
         contains('--dual'),
       );
       final plain = build(core: CoreSettings());
+      expect(plain, contains('-4')); // the v4 default is EXPLICIT now
       expect(plain, isNot(contains('-6')));
       expect(plain, isNot(contains('--dual')));
+    });
+
+    // v4.37 — the MASQUE transport is explicit both ways: an unset
+    // AETHER_MASQUE_HTTP2 on the H3 side prompted «MASQUE transport:».
+    test('transport: h2 → --h2, h3 → --h3 (both explicit)', () {
+      expect(
+        build(core: CoreSettings()..h2Transport = true),
+        contains('--h2'),
+      );
+      expect(
+        build(core: CoreSettings()..h2Transport = false),
+        contains('--h3'),
+      );
+      expect(
+        build(core: CoreSettings()..h2Transport = false),
+        isNot(contains('--h2')),
+      );
+    });
+
+    // v4.37 — the quick-reconnect prompt («Reconnect to it now without
+    // rescanning? [Y/n]») is answered explicitly: --quick-reconnect carries
+    // the exact value the non-TTY default already produced.
+    test('quick reconnect is explicit (--quick-reconnect always present)',
+        () {
+      expect(build(core: CoreSettings()), contains('--quick-reconnect'));
+      expect(
+        build(protocol: ProtocolId.wireguard, chain: ProtocolId.psiphonChain),
+        contains('--quick-reconnect'),
+      );
     });
 
     test('upstream: plain modes only', () {
@@ -520,6 +557,41 @@ void main() {
       // scalar: a bool field accepts only the words true/false).
       expect(toml, isNot(contains('"disabled"')));
       expect(toml, contains('fake_ip = true'));
+    });
+
+    // v4.38 — the psiphon family's strict-socks handshake (the round-13
+    // addendum defect: proxy worked, tunnel showed Connected with no data,
+    // in every version). psiphon's goptlib listener (socksFlushReadBuffer,
+    // psiphon/common/goptlib/socks.go) rejects ANY byte buffered after a
+    // SOCKS message, so zeptun's pipelined handshake (greeting+request in
+    // one write) and its optimistic data (payload riding the request write)
+    // each killed every TCP flow of the psiphon TUNNEL while the walk's
+    // sequential probe passed. Both keys are ?bool in the document schema
+    // (config_json.zig), same bare-word form as `udp`.
+    test('socksStrict adds pipeline = false + optimistic_data = false '
+        '(the psiphon goptlib handshake fix)', () {
+      final toml = ZeptunConfigToml.build(
+        socksPort: 1821,
+        tcpOnly: true,
+        socksStrict: true,
+      );
+      expect(toml, contains('server = "127.0.0.1:1821"'));
+      expect(toml, contains('pipeline = false'));
+      expect(toml, contains('optimistic_data = false'));
+      expect(toml, contains('fake_ip = true'));
+    });
+
+    test('every non-psiphon mode keeps the pipelined default (no strict keys)',
+        () {
+      // The plain WARP legs (1819) and the tor family (1820, aether's own
+      // sequential socks.rs) read the stream with exact-size reads —
+      // pipelining is harmless there and stays enabled.
+      final plain = ZeptunConfigToml.build(socksPort: 1819, tcpOnly: false);
+      expect(plain, isNot(contains('pipeline = ')));
+      expect(plain, isNot(contains('optimistic_data = ')));
+      final tor = ZeptunConfigToml.build(socksPort: 1820, tcpOnly: true);
+      expect(tor, isNot(contains('pipeline = ')));
+      expect(tor, isNot(contains('optimistic_data = ')));
     });
   });
 
@@ -886,6 +958,80 @@ void main() {
       expect(core.freed, [42]);
       expect(statesOf(events).last, VpnState.disconnected);
     });
+
+    // v4.38 — the psiphon family's strict-socks handshake rides the walk's
+    // startVpn call (the round-13 addendum defect: psiphon tunnel showed
+    // Connected with no data while proxy worked). psiphonChain (1821) and
+    // psiphonOnly (1819→psiphon's own listener) dial goptlib, which rejects
+    // pipelined bytes — they must ask the platform for the sequential
+    // client; the tor family (aether's own sequential socks.rs) and every
+    // plain leg must NOT.
+    test(
+      'tunnel mode: socksStrict=true only for the psiphon family '
+      '(psiphonChain/psiphonOnly); tor and plain legs stay pipelined',
+      () async {
+        final startArgs = <Map<Object?, Object?>>[];
+        mockChannel(
+          onStartVpnArgs: startArgs.add,
+        );
+        // 1819 comes from the group's setUp; the tor (1820) and psiphon
+        // chain (1821) listeners are this test's own.
+        final torListener = await _FakeSocks5Server().startOn(1820);
+        final psiphonListener = await _FakeSocks5Server().startOn(1821);
+        try {
+          Future<List<VpnState>> walk(ProtocolId protocol) async {
+            final core = _FakeCore();
+            final adapter = PlatformEngineAdapter(coreFactory: () => core);
+            final events = <EngineEvent>[];
+            adapter.events.listen(events.add);
+            adapter.bind(
+              _FixedConfig(
+                selectedProtocol: protocol,
+                connectionMode: ConnectionMode.tunnel,
+              ),
+            );
+            unawaited(adapter.connect());
+            await Future<void>.delayed(const Duration(milliseconds: 600));
+            await pumpEventQueue();
+            final states = statesOf(events);
+            await adapter.disconnect();
+            await pumpEventQueue();
+            return states;
+          }
+
+          // psiphonChain → strict (goptlib at 1821).
+          expect(
+            await walk(ProtocolId.psiphonChain),
+            [VpnState.connecting, VpnState.connected],
+          );
+          expect(startArgs.last['socksStrict'], isTrue);
+          expect(startArgs.last['tcpOnly'], isTrue);
+          expect(startArgs.last['port'], 1821);
+
+          // psiphonOnly → strict (the 1819 listener is handed to psiphon
+          // itself, psiphon.rs run_only).
+          await walk(ProtocolId.psiphonOnly);
+          expect(startArgs.last['socksStrict'], isTrue);
+          expect(startArgs.last['port'], 1819);
+
+          // torChain → NOT strict (1820 is aether's own sequential
+          // listener; pipelining is harmless there).
+          await walk(ProtocolId.torChain);
+          expect(startArgs.last['socksStrict'], isFalse);
+          expect(startArgs.last['tcpOnly'], isTrue);
+          expect(startArgs.last['port'], 1820);
+
+          // a plain WARP leg → NOT strict.
+          await walk(ProtocolId.wireguard);
+          expect(startArgs.last['socksStrict'], isFalse);
+          expect(startArgs.last['tcpOnly'], isFalse);
+          expect(startArgs.last['port'], 1819);
+        } finally {
+          await torListener.dispose();
+          await psiphonListener.dispose();
+        }
+      },
+    );
 
     test('VPN permission denial → failed(vpnPermissionDenied), nothing started', () async {
       var vpnStarted = false;
@@ -1642,6 +1788,9 @@ void main() {
 void mockChannel({
   FutureOr<Map<Object?, Object?>?> Function()? prepareVpn,
   void Function(int port)? onStartVpn,
+  // v4.38 — the FULL startVpn arguments (the psiphon strict-socks flag
+  // rides here): the port-only callback stays for the older tests.
+  void Function(Map<Object?, Object?> args)? onStartVpnArgs,
   void Function()? onStopVpn,
   Map<Object?, Object?> Function()? counters,
   Map<Object?, Object?> Function()? vpnStatus,
@@ -1665,6 +1814,8 @@ void mockChannel({
           case 'startVpn':
             final port = (call.arguments as Map?)?['port'] as int? ?? 1819;
             onStartVpn?.call(port);
+            onStartVpnArgs?.call(
+                ((call.arguments as Map?) ?? const {}).cast<Object?, Object?>());
             // The real service establishes the TUN + zeptun and THEN
             // emits 'up' — the mock mirrors that timing.
             Timer(const Duration(milliseconds: 150), () {

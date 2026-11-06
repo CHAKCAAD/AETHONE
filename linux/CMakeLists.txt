@@ -88,6 +88,11 @@ pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
 
+# v4.37 — the Linux privilege helper (TUN + routes via pkexec; see
+# linux/helper/aethone_tunnel_helper.cc). Built with the same toolchain and
+# ISA floor as the runner, shipped in the bundle root.
+add_subdirectory("helper")
+
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
 
@@ -124,6 +129,14 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
+
+# v4.37 — the privilege helper + its Polkit action file ship beside the
+# executable; the app's first-connect bootstrap installs them system-wide
+# (/usr/libexec + /usr/share/polkit-1/actions) through pkexec.
+install(TARGETS aethone-tunnel-helper RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/com.chakcaad.aethone.tunnel-helper.policy"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)

@@ -9,6 +9,7 @@
 
 #include <cstdio>
 #include <string>
+#include <thread>
 
 #include "desktop_shared/desktop_engine.h"
 #include "engine_channel_linux.h"
@@ -16,6 +17,82 @@
 namespace {
 
 FlMethodChannel* g_channel = nullptr;  // strong ref, cleared in Unregister
+
+// forward declarations (definitions below, after the FlValue helpers)
+void RespondSuccess(FlMethodCall* call, FlValue* result);
+void RespondError(FlMethodCall* call, const char* code, const char* message);
+
+// v4.37 — everything the tunnel worker threads need to talk back to the GTK
+// main loop. g_idle_add is safe to call from any thread; the Flutter/GTK
+// calls themselves are NOT, so they all happen inside the idle callbacks.
+struct IdleBox {
+  std::string event;   // "up" | "down"
+  std::string reason;  // down reasons, verbatim from the engine layer
+  int port = 0;
+  int session = 0;
+};
+
+gboolean EmitIdle(gpointer data) {
+  IdleBox* box = static_cast<IdleBox*>(data);
+  if (g_channel != nullptr && box != nullptr) {
+    g_autoptr(FlValue) args = fl_value_new_map();
+    fl_value_set_string_take(args, "event", fl_value_new_string(box->event.c_str()));
+    fl_value_set_string_take(args, "port", fl_value_new_int(box->port));
+    if (!box->reason.empty()) {
+      fl_value_set_string_take(args, "reason", fl_value_new_string(box->reason.c_str()));
+    }
+    fl_value_set_string_take(args, "session", fl_value_new_int(box->session));
+    fl_method_channel_invoke_method(g_channel, "onTunnelEvent", args, nullptr,
+                                    nullptr, nullptr);
+  }
+  delete box;
+  return FALSE;  // one-shot
+}
+
+// The engine layer's sink — invoked on the HELPER WORKER thread.
+void TunnelEventSink(void*, const aethone::TunnelEvent& event) {
+  IdleBox* box = new IdleBox();
+  box->event = event.up ? "up" : "down";
+  box->reason = event.reason;
+  box->port = event.port;
+  box->session = event.session;
+  g_idle_add(EmitIdle, box);
+}
+
+// The async verifyTunnelPath response (worker thread → main loop).
+struct VerifyBox {
+  FlMethodCall* call;  // reffed for the trip
+  bool attempted;
+  bool verified;
+  int64_t elapsedMs;
+  std::string detail;
+};
+
+gboolean VerifyRespondIdle(gpointer data) {
+  VerifyBox* box = static_cast<VerifyBox*>(data);
+  if (box != nullptr) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "attempted", fl_value_new_bool(box->attempted));
+    fl_value_set_string_take(result, "verified", fl_value_new_bool(box->verified));
+    fl_value_set_string_take(result, "elapsedMs", fl_value_new_int(box->elapsedMs));
+    fl_value_set_string_take(result, "detail", fl_value_new_string(box->detail.c_str()));
+    RespondSuccess(box->call, result);
+    g_object_unref(box->call);
+    delete box;
+  }
+  return FALSE;
+}
+
+void VerifyWorker(FlMethodCall* call) {
+  VerifyBox* box = new VerifyBox();
+  box->call = call;  // carries the ref taken by the handler
+  const aethone::TunnelPathProbe probe = aethone::VerifyTunnelPath();
+  box->attempted = probe.attempted;
+  box->verified = probe.verified;
+  box->elapsedMs = probe.elapsedMs;
+  box->detail = probe.detail;
+  g_idle_add(VerifyRespondIdle, box);
+}
 
 // ---- FlValue map helpers (GLib refcounting: values are owned by us) ----
 
@@ -113,8 +190,24 @@ void HandleMethodCall(FlMethodChannel* channel, FlMethodCall* call,
     const int port = ArgInt(args, "port", 1819);
     const int session = ArgInt(args, "session", 0);
     const bool tcpOnly = ArgBool(args, "tcpOnly", false);
+    // v4.38 — the psiphon family's strict-socks handshake (pipeline=false
+    // + optimistic_data=false): its goptlib listener rejects pipelined
+    // bytes, which killed every TCP flow of the psiphon tunnel while the
+    // sequential probe passed (the round-13 addendum defect).
+    const bool socksStrict = ArgBool(args, "socksStrict", false);
+    // v4.37 — the Linux privilege path: as a normal user the TUN/link/route
+    // setup needs CAP_NET_ADMIN, so the bring-up goes through the Polkit
+    // helper (pkexec password prompt — can take MINUTES). The Android model
+    // applies: accept the request, complete on the event channel. The Dart
+    // walk's Linux tunnelUp budget (180 s, the permission budget) covers
+    // the dialog. Root/Windows keep the synchronous path unchanged.
+    if (aethone::TunnelPrivilegeViaHelper()) {
+      aethone::StartTunnelAsync(port, session, tcpOnly, socksStrict);
+      RespondSuccess(call, nullptr);
+      return;
+    }
     const aethone::TunnelStartResult res =
-        aethone::StartTunnel(port, session, tcpOnly);
+        aethone::StartTunnel(port, session, tcpOnly, socksStrict);
     switch (res.kind) {
       case aethone::TunnelStartKind::kOk:
         RespondSuccess(call, nullptr);
@@ -131,6 +224,15 @@ void HandleMethodCall(FlMethodChannel* channel, FlMethodCall* call,
         RespondError(call, "tunnelStartFailed", res.reason.c_str());
         return;
     }
+    return;
+  }
+  if (g_strcmp0(name, "verifyTunnelPath") == 0) {
+    // v4.37 — the through-tunnel data-path verification (requirement D):
+    // the helper (uid 0, not excluded from the TUN) makes a REAL request
+    // through the tunnel. SLOW (up to ~20 s) — never on the GTK main
+    // thread; the response is marshaled back with g_idle_add.
+    g_object_ref(call);
+    std::thread(VerifyWorker, call).detach();
     return;
   }
   if (g_strcmp0(name, "stopVpn") == 0) {
@@ -224,6 +326,9 @@ void RegisterEngineChannel(FlEngine* engine) {
                                     FL_METHOD_CODEC(codec));
   fl_method_channel_set_method_call_handler(g_channel, HandleMethodCall,
                                             nullptr, nullptr);
+  // v4.37 — the helper-mode tunnel completes asynchronously (the Polkit
+  // dialog); its events arrive on this sink from the worker thread.
+  SetTunnelEventSink(TunnelEventSink, nullptr);
 }
 
 void UnregisterEngineChannel() {

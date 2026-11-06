@@ -280,6 +280,14 @@ class MainActivity : FlutterActivity() {
                     // get ICMP-unreachable instead of the core's silent
                     // drop (see AethoneVpnService.EXTRA_TCP_ONLY).
                     val tcpOnly = call.argument<Boolean>("tcpOnly") ?: false
+                    // v4.38 — the psiphon family's strict-socks handshake:
+                    // psiphon's goptlib listener rejects pipelined bytes,
+                    // which killed every TCP flow of the psiphon TUNNEL
+                    // while the sequential probe passed (the round-13
+                    // addendum defect, every version). Additive channel key
+                    // — older Dart sends nothing and false keeps the old
+                    // behavior for every non-psiphon mode.
+                    val socksStrict = call.argument<Boolean>("socksStrict") ?: false
                     // v4.26 — record the session BEFORE the start goes out:
                     // a stop that lands while this start is still in flight
                     // bumps the stop generation past it, and the straggler
@@ -290,6 +298,7 @@ class MainActivity : FlutterActivity() {
                         .putExtra(AethoneVpnService.EXTRA_PORT, port)
                         .putExtra(AethoneVpnService.EXTRA_SESSION, session)
                         .putExtra(AethoneVpnService.EXTRA_TCP_ONLY, tcpOnly)
+                        .putExtra(AethoneVpnService.EXTRA_SOCKS_STRICT, socksStrict)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         startForegroundService(intent)
                     } else {

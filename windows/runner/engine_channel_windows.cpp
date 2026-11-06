@@ -122,8 +122,14 @@ void HandleMethodCall(
     const int port = ArgInt(args, "port", 1819);
     const int session = ArgInt(args, "session", 0);
     const bool tcpOnly = ArgBool(args, "tcpOnly", false);
+    // v4.38 — the psiphon family's strict-socks handshake (pipeline=false +
+    // optimistic_data=false): its goptlib listener rejects pipelined bytes,
+    // which killed every TCP flow of the psiphon tunnel while the sequential
+    // probe passed (the round-13 addendum defect). Same key as the Linux
+    // runner and AethoneVpnService.kt.
+    const bool socksStrict = ArgBool(args, "socksStrict", false);
     const aethone::TunnelStartResult res =
-        aethone::StartTunnel(port, session, tcpOnly);
+        aethone::StartTunnel(port, session, tcpOnly, socksStrict);
     switch (res.kind) {
       case aethone::TunnelStartKind::kOk:
         result->Success();

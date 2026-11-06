@@ -55,6 +55,33 @@ class AethoneVpnService : VpnService() {
         /// "this network has no UDP" every app falls back from.
         const val EXTRA_TCP_ONLY = "tcpOnly"
 
+        /// v4.38 — the psiphon family's strict-socks handshake (owner round
+        /// 13 addendum: «هسته تونل در همه نسخه‌ها … در حالت تونل با اینکه
+        /// متصل نشان میدهد، هسته تونل درست دیتا رد و بدل نمیکنه» while the
+        /// same port's proxy worked). The psiphon family's SOCKS target —
+        /// 1821 (aether relays raw into psiphon's local proxy) or 1819
+        /// handed to psiphon in -only mode — is psiphon-tunnel-core's
+        /// goptlib server, whose socksFlushReadBuffer
+        /// (psiphon/common/goptlib/socks.go) treats ANY byte still buffered
+        /// after a SOCKS message as a fatal error and closes the
+        /// connection. zeptun's defaults pipeline the handshake
+        /// (encodeHandshake pipeline=true: greeting+request in one write;
+        /// handler.zig auto→on without auth, and pooled connections
+        /// ALWAYS) and attach optimistic data to the request
+        /// (sendWithEarly) — every TCP flow of the psiphon TUNNEL died
+        /// right at the handshake, while the walk's own probe speaks
+        /// strictly sequential SOCKS5 and passed, so the tunnel showed
+        /// Connected over a dead data path. `pipeline = false` +
+        /// `optimistic_data = false` make zeptun's client fully sequential
+        /// — byte-level proof: scripts/psiphon_socks_pipeline_check.py; the
+        /// same two keys land in the Dart test mirror
+        /// (ZeptunConfigToml) and the desktop builders
+        /// (desktop_shared/desktop_engine.cpp). Deliberately additive and
+        /// psiphon-scoped: every other mode keeps the pipelined default
+        /// (aether's own socks.rs and tor's aether-served listener read
+        /// sequentially from the stream — pipelining is harmless there).
+        const val EXTRA_SOCKS_STRICT = "socksStrict"
+
         /// v4.21 — the Dart-side tunnel-session stamp (see MainActivity's
         /// startVpn): every event THIS instance emits carries it back so the
         /// adapter can drop the stale instance's late `down/destroy` events
@@ -137,6 +164,10 @@ class AethoneVpnService : VpnService() {
     /// like a port change — the blackhole/ICMP behaviour differs.
     private var socksTcpOnly: Boolean = false
 
+    /// v4.38 — the strict-socks handshake zeptun is CURRENTLY serving
+    /// (psiphon family only); same restart semantics as [socksTcpOnly].
+    private var socksStrictLive: Boolean = false
+
     /// v4.21 — the session stamp from the start intent (0 when absent,
     /// e.g. an external start); echoed on EVERY event this instance emits.
     private var sessionId: Int = 0
@@ -152,6 +183,7 @@ class AethoneVpnService : VpnService() {
         socksPort = port
         sessionId = intent?.getIntExtra(EXTRA_SESSION, 0) ?: 0
         val tcpOnly = intent?.getBooleanExtra(EXTRA_TCP_ONLY, false) ?: false
+        val socksStrict = intent?.getBooleanExtra(EXTRA_SOCKS_STRICT, false) ?: false
         // v4.26 — the straggler gate: this start was superseded by a stop
         // (a `stopVpn` processed while the start delivery was still in
         // flight — the lost-cancel window's platform half). Establishing
@@ -209,7 +241,7 @@ class AethoneVpnService : VpnService() {
             // Each stage now names itself: consent/establish failures stay
             // "establish-failed", a nativeStart rc≠0 is
             // "zeptun-start-failed:rc=N".
-            val failReason = startTunnel(port, tcpOnly)
+            val failReason = startTunnel(port, tcpOnly, socksStrict)
             if (failReason != null) {
                 EngineBridge.emit(downEvent(failReason))
                 stopSelf()
@@ -263,7 +295,7 @@ class AethoneVpnService : VpnService() {
 
     /// v4.31b — returns null on success, the failure REASON otherwise (the
     /// stage-named string Dart's tunnelStartFailed shows verbatim).
-    private fun startTunnel(port: Int, tcpOnly: Boolean): String? {
+    private fun startTunnel(port: Int, tcpOnly: Boolean, socksStrict: Boolean): String? {
         if (zeptunUp) {
             // v4.20: a mode switch (e.g. 1819 → 1820) between connects used
             // to keep serving the OLD port — zeptun would relay into a
@@ -273,10 +305,16 @@ class AethoneVpnService : VpnService() {
             // v4.31: the UDP mode counts as part of the target — the same
             // port with a different tcpOnly answers flows differently
             // (ICMP-unreachable vs relayed UDP ASSOCIATE).
-            if (port != socksPort || tcpOnly != socksTcpOnly) {
+            // v4.38: the strict-socks handshake counts too — the same port
+            // with a different socksStrict dials differently (pipelined vs
+            // sequential), so a psiphon mode switching in or out restarts.
+            if (port != socksPort || tcpOnly != socksTcpOnly ||
+                socksStrict != socksStrictLive
+            ) {
                 Log.i(
                     TAG,
-                    "socks target changed $socksPort/$socksTcpOnly -> $port/$tcpOnly; restarting zeptun",
+                    "socks target changed $socksPort/$socksTcpOnly/$socksStrictLive -> " +
+                        "$port/$tcpOnly/$socksStrict; restarting zeptun",
                 )
                 stopTunnel("port-change")
             } else {
@@ -342,6 +380,13 @@ class AethoneVpnService : VpnService() {
         // nativeStart returned rc≠0 and surfaced as «establish-failed»
         // on every tcpOnly mode (owner round 8: psiphon/tor failed
         // immediately; aether modes — no udp line — were fine).
+        //
+        // v4.38 — the strict-socks lines for the psiphon family (see
+        // EXTRA_SOCKS_STRICT): `pipeline = false` makes zeptun send the
+        // greeting and the request as separate writes and wait for each
+        // reply, `optimistic_data = false` keeps the client's payload off
+        // the request write — the fully sequential handshake goptlib
+        // accepts. Same ?bool value form as `udp`.
         val toml = """
             preset = "mobile"
 
@@ -351,6 +396,8 @@ class AethoneVpnService : VpnService() {
             [handler.socks5]
             server = "127.0.0.1:$port"
             ${if (tcpOnly) "udp = false" else ""}
+            ${if (socksStrict) "pipeline = false" else ""}
+            ${if (socksStrict) "optimistic_data = false" else ""}
 
             [dns]
             fake_ip = true
@@ -365,9 +412,11 @@ class AethoneVpnService : VpnService() {
         }
         zeptunUp = true
         socksTcpOnly = tcpOnly
+        socksStrictLive = socksStrict
         Log.i(
             TAG,
             "zeptun up on socks 127.0.0.1:$port udp=${if (tcpOnly) "disabled" else "enabled"} " +
+                "strict=${if (socksStrict) "sequential" else "pipelined"} " +
                 "(protect callback installed)",
         )
         EngineBridge.emit(upEvent(port))

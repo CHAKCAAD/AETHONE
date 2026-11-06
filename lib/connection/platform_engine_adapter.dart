@@ -104,6 +104,15 @@ class AetherArguments {
       '--log-level', 'info',
       // Endpoint-scan profile («سرعت اسکن», 1..5 → the five pinned modes).
       '--scan', scanProfile(scanSpeed),
+      // v4.37 — the last interactive prompt, killed the same way: with a
+      // saved last-connection gateway the core asks «Reconnect to it now
+      // without rescanning? [Y/n]» on stdin (want_quick_reconnect, lib.rs)
+      // — a TTY launch hung there from the SECOND connect on. `--quick-
+      // reconnect` sets AETHER_QUICK_RECONNECT=1, the exact value the
+      // non-TTY default already produced (prompt_line None → yes): the
+      // cached gateway is still VERIFIED before reuse, and the user's
+      // scan-profile choice keeps governing every fresh scan.
+      '--quick-reconnect',
     ];
 
     // --- the WARP-leg protocol FIRST, then the overlay on top of it —
@@ -231,7 +240,17 @@ class AetherArguments {
     }
 
     // -- transport (#35-37, #40).
-    if (core.h2Transport) a.add('--h2');
+    // v4.37 — the MASQUE transport is EXPLICIT both ways. `--h2` alone left
+    // AETHER_MASQUE_HTTP2 unset on the H3 side, so `select_masque_transport()`
+    // (lib.rs) printed "MASQUE transport:" and waited on stdin (same
+    // non-interactive decree as -4 above). `--h3` sets AETHER_MASQUE_HTTP2=0,
+    // which masque_h2::enabled() treats exactly like unset — same behavior,
+    // no hidden prompt.
+    if (core.h2Transport) {
+      a.add('--h2');
+    } else {
+      a.add('--h3');
+    }
     if (!core.quicV2) a.add('--no-quic-v2');
     final dns = core.dns.trim();
     if (dns.isNotEmpty && dns != '1.1.1.1,1.0.0.1') {
@@ -244,8 +263,17 @@ class AetherArguments {
     // their carrier, lib.rs L203-244 — a user value there would fight
     // the chain itself).
     switch (core.ipVersion) {
+      // v4.37 — the NON-INTERACTIVE decree (owner round 13): every prompt
+      // the pinned core asks stdin for is now answered by an explicit flag.
+      // The old "v4 = the core's own default, pass nothing" left AETHER_IP
+      // unset, so `select_ip_version()` (lib.rs) printed "IP version to
+      // scan:" and WAITED on stdin whenever the app was launched from a
+      // terminal (prompt_line: is_terminal → read_line — the owner's sudo
+      // run hung exactly there). `-4` sets AETHER_IP=v4 — the same value the
+      // prompt's default would produce, so behavior is unchanged on every
+      // platform; only the hidden stdin dependency is gone.
       case IpVersion.v4:
-        break;
+        a.add('-4');
       case IpVersion.v6:
         a.add('-6');
       case IpVersion.dual:
@@ -452,8 +480,28 @@ class AetherArguments {
 /// the line). The `enabled`/`disabled` enum tags exist only on the
 /// in-process Config struct and the CLI flags (--socks5-no-udp), never
 /// in a config document.
+///
+/// v4.38 — [socksStrict] adds `pipeline = false` + `optimistic_data =
+/// false` for the psiphon family's tunnel modes (psiphonChain/psiphonOnly):
+/// their SOCKS target is psiphon-tunnel-core's goptlib server, whose
+/// `socksFlushReadBuffer` (psiphon/common/goptlib/socks.go) rejects ANY
+/// byte left buffered after a SOCKS message — zeptun's pipelined
+/// handshake (greeting+request in one write; handler.zig `d.pipelined`,
+/// auto→on without auth) and its optimistic data (request + early
+/// payload, `sendWithEarly`) each tripped it, so every TCP flow of the
+/// psiphon TUNNEL died at the handshake while the same port's proxy-mode
+/// probe (strictly sequential) passed — the owner's round-13 addendum
+/// defect, in every version. Byte-level proof:
+/// scripts/psiphon_socks_pipeline_check.py. Both keys are ?bool in the
+/// document schema (config_json.zig socks5 struct), same bool form as
+/// `udp`. The mobile preset here matches AethoneVpnService.kt; the
+/// desktop preset variant lives in desktop_shared/desktop_engine.cpp.
 class ZeptunConfigToml {
-  static String build({required int socksPort, required bool tcpOnly}) =>
+  static String build({
+    required int socksPort,
+    required bool tcpOnly,
+    bool socksStrict = false,
+  }) =>
       '''
 preset = "mobile"
 
@@ -463,6 +511,7 @@ kind = "socks5"
 [handler.socks5]
 server = "127.0.0.1:$socksPort"
 ${tcpOnly ? 'udp = false' : ''}
+${socksStrict ? 'pipeline = false\noptimistic_data = false' : ''}
 
 [dns]
 fake_ip = true
@@ -505,6 +554,18 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// end-to-end wait lives in the probe-retry loop below.
   static const Duration _listenerBudget = Duration(seconds: 120);
   static const Duration _tunnelUpBudget = Duration(seconds: 30);
+
+  /// v4.37 — the Linux desktop tunnelUp budget: the helper path shows a
+  /// Polkit password prompt DURING the up wait (pkexec can sit on the
+  /// dialog for minutes), so the budget widens to the permission round's
+  /// own 180 s — the exact precedent of `_permissionBudget` for Android's
+  /// VPN consent dialog. Every other platform (Windows zeptun, Android
+  /// VpnService, tests) keeps the 30 s default.
+  static bool get _isLinuxDesktopEngine =>
+      Platform.isLinux &&
+      Platform.environment['AETHONE_DESKTOP_ENGINE'] == '1';
+  Duration get _tunnelUpWaitBudget =>
+      _isLinuxDesktopEngine ? _permissionBudget : _tunnelUpBudget;
   static const Duration _probeTimeout = Duration(seconds: 20);
   static const Duration _permissionBudget = Duration(seconds: 180);
   /// v4.19 — how often the connect walk re-checks the core's health while
@@ -1130,6 +1191,27 @@ class PlatformEngineAdapter implements EngineAdapter {
           // بدل میشه و بعد دویاره دیتایی رد نمیشه» while the same port's
           // proxy worked).
           'tcpOnly': mode.tcpOnly,
+          // v4.38 — the psiphon TUNNEL data-path root cause (owner round
+          // 13 addendum: proxy works, tunnel shows Connected but exchanges
+          // no data, in every version). The psiphon family's SOCKS target
+          // (1821 relay → psiphon's local proxy, or 1819 handed to psiphon
+          // in -only mode) is goptlib — psiphon/common/goptlib/socks.go
+          // `socksFlushReadBuffer` treats ANY byte buffered after a SOCKS
+          // message as a fatal error and closes the connection. zeptun's
+          // desktop/mobile defaults pipeline the handshake (greeting+
+          // request in one write; pooled connections always) and attach
+          // optimistic data to the request — every TCP flow of the tunnel
+          // died right there, while the walk's own probe speaks strictly
+          // sequential SOCKS5 and passed. The fix: `pipeline = false` +
+          // `optimistic_data = false` in the zeptun TOML for exactly the
+          // modes whose listener terminates on goptlib (psiphonChain +
+          // psiphonOnly). The tor family (1820/1819 served by aether's own
+          // sequential socks.rs) and every plain WARP leg are untouched —
+          // evidence: scripts/psiphon_socks_pipeline_check.py (byte-level
+          // replay of both sides) + LINUX_RUNTIME_AND_TUNNEL_FIX_REPORT.md.
+          'socksStrict':
+              overlay == ProtocolId.psiphonChain ||
+              overlay == ProtocolId.psiphonOnly,
         });
       } on PlatformException catch (e) {
         if (!_stale(gen)) {
@@ -1148,7 +1230,7 @@ class PlatformEngineAdapter implements EngineAdapter {
         return false;
       }
       if (_stale(gen)) return false; // cancelled mid-start — straggler-safe (Kotlin gate)
-      final up = await tunnelUp.future.timeout(_tunnelUpBudget, onTimeout: () {
+      final up = await tunnelUp.future.timeout(_tunnelUpWaitBudget, onTimeout: () {
         return false;
       });
       _tunnelUp = null;
@@ -1297,7 +1379,8 @@ class PlatformEngineAdapter implements EngineAdapter {
         fail(
           'engineStartTimeout',
           'the core did not serve 127.0.0.1:$_activePort within '
-          '$_listenerBudget',
+          '$_listenerBudget'
+          '${_probeLastErrorKind == null ? '' : ' — last attempt: $_probeLastErrorKind'}',
         );
       }
       return false;
@@ -1329,7 +1412,8 @@ class PlatformEngineAdapter implements EngineAdapter {
           'the ${mode.label} data path did not answer through '
           '127.0.0.1:$_activePort within ${readyBudget(modeId).inSeconds} s '
           '(the chained protocol can legitimately take tens of seconds to '
-          'bootstrap)',
+          'bootstrap)'
+          '${_probeLastErrorKind == null ? '' : ' — last attempt: $_probeLastErrorKind'}',
         );
       }
       return false;
@@ -1344,6 +1428,51 @@ class PlatformEngineAdapter implements EngineAdapter {
         _tunnelDownReason ?? 'the VPN service went down mid-connection',
       );
       return false;
+    }
+
+    // v4.37 — requirement D («فقط پس از عبور موفق ترافیک واقعی از مسیر
+    // مورد انتظار، وضعیت Connected اعلام شود»): on the Linux desktop the
+    // tunnel is helper-backed, and the helper can prove the DATA PATH
+    // itself — it runs as uid 0, which the uid-exclusion rule does NOT
+    // cover, so its probe genuinely traverses TUN → zeptun → SOCKS5 → the
+    // aether core → the internet. A tunnel whose rules are wrong, whose
+    // zeptun relay is dead or whose DNS delegation broke fails HERE,
+    // honestly, instead of showing «Connected» over a black hole (the
+    // owner's «با اینکه متصله ولی دیتا رد و بدل نمیکنه»).
+    // The SMART tour's measurement walks are exempt (they tear down after
+    // their probe; the WINNER's own full walk runs this gate — and the
+    // candidate window must not absorb a data-path round trip).
+    if (tunnel && !smartMeasure && _isLinuxDesktopEngine) {
+      try {
+        final verdict = await _channel
+            .invokeMethod<Map<Object?, Object?>>('verifyTunnelPath')
+            .timeout(const Duration(seconds: 45));
+        final attempted = verdict?['attempted'] == true;
+        final verified = verdict?['verified'] == true;
+        final detail = (verdict?['detail'] as String?) ?? '';
+        if (!attempted) {
+          // The tunnel came up through the direct (root) path — the local
+          // SOCKS probe remains the gate there (the app's own uid is
+          // excluded from the TUN, an in-process probe could never pass).
+          _debugLog('tunnel path verify skipped: $detail');
+        } else if (!verified) {
+          await _hardCleanup();
+          fail(
+            'tunnelDataPathFailed',
+            'the tunnel was established but real traffic did not pass '
+            'through it — $detail',
+          );
+          return false;
+        } else {
+          _debugLog('tunnel path verified through the TUN ($detail)');
+        }
+      } on MissingPluginException {
+        // An older runner without the method — the walk degrades to the
+        // local-probe gate (never silently: logged for the diagnostics).
+        _debugLog('tunnel path verify unavailable on this runner');
+      } catch (e) {
+        _debugLog('tunnel path verify errored: $e');
+      }
     }
     _emit(statsEvent(probe));
 
@@ -1386,6 +1515,42 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// v4.19 (#2) — the core's last words when it died during the listener
   /// wait ("connection failure comes FROM the core").
   String? _coreFailureDuringStart;
+
+  /// v4.37 — the classified last error of the end-to-end probe attempts
+  /// (requirement 2.5: the raw `SocketException: Connection reset by peer,
+  /// address = 127.0.0.1` the owner saw must become a DIAGNOSTIC line, not
+  /// a swallowed mystery). Set by the probe loops, read by the walk's
+  /// failure screens.
+  String? _probeLastErrorKind;
+
+  /// The classifier for [TunnelProbe] failures: keeps the OS wording but
+  /// names WHAT it means for the walk — a reset on 127.0.0.1 is the core
+  /// (or a previous session's listener) closing the socket mid-handshake.
+  static String classifyProbeError(Object error) {
+    if (error is SocketException) {
+      final msg = error.osError?.message ?? error.message;
+      if (msg.contains('Connection reset by peer')) {
+        return 'the local connection to the core (127.0.0.1) was RESET '
+            'mid-handshake — the core exited or closed its listener just as '
+            'the probe arrived (the core’s own exit reason, when it has '
+            'one, is quoted separately)';
+      }
+      if (msg.contains('Connection refused')) {
+        return 'the core is not accepting connections on 127.0.0.1 yet '
+            '(connection refused)';
+      }
+      return 'local socket error: $msg';
+    }
+    if (error is TimeoutException) {
+      return 'the core accepted the connection but never answered the '
+          'probe within the attempt timeout';
+    }
+    return error.toString();
+  }
+
+  /// The walk's diagnostics channel (flutter run console + release logs via
+  /// the platform capture when the platform chooses to forward it).
+  void _debugLog(String line) => debugPrint('aethone/engine: $line');
 
   /// v4.21 — the honest reason a done job ended: a NORMAL stop carries
   /// `result.state` ("closed"/"stopped"), a FAILED core carries
@@ -1582,7 +1747,12 @@ class PlatformEngineAdapter implements EngineAdapter {
         );
         if (_stale(gen)) return null;
         return result;
-      } catch (_) {
+      } catch (e) {
+        // v4.37 — keep the classified error for the failure screen: a
+        // reset/refused on 127.0.0.1 names itself instead of surfacing as
+        // an anonymous timeout after the budget runs out (the owner's
+        // SocketException report).
+        _probeLastErrorKind = classifyProbeError(e);
         // Probe failed — the core may have died; it owns the failure truth.
         final failure = _pollCoreOnce();
         if (failure != null) {

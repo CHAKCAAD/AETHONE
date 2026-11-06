@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>CHAKCAAD</vendor>
+  <vendor_url>https://github.com/CHAKCAAD/AETHONE</vendor_url>
+  <action id="com.chakcaad.aethone.tunnel-helper">
+    <description>Set up the AETHONE VPN tunnel</description>
+    <description xml:lang="fa">راه‌اندازی تونل AETHONE</description>
+    <message>Authentication is required to create the AETHONE VPN tunnel device and its routes. Only these network operations run with administrator privileges; the app itself keeps running as your user.</message>
+    <message xml:lang="fa">برای ایجاد دستگاه تونل و مسیرهای AETHONE احراز هویت لازم است. تنها همین عملیات‌های شبکه با دسترسی مدیریتی اجرا می‌شوند؛ خود برنامه با کاربر شما اجرا می‌شود.</message>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/aethone-tunnel-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_undefined">no</annotate>
+  </action>
+</policyconfig>

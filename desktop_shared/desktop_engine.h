@@ -32,6 +32,8 @@ struct DesktopPaths {
   std::string zeptunLib;    // zeptun shared  (Linux lib/libzeptun.so | zeptun.dll)
   std::string lyrebirdBin;  // child cores, beside the executable
   std::string psiphonBin;   // (lyrebird / lyrebird.exe, psiphon / psiphon.exe)
+  std::string helperBin;    // Linux: the bundled privilege helper ("" elsewhere)
+  std::string helperPolicy; // Linux: its Polkit action file ("" elsewhere)
 };
 
 // Lazily computes and caches the platform paths. Never returns empty strings.
@@ -95,11 +97,72 @@ struct TunnelStartResult {
 //   * Windows — exclude = the Cloudflare WARP pools (aether's own prober
 //     CIDR set, src/prober.rs at the frozen pin) so the WARP-leg dials keep
 //     the physical path instead of looping the TUN back into itself.
-TunnelStartResult StartTunnel(int port, int session, bool tcpOnly);
+// Starts (or restarts) the zeptun tunnel toward the SOCKS5 listener at
+// `port`. `tcpOnly` disables the SOCKS UDP ASSOCIATE (the tor/psiphon
+// family); `socksStrict` forces a fully sequential SOCKS5 client
+// (pipeline = false + optimistic_data = false) for the psiphon family,
+// whose goptlib listener rejects pipelined bytes — the v4.38 data-path
+// fix (see BuildZeptunToml and LINUX_RUNTIME_AND_TUNNEL_FIX_REPORT.md).
+TunnelStartResult StartTunnel(int port, int session, bool tcpOnly,
+                               bool socksStrict);
 
 // The hardened stop (requestStop twin): generation bump + synchronous
 // teardown. Returns the session id the `down` event should echo.
 int StopTunnel();
+
+// ---- v4.37: the Linux privilege bring-up (Polkit helper) ----------------
+//
+// On Linux as a NORMAL user, zeptun's TUN/link/route setup needs
+// CAP_NET_ADMIN — the direct StartTunnel then fails with
+// `zeptun-start-failed:rc=-3 (permission denied)` (the owner's report).
+// The fix: a tiny root helper (linux/helper/aethone_tunnel_helper.cc)
+// does ONLY those network operations, launched per connection via pkexec.
+//
+// StartTunnelAsync ACCEPTS the request (returns immediately — the walk's
+// tunnelUp budget covers the Polkit dialog) and completes on the event
+// sink, exactly like Android's startForegroundService → EngineBridge.emit
+// model. The sink is invoked on the WORKER thread; the glue layer marshals
+// it onto the platform main loop.
+struct TunnelEvent {
+  bool up;             // true: the tunnel is UP (zeptun running on the
+                       // helper-provided, verified TUN); false: bring-up
+                       // failed (or was superseded) — reason carries why.
+  int port;
+  int session;
+  std::string reason;  // kError-class reasons, verbatim for the UI
+};
+
+using TunnelEventSink = void (*)(void* ctx, const TunnelEvent& event);
+
+// Installs the sink (once). ctx is passed back verbatim.
+void SetTunnelEventSink(TunnelEventSink sink, void* ctx);
+
+// True when THIS build takes the helper path for tunnels: Linux, not root,
+// and the runner chose the helper mode (see StartTunnelAsync).
+bool TunnelPrivilegeViaHelper();
+
+// The async bring-up. Root/Windows callers keep the synchronous StartTunnel
+// (the helper adds nothing there); Linux normal-user callers use this.
+void StartTunnelAsync(int port, int session, bool tcpOnly, bool socksStrict);
+
+// ---- v4.37: the through-tunnel data-path verification (requirement D) ----
+//
+// The walk's SOCKS probe talks to 127.0.0.1:<port> DIRECTLY — it proves the
+// CORE path, not the TUN path. When the helper owns the tunnel (normal
+// user), this asks the helper (uid 0, NOT excluded by the uid rule) to make
+// a REAL request THROUGH the tunnel: resolve → TUN → zeptun → SOCKS5 →
+// aether → internet. The walk reports Connected only after this passes.
+struct TunnelPathProbe {
+  bool attempted;     // false: no helper-backed tunnel (root/direct mode) —
+                      // the local SOCKS probe remains the only gate there.
+  bool verified;      // the data path really passed traffic
+  int64_t elapsedMs;  // first-byte RTT when verified
+  std::string detail; // human-readable outcome (never secrets)
+};
+
+// SLOW (up to ~20 s): runs on a worker thread; the glue layer must not call
+// it on the platform main thread.
+TunnelPathProbe VerifyTunnelPath();
 
 struct TunnelCounters {
   bool running;

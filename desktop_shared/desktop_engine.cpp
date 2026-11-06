@@ -3,6 +3,7 @@
 #include "desktop_engine.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -20,13 +21,19 @@
 #define GETCWD _getcwd
 #define MKDIR(p) _mkdir(p)
 #else
+#include <arpa/inet.h>
 #include <dlfcn.h>
 #include <fcntl.h>  // O_RDONLY
+#include <spawn.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/un.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #define GETCWD getcwd
 #define MKDIR(p) mkdir(p, 0755)
+extern char** environ;
 #endif
 
 #include <zeptun.h>  // the frozen pin's own header (native/zeptun/include)
@@ -116,6 +123,345 @@ TunnelState g_tunnel;
 
 int64_t g_core_job = 0;  // 0 = none (see header)
 std::mutex g_core_job_mutex;
+
+#ifndef _WIN32
+// ---- v4.37: the Linux privilege helper client --------------------------------
+// (path helpers MkDirAll/PathExists are declared later in this file —
+// forward-declared here so the client can sit next to the tunnel state)
+bool PathExists(const std::string& p);
+void MkDirAll(const std::string& path);
+
+// The state of the pkexec-launched aethone-tunnel-helper (one per connect).
+struct HelperState {
+  int sock = -1;             // the live client socket (>= 0 while serving)
+  int tun_fd = -1;           // the TUN fd we adopted (closed with the tunnel)
+  pid_t pid = -1;            // pkexec/helper process (reaped lazily)
+  std::string sockPath;
+  std::string logPath;       // <filesDir>/logs/helper-log.txt (root appends)
+};
+HelperState g_helper;
+std::mutex g_helper_mutex;
+
+TunnelEventSink g_tunnel_sink = nullptr;
+void* g_tunnel_sink_ctx = nullptr;
+std::atomic<int> g_async_stop_gen{0};   // stop generations during async bring-up
+std::atomic<bool> g_async_bringing{false};
+
+void EmitTunnelEvent(bool up, int port, int session, const std::string& reason) {
+  if (g_tunnel_sink == nullptr) return;
+  TunnelEvent e;
+  e.up = up;
+  e.port = port;
+  e.session = session;
+  e.reason = reason;
+  g_tunnel_sink(g_tunnel_sink_ctx, e);
+}
+
+std::string HelperLogLine(const std::string& what) {
+  char stamp[40];
+  const time_t now = time(nullptr);
+  struct tm tmv;
+  localtime_r(&now, &tmv);
+  strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &tmv);
+  return std::string("[") + stamp + "] desktop-engine: " + what + "\n";
+}
+
+// The helper's own stderr lands in its own separable log file (the owner's
+// logging decree: aether / zeptun / helper logs must stay distinguishable).
+void HelperLog(const std::string& line) {
+  const std::string& path = g_helper.logPath;
+  if (path.empty()) return;
+  FILE* f = fopen(path.c_str(), "ab");
+  if (f == nullptr) return;
+  fwrite(line.data(), 1, line.size(), f);
+  fclose(f);
+}
+
+// Where the system-installed helper must live. pkexec only executes
+// root-owned paths, so the BUNDLED helper installs itself there on first
+// connect (pkexec /usr/bin/env <bundle> --self-install — ONE prompt).
+static const char* kHelperInstallPath = "/usr/libexec/aethone-tunnel-helper";
+static const char* kHelperPolicyInstallPath =
+    "/usr/share/polkit-1/actions/com.chakcaad.aethone.tunnel-helper.policy";
+
+bool HelperInstalled() {
+  struct stat st;
+  return stat(kHelperInstallPath, &st) == 0 && S_ISREG(st.st_mode) &&
+         st.st_uid == 0 && (st.st_mode & 0222) == 0 &&
+         access(kHelperInstallPath, X_OK) == 0 &&
+         stat(kHelperPolicyInstallPath, &st) == 0;
+}
+
+// One pkexec round: /usr/bin/env (a root-owned system binary — pkexec's
+// refusal to execute user-writable BUNDLE paths does not apply to it) runs
+// the bundled helper as root, whose --self-install copies itself to
+// /usr/libexec and writes the Polkit action, verifying both (fail-closed).
+bool EnsureHelperInstalled(std::string* err) {
+  if (HelperInstalled()) return true;
+  const DesktopPaths& p = Paths();
+  if (p.helperBin.empty() || access(p.helperBin.c_str(), X_OK) != 0) {
+    *err = "the privilege helper is missing from the bundle (" + p.helperBin +
+           ") — is this a complete desktop bundle?";
+    return false;
+  }
+  const char* env_exe = access("/usr/bin/env", X_OK) == 0 ? "/usr/bin/env"
+                                                          : "/bin/env";
+  if (access(env_exe, X_OK) != 0) {
+    *err = "/usr/bin/env is not available — cannot bootstrap the privilege "
+           "helper on this system";
+    return false;
+  }
+  const char* pkexec = access("/usr/bin/pkexec", X_OK) == 0
+                           ? "/usr/bin/pkexec"
+                           : "/bin/pkexec";
+  if (access(pkexec, X_OK) != 0) {
+    *err = "pkexec (polkit) is not available — install policykit-1 to use "
+           "the tunnel mode, or run the app from an administrator session";
+    return false;
+  }
+  char self_install[] = "--self-install";
+  char* const argv[] = {const_cast<char*>(env_exe),
+                        const_cast<char*>(p.helperBin.c_str()), self_install,
+                        nullptr};
+  HelperLog(HelperLogLine("bootstrap: installing the privilege helper + Polkit "
+                          "action (one pkexec password prompt)"));
+  pid_t pid = -1;
+  if (posix_spawn(&pid, pkexec, nullptr, nullptr, argv, environ) != 0) {
+    *err = "spawning pkexec failed";
+    return false;
+  }
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) {
+    *err = "waiting for pkexec failed";
+    return false;
+  }
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+    const int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    if (code == 126) {
+      *err = "the administrator permission was declined (polkit) — the tunnel "
+             "cannot be set up without it";
+    } else if (code == 127) {
+      *err = "pkexec failed to run the installer (127) — is policykit-1 "
+             "installed and a polkit agent active?";
+    } else {
+      *err = "installing the privilege helper failed (exit " +
+             std::to_string(code) + ")";
+    }
+    return false;
+  }
+  if (!HelperInstalled()) {
+    *err = "the helper did not land at " + std::string(kHelperInstallPath) +
+           " after installation";
+    return false;
+  }
+  HelperLog(HelperLogLine("bootstrap: helper installed system-wide"));
+  return true;
+}
+
+// Spawns `pkexec aethone-tunnel-helper --serve <sock>` and connects.
+// `stop_gen` is the async stop generation at bring-up entry — a disconnect
+// during the Polkit dialog cancels the wait instead of hanging for minutes.
+//
+// LOCK DISCIPLINE (the deadlock lesson): the LONG waits (spawn → socket →
+// connect, up to 180 s while the user stares at the password prompt) run
+// WITHOUT g_helper_mutex — only the brief state updates take it. A single
+// bring-up worker exists at a time (g_async_bringing), so the unlocked
+// stretches are worker-owned; StopTunnel's teardown may race them and the
+// worker treats every failed step as a clean abort.
+bool StartHelper(int stop_gen, std::string* err) {
+  {
+    std::lock_guard<std::mutex> lock(g_helper_mutex);
+    if (g_helper.sock >= 0) return true;  // already serving
+  }
+
+  // The socket lives in the user's runtime dir (0700, user-owned) — the
+  // helper refuses root-owned socket dirs and checks SO_PEERCRED against
+  // the directory's owner.
+  const char* xdg = getenv("XDG_RUNTIME_DIR");
+  std::string dir;
+  if (xdg && *xdg) {
+    dir = std::string(xdg) + "/aethone";
+  } else {
+    dir = "/tmp/aethone-helper-" + std::to_string(static_cast<long>(getuid()));
+  }
+  MkDirAll(dir);
+  chmod(dir.c_str(), 0700);
+  const std::string path = dir + "/tunnel-helper.sock";
+  unlink(path.c_str());  // a stale socket from a crashed pair
+  {
+    std::lock_guard<std::mutex> lock(g_helper_mutex);
+    g_helper.sockPath = path;
+    g_helper.logPath = Paths().filesDir + "/logs/helper-log.txt";
+  }
+
+  // The helper's stderr → its own log file (created by US, appended by root
+  // through the inherited descriptor — the app can read it back).
+  const int log_fd = open(g_helper.logPath.c_str(),
+                          O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+  posix_spawn_file_actions_t fa;
+  posix_spawn_file_actions_init(&fa);
+  if (log_fd >= 0) {
+    posix_spawn_file_actions_adddup2(&fa, log_fd, 1);
+    posix_spawn_file_actions_adddup2(&fa, log_fd, 2);
+  }
+  char sock_arg[256];
+  snprintf(sock_arg, sizeof(sock_arg), "%s", path.c_str());
+  const char* pkexec = access("/usr/bin/pkexec", X_OK) == 0
+                           ? "/usr/bin/pkexec"
+                           : "/bin/pkexec";
+  char* const argv[] = {const_cast<char*>("pkexec"),
+                        const_cast<char*>(kHelperInstallPath),
+                        const_cast<char*>("--serve"), sock_arg, nullptr};
+  pid_t pid = -1;
+  const int rc = posix_spawn(&pid, pkexec, &fa, nullptr, argv, environ);
+  posix_spawn_file_actions_destroy(&fa);
+  if (log_fd >= 0) close(log_fd);
+  if (rc != 0) {
+    *err = "spawning the privilege helper failed";
+    return false;
+  }
+  {
+    std::lock_guard<std::mutex> lock(g_helper_mutex);
+    g_helper.pid = pid;
+  }
+
+  // Wait for the socket (pkexec may sit on a password prompt for minutes —
+  // the Dart walk's Linux tunnelUp budget covers it) and connect. NO lock:
+  // a concurrent StopTunnel must stay responsive.
+  const int kWaitMs = 180000;  // mirrors the Android permission budget
+  bool appeared = false;
+  for (int waited = 0; waited < kWaitMs; waited += 100) {
+    struct stat st;
+    if (stat(path.c_str(), &st) == 0) {
+      appeared = true;
+      break;
+    }
+    if (g_async_stop_gen.load() != stop_gen) {
+      kill(pid, SIGTERM);  // cancel the dialog; the walk already ended
+      *err = "cancelled while waiting for the privilege prompt";
+      return false;
+    }
+    usleep(100 * 1000);
+  }
+  if (!appeared) {
+    *err = "the privilege helper did not come up (did the polkit password "
+           "prompt appear? is a polkit authentication agent running?)";
+    kill(pid, SIGTERM);
+    return false;
+  }
+  int sock = -1;
+  for (int waited = 0; waited < 10000 && sock < 0; waited += 200) {
+    sock = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (sock >= 0) {
+      sockaddr_un sa;
+      memset(&sa, 0, sizeof(sa));
+      sa.sun_family = AF_UNIX;
+      strncpy(sa.sun_path, path.c_str(), sizeof(sa.sun_path) - 1);
+      if (connect(sock, reinterpret_cast<sockaddr*>(&sa), sizeof(sa)) != 0) {
+        close(sock);
+        sock = -1;
+        usleep(200 * 1000);
+      }
+    }
+  }
+  if (sock < 0) {
+    *err = "could not connect to the privilege helper";
+    kill(pid, SIGTERM);
+    return false;
+  }
+  {
+    std::lock_guard<std::mutex> lock(g_helper_mutex);
+    g_helper.sock = sock;
+  }
+  HelperLog(HelperLogLine("helper: connected (pkexec pid " +
+                          std::to_string(static_cast<long>(pid)) + ")"));
+  return true;
+}
+
+// One request → one reply line, optionally receiving an fd (SCM_RIGHTS).
+bool HelperRequest(const char* cmd, std::string* reply, int* fd_out) {
+  std::lock_guard<std::mutex> lock(g_helper_mutex);
+  if (g_helper.sock < 0) {
+    *reply = "ERR helper is not running";
+    return false;
+  }
+  const std::string line = std::string(cmd) + "\n";
+  if (write(g_helper.sock, line.data(), line.size()) !=
+      static_cast<ssize_t>(line.size())) {
+    *reply = "ERR writing to the helper failed";
+    return false;
+  }
+  char buf[512];
+  iovec iov{buf, sizeof(buf) - 1};
+  char control[64];
+  msghdr msg;
+  memset(&msg, 0, sizeof(msg));
+  msg.msg_iov = &iov;
+  msg.msg_iovlen = 1;
+  msg.msg_control = control;
+  msg.msg_controllen = sizeof(control);
+  const ssize_t n = recvmsg(g_helper.sock, &msg, 0);
+  if (n <= 0) {
+    *reply = "ERR the helper closed the connection";
+    return false;
+  }
+  buf[n] = 0;
+  *reply = buf;
+  if (fd_out != nullptr) *fd_out = -1;
+  for (cmsghdr* ch = CMSG_FIRSTHDR(&msg); ch != nullptr;
+       ch = CMSG_NXTHDR(&msg, ch)) {
+    if (ch->cmsg_level == SOL_SOCKET && ch->cmsg_type == SCM_RIGHTS &&
+        ch->cmsg_len >= CMSG_LEN(sizeof(int))) {
+      int got = -1;
+      memcpy(&got, CMSG_DATA(ch), sizeof(int));
+      if (fd_out != nullptr) {
+        *fd_out = got;
+      } else {
+        close(got);
+      }
+    }
+  }
+  return reply->rfind("OK", 0) == 0;
+}
+
+// Tears the helper pair down: sends `down` (the helper reverts routes/rules/
+// resolved on it OR on EOF), closes the socket and the adopted fd, and reaps
+// the process from a detached thread. Idempotent; takes g_helper_mutex only
+// for the brief state swap (never blocks: the long waits in StartHelper run
+// unlocked — the deadlock lesson).
+void StopHelperPair() {
+  int sock = -1, tun_fd = -1;
+  pid_t pid = -1;
+  {
+    std::lock_guard<std::mutex> lock(g_helper_mutex);
+    sock = g_helper.sock;
+    g_helper.sock = -1;
+    tun_fd = g_helper.tun_fd;
+    g_helper.tun_fd = -1;
+    pid = g_helper.pid;
+    g_helper.pid = -1;
+  }
+  if (sock >= 0) {
+    // best-effort `down` (EOF triggers the same teardown in the helper)
+    (void)!write(sock, "down\n", 5);
+    shutdown(sock, SHUT_RDWR);
+    close(sock);
+  }
+  if (tun_fd >= 0) {
+    close(tun_fd);  // the interface dies with the last fd
+  }
+  if (pid > 0) {
+    std::thread([pid] {
+      for (int i = 0; i < 50; ++i) {
+        if (waitpid(pid, nullptr, WNOHANG) == pid) return;
+        usleep(100 * 1000);
+      }
+      kill(pid, SIGKILL);
+      waitpid(pid, nullptr, 0);
+    }).detach();
+  }
+}
+#endif  // !_WIN32
 
 // ---- the core log capture state ----
 constexpr int64_t kLogMaxBytes = 1024 * 1024;  // the Kotlin budget
@@ -220,7 +566,7 @@ const char* kWarpExcludeWindows[] = {
 };
 #endif  // _WIN32
 
-std::string BuildZeptunToml(int port, bool tcpOnly) {
+std::string BuildZeptunToml(int port, bool tcpOnly, bool socksStrict) {
   std::string doc;
   doc.reserve(900);
   doc += "preset = \"desktop\"\n";
@@ -240,6 +586,21 @@ std::string BuildZeptunToml(int port, bool tcpOnly) {
   // bool `false`, never the enum tag string "disabled". Only emitted for
   // TCP-only modes, exactly like the Kotlin builder.
   if (tcpOnly) doc += "udp = false\n";
+  // v4.38 — the psiphon tunnel data-path fix (the round-13 addendum defect,
+  // every version: proxy worked, tunnel showed Connected with no data).
+  // The psiphon family's SOCKS target is psiphon-tunnel-core's goptlib
+  // server; its socksFlushReadBuffer (psiphon/common/goptlib/socks.go)
+  // rejects ANY byte buffered after a SOCKS message. zeptun's defaults
+  // pipeline the handshake (greeting+request in one write — and pooled
+  // connections always) and attach optimistic data, so every TCP flow of
+  // the psiphon tunnel died at the handshake while the sequential probe
+  // passed. Strict mode = a fully sequential SOCKS5 client (same keys as
+  // the Kotlin + Dart builders; byte-level proof:
+  // scripts/psiphon_socks_pipeline_check.py).
+  if (socksStrict) {
+    doc += "pipeline = false\n";
+    doc += "optimistic_data = false\n";
+  }
   doc += "\n[dns]\n";
   doc += "fake_ip = true\n";
   doc += "\n[route]\n";
@@ -261,6 +622,43 @@ std::string BuildZeptunToml(int port, bool tcpOnly) {
 #endif
   return doc;
 }
+
+#ifndef _WIN32
+// v4.37 — the HELPER-mode TOML: the privileged bring-up (TUN + address +
+// MTU + policy routes/rules + the resolved DNS delegation) was ALREADY done
+// by aethone-tunnel-helper, which handed us the open TUN fd. zeptun adopts
+// it in .fd mode (the Android VpnService model: raw IP packets, one queue,
+// no vnet header) and runs the UNPRIVILEGED data plane only. The route
+// section is intentionally absent — RouteConfig.auto_route defaults to false
+// and the rules live in the helper's table 2022 (config keys per the frozen
+// pin: tun.fd sets device.kind = .fd, tun.configure skips the link setup).
+std::string BuildZeptunTomlFd(int port, bool tcpOnly, int fd, bool socksStrict) {
+  std::string doc;
+  doc.reserve(300);
+  doc += "preset = \"desktop\"\n";
+  doc += "\n[tun]\n";
+  doc += "fd = ";
+  doc += std::to_string(fd);
+  doc += "\n";
+  doc += "configure = false\n";
+  doc += "\n[handler]\n";
+  doc += "kind = \"socks5\"\n";
+  doc += "\n[handler.socks5]\n";
+  doc += "server = \"127.0.0.1:";
+  doc += std::to_string(port);
+  doc += "\"\n";
+  if (tcpOnly) doc += "udp = false\n";
+  // v4.38 — the psiphon strict-socks keys, identical to BuildZeptunToml
+  // (the helper path serves the same psiphon family; see the comment there).
+  if (socksStrict) {
+    doc += "pipeline = false\n";
+    doc += "optimistic_data = false\n";
+  }
+  doc += "\n[dns]\n";
+  doc += "fake_ip = true\n";
+  return doc;
+}
+#endif  // !_WIN32
 
 // The reader thread of the capture (single writer — the Kotlin discipline).
 void LogReaderLoop(int read_fd) {
@@ -350,6 +748,8 @@ const DesktopPaths& Paths() {
     cached.zeptunLib = cached.exeDir + "\\zeptun.dll";
     cached.lyrebirdBin = cached.exeDir + "\\lyrebird.exe";
     cached.psiphonBin = cached.exeDir + "\\psiphon.exe";
+    // The privilege helper is a Linux concept (Polkit); Windows keeps its
+    // own requireAdministrator manifest model — both stay empty here.
 #else
     // Flutter's linux bundle convention: shared libraries under lib/.
     // The executable's INSTALL_RPATH is $ORIGIN/lib (linux/CMakeLists.txt).
@@ -357,6 +757,12 @@ const DesktopPaths& Paths() {
     cached.zeptunLib = cached.exeDir + "/lib/libzeptun.so";
     cached.lyrebirdBin = cached.exeDir + "/lyrebird";
     cached.psiphonBin = cached.exeDir + "/psiphon";
+    // v4.37 — the bundled privilege helper + its Polkit action, shipped in
+    // the bundle root by linux/CMakeLists.txt (installed system-wide on the
+    // first tunnel connect; see EnsureHelperInstalled).
+    cached.helperBin = cached.exeDir + "/aethone-tunnel-helper";
+    cached.helperPolicy =
+        cached.exeDir + "/com.chakcaad.aethone.tunnel-helper.policy";
 #endif
   });
   return cached;
@@ -528,7 +934,42 @@ void ClearCoreJob() {
 }
 
 // ---------------------------------------------------------------- tunnel --
-TunnelStartResult StartTunnel(int port, int session, bool tcpOnly) {
+namespace {
+
+// The shared zeptun bring-up: TOML in, engine up (or the honest error).
+TunnelStartResult BringUpZeptun(const std::string& toml) {
+  TunnelStartResult res{TunnelStartKind::kError, ""};
+  const std::string load_err = LoadZeptunLibrary();
+  if (!load_err.empty()) {
+    res.reason = "zeptun-library-missing: " + load_err;
+    return res;
+  }
+  Zeptun* engine = nullptr;
+  const int rc = g_zeptun.create_from_toml(toml.c_str(), toml.size(), &engine);
+  if (rc != ZEPTUN_OK || engine == nullptr) {
+    res.reason = std::string("zeptun-start-failed:rc=") + std::to_string(rc) +
+                 " (" + (g_zeptun.strerror_ ? g_zeptun.strerror_(rc) : "?") +
+                 ")";
+    return res;
+  }
+  const int rc2 = g_zeptun.start(engine);
+  if (rc2 != ZEPTUN_OK) {
+    g_zeptun.destroy(engine);
+    res.reason = std::string("zeptun-start-failed:rc=") + std::to_string(rc2) +
+                 " (" + (g_zeptun.strerror_ ? g_zeptun.strerror_(rc2) : "?") +
+                 ")";
+    return res;
+  }
+  g_tunnel.engine = engine;
+  g_tunnel.up = true;
+  res.kind = TunnelStartKind::kOk;
+  return res;
+}
+
+}  // namespace
+
+TunnelStartResult StartTunnel(int port, int session, bool tcpOnly,
+                               bool socksStrict) {
   std::lock_guard<std::mutex> lock(g_tunnel_mutex);
   TunnelStartResult res{TunnelStartKind::kError, ""};
 
@@ -557,44 +998,197 @@ TunnelStartResult StartTunnel(int port, int session, bool tcpOnly) {
     }
   }
 
-  const std::string load_err = LoadZeptunLibrary();
-  if (!load_err.empty()) {
-    res.reason = "zeptun-library-missing: " + load_err;
-    return res;
+  res = BringUpZeptun(BuildZeptunToml(port, tcpOnly, socksStrict));
+  if (res.kind == TunnelStartKind::kOk) {
+    g_tunnel.port = port;
+    g_tunnel.tcpOnly = tcpOnly;
+    g_tunnel.session = session;
+    if (session > g_tunnel.liveSession) g_tunnel.liveSession = session;
   }
-
-  const std::string toml = BuildZeptunToml(port, tcpOnly);
-  Zeptun* engine = nullptr;
-  const int rc = g_zeptun.create_from_toml(toml.c_str(), toml.size(), &engine);
-  if (rc != ZEPTUN_OK || engine == nullptr) {
-    res.reason = std::string("zeptun-start-failed:rc=") + std::to_string(rc) +
-                 " (" + (g_zeptun.strerror_ ? g_zeptun.strerror_(rc) : "?") +
-                 ")";
-    return res;
-  }
-  const int rc2 = g_zeptun.start(engine);
-  if (rc2 != ZEPTUN_OK) {
-    g_zeptun.destroy(engine);
-    res.reason = std::string("zeptun-start-failed:rc=") + std::to_string(rc2) +
-                 " (" + (g_zeptun.strerror_ ? g_zeptun.strerror_(rc2) : "?") +
-                 ")";
-    return res;
-  }
-  g_tunnel.engine = engine;
-  g_tunnel.up = true;
-  g_tunnel.port = port;
-  g_tunnel.tcpOnly = tcpOnly;
-  g_tunnel.session = session;
-  if (session > g_tunnel.liveSession) g_tunnel.liveSession = session;
-  res.kind = TunnelStartKind::kOk;
   return res;
 }
+
+#ifndef _WIN32
+// ---- v4.37: the async helper bring-up (Linux normal-user tunnel mode) ----
+
+bool TunnelPrivilegeViaHelper() { return geteuid() != 0; }
+
+void SetTunnelEventSink(TunnelEventSink sink, void* ctx) {
+  g_tunnel_sink = sink;
+  g_tunnel_sink_ctx = ctx;
+}
+
+namespace {
+
+// The full helper-path bring-up, run on a worker thread. Every failure
+// surfaces through the event sink with the exact stage named — the walk's
+// tunnelStartFailed screen shows it verbatim.
+void HelperBringUpWorker(int port, int session, bool tcpOnly,
+                         bool socksStrict) {
+  const int stop_gen = g_async_stop_gen.load();
+
+  // Straggler gate: a stop already superseded this start.
+  if (session != 0 && session <= stop_gen) {
+    EmitTunnelEvent(false, 0, session, "stale-start");
+    g_async_bringing.store(false);
+    return;
+  }
+
+  // A previous session's tunnel (if any) must be gone before we build the
+  // next — no two TUNs, no two zeptun engines (the owner's lifecycle rules).
+  {
+    std::lock_guard<std::mutex> lock(g_tunnel_mutex);
+    if (g_tunnel.up) {
+      Zeptun* old = g_tunnel.engine;
+      g_tunnel.engine = nullptr;
+      g_tunnel.up = false;
+      if (old) {
+        if (g_zeptun.stop) g_zeptun.stop(old);
+        if (g_zeptun.destroy) g_zeptun.destroy(old);
+      }
+    }
+  }
+  StopHelperPair();  // idempotent; reverts routes/rules of the old pair
+
+  std::string err;
+  if (!EnsureHelperInstalled(&err)) {
+    EmitTunnelEvent(false, 0, session, "helper-install-failed: " + err);
+    g_async_bringing.store(false);
+    return;
+  }
+  if (!StartHelper(stop_gen, &err)) {
+    EmitTunnelEvent(false, 0, session, "helper-start-failed: " + err);
+    g_async_bringing.store(false);
+    return;
+  }
+
+  std::string reply;
+  int fd = -1;
+  if (!HelperRequest("up", &reply, &fd) || fd < 0) {
+    // The reply carries the helper's own diagnosis (TUNSETIFF EPERM,
+    // netlink error, verification failure …) — strip the "ERR " prefix.
+    const std::string why = reply.rfind("ERR ", 0) == 0
+                                ? reply.substr(4)
+                                : (reply.empty() ? "no reply" : reply);
+    EmitTunnelEvent(false, 0, session,
+                    "tunnel-privileged-setup-failed: " + why);
+    g_async_bringing.store(false);
+    return;
+  }
+
+  // zeptun adopts the pre-created, VERIFIED TUN fd (configure=false,
+  // auto_route=false — the helper already did the privileged half).
+  bool ok = false;
+  std::string fail_reason;
+  {
+    std::lock_guard<std::mutex> lock(g_tunnel_mutex);
+    if (session != 0 && session <= g_tunnel.stopGeneration) {
+      fail_reason = "stale-start";  // a stop landed while the dialog was up
+    } else {
+      const TunnelStartResult res =
+          BringUpZeptun(BuildZeptunTomlFd(port, tcpOnly, fd, socksStrict));
+      if (res.kind == TunnelStartKind::kOk) {
+        g_tunnel.port = port;
+        g_tunnel.tcpOnly = tcpOnly;
+        g_tunnel.session = session;
+        if (session > g_tunnel.liveSession) g_tunnel.liveSession = session;
+        ok = true;
+      } else {
+        fail_reason = res.reason;
+      }
+    }
+  }
+  if (ok) {
+    {
+      std::lock_guard<std::mutex> lock(g_helper_mutex);
+      g_helper.tun_fd = fd;  // ours to close on stop (zeptun .fd never owns)
+    }
+    HelperLog(
+        HelperLogLine("tunnel: up (helper fd adopted, zeptun running)"));
+    EmitTunnelEvent(true, port, session, "");
+  } else {
+    close(fd);
+    HelperLog(HelperLogLine("tunnel: zeptun failed on the helper fd — " +
+                            fail_reason));
+    EmitTunnelEvent(false, 0, session, fail_reason);
+    StopHelperPair();
+  }
+  g_async_bringing.store(false);
+}
+
+}  // namespace
+
+void StartTunnelAsync(int port, int session, bool tcpOnly, bool socksStrict) {
+  if (g_async_bringing.exchange(true)) {
+    // A bring-up is already in flight (the walk serializes starts, but a
+    // straggler start must never stack a second helper): report it stale.
+    EmitTunnelEvent(false, 0, session, "stale-start");
+    return;
+  }
+  std::thread(HelperBringUpWorker, port, session, tcpOnly, socksStrict)
+      .detach();
+}
+
+TunnelPathProbe VerifyTunnelPath() {
+  TunnelPathProbe out{false, false, 0, ""};
+  // Only meaningful when the helper owns the tunnel. In direct/root mode the
+  // app's own uid is excluded from the TUN, so an in-process probe could
+  // never traverse it — the local SOCKS probe remains the gate there
+  // (documented in LINUX_RUNTIME_AND_TUNNEL_FIX_REPORT.md).
+  {
+    std::lock_guard<std::mutex> lock(g_helper_mutex);
+    if (g_helper.sock < 0 || g_helper.tun_fd < 0) {
+      out.detail = "not attempted: the tunnel is not helper-backed";
+      return out;
+    }
+  }
+  std::string reply;
+  if (!HelperRequest("probe", &reply, nullptr)) {
+    out.detail = reply.empty() ? "the helper did not answer the probe"
+                               : reply.substr(reply.rfind("ERR ", 0) == 0
+                                                  ? 4
+                                                  : 0);
+    return out;
+  }
+  out.attempted = true;
+  if (reply.rfind("OK ", 0) == 0) {
+    const size_t sp = reply.find(' ', 3);
+    out.elapsedMs = strtoll(reply.c_str() + 3, nullptr, 10);
+    out.verified = true;
+    out.detail = sp == std::string::npos ? reply
+                                         : reply.substr(sp + 1);
+    // one line only — the detail is for a UI reason line
+    const size_t nl = out.detail.find('\n');
+    if (nl != std::string::npos) out.detail.resize(nl);
+  } else {
+    out.detail = reply.rfind("ERR ", 0) == 0 ? reply.substr(4) : reply;
+    const size_t nl = out.detail.find('\n');
+    if (nl != std::string::npos) out.detail.resize(nl);
+  }
+  HelperLog(HelperLogLine("verify: " + reply));
+  return out;
+}
+
+#else  // _WIN32
+
+bool TunnelPrivilegeViaHelper() { return false; }
+void SetTunnelEventSink(TunnelEventSink, void*) {}
+void StartTunnelAsync(int, int, bool, bool) {}
+TunnelPathProbe VerifyTunnelPath() {
+  return TunnelPathProbe{false, false, 0,
+                         "not attempted: helper is Linux-only"};
+}
+
+#endif  // !_WIN32
 
 int StopTunnel() {
   std::lock_guard<std::mutex> lock(g_tunnel_mutex);
   if (g_tunnel.liveSession > g_tunnel.stopGeneration) {
     g_tunnel.stopGeneration = g_tunnel.liveSession;
   }
+#ifndef _WIN32
+  g_async_stop_gen.store(g_tunnel.stopGeneration);  // cancel an in-flight bring-up
+#endif
   Zeptun* engine = g_tunnel.engine;
   g_tunnel.engine = nullptr;
   g_tunnel.up = false;
@@ -602,6 +1196,12 @@ int StopTunnel() {
     if (g_zeptun.stop) g_zeptun.stop(engine);  // idempotent by bridge design
     if (g_zeptun.destroy) g_zeptun.destroy(engine);
   }
+#ifndef _WIN32
+  // The helper pair goes down too (routes/rules/resolved reverted; the
+  // helper exits on the socket close — EOF is its teardown trigger).
+  StopHelperPair();
+  HelperLog(HelperLogLine("tunnel: down (user stop)"));
+#endif
   return g_tunnel.session;
 }
 
