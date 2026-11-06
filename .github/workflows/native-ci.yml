@@ -2351,8 +2351,23 @@ jobs:
           path: smoke
           name: aethone-desktop-r${{ github.run_number }}-linux
 
-      - name: Install Xvfb + runtime prerequisites
-        run: sudo apt-get update -q && sudo apt-get install -y -q xvfb libegl1
+      # v4.36m: the smoke's first real flight (run 42225458763) aborted
+      # (SIGABRT, silent) inside libepoxy during fl_view_new. Bisected
+      # layer by layer against the REAL r78 bundle in the analysis sandbox:
+      # the Flutter GTK embedding boots the Impeller GLES backend, and epoxy
+      # hard-aborts whenever a GL layer is missing — with the app's
+      # stdout/stderr already dup2'd into the core-log capture, the abort
+      # message lands in core-log.txt, never in the job's stderr files.
+      #   libEGL.so.1              -> libegl1           (was installed)
+      #   eglGetPlatformDisplayEXT -> libegl-mesa0      (GLVND vendor ICD)
+      #   libGLESv2.so.2           -> libgles2          (Impeller renders GLES)
+      #   swrast DRI               -> libgl1-mesa-dri   (llvmpipe under Xvfb)
+      # All four + LIBGL_ALWAYS_SOFTWARE=1: the app boots to 'Using the
+      # Impeller rendering backend (OpenGLESSDF)' and outlives the alive gate
+      # (locally: session header at +1 s, Impeller at +2 s, timeout kills a
+      # healthy app at 25 s).
+      - name: Install Xvfb + headless-GL runtime prerequisites
+        run: sudo apt-get update -q && sudo apt-get install -y -q xvfb libegl1 libegl-mesa0 libgles2 libgl1-mesa-dri
 
       - name: Boot the bundle under Xvfb (fail-closed assertions)
         shell: bash
@@ -2362,6 +2377,7 @@ jobs:
           B="/tmp/bundle"
           [ -x "$B/aethone" ] || { echo "::error::bundle/aethone missing"; exit 1; }
           export XDG_DATA_HOME=/tmp/aethone-smoke-data
+          export LIBGL_ALWAYS_SOFTWARE=1
           rm -rf "$XDG_DATA_HOME"; mkdir -p "$XDG_DATA_HOME"
           Xvfb :77 -screen 0 402x874x24 -nolisten tcp >/dev/null 2>&1 &
           XVFB=$!
@@ -2374,11 +2390,15 @@ jobs:
             echo "::error::the desktop app died within 12 s"
             echo "--- stderr ---"; head -c 2000 /tmp/smoke.err || true
             echo "--- stdout ---"; head -c 1000 /tmp/smoke.out || true
+            # v4.36m: after InstallCoreLogCapture the process stderr IS this
+            # file (dup2 onto the capture pipe) — the abort message the job
+            # stderr can never show lives here.
+            echo "--- captured core log ---"; cat "$XDG_DATA_HOME/aethone/logs/core-log.txt" 2>/dev/null || true
             exit 1
           fi
           LOG="$XDG_DATA_HOME/aethone/logs/core-log.txt"
           [ -f "$LOG" ] || { echo "::error::core-log capture did not install"; exit 1; }
-          grep -q "AETHONE session" "$LOG" || { echo "::error::session header missing from the capture"; exit 1; }
+          grep -q "AETHONE session" "$LOG" || { echo "::error::session header missing from the capture"; cat "$LOG" 2>/dev/null || true; exit 1; }
           for lib in libaether.so libzeptun.so; do
             if ldd "$B/lib/$lib" 2>/dev/null | grep -q "not found"; then
               echo "::error::unresolved dependency in $lib"; ldd "$B/lib/$lib"; exit 1
