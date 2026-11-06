@@ -222,10 +222,39 @@ echo "== [3/4] lyrebird via Aether pt-build.sh @ $AETHER_SHA (pin $LYREBIRD_PIN 
 PT_LYREBIRD_PROOF_FILE="$SRC_CACHE/lyrebird-source-proof.json"
 rm -f "$PT_LYREBIRD_PROOF_FILE"
 export PT_LYREBIRD_PROOF_FILE
+# v4.36d: the patch exchange must be byte-deterministic on every runner.
+# Forensics from the three failed windows legs (runs 42189918027 /
+# 42192566257 / 42196456428):
+#   * v4.36b (no -c flags): the clone handed git apply a CRLF preimage and
+#     autocrlf=true (git-bash system default) read the patch as CRLF — the
+#     contexts matched, the postimage was written smudged, and the patched
+#     file hashed to fd0d9aba… = the CRLF variant of the pinned content
+#     (proven: sed 's/$/\r/' over the pinned LF file reproduces it exactly).
+#   * v4.36c (autocrlf pinned ONLY on the clone side): fresh LF preimage,
+#     but `git apply` still ran under the system autocrlf=true, which read
+#     the patch as CRLF — LF context lines carrying \r vs an LF preimage
+#     mismatched and the FIRST hunk (@@ -156,14 @@) died.
+# The fix normalizes every side of the exchange to LF and pins the apply
+# itself to autocrlf=false. Every guard below is a NO-OP on Linux (inputs
+# are already LF there), so the Linux desktop leg is unchanged; the Android
+# legs (scripts/build_native.sh — untouched, ubuntu default autocrlf=false)
+# are unaffected by design.
+if grep -q $'\r' "$PT_PATCH"; then
+  echo "pt-build-pin.patch: normalizing CRLF -> LF (git-bash checkout artifact)"
+  sed -i 's/\r$//' "$PT_PATCH"
+fi
+if grep -q $'\r' "$AETHER_SRC/pt-build.sh"; then
+  echo "pt-build.sh preimage: normalizing CRLF -> LF (clone/smudge artifact)"
+  sed -i 's/\r$//' "$AETHER_SRC/pt-build.sh"
+fi
 if grep -q "AETHONE (N8 pin hardening" "$AETHER_SRC/pt-build.sh"; then
   echo "pt-build.sh already carries the pin-hardening patch (cached tree)"
 else
-  git -C "$AETHER_SRC" apply --whitespace=nowarn "$PT_PATCH"
+  git -C "$AETHER_SRC" -c core.autocrlf=false apply --whitespace=nowarn "$PT_PATCH"
+fi
+if grep -q $'\r' "$AETHER_SRC/pt-build.sh"; then
+  echo "patched pt-build.sh: normalizing CRLF -> LF (apply-time smudge artifact)"
+  sed -i 's/\r$//' "$AETHER_SRC/pt-build.sh"
 fi
 patched_sha=$(sha256sum "$AETHER_SRC/pt-build.sh" | cut -d' ' -f1)
 [ "$patched_sha" = "$PT_PATCHED_SHA256" ] || die "patched pt-build.sh sha256 mismatch: $patched_sha"
@@ -233,10 +262,14 @@ patched_sha=$(sha256sum "$AETHER_SRC/pt-build.sh" | cut -d' ' -f1)
   cd "$AETHER_SRC"
   bash pt-build.sh "$GOOS" "$GOARCH" "$OUT/aether/pt" "" ""
 )
-require_file "$OUT/aether/pt/lyrebird"
+# v4.36d: pt-build.sh names its output lyrebird$ext (ext=.exe on windows) —
+# the checks and the go-version proof must follow the same name or the
+# windows leg dies right after the patch step (the manifest/whitelist
+# already expected lyrebird.exe; only these two checks lagged behind).
+require_file "$OUT/aether/pt/lyrebird$EXE"
 [ -f "$PT_LYREBIRD_PROOF_FILE" ] || die "lyrebird source-origin proof file missing — pt-build.sh did not record it; pin NOT proven (N8)"
 proof_path=$(sed -n 's/.*"path":"\([^"]*\)".*/\1/p' "$PT_LYREBIRD_PROOF_FILE")
-prov=$(go version -m "$OUT/aether/pt/lyrebird" 2>&1) || die "go version -m failed on lyrebird (N8)"
+prov=$(go version -m "$OUT/aether/pt/lyrebird$EXE" 2>&1) || die "go version -m failed on lyrebird (N8)"
 echo "$prov" | sed -n '1,20p'
 case "$proof_path" in
   git)
