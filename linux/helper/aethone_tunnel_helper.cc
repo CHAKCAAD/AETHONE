@@ -108,7 +108,10 @@ static const uint32_t kFwmark = 0x2022;       // fwmark (non-Android)
 static const uint32_t kFwmask = 0xffffffffu;  // fwmark_mask (non-Android)
 static const uint32_t kTunAddrHost = 0xac130001u;  // 172.19.0.1 (BE in attrs)
 static const int kTunPrefix = 30;
-static const uint32_t kDnsAddrHost = 0xac130002u;  // 172.19.0.2 = host(2)
+// 172.19.0.2 = host(2) — mirrored from config.zig for fidelity (the DNS
+// address the resolvectl step delegates to); resolvectl takes it as a
+// string, so the packed form stays documentation-only.
+[[maybe_unused]] static const uint32_t kDnsAddrHost = 0xac130002u;
 static const char kProbeHost[] = "www.cloudflare.com";
 static const char kProbePath[] = "/cdn-cgi/trace";
 
@@ -143,7 +146,12 @@ static const char kHelperInstallPath[] = "/usr/libexec/aethone-tunnel-helper";
 static const char kHelperPolicyInstallPath[] =
     "/usr/share/polkit-1/actions/com.chakcaad.aethone.tunnel-helper.policy";
 
-// netlink (linux/rtnetlink.h constants, mirrored from route/linux.zig)
+// netlink (linux/rtnetlink.h constants, mirrored from route/linux.zig).
+// The mirror is kept COMPLETE on purpose (audit value: every constant zeptun's
+// route/linux.zig names, side by side); the [[maybe_unused]] statements carry
+// the members this helper's bring-up/teardown never sends — clang's
+// -Wunused-const-variable (in -Wall for C++, unlike GCC) must not break the
+// bundle build over documentation.
 static const uint16_t NLMSG_ERROR = 2;
 static const uint16_t NLMSG_DONE = 3;
 static const uint16_t NLM_F_REQUEST = 0x01;
@@ -152,21 +160,33 @@ static const uint16_t NLM_F_CREATE = 0x400;
 static const uint16_t NLM_F_EXCL = 0x200;
 static const uint16_t NLM_F_REPLACE = 0x100;
 static const uint16_t NLM_F_DUMP = 0x300;
-static const uint16_t RTM_NEWLINK = 16, RTM_DELLINK = 17, RTM_GETLINK = 18,
-                       RTM_NEWADDR = 20, RTM_DELADDR = 21, RTM_GETADDR = 22,
-                       RTM_NEWROUTE = 24, RTM_DELROUTE = 25,
+// GETLINK/GETADDR/DELADDR: dump-side members this helper never sends.
+[[maybe_unused]] static const uint16_t RTM_NEWLINK = 16, RTM_DELLINK = 17,
+                       RTM_GETLINK = 18, RTM_NEWADDR = 20, RTM_DELADDR = 21,
+                       RTM_GETADDR = 22, RTM_NEWROUTE = 24, RTM_DELROUTE = 25,
                        RTM_GETROUTE = 26, RTM_NEWRULE = 32, RTM_DELRULE = 33,
                        RTM_GETRULE = 34;
-static const uint16_t IFLA_IFNAME = 3, IFLA_MTU = 4, IFLA_TXQLEN = 13;
+// IFLA_IFNAME: named by the link-bring-up mirror, not sent (the iface is
+// addressed by ifindex, like route/linux.zig).
+[[maybe_unused]] static const uint16_t IFLA_IFNAME = 3, IFLA_MTU = 4,
+                       IFLA_TXQLEN = 13;
 static const uint16_t IFA_ADDRESS = 1, IFA_LOCAL = 2;
-static const uint16_t RTA_DST = 1, RTA_OIF = 4, RTA_TABLE = 15;
-static const uint16_t FRA_DST = 1, FRA_GOTO = 4, FRA_PRIORITY = 6,
-                       FRA_FWMARK = 10, FRA_TABLE = 15, FRA_FWMASK = 16,
-                       FRA_SUPPRESS_PREFIXLEN = 14, FRA_UID_RANGE = 20;
+// RTA_DST: only the default route is installed (RTA_GATEWAY-free, dst=0
+// implied), so the attribute name stays mirror-only.
+[[maybe_unused]] static const uint16_t RTA_DST = 1, RTA_OIF = 4,
+                       RTA_TABLE = 15;
+// FRA_DST: the rules select by fwmark/uid-range, never by destination.
+[[maybe_unused]] static const uint16_t FRA_DST = 1, FRA_GOTO = 4,
+                       FRA_PRIORITY = 6, FRA_FWMARK = 10, FRA_TABLE = 15,
+                       FRA_FWMASK = 16, FRA_SUPPRESS_PREFIXLEN = 14,
+                       FRA_UID_RANGE = 20;
 static const uint8_t FR_ACT_TO_TBL = 1, FR_ACT_GOTO = 2, FR_ACT_NOP = 3;
 static const uint32_t FIB_RULE_INVERT = 0x02;
 static const uint32_t RT_TABLE_MAIN = 254, RT_TABLE_UNSPEC = 0;
-static const uint8_t RTPROT_STATIC = 4, RT_SCOPE_LINK = 253,
+// RT_SCOPE_UNIVERSE: the default route is added with scope 0 passed
+// literally at the call site (matching the Zig struct default), so the
+// named constant is mirror-only.
+[[maybe_unused]] static const uint8_t RTPROT_STATIC = 4, RT_SCOPE_LINK = 253,
                      RT_SCOPE_UNIVERSE = 0, RTN_UNICAST = 1;
 static const int NETLINK_ROUTE_PROTO = 0;  // NETLINK_ROUTE (linux/netlink.h)
 struct SockaddrNl {

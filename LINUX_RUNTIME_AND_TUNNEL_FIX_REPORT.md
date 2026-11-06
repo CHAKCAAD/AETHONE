@@ -321,11 +321,27 @@ ever logged:
 | `flutter analyze` (whole repo, warnings fatal) | **PASS — 0 findings** |
 | `flutter test` (full suite) | **PASS — 239 tests**, including the 3 new v4.38 tests (strict TOML lines; non-psiphon modes keep pipelining; the walk passes `socksStrict` exactly for psiphonChain/psiphonOnly with ports 1821/1819/1820/1819 asserted) |
 | v4.37 arg tests (`-4`/`--h2`/`--h3`/`--quick-reconnect` explicit) | **PASS** (in the same suite; pinned in `test/m2_engine_test.dart`) |
-| `g++ -std=c++17 -Wall -Wextra` full build of `linux/helper/aethone_tunnel_helper.cc` | **PASS — zero warnings**, binary runs |
+| `g++ -std=c++17 -Wall -Wextra` full build of `linux/helper/aethone_tunnel_helper.cc` | **PASS — zero warnings**, binary runs *(g++; see the v4.38a note below — clang, the `flutter build linux` toolchain, additionally enables `-Wunused-const-variable` for C++ and failed the first CI run on 8 mirror-only constants)* |
 | helper `--version` / closed command set | **PASS** (`aethone-tunnel-helper 1`; unknown flag → usage, rc=2) |
 | helper `--serve` as a normal user | **PASS — refused** (`refusing to serve unprivileged (euid=1001)`, rc=2) |
 | `g++ -fsyntax-only` of `desktop_shared/desktop_engine.cpp` against the real vendored `zeptun.h` | **PASS** |
 | byte-level psiphon handshake proof (`scripts/psiphon_socks_pipeline_check.py`) | **PASS** — pipelined rejected («18 bytes left after SOCKS message»), optimistic rejected, sequential SERVED |
+
+**v4.38a fixup (first CI run of this round, run 42278396584):** 13 of 16 legs green
+on the first flight — including every test leg (flutter-ui with the handshake-contract
+gate, zeptun @ pin, the psiphon fork, the aether crate), all three Android ABIs, both
+windows legs and the linux desktop-native leg. The **linux bundle** leg — the only place
+the helper is compiled by `flutter build linux` (CMake → clang, `-Wall -Werror` via
+`apply_standard_settings`) — failed on 8 `-Wunused-const-variable` errors: clang enables
+that check inside `-Wall` for C++; GCC does not (C-only there), so §9's g++ row was green
+while the shipped build path was not. The eight are mirror-only members of the complete
+route/linux.zig constant mirror (`kDnsAddrHost`, `RTM_GETLINK`, `RTM_DELADDR`,
+`RTM_GETADDR`, `IFLA_IFNAME`, `RTA_DST`, `FRA_DST`, `RT_SCOPE_UNIVERSE`) — kept for audit
+fidelity, never sent by this helper. Fix: `[[maybe_unused]]` (C++17, the helper target's
+own `cxx_std_17`) on the six carrying statements — the mirror stays complete, the compiler
+stays informed. Reproduced all 8 locally with `g++ -Wall -Wextra -Wunused-const-variable
+-Werror` (GCC runs the check when asked explicitly), then green on the same set; link
+green; `--version` prints; unprivileged `serve`/`--selftest` still refuse (rc=2).
 
 ## 10. CI gates (this round's run — recorded after the push)
 
