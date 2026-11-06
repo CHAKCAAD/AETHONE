@@ -1,7 +1,7 @@
 # AETHONE — Linux CPU ISA Compatibility Report (x86-64-v1 floor)
 
-**Round:** v4.36n · **Branch:** `ci-bootstrap/v4.4` · **Fix commit:** `4b283e7`
-**Verification run:** #80 (run id 42253093789) — results filled in below after the run completed.
+**Round:** v4.36n · **Branch:** `ci-bootstrap/v4.4` · **Fix commits:** `4b283e7` (the four-layer fix) + `1c7f8a8` (PE-audit pattern portability)
+**Verification runs:** #80 (id 42253093789 — Linux-side proof) and #81 (id 42256864719 — **all 17 jobs green**)
 **Scope:** Linux desktop bundle x86-64 CPU compatibility (root cause + fix + gates), with the Windows x86_64 appendix audit. Android untouched (frozen round; regression-verified only).
 
 ---
@@ -87,9 +87,62 @@ and the workflow's informational check parsed the note with `grep -o 'x86 ISA ne
 (that would leave a v3-stamped-but-silent binary), no `continue-on-error`, no removal of
 tests, no Android file touched.
 
-## 4. Verification — run #80 (commit 4b283e7), all real executions
+## 4. Verification — runs #80/#81 (fix commits `4b283e7` + `1c7f8a8`), all real executions
 
-<!-- RESULTS -->
+**Run #80** (`4b283e7`, id 42253093789): every Linux-side goal green on the first flight —
+`Desktop bundle (linux)` on **`Image: ubuntu-24.04`** with the new ISA gate:
+
+```
+[isa-gate] bundle/aethone: x86 ISA needed: x86-64-baseline     ← was: baseline, v2, v3
+[isa-gate] (all 8 other bundle ELFs): no ISA property (baseline)
+[ldd]     every dynamic ELF resolves (libjvm.so excepted); lyrebird/psiphon static
+[isa-census] bundle/aethone: 0 v3 sites
+ISA gate PASS: every bundled ELF at the x86-64-v1 floor; all dynamic deps resolve
+```
+
+The windows leg failed in the new PE audit on a **regex portability bug** (llvm-objdump
+prints size-suffixed mnemonics — `testb`/`tzcntl` — where GNU prints `test`/`tzcnt`; the
+url_launcher dispatch guard `test $0x20,%al` printed as `testb $0x20, %al` and did not
+match). Fixed in `1c7f8a8` with tool-portable patterns (optional `[bwlq]?` size suffix +
+comma-space tolerance, `andnpd` still excluded) and a self-diagnosing guard-context dump.
+
+**Run #81** (`1c7f8a8`, id 42256864719) — **ALL 17 jobs GREEN, `PIPELINE GREEN 16/16`**:
+
+| # | Required real test (the eight demanded) | Result |
+|---|---|---|
+| 1 | Flutter analyze + unit/widget tests (`flutter-ui` job) | **PASS** (pinned Flutter 3.47.9) |
+| 2 | Native unit tests — aether crate (480 fns, `--features tor`), psiphon fork (vet + 23 gated pkgs), zeptun (upstream linux CI gate) | **PASS** (3 jobs) |
+| 3 | Linux release build (`flutter build linux --release` on ubuntu-24.04) | **PASS** — `Desktop bundle (linux)` |
+| 4 | Full ELF ISA audit of the built bundle (CI fail-closed gate + independent local re-audit of the downloaded artifact) | **PASS** — `bundle/aethone: x86-64-baseline`; the other 8 ELFs carry no ISA property |
+| 5 | `ldd` full-resolution proof | **PASS** — every dynamic ELF resolves on the build leg (`libjvm.so` excepted for the dormant JNI asset); smoke leg re-checks libaether/libzeptun |
+| 6 | Desktop smoke under Xvfb (linux bundle) | **PASS** — `Image: ubuntu-24.04`, app alive past 12 s, core-log capture + session header, `[isa-gate] shipped bundle/aethone: x86 ISA needed: x86-64-baseline` **re-proved after the tar round-trip** |
+| 7 | Main program (bundle/aethone) confirmed at v1 | **PASS** — CI gate + independent `readelf` on the downloaded r81 artifact; **0** v3-class instructions in the executable |
+| 8 | Android regression (all Android jobs unchanged & green in the same run) | **PASS** — native build ×3 ABIs, ELF/ABI inspection, emulator runtime smoke, APK build, APK cold-start smoke all success; `scripts/build_native.sh`, NDK/gradle/Kotlin untouched (diff: only `linux/CMakeLists.txt`, `scripts/build_native_desktop.sh`, `.github/workflows/native-ci.yml`) |
+
+**Windows PE audit (run #81, real llvm-objdump on the windows-2025 image, first flight
+after the portability fix):** `PE audit PASS` —
+`data/app.so: 0`, `dartjni.dll: 0` (zero-tolerance), `zeptun.dll: 0 v3 + 37 tzcnt`
+(tzcnt-only policy), `aethone.exe: 102 v3 + 5 tzcnt` and
+`url_launcher_windows_plugin.dll: 32 v3 + 4 tzcnt` (envelope + dispatch-shape check),
+`flutter_windows.dll: 14669`, `aether.dll: 17260`, `wintun.dll: 77`, `lyrebird.exe:
+108908`, `psiphon.exe: 8792` (counted, runtime-dispatched). Independent GNU-objdump
+re-audit of the downloaded r81 Windows bundle reproduces every number and both guard
+shapes (`cmp $0x2,%eax` at `0x140013abf` in aethone.exe; `test $0x20,%al` at
+`0x18000c499` in url_launcher).
+
+**Shipped artifacts (run #81):**
+* `aethone-linux-x86_64-r81.tar.gz` — sha256 `dbf97e4f5fbb1d069d3b5de4406b8d0e910a4e02bbd3704a5241ce61ecad17bf`
+* `aethone-windows-x86_64-r81.zip` — sha256 `a87f3adbe55d878a665131a0885a2cbdd5321859652762a6a7b754af640ddb7f`
+* glibc symbol-version floors (r81): `bundle/aethone` GLIBC_2.34 (Ubuntu 22.04+),
+  `libaether.so` GLIBC_2.39 (Ubuntu 24.04+), `libzeptun.so` GLIBC_2.34,
+  `libflutter_linux_gtk.so` GLIBC_2.18. On a pre-24.04 distribution the app needs the
+  2.39-era symbols only for libaether.so — an older-distro user sees a symbol-version
+  error, never an ISA crash; that floor is a glibc-age constraint, not a CPU constraint.
+
+**Final fix commits:** `4b283e7` (the four-layer fix) → `1c7f8a8` (PE-audit pattern
+portability). Verification runs: #80 (Linux-side proof + the regex finding) and #81
+(full 17/17 green).
+
 
 ## 5. Windows x86_64 appendix — machine-code audit (llvm-objdump)
 
