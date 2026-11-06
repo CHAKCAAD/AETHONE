@@ -62,10 +62,15 @@ GOARCH=amd64
 EXE=""
 LIBAETHER=""
 LIBZEPTUN=""
+ZLIB_DIR="lib"
 if [ "$OS" = "windows" ]; then
   EXE=".exe"
   LIBAETHER="aether.dll"
   LIBZEPTUN="zeptun.dll"
+  # zig installs RUNTIME dlls under bin/ on Windows (lib/ carries only the
+  # import library zeptun.lib) — proven by the x86_64-windows-gnu crossbuild
+  # that located the artifacts; the hosted msvc run built the same layout.
+  ZLIB_DIR="bin"
   RUST_TARGET="x86_64-pc-windows-msvc"
 else
   LIBAETHER="libaether.so"
@@ -98,7 +103,7 @@ clone_pin "$ZEPTUN_REPO" "$ZEPTUN_SHA" "$ZEPTUN_SRC"
   # build's optimize mode.
   "$ZIG" build -Doptimize=ReleaseFast
 )
-ZLIB="$ZEPTUN_SRC/zig-out/lib/$LIBZEPTUN"
+ZLIB="$ZEPTUN_SRC/zig-out/$ZLIB_DIR/$LIBZEPTUN"
 require_file "$ZLIB"
 mkdir -p "$OUT/zeptun"
 cp "$ZLIB" "$OUT/zeptun/$LIBZEPTUN"
