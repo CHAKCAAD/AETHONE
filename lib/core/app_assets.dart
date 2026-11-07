@@ -89,6 +89,13 @@ abstract final class AppAssets {
   static const String iconNotification = '$_icons/Notification 1.svg';
   static const String iconSend = '$_icons/Send 1.svg';
 
+  /// v1.0.0 (round 18) — the About-card link rows' glyphs, the owner's
+  /// own picks: «برای تلگرام از آیکون: Send 3 استفاده کن و برای
+  /// اینستاگرام از Instagram.svg استفاده کن که توی پوشه آیکون های اپ
+  /// هست». The repo row rides the committed GitHub logo (logoGithub).
+  static const String iconSend3 = '$_icons/Send 3.svg';
+  static const String iconInstagram = '$_icons/Instagram.svg';
+
   // --- v4.34 light mode (owner round 10): the theme-toggle icons the
   // owner named — «آیکون با نام Sun 1 برای حالت لایت و آیکون با نام Moon
   // برای حالت نایت مود که هردو در پوشه آیکون های اپ موجود هستند».
@@ -313,6 +320,9 @@ abstract final class AppAssets {
         iconTick,
         iconNotification,
         iconSend,
+        // v1.0.0 — the About-card link rows (Send 3 / Instagram).
+        iconSend3,
+        iconInstagram,
         iconOff,
         iconActivity4,
         iconRight2,

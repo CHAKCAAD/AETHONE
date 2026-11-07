@@ -11,10 +11,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../connection/connection_state.dart';
 import '../../../connection/connection_store.dart';
 import '../../../connection/desktop_window.dart';
 import '../../../core/app_assets.dart';
+import '../../../core/app_meta.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 import 'settings_controls.dart';
@@ -70,6 +73,16 @@ class _GeneralSettingsPageState extends State<GeneralSettingsPage> {
     }
   }
 
+  /// v1.0.0 (round 18) — the About-card link rows open EXTERNALLY (the
+  /// openTelegramChannel precedent: never an in-app webview).
+  Future<void> _openLink(String url) async {
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // no handler on the device — the honest no-op (the row stays a row)
+    }
+  }
+
   Future<void> _confirmReset() async {
     final strings = AppStrings.of(context);
     final confirmed = await showDialog<bool>(
@@ -103,10 +116,45 @@ class _GeneralSettingsPageState extends State<GeneralSettingsPage> {
                 keyId: 'app-version',
                 icon: AppAssets.iconSetting,
                 title: strings.appVersionLabel,
-                // v4.35 — the beta window shows the stage, not the number.
-                trailingValue: strings.betaStage,
+                // v1.0.0 (round 18): «در قسمت تنظیمات عمومی نسخه برنامه
+                // رو بنویس طبیعتا نسخه 1.0.0 باید باشه» — the REAL number
+                // (kept locked to pubspec by app_meta_test).
+                trailingValue: appVersion,
                 chevron: false,
                 onTap: () {}, // a value row — not a navigation target
+              ),
+              const SubSectionDivider(),
+              // v1.0.0 (round 18) — «آدرس ریپو رو اضافه کن»: the repo row
+              // (the committed GitHub logo rides it).
+              SettingNavRow(
+                keyId: 'repository',
+                icon: AppAssets.logoGithub,
+                title: strings.githubRow,
+                trailingValue: 'CHAKCAAD/AETHONE',
+                chevron: false,
+                onTap: () => _openLink(repositoryUrl),
+              ),
+              const SubSectionDivider(),
+              // «آدرس تلگرام: t.me/AETHONE … برای تلگرام از آیکون: Send 3
+              // استفاده کن» — the owner-named glyph.
+              SettingNavRow(
+                keyId: 'telegram',
+                icon: AppAssets.iconSend3,
+                title: strings.telegramRow,
+                trailingValue: '@AETHONE',
+                chevron: false,
+                onTap: () => _openLink(telegramChannelUrl),
+              ),
+              const SubSectionDivider(),
+              // «آدرس اینستاگرام … برای اینستاگرام از Instagram.svg استفاده
+              // کن که توی پوشه آیکون های اپ هست».
+              SettingNavRow(
+                keyId: 'instagram',
+                icon: AppAssets.iconInstagram,
+                title: strings.instagramRow,
+                trailingValue: '@aethoneiran',
+                chevron: false,
+                onTap: () => _openLink(instagramUrl),
               ),
             ],
           ),

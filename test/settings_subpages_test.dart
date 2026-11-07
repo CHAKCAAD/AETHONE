@@ -24,6 +24,7 @@ import 'package:aethone/features/settings/appearance_page.dart';
 import 'package:aethone/features/settings/connection_page.dart';
 import 'package:aethone/features/settings/core_page.dart';
 import 'package:aethone/features/settings/general_page.dart';
+import 'package:aethone/core/app_meta.dart';
 import 'package:aethone/features/settings/language_page.dart';
 import 'package:aethone/features/settings/psiphon_page.dart';
 import 'package:aethone/features/settings/routing_page.dart';
@@ -89,15 +90,15 @@ void main() {
       await tester.pumpWidget(_booth(GeneralSettingsPage(store: store)));
       await tester.pumpAndSettle();
 
-      // v4.35 (owner round 11, the beta round): the version row shows the
-      // STAGE, not the number («نسخه برنامه رو بنویس آزمایشی» — the fa
-      // booth renders betaStage «آزمایشی»); the repo/channel rows are
-      // dropped for the beta window. The number itself stays locked to
-      // pubspec by app_meta_test.
+      // v1.0.0 (round 18): the version row shows the REAL number
+      // («در قسمت تنظیمات عمومی نسخه برنامه رو بنویس طبیعتا نسخه 1.0.0
+      // باید باشه»); the repo / Telegram / Instagram link rows are back
+      // from the beta-window drop (this round's decree).
       expect(find.byKey(const ValueKey('nav-app-version')), findsOneWidget);
-      expect(find.text('آزمایشی'), findsOneWidget); // == betaStage (fa)
-      expect(find.byKey(const ValueKey('nav-telegram')), findsNothing);
-      expect(find.byKey(const ValueKey('nav-repository')), findsNothing);
+      expect(find.text(appVersion), findsOneWidget); // == '1.0.0' (fa)
+      expect(find.byKey(const ValueKey('nav-repository')), findsOneWidget);
+      expect(find.byKey(const ValueKey('nav-telegram')), findsOneWidget);
+      expect(find.byKey(const ValueKey('nav-instagram')), findsOneWidget);
     });
   });
 

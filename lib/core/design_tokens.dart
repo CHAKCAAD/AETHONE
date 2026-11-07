@@ -116,8 +116,13 @@ abstract final class AethColors {
   /// binary slot ([AethThemeSync.light]), not the lerped palette, so no
   /// cross-fade frame, restore seed or stale-palette edge can ever render
   /// the wordmark dark at night.
+  ///
+  /// v1.0.0 (round 18): light mode pins PURE BLACK («متن aethone بالای
+  /// صفحه اصلی … در حالت لایت مود باید مشکی رنگ باشه») — the symmetric
+  /// decree: white at night, black in light, both resolved slots, never
+  /// the lerped palette.
   static Color get wordmarkInk => AethThemeSync.light
-      ? textPrimary
+      ? const Color(0xFF000000)
       : const Color(0xFFFFFFFF);
 
   /// Secondary/muted text — night `#8E8E93` (VLM read) / light `#A3A3A3`

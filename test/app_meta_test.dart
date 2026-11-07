@@ -114,6 +114,7 @@ void main() {
       s.appVersionLabel;
       s.telegramRow;
       s.githubRow;
+      s.instagramRow;
       s.secNotifications;
       s.notificationsComing;
       s.secAppLanguage;

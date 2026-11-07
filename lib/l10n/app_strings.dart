@@ -226,6 +226,9 @@ class AppStrings {
   String get betaStage => _v['betaStage']!;
   String get telegramRow => _v['telegramRow']!;
   String get githubRow => _v['githubRow']!;
+
+  /// v1.0.0 (round 18) — the Instagram link row (the About card).
+  String get instagramRow => _v['instagramRow']!;
   String get secNotifications => _v['secNotifications']!;
   String get notificationsComing => _v['notificationsComing']!;
 
@@ -650,6 +653,7 @@ class AppStrings {
       'betaStage': 'آزمایشی',
       'telegramRow': 'کانال تلگرام',
       'githubRow': 'مخزن گیت‌هاب',
+      'instagramRow': 'اینستاگرام',
       'secNotifications': 'اعلان و رویداد',
       'notificationsComing': 'اعلان اندروید هنگام اتصال نمایش داده می‌شود و دکمهٔ «قطع اتصال» همان‌جا در دسترس است؛ در دسکتاپ از منوی آیکون سینی سیستم قطع و وصل کنید.',
       'notificationsRow': 'اعلان اتصال',
@@ -949,6 +953,7 @@ class AppStrings {
       'betaStage': 'Beta',
       'telegramRow': 'Telegram channel',
       'githubRow': 'GitHub repository',
+      'instagramRow': 'Instagram',
       'secNotifications': 'Notifications & events',
       'notificationsComing':
           "While connected, Android's notification carries a Disconnect action right on it; on the desktop the system-tray menu toggles the connection.",
@@ -1246,6 +1251,7 @@ class AppStrings {
       'betaStage': 'Бета-версия',
       'telegramRow': 'Канал Telegram',
       'githubRow': 'Репозиторий GitHub',
+      'instagramRow': 'Instagram',
       'secNotifications': 'Уведомления и события',
       'notificationsComing': 'Во время подключения уведомление Android несёт действие «Отключить» прямо в себе; на десктопе соединением управляет меню значка в трее.',
       'notificationsRow': 'Уведомление о подключении',
@@ -1542,6 +1548,7 @@ class AppStrings {
       'betaStage': '测试版',
       'telegramRow': 'Telegram 频道',
       'githubRow': 'GitHub 仓库',
+      'instagramRow': 'Instagram',
       'secNotifications': '通知与事件',
       'notificationsComing': '连接时，Android 通知栏内即带有「断开连接」按钮；桌面端可通过系统托盘菜单切换连接。',
       'notificationsRow': '连接通知',
@@ -1848,6 +1855,7 @@ class AppStrings {
       'betaStage': 'Beta',
       'telegramRow': 'Telegram kanaly',
       'githubRow': 'GitHub repozitoriýasy',
+      'instagramRow': 'Instagram',
       'secNotifications': 'Bildirişler we wakalar',
       'notificationsComing': 'Birikdirilen wagty Android-iň bildirişinda «Birikmegi kes» düwmesi bar; iş stolynda sistema treý menyusy birikmäni dolandyrýar.',
       'notificationsRow': 'Birikme bildirişi',
