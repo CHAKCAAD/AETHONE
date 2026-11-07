@@ -13,4 +13,12 @@ object EngineBridge {
     fun emit(args: Map<String, Any?>) {
         channel?.invokeMethod("onTunnelEvent", args)
     }
+
+    /// v4.41 (owner round 17, item 12) — a DIRECT method call on the
+    /// engine channel (the notification's «قطع اتصال» action arrives as
+    /// `onNotificationDisconnect`, exactly like the desktop tray's
+    /// `onTrayToggleConnection`).
+    fun invoke(method: String, args: Map<String, Any?>) {
+        channel?.invokeMethod(method, args)
+    }
 }

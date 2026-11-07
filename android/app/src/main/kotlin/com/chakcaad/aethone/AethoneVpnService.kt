@@ -88,6 +88,24 @@ class AethoneVpnService : VpnService() {
         /// (owner device-test: «در حالت تونل … tunnelStartFailed / destroy»
         /// from a service that was already being torn down).
         const val EXTRA_SESSION = "session"
+
+        /// v4.41 (owner round 17, item 4) — the per-app tunneling pick:
+        /// "all" (whole-device TUN, the standing behavior), "allow" (ONLY
+        /// these packages through the TUN) or "disallow" (everything
+        /// EXCEPT these packages). Applied through the Builder's
+        /// allow/disallow lists — mutually exclusive, so a degenerate
+        /// allow-list (empty, or every entry uninstalled) falls back to
+        /// the whole-device rule set.
+        const val EXTRA_APP_MODE = "appMode"
+        const val EXTRA_APPS = "apps"
+
+        /// v4.41 (owner round 17, item 12) — the notification's «قطع اتصال»
+        /// action. Handled at the very top of onStartCommand: the STORE
+        /// owns the full teardown (core + TUN + state machine), so the
+        /// service only forwards the request to Dart; the grace-timer
+        /// fallback stops the TUN itself if no engine answers (the app
+        /// process was killed) — no orphaned tunnel.
+        const val ACTION_DISCONNECT = "com.chakcaad.aethone.DISCONNECT"
         private const val TAG = "AethoneVpn"
         private const val CHANNEL_ID = "aethone_vpn"
         private const val NOTIFICATION_ID = 1
@@ -168,6 +186,11 @@ class AethoneVpnService : VpnService() {
     /// (psiphon family only); same restart semantics as [socksTcpOnly].
     private var socksStrictLive: Boolean = false
 
+    /// v4.41 — the per-app tunneling key ("mode|sorted,packages") the TUN
+    /// is CURRENTLY configured with; a change restarts the tunnel exactly
+    /// like a port change (an already-established TUN cannot be re-scoped).
+    private var liveAppsKey: String = "all|"
+
     /// v4.21 — the session stamp from the start intent (0 when absent,
     /// e.g. an external start); echoed on EVERY event this instance emits.
     private var sessionId: Int = 0
@@ -178,12 +201,38 @@ class AethoneVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // v4.41 — the notification's Disconnect action: never reaches the
+        // start path (the service is already foreground; the action was
+        // posted from its live notification).
+        if (intent?.action == ACTION_DISCONNECT) {
+            Log.i(TAG, "disconnect requested from the notification")
+            EngineBridge.invoke(
+                "onNotificationDisconnect",
+                mapOf("session" to sessionId),
+            )
+            // The honest fallback: if no Dart engine answers within the
+            // grace window (process killed), stop the tunnel ourselves.
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                {
+                    if (instance === this && zeptunUp) stopFromUser()
+                },
+                600,
+            )
+            return START_NOT_STICKY
+        }
         startForegroundCompat()
         val port = intent?.getIntExtra(EXTRA_PORT, 1819) ?: 1819
         socksPort = port
         sessionId = intent?.getIntExtra(EXTRA_SESSION, 0) ?: 0
         val tcpOnly = intent?.getBooleanExtra(EXTRA_TCP_ONLY, false) ?: false
         val socksStrict = intent?.getBooleanExtra(EXTRA_SOCKS_STRICT, false) ?: false
+        // v4.41 — the per-app tunneling pick (older Dart halves send
+        // nothing; "all" + an empty list keeps the whole-device rule set).
+        val appMode = intent?.getStringExtra(EXTRA_APP_MODE) ?: "all"
+        @Suppress("UNCHECKED_CAST")
+        val apps = (intent?.getStringArrayListExtra(EXTRA_APPS) ?: arrayListOf())
+            .filter { it.isNotBlank() }
+
         // v4.26 — the straggler gate: this start was superseded by a stop
         // (a `stopVpn` processed while the start delivery was still in
         // flight — the lost-cancel window's platform half). Establishing
@@ -241,7 +290,7 @@ class AethoneVpnService : VpnService() {
             // Each stage now names itself: consent/establish failures stay
             // "establish-failed", a nativeStart rc≠0 is
             // "zeptun-start-failed:rc=N".
-            val failReason = startTunnel(port, tcpOnly, socksStrict)
+            val failReason = startTunnel(port, tcpOnly, socksStrict, appMode, apps)
             if (failReason != null) {
                 EngineBridge.emit(downEvent(failReason))
                 stopSelf()
@@ -295,7 +344,13 @@ class AethoneVpnService : VpnService() {
 
     /// v4.31b — returns null on success, the failure REASON otherwise (the
     /// stage-named string Dart's tunnelStartFailed shows verbatim).
-    private fun startTunnel(port: Int, tcpOnly: Boolean, socksStrict: Boolean): String? {
+    private fun startTunnel(
+        port: Int,
+        tcpOnly: Boolean,
+        socksStrict: Boolean,
+        appMode: String,
+        apps: List<String>,
+    ): String? {
         if (zeptunUp) {
             // v4.20: a mode switch (e.g. 1819 → 1820) between connects used
             // to keep serving the OLD port — zeptun would relay into a
@@ -308,13 +363,18 @@ class AethoneVpnService : VpnService() {
             // v4.38: the strict-socks handshake counts too — the same port
             // with a different socksStrict dials differently (pipelined vs
             // sequential), so a psiphon mode switching in or out restarts.
+            // v4.41 — the per-app set counts as part of the target too:
+            // an established TUN cannot be re-scoped, so a changed app
+            // mode/list restarts it (same semantics as a port change).
+            val appsKey = "$appMode|${apps.sorted().joinToString(",")}"
             if (port != socksPort || tcpOnly != socksTcpOnly ||
-                socksStrict != socksStrictLive
+                socksStrict != socksStrictLive || appsKey != liveAppsKey
             ) {
                 Log.i(
                     TAG,
-                    "socks target changed $socksPort/$socksTcpOnly/$socksStrictLive -> " +
-                        "$port/$tcpOnly/$socksStrict; restarting zeptun",
+                    "socks target changed $socksPort/$socksTcpOnly/$socksStrictLive/" +
+                        "$liveAppsKey -> $port/$tcpOnly/$socksStrict/$appsKey; " +
+                        "restarting zeptun",
                 )
                 stopTunnel("port-change")
             } else {
@@ -348,12 +408,49 @@ class AethoneVpnService : VpnService() {
             .addAddress("172.19.0.1", 30)
             .addRoute("0.0.0.0", 0)
             .addDnsServer("172.19.0.2")
-        try {
-            builder.addDisallowedApplication(packageName)
-        } catch (e: Exception) {
-            // Only possible for a missing package name — record and continue;
-            // zeptun's protect() callback is the second loop guard.
-            Log.w(TAG, "addDisallowedApplication failed", e)
+        // v4.41 (owner round 17, item 4) — per-app tunneling. The two
+        // Builder lists are mutually exclusive (mixing them throws), so:
+        //  * "allow": every VALID selected package joins the allow-list —
+        //    the app's own uid is then outside the list and implicitly
+        //    excluded from the TUN (loop prevention without an explicit
+        //    disallow, which the Builder would reject);
+        //  * "disallow": every valid selected package joins the
+        //    disallow-list, and the app itself is always appended to it;
+        //  * anything else ("all", a degenerate/empty allow-list): the
+        //    standing whole-device rule — only the app itself is
+        //    disallowed.
+        // Uninstalled/invisible packages throw NameNotFoundException per
+        // entry — recorded and skipped, never fatal to the tunnel.
+        var allowApplied = false
+        if (appMode == "allow" && apps.isNotEmpty()) {
+            for (pkg in apps) {
+                if (pkg == packageName) continue
+                try {
+                    builder.addAllowedApplication(pkg)
+                    allowApplied = true
+                } catch (e: Exception) {
+                    Log.w(TAG, "addAllowedApplication($pkg) failed — uninstalled?", e)
+                }
+            }
+        } else if (appMode == "disallow") {
+            for (pkg in apps) {
+                if (pkg == packageName) continue
+                try {
+                    builder.addDisallowedApplication(pkg)
+                } catch (e: Exception) {
+                    Log.w(TAG, "addDisallowedApplication($pkg) failed — uninstalled?", e)
+                }
+            }
+        }
+        if (!allowApplied) {
+            try {
+                builder.addDisallowedApplication(packageName)
+            } catch (e: Exception) {
+                // Only possible for a missing package name — record and
+                // continue; zeptun's protect() callback is the second loop
+                // guard.
+                Log.w(TAG, "addDisallowedApplication failed", e)
+            }
         }
         val fd: ParcelFileDescriptor = builder.establish() ?: run {
             Log.e(TAG, "Builder.establish() returned null (revoked or no permission)")
@@ -413,11 +510,12 @@ class AethoneVpnService : VpnService() {
         zeptunUp = true
         socksTcpOnly = tcpOnly
         socksStrictLive = socksStrict
+        liveAppsKey = "$appMode|${apps.sorted().joinToString(",")}"
         Log.i(
             TAG,
             "zeptun up on socks 127.0.0.1:$port udp=${if (tcpOnly) "disabled" else "enabled"} " +
                 "strict=${if (socksStrict) "sequential" else "pipelined"} " +
-                "(protect callback installed)",
+                "apps=$liveAppsKey (protect callback installed)",
         )
         EngineBridge.emit(upEvent(port))
         return null
@@ -476,12 +574,28 @@ class AethoneVpnService : VpnService() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        // v4.41 (round 17, item 12) — the «قطع اتصال» action rides the
+        // notification (the store runs the full user disconnect), and the
+        // small icon is the brand A-mark alpha mask (the launcher mipmap
+        // rendered as a grey blob in the status bar).
+        val disconnectIntent = PendingIntent.getService(
+            this,
+            1,
+            Intent(this, AethoneVpnService::class.java)
+                .setAction(ACTION_DISCONNECT),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_aethone)
             .setContentTitle(getString(R.string.vpn_notification_title))
             .setContentText(getString(R.string.vpn_notification_text))
             .setOngoing(true)
             .setContentIntent(contentIntent)
+            .addAction(
+                0,
+                getString(R.string.vpn_notification_disconnect),
+                disconnectIntent,
+            )
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             // specialUse + PROPERTY_SPECIAL_USE_FGS_SUBTYPE=vpn-tunnel in the

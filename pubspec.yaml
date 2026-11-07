@@ -95,6 +95,11 @@ flutter:
     # feGaussianBlur which flutter_svg cannot rasterize; rendered via
     # headless Chromium with filters intact; SVG sources stay committed) ---
     - design/patterns_png/
+    # --- v4.41 (round 17): the country routing profiles — one [direct]
+    #     rule file per routing-area pick (ccTLD suffixes + domestic
+    #     domains + the country's aggregated IPv4 space); the adapter
+    #     plants the selected one as AETHER_ROUTES_FILE at every connect. ---
+    - design/routing/
     # --- country flags: pre-rendered 256×256 PNGs (v4.10 — 265 of 266 SVGs
     # embed the artwork as raster <image> inside <pattern>, unsupported by
     # flutter_svg; PNGs are extracted from the owner's own embedded artwork.
@@ -108,6 +113,9 @@ flutter:
     - design/آیکون های اپ/Download.svg
     - design/آیکون های اپ/Upload.svg
     - design/آیکون های اپ/Setting.svg
+    - design/آیکون های اپ/Category.svg
+    - design/آیکون های اپ/Tick.svg
+    - design/آیکون های اپ/Notification 1.svg
     - design/آیکون های اپ/Information Circle.svg
     - design/آیکون های اپ/Map.svg
     - design/آیکون های اپ/Send 1.svg

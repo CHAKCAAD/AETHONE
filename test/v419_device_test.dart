@@ -10,6 +10,7 @@ library;
 
 import 'dart:async';
 
+import 'package:aethone/connection/app_tunnel.dart';
 import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/core_settings.dart';
@@ -614,6 +615,14 @@ void main() {
 }
 
 class _Cfg implements EngineConfigSource {
+  /// v4.41 — the seam's new members (routing profile + per-app pick).
+  @override
+  String? get routingRegion => null;
+  @override
+  AppTunnelMode get appTunnelMode => AppTunnelMode.all;
+  @override
+  Set<String> get appTunnelApps => const <String>{};
+
   _Cfg({ProtocolId? selectedProtocol})
       : selectedProtocol = selectedProtocol ?? ProtocolId.wireguard;
   @override

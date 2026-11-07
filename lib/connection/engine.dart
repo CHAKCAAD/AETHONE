@@ -13,6 +13,8 @@
 ///  * secrets never appear in events or logs.
 library;
 
+import 'app_tunnel.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -166,6 +168,22 @@ abstract class EngineConfigSource {
 
   /// «سرعت اسکن» 1..5 (protocol sheet; feeds the core scan profile).
   int get scanSpeed;
+
+  /// v4.41 (owner round 17, item 3): the routing-area pick — 'ir'/'tm'/
+  /// 'ru'/'cn' or null (= none). The adapter materializes the country's
+  /// routing profile (lib/connection/country_routes.dart) and plants
+  /// `AETHER_ROUTES_FILE` before every core start: the selected country's
+  /// own domains + IP space go DIRECT, everything else tunnels. Before
+  /// v4.41 this pick was persisted but never consumed — the profiles
+  /// routed nothing.
+  String? get routingRegion;
+
+  /// v4.41 (owner round 17, item 4): the per-app tunneling pick (Android,
+  /// tunnel mode) — [AppTunnelMode.all] keeps the whole-device TUN, the
+  /// other two modes apply [appTunnelApps] through the VpnService
+  /// Builder's allow/disallow lists.
+  AppTunnelMode get appTunnelMode;
+  Set<String> get appTunnelApps;
 
   /// v4.32 — the AUTO/SMART protocol-mode pill (connection page +
   /// onboarding). SMART is the APP-LAYER selector (SMART_AUTO_SPEC.md §3:

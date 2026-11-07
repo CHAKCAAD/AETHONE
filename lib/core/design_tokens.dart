@@ -110,6 +110,16 @@ abstract final class AethColors {
   /// Theme-dependent (v4.34).
   static Color get textPrimary => AethThemeSync.palette.textPrimary;
 
+  /// v4.41 (owner round 17, item 10): the AETHONE lockup's TEXT — pinned
+  /// PURE WHITE at night («متن AETHONE بالای صفحه اصلی باید در حالت نایت
+  /// مود سفید باشه»); light keeps the theme ink. Reads the RESOLVED
+  /// binary slot ([AethThemeSync.light]), not the lerped palette, so no
+  /// cross-fade frame, restore seed or stale-palette edge can ever render
+  /// the wordmark dark at night.
+  static Color get wordmarkInk => AethThemeSync.light
+      ? textPrimary
+      : const Color(0xFFFFFFFF);
+
   /// Secondary/muted text — night `#8E8E93` (VLM read) / light `#A3A3A3`
   /// (the light CSS «UP:»/«DOWN:» label color). Theme-dependent (v4.34).
   static Color get textSecondary => AethThemeSync.palette.textSecondary;
@@ -468,8 +478,12 @@ abstract final class AethGeometry {
   /// #2 — «متن توضیحات کارت ها باید کمی کوچک تر باشد»).
   static const double settingsPillH = 87;
   static const double settingsPillGap = 24;
-  static const double settingsPillLogoPsiphon = 56;
-  static const double settingsPillLogoTor = 42;
+  // v4.41 (owner round 17, item 2): «آیکون تور و سایفون صفحه تنطیمات هم
+  // حداکثر ارتفاع 35 داشته باشن در حال حاضر زیادی بزرگ هستن» — the v4.40
+  // 56/42 boxes were too big; both logos cap at 35 ink-height now (the
+  // psiphon 27×36 art prints 26×35, the tor 32×32 art prints 35×35).
+  static const double settingsPillLogoPsiphon = 35;
+  static const double settingsPillLogoTor = 35;
   static const double settingsPillInset = 16;
   static const double settingsPillTitleSize = 13;
   static const double settingsPillSubSize = 9;
@@ -582,9 +596,15 @@ abstract final class AethGeometry {
   /// ink-height; the owner's art carries its own breathing room). The
   /// plain ONLY subtiles keep the family logos at the old stack's own
   /// calibrated boxes (psiphon 31.2 / tor 26.3 — the _StackGlyph evidence).
-  static const double protoCombinedGlyphH = 48;
-  static const double protoPsiphonGlyphBox = 31.2;
-  static const double protoTorGlyphBox = 26.3;
+  // v4.41 (owner round 17, item 1): «حداکثر ارتفاع 35 کافیه … آیکون های
+  // اصلی سایفون و تور هم ارتفاعشون اندازه آیکون سمت چپ باشه» — EVERY
+  // family-card glyph (the combined modes AND the plain family logos inside
+  // the three right subtiles) caps at 35 ink-height, matching the
+  // main-block logo on the visual left; the v4.40 48/31.2/26.3 frame
+  // calibration is retired by the decree.
+  static const double protoCombinedGlyphH = 35;
+  static const double protoPsiphonGlyphBox = 35;
+  static const double protoTorGlyphBox = 35;
 
   /// Scan pills: h36 r8 gap8, CENTERED (row spans x33..367). Widths increase
   /// toward the right; the frame ships the widest (rightmost, 87) SELECTED.

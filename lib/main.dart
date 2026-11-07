@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app.dart';
+import 'connection/connection_state.dart';
 import 'connection/connection_store.dart';
 import 'connection/desktop_window.dart';
 import 'connection/egress_locations.dart';
+import 'connection/platform_engine_adapter.dart';
 import 'connection/settings_persistence.dart';
 import 'connection/smart_scorecard.dart';
 
@@ -47,6 +49,21 @@ Future<void> main() async {
   // button's ask-dialog, the remembered pick, and the tray menu's toggle
   // entry. No-op on Android.
   DesktopWindowBridge(store).bind();
+
+  // v4.41 (owner round 17, item 12) — the Android connection notifications'
+  // «قطع اتصال» action: the SAME full user disconnect the in-app button
+  // runs (core + TUN + hold service + state machine), fired from the
+  // service's action button through the engine channel. The store's
+  // single-flight guard owns every other state.
+  PlatformEngineAdapter.onNotificationDisconnect = () {
+    final state = store.state;
+    if (state == VpnState.connected ||
+        state == VpnState.connecting ||
+        state == VpnState.starting ||
+        state == VpnState.reconnecting) {
+      unawaited(store.disconnect());
+    }
+  };
 
   runApp(AethoneApp(store: store));
 }

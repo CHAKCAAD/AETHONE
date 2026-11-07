@@ -30,6 +30,7 @@ import '../core/app_assets.dart';
 import '../core/app_theme.dart';
 import '../core/motion.dart';
 import 'connection_state.dart';
+import 'app_tunnel.dart';
 import 'connection_store.dart';
 import 'core_settings.dart';
 import 'egress_locations.dart';
@@ -52,6 +53,11 @@ abstract final class SettingsKeys {
   static const torLocation = 'aethone.settings.torLocation';
   static const protocolModeSmart = 'aethone.settings.protocolModeSmart';
   static const routingRegion = 'aethone.settings.routingRegion';
+
+  /// v4.41 — per-app tunneling (Android, tunnel mode): the mode name +
+  /// the selected package list.
+  static const appTunnelMode = 'aethone.settings.appTunnelMode';
+  static const appTunnelApps = 'aethone.settings.appTunnelApps';
   static const killSwitch = 'aethone.settings.killSwitch';
   static const homeLook = 'aethone.settings.homeLook';
   static const motionStyle = 'aethone.settings.motionStyle';
@@ -164,6 +170,17 @@ class SettingsPersistence {
       } else if (region.length == 2 && region == region.toLowerCase()) {
         store.routingRegion = region;
       }
+      // v4.41 — per-app tunneling: unknown mode names fall back to `all`
+      // (never crash an old/corrupt blob); the package list is stored
+      // verbatim (uninstalled packages are skipped by the service).
+      store.appTunnelMode = AppTunnelMode.fromName(
+        prefs.getString(SettingsKeys.appTunnelMode),
+      );
+      store.appTunnelApps = prefs
+              .getStringList(SettingsKeys.appTunnelApps)
+              ?.where((p) => p.trim().isNotEmpty)
+              .toSet() ??
+          <String>{};
       if (prefs.containsKey(SettingsKeys.killSwitch)) {
         store.killSwitch = prefs.getBool(SettingsKeys.killSwitch)!;
       }
@@ -358,6 +375,15 @@ class SettingsPersistence {
       } else {
         await prefs.setString(SettingsKeys.routingRegion, region);
       }
+      // v4.41 — per-app tunneling.
+      await prefs.setString(
+        SettingsKeys.appTunnelMode,
+        store.appTunnelMode.name,
+      );
+      await prefs.setStringList(
+        SettingsKeys.appTunnelApps,
+        store.appTunnelApps.toList(growable: false),
+      );
       await prefs.setBool(SettingsKeys.killSwitch, store.killSwitch);
       await prefs.setString(SettingsKeys.homeLook, store.homeLook.name);
       await prefs.setString(SettingsKeys.motionStyle, store.animationStyle.name);

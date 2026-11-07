@@ -25,6 +25,14 @@
 /// The color change is animated as a crossfade between the two artwork
 /// variants (owner: «با انیمیشن به رنگ سبز تغییر پیدا میکنند»).
 ///
+/// v4.41 (owner round 17, item 6): «کمی فلش های رو به بالا پترن های کنار
+/// تمام صفحات رو کوچیک تر کن دقت کن فقط فلش رو به بالا رو کوچیک کن، نه
+/// حاله رنگی زیرش» — the up-arrow chevron STROKES of all four artworks
+/// were re-scaled to 0.8 around their own centre (path + mask + gradient
+/// coordinates, SVG sources in design/پترن پس زمینه صفحه اصلی), while the
+/// blurred halo circle underneath kept its geometry untouched; the PNGs
+/// were re-rendered from those sources.
+///
 /// While [active] (the engine walking OR the tunnel up — home only) the
 /// canvases come alive: a slow VERTICAL drift plus a gentle luminance
 /// breath — v4.25 makes the drift the STYLE'S OWN tempo ([MotionRecipe]):

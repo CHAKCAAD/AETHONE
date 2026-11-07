@@ -153,7 +153,8 @@ class _Wordmark extends StatelessWidget {
             fontWeight: FontWeight.w700,
             fontSize: fontSize,
             letterSpacing: AethGeometry.wordmarkLetterSpacing * s,
-            color: AethColors.textPrimary,
+            // v4.41 (round 17, item 10): pinned pure white at night.
+            color: AethColors.wordmarkInk,
           ),
         ),
       ],

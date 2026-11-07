@@ -31,8 +31,10 @@ class AethoneApp extends StatefulWidget {
     Locale('en'),
     Locale('ru'),
     Locale('zh', 'CN'),
-    // tk joins when its Material-localizations coverage is handled
-    // (onboarding step) — AppStrings already carries tk→en fallback.
+    // v4.41: tk (Turkmen) resolves its OWN AppStrings table (round 17);
+    // the Material-locale mapping below stays 'en' because
+    // flutter_localizations ships no Turkmen coverage — only the few
+    // framework-owned strings (cut/copy/paste tooltips) render English.
   ];
 
   @override
@@ -172,9 +174,11 @@ class _AethoneAppState extends State<AethoneApp>
   /// null keeps the device locale (MaterialApp resolves it against
   /// [AethoneApp.supportedLocales], else Persian — the design language).
   /// v4.23 — 'tk' (the wizard's Turkmenistan tile) maps onto the English
-  /// Material locale: flutter_localizations has no Turkmen coverage, and
-  /// AppStrings' tk table is the documented en fallback. The store keeps
-  /// the raw 'tk' so both language pages show the pick as selected.
+  /// Material locale: flutter_localizations has no Turkmen coverage. Since
+  /// v4.41 AppStrings carries the COMPLETE tk table (round 17) — every
+  /// app-owned string renders Turkmen; only framework tooltips fall back
+  /// to English. The store keeps the raw 'tk' so both language pages show
+  /// the pick as selected.
   Locale? _locale(String? code) => switch (code) {
         'fa' => const Locale('fa'),
         'en' => const Locale('en'),

@@ -15,6 +15,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:aethone/connection/app_tunnel.dart';
 import 'package:aethone/connection/aether_ffi.dart';
 import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/core_settings.dart';
@@ -2084,6 +2085,14 @@ class _FakeCore implements AetherCoreApi {
 
 /// A config source with fixed user choices (interface getter names).
 class _FixedConfig implements EngineConfigSource {
+  /// v4.41 — the seam's new members (routing profile + per-app pick).
+  @override
+  String? get routingRegion => null;
+  @override
+  AppTunnelMode get appTunnelMode => AppTunnelMode.all;
+  @override
+  Set<String> get appTunnelApps => const <String>{};
+
   _FixedConfig({
     ProtocolId? selectedProtocol,
     ConnectionMode? connectionMode,

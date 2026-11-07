@@ -877,7 +877,9 @@ class _FamilyCard extends StatelessWidget {
                     Positioned(
                       left: 0,
                       right: 0,
-                      top: (AethGeometry.protoMainLogoCenterY - 28) * s,
+                      // v4.41 (owner round 17, item 1): the main logo is 35
+                      // tall now — re-center the box on the frame's cy 43.
+                      top: (AethGeometry.protoMainLogoCenterY - 35 / 2) * s,
                       child: Center(
                         // v4.35 (owner item 4): the family main logo rides
                         // the theme ink (was hardcoded Colors.white —
@@ -886,7 +888,9 @@ class _FamilyCard extends StatelessWidget {
                           id: isPsiphon
                               ? ProtocolId.psiphonOnly
                               : ProtocolId.torOnly,
-                          size: (isPsiphon ? 56 : 42) * s,
+                          // v4.41: «حداکثر ارتفاع 35 کافیه» — the v4.40
+                          // 56/42 boxes were too big; 35 for both families.
+                          size: 35 * s,
                         ),
                       ),
                     ),
@@ -1009,6 +1013,13 @@ class _SubTileState extends State<_SubTile>
                 ? ProtocolGlyph(
                     id: widget.id,
                     size: AethGeometry.protoCombinedGlyphH * s,
+                    // v4.41 (owner round 17, item 11): «آیکون وارپ اور تور
+                    // و وارپ اور سایفون باید وقتی در حالت انتخاب هستن
+                    // سفید رنگ باشن» — the v4.40 verbatim-artwork rewrite
+                    // dropped the selected-tile all-ink rule for the
+                    // combined modes; their green artworks (#1AD995) are
+                    // the tile's own fill and vanished when selected.
+                    white: widget.isSelected,
                   )
                 : ProtocolGlyph(
                     id: widget.id,

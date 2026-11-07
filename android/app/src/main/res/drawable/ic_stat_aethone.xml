@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v4.41 (round 17, item 12) — the connection notifications' status-bar
+     small icon: the brand A-mark as a pure white alpha mask (the
+     silhouette of design/brand/app-icon.png). Status-bar icons must be
+     alpha-only — the system tints them; the old full-colour launcher
+     mipmaps rendered as a grey blob up there. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="42"
+    android:viewportHeight="42">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M39.501,10.9064L39.501,34.419L27.1979,41.7331L27.1979,18.4603L14.7857,12.1628L13.5185,11.52L6.24289,7.82901L18.5044,0.253476L39.501,10.9064Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M23.5425,30.8356L11.8053,38.6112L2.48282,33.7823L2.48282,23.3047L14.7857,15.6215L14.7857,26.2989L23.5425,30.8356Z" />
+</vector>

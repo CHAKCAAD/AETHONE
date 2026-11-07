@@ -78,6 +78,15 @@ abstract final class AppAssets {
   static const String iconSetting = '$_icons/Setting.svg';
   static const String iconInformationCircle = '$_icons/Information Circle.svg';
   static const String iconMap = '$_icons/Map.svg';
+
+  /// v4.41 (round 17, item 4) — the per-app tunneling section's heading
+  /// (the launchable-apps grid) + the selected-row check.
+  static const String iconCategory = '$_icons/Category.svg';
+  static const String iconTick = '$_icons/Tick.svg';
+
+  /// v4.41 (round 17, item 12) — the notifications section's heading (the
+  /// owner's icon-set glyph).
+  static const String iconNotification = '$_icons/Notification 1.svg';
   static const String iconSend = '$_icons/Send 1.svg';
 
   // --- v4.34 light mode (owner round 10): the theme-toggle icons the
@@ -273,9 +282,10 @@ abstract final class AppAssets {
   /// shipped as pre-rendered 256×256 PNGs extracted from the owner's own
   /// embedded artwork (no redesign, byte-faithful to the SVG).
   ///
-  /// v4.21: `flag('auto')` is the AUTO placeholder globe — a stand-in drawn
-  /// for this build (owner: «فعلا یه پرچم خودت اضافه کن بعدا پرچمش رو طراحی
-  /// و ارسال میکنم»); the owner's own artwork replaces the file in place.
+  /// v4.41 (round 17): `flag('auto')` is the OWNER'S OWN artwork — the
+  /// delivered «آیکون لوکیشن خودکار» tile (design/brand/auto-location.svg,
+  /// the green rounded square with the white globe mark), rendered 256×256
+  /// like every other flag. The v4.21 placeholder globe is retired.
   static String flag(String code) => '$_flags/$code.png';
 
   /// True when the asset is a pre-rendered PNG (rendered via Image.asset);
@@ -299,6 +309,9 @@ abstract final class AppAssets {
         iconSetting,
         iconInformationCircle,
         iconMap,
+        iconCategory,
+        iconTick,
+        iconNotification,
         iconSend,
         iconOff,
         iconActivity4,

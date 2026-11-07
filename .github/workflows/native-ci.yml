@@ -2318,8 +2318,9 @@ jobs:
           # tzcnt encoding inside libzeptun.so (REP+BSF: executes as bsf on
           # non-BMI CPUs — a guarded fallback, not a v3 requirement). The
           # load-time guarantee is the property gate above; the counts are
-          # the audit trail. Full dispatch audit:
-          # LINUX_CPU_COMPATIBILITY_REPORT.md.
+          # the audit trail. Full dispatch audit: the workflow's own
+          # v3-census steps (the report file was retired with the
+          # public-repo cleanup, v4.41).
           echo "== v3-class instruction census (report-only; runtime-dispatched kernels) =="
           # Same tool-portable pattern as the Windows PE audit (GNU vs llvm
           # objdump suffix/space differences; andnpd excluded — SSE2).
@@ -2364,8 +2365,9 @@ jobs:
       # analysis of every PE with llvm-objdump (LLVM is preinstalled on the
       # windows-2025 image). Windows has no load-time ISA property: a v3
       # instruction only faults (STATUS_ILLEGAL_INSTRUCTION) when EXECUTED,
-      # so the policy is per-component, from the r79 dispatch audit (see
-      # LINUX_CPU_COMPATIBILITY_REPORT.md):
+      # so the policy is per-component, from the r79 dispatch audit (the
+      # zero-v3/tzcnt-only census below; the report file was retired with
+      # the public-repo cleanup, v4.41):
       #   * ZERO v3 sites — data/app.so (Dart AOT: gen_snapshot baseline)
       #     and dartjni.dll (native-assets clang baseline);
       #   * tzcnt-only — zeptun.dll (-Dcpu=baseline; LLVM emits the tzcnt
@@ -2496,7 +2498,7 @@ jobs:
             echo "flutter=${FLUTTER_VERSION}"
             echo "scope=v4.40 THE FMA FLOOR + CLOSE-DIALOG + AUTO THEME + ICON SET: Linux x86_64 app bundle, same look & size as Android (402x874 window, v4.40: clamped to the monitor so small screens see the whole frame), engines embedded (bundle/lib/libaether.so + libzeptun.so; lyrebird + psiphon child cores at the bundle root). THE FMA FLOOR (defense in depth, r86-informed): the Go engines' math.archExp assembly carries an FMA path (runtime-dispatched by Go's useFMA byte — verified present in the r86 binaries); the GOROOT haveArchExp=false patch removes the assembly path entirely — math.Exp is pure-Go now — and the zero-vfmadd gate proves it on both engines. zeptun builds ReleaseSafe now (a tunnel bug prints a panic into the core log instead of dying silently) and its logs route into the captured core log (the zeptun log bridge). The system-proxy companion: while the tunnel is up the OS proxy points at the same local SOCKS5 listener (gsettings; restored on stop + startup hygiene). Close-to-tray round 15: the close button asks (Dart ask-dialog, remember checkbox, general-settings row); the tray menu offers show / toggle connection / quit. The v4.40 Dart round: the owner's protocol icon set (dark/light pairs rendered EXACTLY as delivered), the AUTO theme schedule (06:00-18:00 light), the general-settings additions (close behavior, login auto-start, reset), the protocol-mode setting retired, the tor AUTO location resolved through TWO sources (Onionoo + ip-api)."
             echo "native_pins=${native_pins}"
-            echo "x86_isa_floor=x86-64-v1 (built on the baseline ubuntu-24.04 image; runner+plugins pinned to -march=x86-64 -mtune=generic; fail-closed readelf gate over every bundled ELF — see LINUX_CPU_COMPATIBILITY_REPORT.md)"
+            echo "x86_isa_floor=x86-64-v1 (built on the baseline ubuntu-24.04 image; runner+plugins pinned to -march=x86-64 -mtune=generic; fail-closed readelf gate over every bundled ELF — see the ISA gates in this workflow)"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > dist/BUILD_INFO.txt
           sha256sum dist/*.tar.gz | tee dist/SHA256SUMS.txt
@@ -2518,7 +2520,7 @@ jobs:
           "flutter=${{ env.FLUTTER_VERSION }}" | Add-Content dist/BUILD_INFO.txt
           "scope=v4.40 THE FMA FLOOR + CLOSE-DIALOG + AUTO THEME + ICON SET: Windows x86_64 app bundle, same look & size as Android (402x874 window, v4.40: clamped to the monitor work area), engines embedded beside aethone.exe (aether.dll + zeptun.dll + the pinned wintun.dll adapter + lyrebird.exe + psiphon.exe). THE FMA FLOOR (defense in depth, r86-informed — all 8 FMA sites in each engine live in math.archExp, runtime-dispatched by Go's useFMA byte): the GOROOT haveArchExp=false patch removes the assembly path entirely — math.Exp is pure-Go — and the CI PE audit gates both engines to ZERO vfmadd sites. The proxy-mode crash itself is NOT yet root-caused: the new crash log (exception code + module+offset) names the culprit on the next device test. zeptun builds ReleaseSafe (panics print to the captured core log — the VPN-mode silent crash becomes readable) and the zeptun log bridge surfaces the REAL wintun error inside the tunnelStartFailed reason (the rc=-5 device-error message now quotes it). The Windows crash log: an unhandled-exception filter writes exception code + module+offset to logs/crash-log.txt. The system-proxy companion: while the tunnel is up the WinInet proxy points at the local SOCKS5 listener (registry + refresh; restored on stop + startup hygiene). Close-to-tray round 15: WM_CLOSE routes into the Dart ask-dialog (remember checkbox, general-settings row); the tray menu offers show / toggle connection / quit. The v4.40 Dart round: the owner's protocol icon set (dark/light pairs, EXACTLY as delivered), the AUTO theme schedule (06:00-18:00 light), the general-settings additions (close behavior, login auto-start, reset), the protocol-mode setting retired, the tor AUTO location through TWO resolvers (Onionoo + ip-api). requireAdministrator stays (Wintun adapter + strict-route WFP); the -only family tunnel legs stay refused up-front (platformLimit)." | Add-Content dist/BUILD_INFO.txt
           "native_pins=aether@$($pins.pins.aether) zeptun@$($pins.pins.zeptun)" | Add-Content dist/BUILD_INFO.txt
-          "x86_isa_floor=x86-64 baseline (llvm-objdump machine-code audit in CI; v3-class instructions exist only inside CPUID runtime-dispatched kernels — MSVC STL/Skia/BoringSSL/Go crypto; see LINUX_CPU_COMPATIBILITY_REPORT.md)" | Add-Content dist/BUILD_INFO.txt
+          "x86_isa_floor=x86-64 baseline (llvm-objdump machine-code audit in CI; v3-class instructions exist only inside CPUID runtime-dispatched kernels — MSVC STL/Skia/BoringSSL/Go crypto; see the ISA gates in this workflow)" | Add-Content dist/BUILD_INFO.txt
           "recorded_at=$(Get-Date -AsUTC -Format 'yyyy-MM-ddTHH:mm:ssZ')" | Add-Content dist/BUILD_INFO.txt
           Get-FileHash dist/*.zip -Algorithm SHA256 | ForEach-Object { "{0}  {1}" -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } | Set-Content dist/SHA256SUMS.txt
           Get-Content dist/SHA256SUMS.txt
@@ -2963,7 +2965,7 @@ jobs:
               __isa_available-dispatch envelope: aethone.exe/
               url_launcher_windows_plugin.dll; counted:
               flutter_windows.dll/aether.dll/wintun.dll/lyrebird.exe/
-              psiphon.exe). Full audit: LINUX_CPU_COMPATIBILITY_REPORT.md.
+              psiphon.exe). Full audit: the PE machine-code gates in this workflow.
           --- NOT TESTED BY THIS RUN (stays BLOCKED / NOT TESTED — decision N2) ---
             - execution on a REAL pre-Haswell CPU (the owner's i3-3240 Ivy
               Bridge class): the Linux floor is proven statically (readelf

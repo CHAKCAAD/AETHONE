@@ -1,0 +1,29 @@
+# AETHONE country routing profile — Turkmenistan (tm)
+# v4.41 (round 17): the selected routing area's own traffic goes DIRECT
+# (bypasses the tunnel); everything else tunnels. Consumed by the aether
+# core through AETHER_ROUTES_FILE ([block]/[direct] sections; bare
+# entries are domain-suffix rules covering every subdomain, CIDR entries
+# are IP-range rules, `private` keeps LAN/localhost local).
+#
+# Data: IPv4 space = the ipdeny tm zone (aggregated RIR delegation
+# data, https://www.ipdeny.com — fetched 2026-11-08). IPv6 is not covered
+# yet. Domestic-domain list is curated from the country's major services
+# on non-ccTLDs; every ccTLD domain is covered by the TLD suffix rule.
+
+[direct]
+# LAN / loopback / CGNAT always stay local
+private
+# the country TLD (suffix rule — covers every subdomain)
+tm
+# the country IPv4 space (11 prefixes)
+77.83.59.0/24
+95.85.96.0/19
+103.220.0.0/22
+119.235.112.0/20
+177.93.143.0/24
+185.69.184.0/22
+185.246.72.0/22
+216.250.8.0/21
+217.65.78.0/24
+217.174.224.0/20
+194.117.52.192/26

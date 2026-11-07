@@ -4,6 +4,8 @@
     <string name="vpn_channel_name">تونل AETHONE</string>
     <string name="vpn_notification_title">AETHONE</string>
     <string name="vpn_notification_text">سرویس تونل در حال اجراست</string>
+    <!-- v4.41 (round 17, item 12): the notifications' Disconnect action. -->
+    <string name="vpn_notification_disconnect">قطع اتصال</string>
     <!-- v4.19 (#7): the proxy-mode process-hold service notification. -->
     <string name="core_channel_name">پروکسی AETHONE</string>
     <string name="core_notification_title">AETHONE</string>

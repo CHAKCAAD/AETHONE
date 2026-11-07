@@ -288,6 +288,12 @@ class MainActivity : FlutterActivity() {
                     // — older Dart sends nothing and false keeps the old
                     // behavior for every non-psiphon mode.
                     val socksStrict = call.argument<Boolean>("socksStrict") ?: false
+                    // v4.41 (round 17, item 4) — the per-app tunneling
+                    // pick: "all" | "allow" | "disallow" + the selected
+                    // packages (absent = the whole-device standing rule).
+                    val appTunnelMode = call.argument<String>("appTunnelMode") ?: "all"
+                    val appTunnelApps =
+                        call.argument<List<String>>("appTunnelApps") ?: emptyList()
                     // v4.26 — record the session BEFORE the start goes out:
                     // a stop that lands while this start is still in flight
                     // bumps the stop generation past it, and the straggler
@@ -299,6 +305,11 @@ class MainActivity : FlutterActivity() {
                         .putExtra(AethoneVpnService.EXTRA_SESSION, session)
                         .putExtra(AethoneVpnService.EXTRA_TCP_ONLY, tcpOnly)
                         .putExtra(AethoneVpnService.EXTRA_SOCKS_STRICT, socksStrict)
+                        .putExtra(AethoneVpnService.EXTRA_APP_MODE, appTunnelMode)
+                        .putExtra(
+                            AethoneVpnService.EXTRA_APPS,
+                            ArrayList(appTunnelApps.filter { it.isNotBlank() }),
+                        )
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         startForegroundService(intent)
                     } else {
@@ -328,6 +339,12 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "vpnStatus" -> result.success(AethoneVpnService.status())
+                // v4.41 (round 17, item 4) — the launchable-app list for
+                // the per-app tunneling picker (label + package, the app
+                // itself excluded). Apps with a launcher activity are
+                // visible to every app by the package-visibility rules —
+                // no QUERY_ALL_PACKAGES needed.
+                "installedApps" -> result.success(installedApps())
                 "zeptunCounters" -> result.success(AethoneVpnService.counters())
                 // v4.19 (#7): the proxy-mode process hold (CoreHoldService).
                 "startCoreHold" -> {
@@ -363,6 +380,30 @@ class MainActivity : FlutterActivity() {
         if (Build.VERSION.SDK_INT >= 33) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
         }
+    }
+
+    /// v4.41 — the per-app tunneling picker's list: every LAUNCHABLE
+    /// app (label + packageName), AETHONE itself excluded (tunneling the
+    /// tunnel makes a loop), sorted by label.
+    private fun installedApps(): List<Map<String, String>> {
+        val pm = packageManager
+        val launcher = android.content.Intent(
+            android.content.Intent.ACTION_MAIN,
+        ).addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+        return pm.queryIntentActivities(launcher, 0)
+            .asSequence()
+            .map { it.activityInfo.applicationInfo }
+            .filter { it.packageName != packageName }
+            .distinctBy { it.packageName }
+            .map { info ->
+                mapOf(
+                    "package" to info.packageName,
+                    "label" to (pm.getApplicationLabel(info)?.toString()
+                        ?: info.packageName),
+                )
+            }
+            .sortedBy { it["label"]?.lowercase() }
+            .toList()
     }
 
     /// v4.19 (#1): the tunnel-mode crash on the owner's device could not be

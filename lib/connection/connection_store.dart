@@ -23,6 +23,7 @@ import 'connection_state.dart';
 import 'core_settings.dart';
 import 'egress_locations.dart';
 import 'engine.dart';
+import 'app_tunnel.dart';
 import 'platform_engine_adapter.dart';
 import 'smart_scorecard.dart';
 import 'transport_modes.dart';
@@ -152,10 +153,23 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
 
   /// Routing-rules country: 'ir' (default, design shows «Iran»), 'tm',
   /// 'ru', 'cn' or null = None (phase-1 report: IR/TM/RU/CN + None).
+  @override
   String? routingRegion = 'ir';
 
   /// Kill switch preference — ON by default (design shows «ON»).
   bool killSwitch = true;
+
+  /// v4.41 (owner round 17, item 4) — per-app tunneling (Android, tunnel
+  /// mode): all = every app rides the TUN (the standing behavior), allow
+  /// = ONLY the selected apps, disallow = everything EXCEPT the selected
+  /// apps. Applied by AethoneVpnService's Builder through
+  /// VpnService.Builder.addAllowedApplication / addDisallowedApplication.
+  @override
+  AppTunnelMode appTunnelMode = AppTunnelMode.all;
+
+  /// The selected packages ([AppTunnelMode.allow] / [AppTunnelMode.disallow]).
+  @override
+  Set<String> appTunnelApps = <String>{};
 
   /// Settings setters (notify; the settings page + status cards rebuild).
   void setProtocolModeSmart(bool smart) {
@@ -173,6 +187,21 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   void setKillSwitch(bool on) {
     if (killSwitch == on) return;
     killSwitch = on;
+    notifyListeners();
+  }
+
+  /// v4.41 — per-app tunneling setters (the routing page's section).
+  void setAppTunnelMode(AppTunnelMode mode) {
+    if (appTunnelMode == mode) return;
+    appTunnelMode = mode;
+    notifyListeners();
+  }
+
+  void toggleAppTunnelApp(String packageName, {required bool selected}) {
+    final next = {...appTunnelApps};
+    if (selected == next.contains(packageName)) return;
+    selected ? next.add(packageName) : next.remove(packageName);
+    appTunnelApps = next;
     notifyListeners();
   }
 

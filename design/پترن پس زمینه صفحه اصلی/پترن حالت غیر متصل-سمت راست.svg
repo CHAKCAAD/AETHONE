@@ -3,24 +3,24 @@
 <circle cx="308" cy="281" r="104" fill="#EA2323"/>
 </g>
 <mask id="stroke0_2064_1282" fill="white">
-<path d="M221.121 178.578L342.349 259.312L337.815 347.859L217.824 267.948L142.736 310.321L135.071 314.647L91.0584 339.486L94.1016 250.256L221.121 178.578Z"/>
+<path d="M220.2375 205.5189L317.2199 270.1061L313.5927 340.9437L217.5999 277.0149L157.5295 310.9133L151.3975 314.3741L116.1875 334.2453L118.6220 262.8613L220.2375 205.5189Z"/>
 </mask>
-<path d="M221.121 178.578L342.349 259.312L337.815 347.859L217.824 267.948L142.736 310.321L135.071 314.647L91.0584 339.486L94.1016 250.256L221.121 178.578Z" stroke-width="2" stroke="url(#paint0_linear_2064_1282)" stroke-opacity="0.85" mask="url(#stroke0_2064_1282)"/>
+<path d="M220.2375 205.5189L317.2199 270.1061L313.5927 340.9437L217.5999 277.0149L157.5295 310.9133L151.3975 314.3741L116.1875 334.2453L118.6220 262.8613L220.2375 205.5189Z" stroke-width="2" stroke="url(#paint0_linear_2064_1282)" stroke-opacity="0.85" mask="url(#stroke0_2064_1282)"/>
 <mask id="stroke1_2064_1282" fill="white">
-<path d="M269.077 329.288L268.867 416.502L211.959 447.987L157.938 412.01L160.568 322.197L215.62 358.86L269.077 329.288Z"/>
+<path d="M258.6023 326.0869L258.4343 395.8581L212.9079 421.0461L169.6911 392.2645L171.7951 320.4141L215.8367 349.7445L258.6023 326.0869Z"/>
 </mask>
-<path d="M269.077 329.288L268.867 416.502L211.959 447.987L157.938 412.01L160.568 322.197L215.62 358.86L269.077 329.288Z" stroke-width="2" stroke="url(#paint1_linear_2064_1282)" stroke-opacity="0.85" mask="url(#stroke1_2064_1282)"/>
+<path d="M258.6023 326.0869L258.4343 395.8581L212.9079 421.0461L169.6911 392.2645L171.7951 320.4141L215.8367 349.7445L258.6023 326.0869Z" stroke-width="2" stroke="url(#paint1_linear_2064_1282)" stroke-opacity="0.85" mask="url(#stroke1_2064_1282)"/>
 <defs>
 <filter id="filter0_f_2064_1282" x="0" y="-27" width="616" height="616" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
 <feFlood flood-opacity="0" result="BackgroundImageFix"/>
 <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
 <feGaussianBlur stdDeviation="102" result="effect1_foregroundBlur_2064_1282"/>
 </filter>
-<linearGradient id="paint0_linear_2064_1282" x1="273.128" y1="213.213" x2="158.931" y2="384.687" gradientUnits="userSpaceOnUse">
+<linearGradient id="paint0_linear_2064_1282" x1="261.8431" y1="233.2269" x2="170.4855" y2="370.4061" gradientUnits="userSpaceOnUse">
 <stop stop-color="#EA2323"/>
 <stop offset="0.658654" stop-color="#EA2323" stop-opacity="0"/>
 </linearGradient>
-<linearGradient id="paint1_linear_2064_1282" x1="249.902" y1="316.518" x2="177.59" y2="425.098" gradientUnits="userSpaceOnUse">
+<linearGradient id="paint1_linear_2064_1282" x1="243.2623" y1="315.8709" x2="185.4127" y2="402.7349" gradientUnits="userSpaceOnUse">
 <stop stop-color="#EA2323"/>
 <stop offset="0.658654" stop-color="#EA2323" stop-opacity="0"/>
 </linearGradient>

@@ -60,7 +60,9 @@ import 'package:flutter/services.dart';
 import '../core/app_assets.dart';
 import 'aether_env.dart';
 import 'aether_ffi.dart';
+import 'app_tunnel.dart';
 import 'connection_state.dart';
+import 'country_routes.dart';
 import 'core_log.dart';
 import 'core_settings.dart';
 import 'egress_locations.dart';
@@ -549,6 +551,24 @@ class PlatformEngineAdapter implements EngineAdapter {
 
   static const MethodChannel _channel = MethodChannel('aethone/engine');
 
+  /// v4.41 (round 17, item 4) — the launchable-app list for the per-app
+  /// tunneling picker (label + package). Android only; every other
+  /// platform (and tests) reports an empty list — the routing page hides
+  /// the section there.
+  static Future<List<InstalledApp>> installedApps() async {
+    try {
+      final raw = await _channel
+          .invokeMethod<List<Object?>>('installedApps');
+      return (raw ?? const [])
+          .map((e) => InstalledApp.fromMap(e as Map<Object?, Object?>))
+          .toList(growable: false);
+    } on PlatformException {
+      return const [];
+    } on MissingPluginException {
+      return const [];
+    }
+  }
+
   /// Listener-bind budget: the core binds its listeners at START for every
   /// mode (lib.rs L128) — this wait is a cheap sanity bound; the real
   /// end-to-end wait lives in the probe-retry loop below.
@@ -771,6 +791,12 @@ class PlatformEngineAdapter implements EngineAdapter {
   // events simply never fire.
   static void Function()? onWindowCloseRequested;
   static void Function()? onTrayToggleConnection;
+
+  /// v4.41 (round 17, item 12) — the Android connection notifications'
+  /// «قطع اتصال» action (AethoneVpnService / CoreHoldService): the store
+  /// owns the full teardown (core + TUN + hold service + state machine),
+  /// exactly like the desktop tray toggle. Wired in main().
+  static void Function()? onNotificationDisconnect;
 
   @override
   Future<void> connect() async {
@@ -1204,6 +1230,14 @@ class PlatformEngineAdapter implements EngineAdapter {
           // بدل میشه و بعد دویاره دیتایی رد نمیشه» while the same port's
           // proxy worked).
           'tcpOnly': mode.tcpOnly,
+          // v4.41 (round 17, item 4) — the per-app tunneling pick:
+          // 'all' | 'allow' | 'disallow' + the selected packages. The
+          // service applies them to the VpnService Builder (allow-list /
+          // disallow-list); a mode change restarts the TUN exactly like a
+          // port change (see AethoneVpnService).
+          'appTunnelMode': config.appTunnelMode.name,
+          'appTunnelApps':
+              config.appTunnelApps.toList(growable: false),
           // v4.38 — the psiphon TUNNEL data-path root cause (owner round
           // 13 addendum: proxy works, tunnel shows Connected but exchanges
           // no data, in every version). The psiphon family's SOCKS target
@@ -1316,6 +1350,26 @@ class PlatformEngineAdapter implements EngineAdapter {
     final core = _core =
         _coreFactory == null ? AetherCore.open() : _coreFactory();
     final paths = await _paths();
+    // v4.41 (owner round 17, item 3) — the routing-area profile reaches the
+    // engine at last: the selected country's rules file is (re)written into
+    // the engine dir and planted as AETHER_ROUTES_FILE; the pinned core's
+    // RuleSet::from_env APPENDS its [direct]/[block] sections to the CLI
+    // rule lists (the user's own expert fields keep flowing through
+    // --route-block/--route-direct, untouched). A 'none' pick sets nothing
+    // — the pre-v4.41 behavior. Best-effort by design: a missing/unreadable
+    // profile must never kill a connect walk (the core only warns and runs
+    // with the user's own lists).
+    if (hasCountryRouteProfile(config.routingRegion)) {
+      try {
+        final routesPath = await materializeCountryRoutes(
+          filesDir: paths.filesDir,
+          region: config.routingRegion!,
+        );
+        setAetherEnvVar('AETHER_ROUTES_FILE', routesPath);
+      } catch (error) {
+        debugPrint('country routes profile skipped: $error');
+      }
+    }
     // v4.34 — the SMART tour's variant settings (masque HTTP/2 vs HTTP/3)
     // replace the user's own for THIS attempt only.
     final effectiveCore = coreOverride ?? config.coreSettings;
@@ -2266,6 +2320,10 @@ class PlatformEngineAdapter implements EngineAdapter {
         }
         if (call.method == 'onTrayToggleConnection') {
           onTrayToggleConnection?.call();
+          return;
+        }
+        if (call.method == 'onNotificationDisconnect') {
+          onNotificationDisconnect?.call();
           return;
         }
         throw MissingPluginException(

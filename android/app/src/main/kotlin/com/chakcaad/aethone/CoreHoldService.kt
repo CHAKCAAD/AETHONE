@@ -52,6 +52,18 @@ class CoreHoldService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // v4.41 (owner round 17, item 12) — the notification's «قطع اتصال»:
+        // the STORE owns the teardown (it stops the core and then this
+        // hold service itself). No grace fallback needed — this service
+        // lives in the Flutter process, so a dead engine means a dead
+        // notification too.
+        if (intent?.action == AethoneVpnService.ACTION_DISCONNECT) {
+            EngineBridge.invoke(
+                "onNotificationDisconnect",
+                mapOf("session" to 0),
+            )
+            return START_NOT_STICKY
+        }
         heldPort = intent?.getIntExtra(EXTRA_PORT, 1819) ?: 1819
         startForegroundCompat()
         instance = this
@@ -82,12 +94,26 @@ class CoreHoldService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        // v4.41 (round 17, item 12) — the same «قطع اتصال» action + the
+        // brand A-mark status-bar icon as the tunnel notification.
+        val disconnectIntent = PendingIntent.getService(
+            this,
+            1,
+            Intent(this, CoreHoldService::class.java)
+                .setAction(AethoneVpnService.ACTION_DISCONNECT),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_aethone)
             .setContentTitle(getString(R.string.core_notification_title))
             .setContentText(getString(R.string.core_notification_text))
             .setOngoing(true)
             .setContentIntent(contentIntent)
+            .addAction(
+                0,
+                getString(R.string.vpn_notification_disconnect),
+                disconnectIntent,
+            )
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceCompat.startForeground(

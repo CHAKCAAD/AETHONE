@@ -31,6 +31,7 @@ class GeneralSettingsPage extends StatefulWidget {
 
 class _GeneralSettingsPageState extends State<GeneralSettingsPage> {
   static bool get _isDesktop => Platform.isLinux || Platform.isWindows;
+  static bool get _isAndroid => Platform.isAndroid;
 
   bool _autoStart = false;
 
@@ -107,6 +108,38 @@ class _GeneralSettingsPageState extends State<GeneralSettingsPage> {
                 chevron: false,
                 onTap: () {}, // a value row — not a navigation target
               ),
+            ],
+          ),
+        ),
+
+        // ---- Section: notifications (owner round 17, item 12) ----
+        // «این قابلیت رو اضافه کن که کاربر بتونه از نوتیفیکشن اتصال رو
+        // قطع کنه» — the connection notification now carries the
+        // Disconnect action; the section states it (Android shows the
+        // notification reality, the desktop shows the tray reality — one
+        // description covers both).
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconNotification,
+          title: strings.secNotifications,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingNavRow(
+                keyId: 'connection-notification',
+                icon: _isAndroid
+                    ? AppAssets.iconNotification
+                    : AppAssets.iconShieldTick,
+                title: strings.notificationsRow,
+                trailingValue: strings.notificationsOn,
+                chevron: false,
+                onTap: () {}, // a value row — not a navigation target
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.notificationsComing),
             ],
           ),
         ),
