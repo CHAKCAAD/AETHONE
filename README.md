@@ -33,19 +33,18 @@ Turkmen.
 
 ## Downloads
 
-Pre-release builds are published on the
-[Releases](https://github.com/chakcaad/AETHONE/releases) page:
+The current release (**v1.0.0**) ships **Android only** — one APK per CPU,
+published on the [Releases](https://github.com/chakcaad/AETHONE/releases)
+page:
 
 | Device | File |
 | --- | --- |
 | Android 64-bit (most phones) | `aethone-arm64-v8a-*.apk` |
 | Android 32-bit / older | `aethone-armeabi-v7a-*.apk` |
 | Emulator / x86_64 | `aethone-x86_64-*.apk` |
-| Linux x86_64 | `aethone-linux-x86_64-*.tar.gz` |
-| Windows x86_64 | `aethone-windows-x86_64-*.zip` |
 
-Android requires Android 10 (API 29) or newer. Linux needs a polkit agent for
-the one sudo prompt; Windows asks UAC for the tunnel.
+Android requires Android 7.0 (API 24) or newer. Linux and Windows bundles
+are built by CI on every commit but are not published as releases yet.
 
 ## Build from source
 
@@ -125,19 +124,18 @@ AETHONE ترافیک شما را از طریق زنجیره‌ای از ترنس
 
 ## دانلود
 
-نسخه‌های آزمایشی در صفحهٔ
-[Releases](https://github.com/chakcaad/AETHONE/releases) منتشر می‌شوند:
+نسخهٔ فعلی (**v1.0.0**) فقط برای **اندروید** منتشر می‌شود — برای هر پردازنده
+یک APK جدا، در صفحهٔ
+[Releases](https://github.com/chakcaad/AETHONE/releases):
 
 | دستگاه | فایل |
 | --- | --- |
 | اندروید ۶۴ بیتی (اکثر گوشی‌ها) | `aethone-arm64-v8a-*.apk` |
 | اندروید ۳۲ بیتی / قدیمی | `aethone-armeabi-v7a-*.apk` |
 | شبیه‌ساز / x86_64 | `aethone-x86_64-*.apk` |
-| لینوکس x86_64 | `aethone-linux-x86_64-*.tar.gz` |
-| ویندوز x86_64 | `aethone-windows-x86_64-*.zip` |
 
-اندروید ۱۰ (API 29) یا جدیدتر لازم است. لینوکس برای یک بار پرسیدن رمز sudo به
-polkit-agent نیاز دارد؛ ویندوز برای تونل تأیید UAC می‌خواهد.
+اندروید ۷.۰ (API 24) یا جدیدتر لازم است. بسته‌های لینوکس و ویندوز هم در هر
+کامیت توسط CI ساخته می‌شوند اما هنوز به‌عنوان نسخه منتشر نشده‌اند.
 
 ## ساخت از سورس
 
