@@ -5,6 +5,7 @@
 #include "flutter/generated_plugin_registrant.h"
 
 #include "engine_channel_windows.h"
+#include "tray_icon_windows.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -71,6 +72,15 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
+    case WM_CLOSE:
+      // v4.39 — close-to-tray: hide the window; the tunnel and every
+      // engine keep running in the background. The tray menu's Exit entry
+      // is the real quit. When the notification area is unavailable the
+      // default destroy path proceeds unchanged.
+      if (aethone::TrayController::Instance()->HideToTray(hwnd)) {
+        return 0;
+      }
+      break;
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;

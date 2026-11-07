@@ -468,3 +468,199 @@ The code + tests + CI + this report land as the round's commit(s) on `ci-bootstr
 10. Android/Windows zero regression — the freeze honored except the psiphon-scoped,
     additive exception the owner's addendum demands (§7); CI per-platform builds + tests
     green; device rounds pending (§11.5).
+
+
+---
+
+# v4.39 — the owner's device-report round (2026-11-07)
+
+The r85 bundles (the first 16/16-green run, v4.38c) went to the owner's
+devices. The report came back with five items; every one is root-caused,
+fixed, and gated below. Zero frozen pins changed; the Android legs are
+untouched (their CI commands are byte-identical; only the mipmap launcher
+faces were regenerated from the owner's own mark).
+
+## 14. The owner's five items and their root causes
+
+### 14.1 «از ابتدا برنامه باید با دسترسی sudo اجرا بشه» — root-from-start
+
+The v4.37 model elevated ONLY the TUN bring-up (the Polkit helper); the
+GUI and the child cores ran as the normal user. The owner's decree: the
+WHOLE app runs as root from launch — the TUN AND the engines it spawns in
+the background, one privilege grant, no per-action prompts.
+
+**Fix** — `ElevateAtStartup()` (desktop_shared/desktop_engine.cpp), the new
+FIRST statement of `linux/runner/main.cc`:
+
+* guards: already-root -> skip; `AETHONE_ELEVATION_ATTEMPT` set -> skip
+  (the elevated side sets it; also the user's escape hatch); `CI` set ->
+  skip (the smoke leg stays deterministic); no `XDG_CURRENT_DESKTOP` and no
+  `DESKTOP_SESSION` -> skip (headless); no pkexec/env on PATH -> skip;
+* spawn: `pkexec /usr/bin/env <SESSION=...>... AETHONE_ELEVATION_ATTEMPT=1
+  <abs exe>` — /usr/bin/env is root-owned (pkexec's refusal to execute
+  user-writable bundle paths does not apply; the same proven bootstrap the
+  v4.37 helper install uses), the session vars (DISPLAY, WAYLAND_DISPLAY,
+  XAUTHORITY, XDG_RUNTIME_DIR, XDG_SESSION_TYPE, XDG_CURRENT_DESKTOP,
+  DESKTOP_SESSION, DBUS_SESSION_BUS_ADDRESS, LANG) pass through, and HOME /
+  XDG_DATA_HOME deliberately re-root — the root instance's app data lives
+  under /root, never inside the invoking user's directories;
+* waits up to 300 s (the password prompt budget), then reports: elevated
+  child ran to completion -> this process exits 0; declined (126) / no
+  agent (127) / nonzero -> falls through IN PLACE as the unprivileged app,
+  and the v4.37 helper path stays available for tunnels.
+
+**Post-elevation, once root** — `EnsureDesktopIntegration()` (best effort,
+idempotent, after the log capture so the outcome lands in the captured
+core log): installs `aethone-icon.png` as
+`/usr/share/icons/hicolor/256x256/apps/com.chakcaad.aethone.png` and writes
+`/usr/share/applications/com.chakcaad.aethone.desktop` with
+`Exec=<bundle>/aethone` — a moved bundle self-heals on its next root launch.
+
+### 14.2 «آیکونش توی ترای سیستم کوچیک بشه» — close-to-tray, both desktops
+
+**Linux** — `linux/runner/tray_controller_linux.cc`: `GtkStatusIcon`
+carrying the owner's mark AS-IS (`aethone-tray.png` from the bundle root,
+scaled to 24 px); the window's `delete-event` hides instead of destroying;
+the menu is «نمایش AETHONE / خروج». A 3-second embed-grace timer un-hides
+the window when the session has no system tray, and the verdict is
+remembered (the next close quits directly — never a stranded hidden app).
+A missing bundle face keeps the default close semantics.
+
+**Windows** — `windows/runner/tray_icon_windows.cpp`: `Shell_NotifyIconW`
+with the new `IDI_TRAY_ICON` resource (the mark AS-IS); `WM_CLOSE` in
+`flutter_window.cpp` hides the window; the tray menu is Show/Exit in
+Persian (`نمایش` / `خروج` as codepage-proof UTF-16 escapes — the runner
+compiles without /utf-8); `TaskbarCreated` re-adds the icon after an
+Explorer restart. A rejected `NIM_ADD` falls back to the default destroy.
+
+### 14.3 The brand mark — one pipeline, two faces
+
+`design/brand/aethone-logo.svg` (the owner's delivery, committed verbatim)
+is rendered by `scripts/render_brand_icons.py` natively per size:
+
+* the TRAY face — the mark exactly as-is (transparent): tray_icon.ico
+  (16/24/32/48, embedded in aethone.exe) + aethone-tray.png (96);
+* the APP face — the same mark on WHITE: app_icon.ico (16..256, replaces
+  the template), aethone-icon.png (256), and the five Android mipmap
+  ic_launcher.png faces (48/72/96/144/192).
+
+Every corner pixel verified: tray faces fully transparent, app faces
+opaque white. The outputs are committed (CI never re-renders); the script
+is the derivation record.
+
+### 14.4 Windows: `LoadLibrary zeptun.dll failed (126)`
+
+Import-table analysis of the r85 `zeptun.dll` (objdump, the actual
+artifact): every import is a system DLL (ADVAPI32, IPHLPAPI, KERNEL32,
+WS2_32, fwpuclnt, ntdll) — nothing was missing. The DLL sat beside
+`aethone.exe`. The 126 therefore came from the PATH argument:
+`std::wstring(str.begin(), str.end())` widened byte-wise — garbage for any
+non-ASCII install path (a Persian user name / extraction folder), so
+`LoadLibraryExW` looked for a mangled filename and honestly reported "not
+found".
+
+**Fix** — the engine layer's Windows path handling is UTF-8 end-to-end
+(`Utf8ToWide`/`WideToUtf8` via `MultiByteToWideChar(CP_UTF8)` at the exact
+Win32 boundary): `GetModuleFileNameW`, `SHGetFolderPathW`,
+`GetFileAttributesW`, `_wfopen/_wremove/_wrename` (the capture paths),
+`_wmkdir`, `_wgetcwd`; the zeptun load converts once and retries with
+`LOAD_WITH_ALTERED_SEARCH_PATH`; the failure string now carries the
+absolute path it tried. The Dart side already opens `aether.dll` by the
+exe-dir-relative name (the W loader handles it natively — unchanged).
+
+**The same class on Linux** — POSIX paths are bytes; nothing to convert.
+The CI regression gate: the desktop smoke leg now boots the same bundle
+under `/tmp/باندل-آتون` with `XDG_DATA_HOME=/tmp/داده-آتون` and asserts the
+core-log capture installs there.
+
+### 14.5 «psiphon.exe باید در پس زمینه اجرا بشه» + the tor family
+
+Three spawn sites launched console children (a console child of a GUI app
+gets its own visible window on Windows):
+
+* `aether/src/psiphon.rs` — psiphon.exe (the psiphon family connect);
+* `aether/src/bridges.rs` — the lyrebird PT capability probe;
+* `tor-ptmgr-0.46.0/src/ipc.rs` — arti's own PT child. THIS is the tor
+  family's visible psiphon.exe the owner saw: arti (the tor engine) spawns
+  the PT binary for bridged connects, and with the lyrebird PT registered
+  for the tor modes, the PT child's console popped on every bridged tor
+  connect — looking exactly like "psiphon.exe runs when I press tor".
+
+**Fix** — `scripts/build_native_desktop.sh` patches all three sites with
+`#[cfg(windows)] creation_flags(CREATE_NO_WINDOW)` (0x0800_0000). The
+child cores keep their piped stdio; only the window goes away. The
+patcher is fail-closed (the pristine text must match exactly once, or the
+already-applied state exactly once) and its idempotency was proven locally
+by three consecutive passes over the real pinned sources. A kill-on-close
+Job Object in `windows/runner/main.cpp` now also reaps every child when
+aethone.exe exits (any path — quit, crash, task-kill).
+
+**Tor's protocol path itself** — audited, no defect found: the walk is
+architecture-identical across families (transport_modes.dart maps every
+mode to its listener; torChain -> --tor-bind 1820, torOnly -> --bind 1819
+serving plain tor). The tor family's failures on the owner's Windows
+device trace to the two classes fixed above (un-hidden PT children + the
+ANSI path layer). No separate tor code path was added — none is needed.
+
+## 15. What was REALLY executed this round (local, this machine)
+
+* `g++ -fsyntax-only -Wall -Wextra -Werror` over the full TUs:
+  desktop_engine.cpp (whole, Linux half), engine_channel_linux.cc,
+  tray_controller_linux.cc (new GTK/pixbuf stub, real glib/gobject),
+  tray_icon_windows.cpp (new Win32/shellapi stub — the MSVC-side
+  pre-flight this sandbox cannot really compile);
+* `render_brand_icons.py` executed; all nine outputs verified (sizes,
+  modes, corner pixels; PIL reads every .ico/.png back);
+* the hidden-child-cores patcher run three consecutive times over the
+  REAL pinned sources (aether @ d58f9d56 + tor-ptmgr-0.46.0 downloaded
+  from crates.io): APPLIED / ALREADY_APPLIED / ALREADY_APPLIED, exactly
+  one patch site per file at the end;
+* import-table dump of the r85 zeptun.dll/aether.dll/aethone.exe/
+  lyrebird.exe/psiphon.exe/flutter_windows.dll (objdump) — the 126
+  root-cause proof;
+* `bash -n` over the modified build script; YAML load of the modified
+  workflow (13 jobs, the smoke step list verified);
+* CI guard added after the analysis: `ElevateAtStartup` skips when `CI`
+  is set — the smoke leg boots deterministically (no pkexec attempt).
+
+## 16. NOT TESTED (honest limits — what needs the owner's devices)
+
+1. the live pkexec elevation round (the password prompt, the root
+   instance's DISPLAY plumbing) — posture + guards verified, the dialog
+   itself is an owner round; decline/headless/no-agent fallbacks verified
+   by construction;
+2. the tray embed on a real desktop session (X11 + a system tray; the
+   grace timer's un-hide path) — CI boots headless Xvfb where
+   GtkStatusIcon never embeds, so the CI leg exercises the FALLBACK, not
+   the tray;
+3. `ElevateAtStartup` under Wayland (the session vars pass; pkexec + a
+   Wayland compositor's polkit agent is an owner round);
+4. the CREATE_NO_WINDOW patch on a real Windows session (compiles are
+   CI-gated; the visual proof — no console windows — is an owner round);
+5. the tor family's device behavior after the round (the diagnosis is
+   code-architected; the owner's «وقتی تور اور وارپ رو میزنم» observation
+   is explained by the arti PT child + should vanish with the hidden
+   spawns — verify on device).
+
+## 17. The commit (v4.39)
+
+The code + icons + build-script patches + CI gates + this section land as
+`v4.39` on `ci-bootstrap/v4.4`. Baseline: `da60d05` (v4.38c, the SIGPIPE
+fixup). Run evidence recorded below after the dispatch.
+
+| file | this round |
+|---|---|
+| design/brand/aethone-logo.svg | NEW — the owner's mark, verbatim |
+| scripts/render_brand_icons.py | NEW — the two-face pipeline |
+| windows/runner/resources/{app_icon,tray_icon}.ico | regenerated (app: white bg; NEW tray) |
+| windows/runner/{tray_icon_windows.cpp,.h} | NEW — the Windows tray |
+| windows/runner/{flutter_window.cpp,main.cpp,resource.h,Runner.rc,CMakeLists.txt} | WM_CLOSE-to-tray, Job Object, IDI_TRAY_ICON, new source |
+| linux/packaging/{aethone-icon,aethone-tray}.png | NEW — the bundle faces |
+| linux/runner/{tray_controller_linux.cc,.h} | NEW — the GTK tray |
+| linux/runner/{main.cc,my_application.cc,CMakeLists.txt}; linux/CMakeLists.txt | the elevation call; icon + tray wiring; new source; the two PNG faces installed into the bundle |
+| desktop_shared/desktop_engine.{h,cpp} | the UTF-8/W path layer; ElevateAtStartup; EnsureDesktopIntegration |
+| android/app/src/main/res/mipmap-*/ic_launcher.png | regenerated (the mark on white) |
+| scripts/build_native_desktop.sh | the three CREATE_NO_WINDOW patches (fail-closed, idempotent) |
+| scripts/syntax_check_linux_runner.sh | + the tray/engine/Win32 legs; new stubs (gtk, windows, shellapi) |
+| .github/workflows/native-ci.yml | BUILD_INFO scope lines (both legs); smoke: the two icon assertions + the Persian-path boot |
+| README.md / this report | the v4.39 records |

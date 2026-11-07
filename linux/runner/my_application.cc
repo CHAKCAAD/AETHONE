@@ -8,6 +8,7 @@
 #include "flutter/generated_plugin_registrant.h"
 
 #include "engine_channel_linux.h"
+#include "tray_controller_linux.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -58,6 +59,13 @@ static void my_application_activate(GApplication* application) {
   // reference-screen CSS "iPhone 17 - 22"): the desktop window opens at
   // the same size the Android app renders, so the UI is pixel-identical.
   gtk_window_set_default_size(window, 402, 874);
+
+  // v4.39 — the app face for the window/taskbar (the owner's mark on
+  // WHITE — «آیکون اصلی اپ ... با پس زمینه سفید») + the close-to-tray
+  // controller (the transparent mark lives in the tray, exactly as
+  // delivered). Both ship in the bundle root beside the executable.
+  gtk_window_set_icon_from_file(window, aethone::AppIconFile(), nullptr);
+  aethone::AttachTray(window);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(

@@ -10,6 +10,7 @@ add_executable(${BINARY_NAME}
   "main.cc"
   "my_application.cc"
   "engine_channel_linux.cc"
+  "tray_controller_linux.cc"
   "../../desktop_shared/desktop_engine.cpp"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
 )

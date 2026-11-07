@@ -6,6 +6,64 @@ bundle v1, v2, v3, v4, the v4.1 addendum, v4.2 and v4.3 (2026-10-31 / 2026-11-01
 pin (source commits, Rust/Go/Zig versions, NDK r26d, API 29, three-ABI matrix, N1–N8)
 was changed in v4.2, v4.3, v4.4, v4.5, v4.6, v4.7, v4.8 or v4.9.
 
+## v4.39 — root-from-start, close-to-tray, brand icons; the Windows path fix (2026-11-07)
+
+Owner decree (device report on the r85 bundles): «فقط تونل نباید با درخواست sudo
+اجرا بشه بلکه از ابتدا برنامه باید با دسترسی sudo اجرا بشه تا بتونه هم تونل رو
+اجرا کنه هم موتورهای مورد نیازش رو خودش توی پس زمینه اجرا کنه»، close-to-tray
+«وقتی کاربر روی دکمه بستن کلیک میکنه برنامه به جای اینکه کلا بسته بشه آیکونش
+توی ترای سیستم کوچیک بشه»، the brand mark delivered as `design/brand/
+aethone-logo.svg` — the tray face exactly as-is, the app face on a white
+background everywhere (menus, launchers, captions); and the Windows device
+report: `tunnelStartFailed: zeptun-library-missing: LoadLibrary zeptun.dll
+failed (126)`, the visible `psiphon.exe` console window, and the tor-protocol
+family behaving strangely (the walk spawning psiphon for `-only` modes by
+architecture). Delivered with **zero frozen-pin changes**:
+
+* **Root-from-start (Linux)** — `ElevateAtStartup()`: the FIRST statement of
+  `linux/runner/main.cc` relaunches the whole app as root through one pkexec
+  prompt (`pkexec env <session vars> <exe>`; CI/headless/decline falls back
+  in-place, the v4.37 helper path stays). The root instance installs the menu
+  entry + hicolor icon (`EnsureDesktopIntegration`, idempotent, Exec follows
+  the bundle — a moved bundle self-heals on its next root launch).
+* **Close-to-tray** — `linux/runner/tray_controller_linux.cc` (GtkStatusIcon,
+  `نمایش / خروج`) and `windows/runner/tray_icon_windows.cpp` (Shell_NotifyIcon,
+  Show/Exit in Persian): the close button hides the window; the tunnel and
+  every engine keep running. An embed-grace timer un-hides when the session
+  has no tray; a missing bundle face keeps the default close semantics.
+* **Brand icons, one pipeline** — `scripts/render_brand_icons.py` renders
+  `design/brand/aethone-logo.svg` natively per size into `windows/runner/
+  resources/{app_icon,tray_icon}.ico` (embedded via `Runner.rc`, new
+  `IDI_TRAY_ICON`), `linux/packaging/{aethone-icon,aethone-tray}.png` (shipped
+  in the bundle root, fail-closed smoke assertions) and the five Android
+  mipmap `ic_launcher.png` faces. App face = the mark on WHITE; tray face =
+  the mark AS-IS.
+* **The Windows 126 fix** — the engine layer's Windows path handling is
+  UTF-8 end-to-end: `Utf8ToWide/WideToUtf8` at the exact Win32 boundary
+  (`GetModuleFileNameW/SHGetFolderPathW/GetFileAttributesW/_wfopen`), the
+  zeptun load goes through `CP_UTF8` with an `LOAD_WITH_ALTERED_SEARCH_PATH`
+  second chance, and the failure now names the absolute path. The v4.36
+  byte-widening (`std::wstring(begin, end)`) is what broke non-ASCII install
+  paths (a Persian user name / extraction folder) — proven by import-table
+  analysis of the r85 `zeptun.dll` (all imports are system DLLs; the DLL sat
+  beside `aethone.exe`).
+* **Hidden child cores (Windows)** — `scripts/build_native_desktop.sh`
+  patches three spawn sites with `CREATE_NO_WINDOW` (fail-closed,
+  idempotency proven by three consecutive local passes):
+  `aether/src/psiphon.rs` (psiphon.exe), `aether/src/bridges.rs` (the lyrebird
+  PT probe) and `tor-ptmgr-0.46.0/src/ipc.rs` (arti's own lyrebird PT child —
+  this is also why the tor-protocol modes popped psiphon.exe: arti spawns
+  the PT binary for bridged connects). A kill-on-close Job Object in
+  `windows/runner/main.cpp` reaps every child at exit.
+* **Tor on Windows** — diagnosis and fix documented in the report: the walk
+  is architecture-identical across families; the visible-window + failure
+  surface came from the un-hidden PT children and the ANSI path layer.
+  Both are fixed this round; the tor family needs no separate code path
+  (evidence: the transport-mode table + `tor-ptmgr` spawn site).
+* **New CI gates** — the desktop smoke leg asserts the two icon faces ship
+  in the bundle and boots the same bundle under a Persian path with a
+  Persian `XDG_DATA_HOME` (the regression gate for the 126 class).
+
 ## v4.36 — the desktop round: Linux & Windows output, same look & size (2026-11-06)
 
 Owner decree: «حالا میخوام با همین ضاهر و اندازه برای لینوکس و ویندوز هم خروجی

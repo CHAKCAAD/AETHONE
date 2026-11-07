@@ -175,4 +175,34 @@ struct TunnelCounters {
 /// keep the struct type and the accessor from colliding in C++ lookup.
 TunnelCounters ReadTunnelCounters();
 
+// ---- v4.39: the Linux root-from-start model (the owner's decree) --------
+//
+// The owner's decree (delivered in Persian, 2026-11-07): the tunnel must
+// not be the only thing that runs elevated — the WHOLE app must run as
+// root from launch, so it can bring the TUN up AND spawn every engine it
+// needs in the background by itself, with no per-action prompts. (The
+// decree's own wording is recorded in linux/runner/main.cc — this header
+// compiles on MSVC too, where the sources stay pure ASCII.)
+//
+// ElevateAtStartup() is the FIRST statement of linux/runner/main.cc —
+// before the log capture, before GTK, before any engine work. When the
+// session can authenticate, the process relaunches as root through
+// `pkexec env <session vars> <exe>` (ONE polkit prompt at launch; /usr/bin/
+// env is root-owned, so pkexec's refusal to execute user-writable bundle
+// paths does not apply — the same proven bootstrap the v4.37 helper uses).
+// Returns true when an elevated child ran to completion: main() must then
+// exit with *exit_code immediately. Returns false when no attempt was
+// made or it was declined (headless CI launch, pkexec missing, password
+// canceled) — the process continues in place and the v4.37 helper path
+// remains the unprivileged fallback for tunnels.
+bool ElevateAtStartup(int* exit_code);
+
+// The root instance's one-time (idempotent, best-effort) system
+// integration, called after the log capture so the outcome lands in the
+// captured core log: the hicolor app icon (the owner's mark on white) and
+// the .desktop menu entry. Exec always points at THIS bundle's current
+// location, so a moved bundle self-heals on its next root launch.
+// Windows keeps the embedded-resource model and needs none of this.
+void EnsureDesktopIntegration();
+
 }  // namespace aethone

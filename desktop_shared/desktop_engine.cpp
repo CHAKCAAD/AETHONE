@@ -10,8 +10,10 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 #ifdef _WIN32
+#include <cwchar>
 #include <direct.h>
 #include <fcntl.h>
 #include <io.h>
@@ -19,11 +21,15 @@
 #include <shlobj.h>
 #include <windows.h>
 #define GETCWD _getcwd
-#define MKDIR(p) _mkdir(p)
+// v4.39 — the Windows path layer is UTF-8 end-to-end: every path the
+// engine layer builds travels as UTF-8 and converts through
+// MultiByteToWideChar(CP_UTF8) exactly once, at the Win32 boundary.
+#define MKDIR(p) _wmkdir(Utf8ToWide(p).c_str())
 #else
 #include <arpa/inet.h>
 #include <dlfcn.h>
 #include <fcntl.h>  // O_RDONLY
+#include <signal.h>
 #include <spawn.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -56,6 +62,64 @@ ZeptunApi g_zeptun;
 std::once_flag g_zeptun_once;
 std::string g_zeptun_error;
 
+#ifdef _WIN32
+// v4.39 — the UTF-8/W boundary helpers. The v4.36 code used the ANSI
+// entry points (GetModuleFileNameA / SHGetFolderPathA / GetFileAttributesA
+// / fopen) and, at LoadLibrary time, widened with
+// std::wstring(str.begin(), str.end()) — a byte-wise widening that is only
+// correct for pure ASCII. The owner's device test of the r85 Windows
+// bundle hit exactly that: a non-ASCII install path (a Persian user name
+// or extract folder) widens to garbage and LoadLibraryExW reports 126 —
+// ERROR_MOD_NOT_FOUND, "LoadLibrary zeptun.dll failed (126)" — while the
+// very same bundle works under an ASCII path. Every path below is UTF-8
+// in the C++ layer and converts exactly once, here.
+std::wstring Utf8ToWide(const std::string& s) {
+  if (s.empty()) return std::wstring();
+  const int need = MultiByteToWideChar(CP_UTF8, 0, s.data(),
+                                       static_cast<int>(s.size()), nullptr, 0);
+  if (need <= 0) return std::wstring();
+  std::wstring w(static_cast<size_t>(need), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()),
+                      &w[0], need);
+  return w;
+}
+std::string WideToUtf8(const wchar_t* w, size_t n) {
+  if (w == nullptr || n == 0) return std::string();
+  const int bytes = WideCharToMultiByte(CP_UTF8, 0, w, static_cast<int>(n),
+                                        nullptr, 0, nullptr, nullptr);
+  if (bytes <= 0) return std::string();
+  std::string s(static_cast<size_t>(bytes), '\0');
+  WideCharToMultiByte(CP_UTF8, 0, w, static_cast<int>(n), &s[0], bytes,
+                      nullptr, nullptr);
+  return s;
+}
+#endif  // _WIN32
+
+// v4.39 — codepage-safe file helpers for the captured-core-log paths (the
+// filesDir can carry non-ASCII; the ANSI CRT entry points would miss the
+// very files the W layer just created). Linux keeps the POSIX calls.
+std::FILE* FileOpen(const std::string& path, const char* mode) {
+#ifdef _WIN32
+  return _wfopen(Utf8ToWide(path).c_str(), Utf8ToWide(mode).c_str());
+#else
+  return fopen(path.c_str(), mode);
+#endif
+}
+int FileRemove(const std::string& path) {
+#ifdef _WIN32
+  return _wremove(Utf8ToWide(path).c_str());
+#else
+  return remove(path.c_str());
+#endif
+}
+int FileRename(const std::string& from, const std::string& to) {
+#ifdef _WIN32
+  return _wrename(Utf8ToWide(from).c_str(), Utf8ToWide(to).c_str());
+#else
+  return rename(from.c_str(), to.c_str());
+#endif
+}
+
 template <typename Fn>
 Fn Sym(void* lib, const char* name) {
 #ifdef _WIN32
@@ -69,13 +133,27 @@ Fn Sym(void* lib, const char* name) {
 void LoadZeptunOnce() {
   const DesktopPaths& p = Paths();
 #ifdef _WIN32
+  // v4.39 — the wide path comes through the CP_UTF8 boundary (the v4.36
+  // byte-widening broke every non-ASCII install path: LoadLibrary reported
+  // 126 while the DLL sat right beside aethone.exe). The absolute path
+  // keeps the load independent of the CWD; APPLICATION_DIR resolves
+  // zeptun.dll's own imports against the bundle first.
+  const std::wstring wide = Utf8ToWide(p.zeptunLib);
   HMODULE lib = LoadLibraryExW(  // NOLINT: wide string on Windows
-      std::wstring(p.zeptunLib.begin(), p.zeptunLib.end()).c_str(),
-      nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
+      wide.c_str(), nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
   if (lib == nullptr) {
-    char buf[48];
-    snprintf(buf, sizeof(buf), "LoadLibrary zeptun.dll failed (%lu)",
-             GetLastError());
+    // A second chance with the altered search path — some downlevel
+    // Windows builds mishandle the flag combination on absolute paths;
+    // never a reason to fail silently.
+    lib = LoadLibraryExW(wide.c_str(), nullptr,
+                         LOAD_WITH_ALTERED_SEARCH_PATH);
+  }
+  if (lib == nullptr) {
+    char buf[200];
+    snprintf(buf, sizeof(buf),
+             "LoadLibrary zeptun.dll failed (%lu) at %s — is the DLL "
+             "shipped beside aethone.exe?",
+             GetLastError(), p.zeptunLib.c_str());
     g_zeptun_error = buf;
     return;
   }
@@ -481,7 +559,9 @@ std::string DirName(const std::string& path) {
 
 bool PathExists(const std::string& p) {
 #ifdef _WIN32
-  return GetFileAttributesA(p.c_str()) != INVALID_FILE_ATTRIBUTES;
+  // v4.39 — W entry point: the v4.36 GetFileAttributesA misread every
+  // non-ASCII path (same class as the LoadLibrary 126).
+  return GetFileAttributesW(Utf8ToWide(p).c_str()) != INVALID_FILE_ATTRIBUTES;
 #else
   struct stat st {};
   return stat(p.c_str(), &st) == 0;
@@ -517,9 +597,9 @@ void MkDirAll(const std::string& path) {
 
 std::string ExePath() {
 #ifdef _WIN32
-  char buf[MAX_PATH];
-  const DWORD n = GetModuleFileNameA(nullptr, buf, MAX_PATH);
-  return n > 0 ? std::string(buf, n) : std::string("aethone.exe");
+  wchar_t buf[MAX_PATH];
+  const DWORD n = GetModuleFileNameW(nullptr, buf, MAX_PATH);
+  return n > 0 ? WideToUtf8(buf, n) : std::string("aethone.exe");
 #else
   char buf[4096];
   const ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
@@ -531,13 +611,15 @@ std::string ExePath() {
 
 std::string HomeDataDir() {
 #ifdef _WIN32
-  char roaming[MAX_PATH];
+  wchar_t roaming[MAX_PATH];
   if (SUCCEEDED(
-          SHGetFolderPathA(nullptr, CSIDL_APPDATA, nullptr, 0, roaming))) {
-    return std::string(roaming) + "\\aethone";
+          SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, roaming))) {
+    return WideToUtf8(roaming, wcslen(roaming)) + "\\aethone";
   }
-  char buf[MAX_PATH];
-  if (GETCWD(buf, sizeof(buf))) return std::string(buf) + "\\aethone";
+  wchar_t buf[MAX_PATH];
+  if (_wgetcwd(buf, MAX_PATH)) {
+    return WideToUtf8(buf, wcslen(buf)) + "\\aethone";
+  }
   return "aethone";
 #else
   const char* xdg = getenv("XDG_DATA_HOME");
@@ -670,7 +752,7 @@ void LogReaderLoop(int read_fd) {
     if (out) fclose(out);
     out = nullptr;
     if (!truncate) {
-      FILE* probe = fopen(current.c_str(), "rb");
+      FILE* probe = FileOpen(current, "rb");
       if (probe) {
 #ifdef _WIN32
         _fseeki64(probe, 0, SEEK_END);
@@ -681,12 +763,12 @@ void LogReaderLoop(int read_fd) {
 #endif
         fclose(probe);
         if (len >= kLogMaxBytes) {
-          remove(prev.c_str());
-          rename(current.c_str(), prev.c_str());  // rotate: keep ONE generation
+          FileRemove(prev);
+          FileRename(current, prev);  // rotate: keep ONE generation
         }
       }
     }
-    out = fopen(current.c_str(), truncate ? "wb" : "ab");
+    out = FileOpen(current, truncate ? "wb" : "ab");
     written = 0;
   };
   reopen(false);
@@ -811,8 +893,8 @@ void InstallCoreLogCapture() {
   g_log_prev = g_log_dir + "/core-log.1.txt";
   // v4.34 decree: every process starts with an EMPTY capture (a force-killed
   // session leaves no residue either).
-  remove(g_log_path.c_str());
-  remove(g_log_prev.c_str());
+  FileRemove(g_log_path);
+  FileRemove(g_log_prev);
 
 #ifdef _WIN32
   int fds[2];
@@ -849,7 +931,7 @@ std::string ReadCoreLogTail(int tailBytes, int64_t* totalBytesOut) {
 
   int64_t currentLen = 0, prevLen = 0;
   {
-    FILE* f = fopen(g_log_path.c_str(), "rb");
+    FILE* f = FileOpen(g_log_path, "rb");
     if (f) {
 #ifdef _WIN32
       _fseeki64(f, 0, SEEK_END);
@@ -860,7 +942,7 @@ std::string ReadCoreLogTail(int tailBytes, int64_t* totalBytesOut) {
 #endif
       fclose(f);
     }
-    f = fopen(g_log_prev.c_str(), "rb");
+    f = FileOpen(g_log_prev, "rb");
     if (f) {
 #ifdef _WIN32
       _fseeki64(f, 0, SEEK_END);
@@ -894,7 +976,7 @@ std::string ReadCoreLogTail(int tailBytes, int64_t* totalBytesOut) {
       fclose(f);
     }
   }
-  FILE* f = fopen(g_log_path.c_str(), "rb");
+  FILE* f = FileOpen(g_log_path, "rb");
   if (f) {
     const int64_t currentFrom = currentLen - (tail - fromPrev);
 #ifdef _WIN32
@@ -915,8 +997,8 @@ std::string ReadCoreLogTail(int tailBytes, int64_t* totalBytesOut) {
 void ClearCoreLog() {
   std::lock_guard<std::mutex> lock(g_log_clear_mutex);
   g_log_clear_requested = true;
-  remove(g_log_path.c_str());
-  remove(g_log_prev.c_str());
+  FileRemove(g_log_path);
+  FileRemove(g_log_prev);
 }
 
 // ------------------------------------------------------------- core job --
@@ -1220,5 +1302,183 @@ TunnelCounters ReadTunnelCounters() {
   }
   return out;
 }
+
+#ifndef _WIN32
+// ---- v4.39: the Linux root-from-start model + the system integration ----
+
+namespace {
+
+bool WriteFileIfChanged(const std::string& path, const std::string& data) {
+  bool same = false;
+  FILE* f = FileOpen(path, "rb");
+  if (f != nullptr) {
+    std::string existing(data.size(), '\0');
+    const size_t got = fread(&existing[0], 1, existing.size(), f);
+    existing.resize(got);
+    same = got == data.size() && existing == data;
+    fclose(f);
+  }
+  if (same) return true;  // idempotent: no churn on every root launch
+  f = FileOpen(path, "wb");
+  if (f == nullptr) return false;
+  const size_t wrote = fwrite(data.data(), 1, data.size(), f);
+  fclose(f);
+  return wrote == data.size();
+}
+
+bool ReadAllBytes(const std::string& path, std::string* out) {
+  FILE* f = FileOpen(path, "rb");
+  if (f == nullptr) return false;
+  char buf[8192];
+  for (;;) {
+    const size_t n = fread(buf, 1, sizeof(buf), f);
+    if (n == 0) break;
+    out->append(buf, n);
+  }
+  fclose(f);
+  return !out->empty();
+}
+
+}  // namespace
+
+bool ElevateAtStartup(int* exit_code) {
+  *exit_code = 0;
+  if (geteuid() == 0) return false;  // already root (sudo / the menu entry)
+  // The loop guard doubles as the user's escape hatch: the elevated side
+  // sets it (so the root instance never re-prompts), and anyone can plant
+  // it to force the unprivileged mode on purpose.
+  if (getenv("AETHONE_ELEVATION_ATTEMPT") != nullptr) return false;
+  // Headless / CI launches (the desktop-smoke Xvfb boot) must never sit on
+  // a polkit prompt: only ask when a real session marked the environment.
+  // CI=true covers every hosted-runner environment explicitly — the smoke
+  // gate stays deterministic even if an image ever sets XDG_CURRENT_DESKTOP.
+  if (getenv("CI") != nullptr) return false;
+  const char* const desktop = getenv("XDG_CURRENT_DESKTOP");
+  const char* const session = getenv("DESKTOP_SESSION");
+  const bool interactive = (desktop != nullptr && *desktop != 0) ||
+                           (session != nullptr && *session != 0);
+  if (!interactive) return false;
+  const char* pkexec =
+      access("/usr/bin/pkexec", X_OK) == 0
+          ? "/usr/bin/pkexec"
+          : (access("/bin/pkexec", X_OK) == 0 ? "/bin/pkexec" : nullptr);
+  if (pkexec == nullptr) return false;  // no polkit — the v4.37 helper path stays
+  const char* const env_exe =
+      access("/usr/bin/env", X_OK) == 0 ? "/usr/bin/env" : "/bin/env";
+  if (access(env_exe, X_OK) != 0) return false;
+
+  // The session plumbing the elevated instance needs to reach the user's
+  // display. Everything else (HOME, XDG_DATA_HOME) deliberately re-roots:
+  // the root instance's app data lives under /root, never inside the
+  // invoking user's directories — root-owned files there would break the
+  // unprivileged fallback's own writes.
+  std::vector<std::string> pass;
+  const char* const kSessionVars[] = {
+      "DISPLAY",         "WAYLAND_DISPLAY", "XAUTHORITY",
+      "XDG_RUNTIME_DIR", "XDG_SESSION_TYPE", "XDG_CURRENT_DESKTOP",
+      "DESKTOP_SESSION", "DBUS_SESSION_BUS_ADDRESS", "LANG",
+  };
+  for (const char* name : kSessionVars) {
+    const char* const value = getenv(name);
+    if (value != nullptr && *value != 0) {
+      pass.push_back(std::string(name) + "=" + value);
+    }
+  }
+  pass.push_back("AETHONE_ELEVATION_ATTEMPT=1");
+
+  const std::string self = ExePath();
+  if (self.empty() || access(self.c_str(), X_OK) != 0) return false;
+
+  std::vector<char*> argv;
+  argv.push_back(const_cast<char*>("pkexec"));
+  argv.push_back(const_cast<char*>(env_exe));
+  for (const std::string& kv : pass) {
+    argv.push_back(const_cast<char*>(kv.c_str()));
+  }
+  argv.push_back(const_cast<char*>(self.c_str()));
+  argv.push_back(nullptr);
+
+  pid_t pid = -1;
+  if (posix_spawn(&pid, pkexec, nullptr, nullptr, argv.data(), environ) != 0) {
+    return false;
+  }
+  // The user may sit on the password prompt for a while (the walk's Linux
+  // permission-budget twin); the cap cancels instead of hanging forever.
+  const int kElevateWaitMs = 300000;
+  int status = 0;
+  bool ran = false;
+  for (int waited = 0; waited < kElevateWaitMs; waited += 100) {
+    if (waitpid(pid, &status, WNOHANG) == pid) {
+      ran = true;
+      break;
+    }
+    usleep(100 * 1000);
+  }
+  if (!ran) {
+    kill(pid, SIGTERM);
+    waitpid(pid, &status, 0);
+    return false;
+  }
+  if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+    *exit_code = 0;  // the elevated session ran to completion
+    return true;
+  }
+  // Declined (126) / no agent (127) / the root instance exited nonzero:
+  // fall through in THIS process as the unprivileged app — the v4.37
+  // helper path remains available for tunnels.
+  return false;
+}
+
+void EnsureDesktopIntegration() {
+  if (geteuid() != 0) return;  // only the root instance writes /usr/share
+  const DesktopPaths& p = Paths();
+  const std::string icon_src = p.exeDir + "/aethone-icon.png";
+  const std::string hicolor_dir = "/usr/share/icons/hicolor/256x256/apps";
+  const std::string hicolor_icon =
+      hicolor_dir + "/com.chakcaad.aethone.png";
+  const std::string desktop_path =
+      "/usr/share/applications/com.chakcaad.aethone.desktop";
+
+  // 1. the hicolor app icon — the owner's mark on white (the menu/grid
+  //    face; the tray keeps the transparent mark, shipped as the bundle's
+  //    aethone-tray.png).
+  bool icon_ok = false;
+  std::string icon_bytes;
+  if (ReadAllBytes(icon_src, &icon_bytes)) {
+    MkDirAll(hicolor_dir);
+    icon_ok = WriteFileIfChanged(hicolor_icon, icon_bytes);
+  }
+
+  // 2. the menu entry — Exec always points at THIS bundle's current
+  //    location, so a moved bundle self-heals on its next root launch.
+  const std::string entry =
+      "[Desktop Entry]\n"
+      "Type=Application\n"
+      "Name=AETHONE\n"
+      "Exec=" + p.exeDir + "/aethone\n"
+      "Icon=com.chakcaad.aethone\n"
+      "Terminal=false\n"
+      "Categories=Network;\n"
+      "StartupWMClass=com.chakcaad.aethone\n";
+  MkDirAll("/usr/share/applications");
+  const bool entry_ok = WriteFileIfChanged(desktop_path, entry);
+
+  if (!icon_ok || !entry_ok) {
+    // Best effort by decree: a read-only /usr (immutable ostree) or a
+    // missing bundle icon must never block the launch — the outcome lands
+    // in the captured core log for the settings page.
+    fprintf(stderr,
+            "desktop-integration: icon_ok=%d entry_ok=%d (best effort; "
+            "the app runs regardless)\n",
+            icon_ok ? 1 : 0, entry_ok ? 1 : 0);
+  }
+}
+
+#else  // _WIN32
+
+bool ElevateAtStartup(int*) { return false; }  // the exe manifest already carries requireAdministrator
+void EnsureDesktopIntegration() {}             // Windows uses embedded resources
+
+#endif  // !_WIN32
 
 }  // namespace aethone

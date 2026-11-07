@@ -138,6 +138,16 @@ install(TARGETS aethone-tunnel-helper RUNTIME DESTINATION "${CMAKE_INSTALL_PREFI
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/com.chakcaad.aethone.tunnel-helper.policy"
   DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
 
+# v4.39 — the two icon faces ship beside the executable (the owner's mark,
+# design/brand/aethone-logo.svg):
+#   aethone-icon.png — the mark on WHITE (window/taskbar face; the root
+#     instance installs it as the hicolor app icon — EnsureDesktopIntegration)
+#   aethone-tray.png — the mark AS-IS, transparent (the tray face)
+# Regenerate with scripts/render_brand_icons.py after any SVG change.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/aethone-icon.png"
+  "${CMAKE_CURRENT_SOURCE_DIR}/packaging/aethone-tray.png"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
+
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 

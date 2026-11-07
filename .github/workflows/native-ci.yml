@@ -2474,7 +2474,7 @@ jobs:
             echo "run_id=${{ github.run_id }}"
             echo "commit=${{ github.sha }}"
             echo "flutter=${FLUTTER_VERSION}"
-            echo "scope=v4.38 RUNTIME ROUND + PSIPHON DATA FIX: Linux x86_64 app bundle, same look & size as Android (402x874 window), engines embedded (bundle/lib/libaether.so + libzeptun.so; lyrebird + psiphon child cores at the bundle root). Tunnel privilege: the bundled aethone-tunnel-helper + Polkit action install system-wide on first connect (one pkexec prompt); the GUI runs as the normal user, only the TUN/routes/resolved operations run elevated (SCM_RIGHTS fd handoff, uid-0 end-to-end tunnel verification before Connected). Proxy mode stays unprivileged. Aether runs fully non-interactive (explicit -4/-6/--dual, --h2/--h3, --quick-reconnect). Root-run still works (direct path). Psiphon tunnel modes (chain/only) now configure zeptun with pipeline=false + optimistic_data=false — its goptlib SOCKS server rejects pipelined bytes, which is what killed the psiphon tunnel data path in every version while proxy mode worked (byte-level gate: scripts/psiphon_socks_pipeline_check.py; Android/Windows/desktop builders share the same socksStrict flag)."
+            echo "scope=v4.39 ROOT-FROM-START + TRAY + BRAND ICONS: Linux x86_64 app bundle, same look & size as Android (402x874 window), engines embedded (bundle/lib/libaether.so + libzeptun.so; lyrebird + psiphon child cores at the bundle root). Tunnel privilege model per the owner's decree: the WHOLE app relaunches as root at launch through one pkexec prompt (ElevateAtStartup, session env preserved through /usr/bin/env; decline/headless falls back to the v4.37 helper path). The root instance installs the menu entry + hicolor icon (EnsureDesktopIntegration). Close-to-tray: the window hides to the tray (the owner's mark as-is, aethone-tray.png); the window/taskbar face is the mark on white (aethone-icon.png). Psiphon tunnel modes keep the v4.38 strict-socks keys (pipeline=false + optimistic_data=false; byte-level gate: scripts/psiphon_socks_pipeline_check.py). Aether runs fully non-interactive (explicit -4/-6/--dual, --h2/--h3, --quick-reconnect)."
             echo "native_pins=${native_pins}"
             echo "x86_isa_floor=x86-64-v1 (built on the baseline ubuntu-24.04 image; runner+plugins pinned to -march=x86-64 -mtune=generic; fail-closed readelf gate over every bundled ELF — see LINUX_CPU_COMPATIBILITY_REPORT.md)"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -2496,7 +2496,7 @@ jobs:
           "run_id=${{ github.run_id }}" | Set-Content dist/BUILD_INFO.txt
           "commit=${{ github.sha }}" | Add-Content dist/BUILD_INFO.txt
           "flutter=${{ env.FLUTTER_VERSION }}" | Add-Content dist/BUILD_INFO.txt
-          "scope=v4.36 DESKTOP BETA (owner round 12): Windows x86_64 app bundle, same look & size as Android (402x874 window), engines embedded beside aethone.exe (aether.dll + zeptun.dll + the pinned wintun.dll adapter + lyrebird.exe + psiphon.exe). The exe manifest ships requireAdministrator (Wintun adapter + strict-route WFP need elevation). The -only family tunnel legs are refused up-front (platformLimit) - every other mode tunnels through the WARP-exclude route." | Add-Content dist/BUILD_INFO.txt
+          "scope=v4.39 PATH FIX + TRAY + BRAND ICONS: Windows x86_64 app bundle, same look & size as Android (402x874 window), engines embedded beside aethone.exe (aether.dll + zeptun.dll + the pinned wintun.dll adapter + lyrebird.exe + psiphon.exe). The engine layer's Windows path handling is now UTF-8 end-to-end (the v4.36 byte-widening broke every non-ASCII install path — LoadLibrary zeptun.dll failed 126 under a Persian user name while the bundle was complete; fixed at the MultiByteToWideChar boundary, load error now names the absolute path). The child cores (psiphon.exe, arti's lyrebird PT, the PT probe) spawn with CREATE_NO_WINDOW — no console windows beside the GUI app; a kill-on-close job object reaps them at process exit. Close-to-tray: the window hides to the notification area (IDI_TRAY_ICON, the owner's mark as-is); the app face (IDI_APP_ICON, the same mark on white) is what the Start menu / taskbar / caption show. The exe manifest ships requireAdministrator (Wintun adapter + strict-route WFP need elevation). The -only family tunnel legs are refused up-front (platformLimit) - every other mode tunnels through the WARP-exclude route." | Add-Content dist/BUILD_INFO.txt
           "native_pins=aether@$($pins.pins.aether) zeptun@$($pins.pins.zeptun)" | Add-Content dist/BUILD_INFO.txt
           "x86_isa_floor=x86-64 baseline (llvm-objdump machine-code audit in CI; v3-class instructions exist only inside CPUID runtime-dispatched kernels — MSVC STL/Skia/BoringSSL/Go crypto; see LINUX_CPU_COMPATIBILITY_REPORT.md)" | Add-Content dist/BUILD_INFO.txt
           "recorded_at=$(Get-Date -AsUTC -Format 'yyyy-MM-ddTHH:mm:ssZ')" | Add-Content dist/BUILD_INFO.txt
@@ -2605,6 +2605,10 @@ jobs:
           # ensure the TUN device exists (usually present on the hosted VMs)
           sudo modprobe tun 2>/dev/null || true
           [ -c /dev/net/tun ] || sudo mknod /dev/net/tun c 10 200
+          # v4.39 — the brand faces must ship in the bundle (fail-closed):
+          # the tray face (the owner's mark as-is) + the app face (white).
+          [ -f "$B/aethone-tray.png" ] || { echo "::error::aethone-tray.png missing from the shipped bundle"; exit 1; }
+          [ -f "$B/aethone-icon.png" ] || { echo "::error::aethone-icon.png missing from the shipped bundle"; exit 1; }
           sudo -n "$B/aethone-tunnel-helper" --selftest
           echo "helper selftest PASS"
 
@@ -2657,7 +2661,31 @@ jobs:
           hbad=$(printf '%s\n' "$hnotes" | grep -o 'x86-64-v[2-4]' || true)
           [ -z "$hbad" ] || { echo "::error::aethone-tunnel-helper requires ${hbad}— ISA regression"; exit 1; }
           echo "[isa-gate] shipped aethone-tunnel-helper: ${hnotes:-no ISA property (baseline)}"
-          echo "desktop smoke PASS: app alive, capture installed, libs resolve"
+          # v4.39 — the Persian-path boot: the same bundle, extracted under a
+          # non-ASCII path, must boot and install the core-log capture under a
+          # non-ASCII XDG_DATA_HOME. The shared desktop_engine path layer is
+          # UTF-8 end-to-end; this is the regression gate for the Windows twin
+          # of the same code (this round's zeptun-126 fix).
+          PB="/tmp/باندل-آتون"
+          rm -rf "$PB"; mkdir -p "$PB"
+          tar -xzf smoke/aethone-linux-x86_64-*.tar.gz -C "$PB"
+          [ -x "$PB/bundle/aethone" ] || { echo "::error::the Persian-path extract failed"; exit 1; }
+          export XDG_DATA_HOME="/tmp/داده-آتون"
+          rm -rf "$XDG_DATA_HOME"; mkdir -p "$XDG_DATA_HOME"
+          DISPLAY=:77 timeout 20 "$PB/bundle/aethone" >/tmp/smoke2.out 2>/tmp/smoke2.err &
+          PAPP=$!
+          sleep 8
+          if ! kill -0 $PAPP 2>/dev/null; then
+            echo "::error::the desktop app died under the Persian path"
+            head -c 1500 /tmp/smoke2.err || true
+            cat "$XDG_DATA_HOME/aethone/logs/core-log.txt" 2>/dev/null || true
+            exit 1
+          fi
+          PLOG="$XDG_DATA_HOME/aethone/logs/core-log.txt"
+          [ -f "$PLOG" ] || { echo "::error::the capture did not install under the Persian path"; exit 1; }
+          grep -q "AETHONE session" "$PLOG" || { echo "::error::session header missing under the Persian path"; exit 1; }
+          kill $PAPP 2>/dev/null || true
+          echo "desktop smoke PASS: app alive, capture installed, libs resolve, Persian path boots"
           kill $APP $XVFB 2>/dev/null || true
 
       - name: Record smoke status (real result, uploaded even on failure)

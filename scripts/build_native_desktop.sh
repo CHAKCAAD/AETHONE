@@ -259,6 +259,146 @@ PY_BORING_SYS
   done
   echo "Total stale boring-sys cache entries removed: $removed"
 
+  # v4.39 — THE HIDDEN CHILD CORES ON WINDOWS. The owner's device report of
+  # the r85 bundle: on Windows, every connect popped a visible console
+  # window — the engine cores the aether cdylib spawns (psiphon.exe via
+  # aether/src/psiphon.rs, the lyrebird PT probe via aether/src/bridges.rs)
+  # and the lyrebird PT that arti itself spawns (tor-ptmgr 0.46.0,
+  # registry/src/.../ipc.rs). A console child of a GUI app gets its own
+  # console window; CREATE_NO_WINDOW (0x0800_0000) hides them all. The
+  # child cores keep their piped stdio — only the window goes away
+  # (the owner's decree: «psiphon.exe باید در پس زمینه سیستم اجرا بشه»).
+  # Same fail-closed discipline as the boring-sys patch above: the exact
+  # pristine text must match once, or the already-applied state; anything
+  # else dies.
+  "$PY" - "${CARGO_HOME:-$HOME/.cargo}" <<'PY_CHILD_CORES'
+import sys
+from pathlib import Path
+
+cargo_home = Path(sys.argv[1]).expanduser()
+
+def patch_file(path, old, new, what):
+    source = path.read_text(encoding="utf-8")
+    n_old, n_new = source.count(old), source.count(new)
+    if n_old == 1:
+        path.write_text(source.replace(old, new, 1), encoding="utf-8")
+        state = "APPLIED"
+    elif n_old == 0 and n_new == 1:
+        state = "ALREADY_APPLIED"
+    else:
+        raise SystemExit(
+            f"FATAL: {what}: expected the pristine text exactly once or the "
+            f"patched state exactly once; got old={n_old} new={n_new} at {path}"
+        )
+    print(f"[v4.39 hidden-child-cores] {path.name}: {state} ({what})")
+
+# 1. aether/src/psiphon.rs — the psiphon child core spawn (tokio Command:
+#    creation_flags is an inherent windows-only method, no import needed).
+#    The anchor extends past the chain into the NEXT statement: the old
+#    text must NOT be a substring of the new one, or the patch would
+#    double-apply on a cached tree (proven by the local idempotency run).
+patch_file(
+    Path("src/psiphon.rs").resolve(),
+    """    let mut command = Command::new(&exe);
+    command
+        .args(client_arguments(&config_path, state, entries.as_deref()))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    if let Some((key, value)) = ca_store_env() {""",
+    """    let mut command = Command::new(&exe);
+    command
+        .args(client_arguments(&config_path, state, entries.as_deref()))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    // AETHONE v4.39 — the psiphon child core runs hidden on Windows: a
+    // console child of a GUI app otherwise gets its own visible console
+    // window on every connect (the owner's device report).
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000);
+    if let Some((key, value)) = ca_store_env() {""",
+    "psiphon.rs hidden child core",
+)
+
+# 2. aether/src/bridges.rs — the lyrebird PT capability probe. std Command
+#    here, so the trait method is called fully-qualified (no import).
+patch_file(
+    Path("src/bridges.rs").resolve(),
+    """    let mut child = Command::new(path)
+        .env("TOR_PT_MANAGED_TRANSPORT_VER", "1")
+        .env("TOR_PT_STATE_LOCATION", &state)
+        .env("TOR_PT_EXIT_ON_STDIN_CLOSE", "1")
+        .env("TOR_PT_CLIENT_TRANSPORTS", ASKABLE.join(","))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;""",
+    """    let mut pt_probe = Command::new(path);
+    pt_probe
+        .env("TOR_PT_MANAGED_TRANSPORT_VER", "1")
+        .env("TOR_PT_STATE_LOCATION", &state)
+        .env("TOR_PT_EXIT_ON_STDIN_CLOSE", "1")
+        .env("TOR_PT_CLIENT_TRANSPORTS", ASKABLE.join(","))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    // AETHONE v4.39 — the PT probe runs hidden on Windows (same reason as
+    // the psiphon child core: no console window beside the GUI app).
+    #[cfg(windows)]
+    std::os::windows::process::CommandExt::creation_flags(
+        &mut pt_probe, 0x0800_0000);
+    let mut child = pt_probe.spawn().ok()?;""",
+    "bridges.rs hidden PT probe",
+)
+
+# 3. tor-ptmgr 0.46.0 (the registry source cargo fetched) — arti's own PT
+#    child spawn. Exactly one extracted copy must exist, like boring-sys.
+registry_src = cargo_home / "registry" / "src"
+matches = sorted(registry_src.glob("*/tor-ptmgr-0.46.0/src/ipc.rs"))
+if len(matches) != 1:
+    raise SystemExit(
+        "FATAL: expected exactly one tor-ptmgr-0.46.0/src/ipc.rs under "
+        f"{registry_src}, found {len(matches)}."
+    )
+patch_file(
+    matches[0],
+    """            let child = Command::new(binary_path)
+                .args(arguments.iter())
+                .envs(all_env_vars)
+                .stdout(Stdio::piped())
+                .stdin(Stdio::piped())
+                .spawn()
+                .map_err(|e| PtError::ChildSpawnFailed {
+                    path: binary_path.clone(),
+                    error: Arc::new(e),
+                })?;""",
+    """            let mut pt_child = Command::new(binary_path);
+            pt_child
+                .args(arguments.iter())
+                .envs(all_env_vars)
+                .stdout(Stdio::piped())
+                .stdin(Stdio::piped());
+            // AETHONE v4.39 — arti's PT child (lyrebird) runs hidden on
+            // Windows: without this, every tor connect that uses bridges
+            // pops a visible console window beside the GUI app.
+            #[cfg(windows)]
+            std::os::windows::process::CommandExt::creation_flags(
+                &mut pt_child, 0x0800_0000);
+            let child = pt_child
+                .spawn()
+                .map_err(|e| PtError::ChildSpawnFailed {
+                    path: binary_path.clone(),
+                    error: Arc::new(e),
+                })?;""",
+    "tor-ptmgr ipc.rs hidden PT child",
+)
+print("[v4.39 hidden-child-cores] all three spawn sites now CREATE_NO_WINDOW on Windows")
+PY_CHILD_CORES
+
   # v4.36k ISA note: rustc needs no flag here — its default codegen for both
   # host targets is baseline x86-64 (SSE2, no elevated ISA note in the ELF).
   # Deliberately NOT exporting RUSTFLAGS: aether's .cargo/config.toml pins

@@ -54,6 +54,12 @@ END
 // remains consistent on all systems.
 IDI_APP_ICON            ICON                    "resources\\app_icon.ico"
 
+// v4.39 — the tray face: the owner's mark EXACTLY as delivered (the
+// transparent face of design/brand/aethone-logo.svg; regenerate with
+// scripts/render_brand_icons.py). The app face (IDI_APP_ICON, the same
+// mark on white) is what the Start menu / taskbar / window caption show.
+IDI_TRAY_ICON           ICON                    "resources\\tray_icon.ico"
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
