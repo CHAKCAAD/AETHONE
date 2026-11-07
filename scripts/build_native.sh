@@ -376,20 +376,21 @@ PY_BORING_SYS
 # ------------------------------------------- lyrebird (Aether's frozen script, pin-hardened) ----
 echo "== [3/4] lyrebird via Aether pt-build.sh @ $AETHER_SHA (pin $LYREBIRD_PIN enforced) =="
 
-# v4.40 — the pre-FMA floor for the x86_64 leg (see build_native_desktop.sh
-# for the full evidence): Go's amd64 ASSEMBLY math.Exp (math.archExp) uses
-# vfmadd213sd unconditionally — no CPUID gate, GOAMD64=v1 does not disarm
-# hand-written assembly — and every pre-Haswell Intel CPU (the Atom tablets
-# this APK may land on included) hard-faults on it with SIGILL. The arm
-# legs are untouched (FMA is baseline ISA on aarch64; the armv7 builder
-# emits no FMA). Fail-closed like every other patch here: the exact line
-# must match, or the already-patched state, or the leg dies.
+# v4.40 — the pre-FMA floor for the x86_64 leg (defense in depth — see
+# build_native_desktop.sh for the full record): Go's amd64 ASSEMBLY
+# math.Exp carries an FMA path selected by a runtime useFMA byte (the
+# dispatch exists in Go 1.26.3); the floor removes the assembly path
+# entirely (haveArchExp = false in src/math/exp_asm.go) so the engines can
+# never execute FMA regardless of dispatch, and the zero-vfmadd gate
+# below proves it. The arm legs are untouched (FMA is baseline ISA on
+# aarch64; the armv7 builder emits none). Fail-closed like every other
+# patch here: the exact line must match, or the leg dies.
 if [ "$GOARCH" = "amd64" ]; then
-  GOEXP="$(go env GOROOT)/src/math/exp_amd64.go"
+  GOEXP="$(go env GOROOT)/src/math/exp_asm.go"
   [ -f "$GOEXP" ] || die "math FMA floor: $GOEXP not found in the pinned Go toolchain — layout changed, refusing to build FMA-unsafe engines"
   if grep -q '^const haveArchExp = true$' "$GOEXP"; then
     sed -i 's/^const haveArchExp = true$/const haveArchExp = false/' "$GOEXP"
-    echo "[fma-floor x86_64] math.archExp (amd64 asm, unconditional vfmadd) disabled — math.Exp now pure-Go"
+    echo "[fma-floor x86_64] math.archExp (the amd64 asm with its FMA path) disabled — math.Exp now pure-Go"
   elif grep -q '^const haveArchExp = false$' "$GOEXP"; then
     echo "[fma-floor x86_64] math.archExp already disabled (cached toolchain)"
   else

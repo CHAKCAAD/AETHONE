@@ -8,16 +8,17 @@ was changed in v4.2, v4.3, v4.4, v4.5, v4.6, v4.7, v4.8 or v4.9.
 
 ## v4.40 — the FMA floor, the close-dialog, the AUTO theme, the icon set (2026-11-07)
 
-Owner rounds 14–16. **The r86 Windows root cause, at the object level**: all 8
-FMA sites in psiphon.exe AND all 8 in lyrebird.exe live inside `math.archExp` —
-Go's amd64 ASSEMBLY `math.Exp` uses `vfmadd213sd` UNCONDITIONALLY (no CPUID
-gate; GOAMD64=v1 does not disarm assembly). On the owner's pre-Haswell CPU
-(i3-3240, Ivy Bridge — no FMA3) any exponential-backoff call in either engine
-dies with STATUS_ILLEGAL_INSTRUCTION — exactly the proxy-mode «illegal
-instruction» dialog. The fix: the GOROOT `haveArchExp=false` patch (pure-Go
-math.Exp) on every amd64 Go build (desktop legs + the Android x86_64 leg), a
-zero-vfmadd build gate on both engines, and the CI PE audit's new `nofma`
-policy. The desktop zeptun builds move to ReleaseSafe (a tunnel bug prints a
+Owner rounds 14–16. **The FMA floor (defense in depth, r86-informed)**: the
+r86 binaries carry all their FMA sites (8 per engine) inside Go's assembly
+`math.archExp` — runtime-dispatched by Go's `useFMA` byte (verified present
+by disassembly, so NOT the crash itself). The GOROOT `haveArchExp=false`
+patch (src/math/exp_asm.go) removes that assembly path entirely — pure-Go
+math.Exp — on every amd64 Go build (desktop legs + the Android x86_64 leg),
+a zero-vfmadd build gate proves it on the produced engines, and the CI PE
+audit's new `nofma` policy holds the line. The proxy-mode illegal
+instruction itself is honestly UNROOT-CAUSED at this distance — v4.40 ships
+a Windows crash log (exception code + module + offset into
+logs/crash-log.txt) so the next device test names the culprit precisely. The desktop zeptun builds move to ReleaseSafe (a tunnel bug prints a
 panic into the core log instead of a silent UD2 crash), the zeptun log bridge
 surfaces the REAL wintun error inside the `tunnelStartFailed` reason (the
 rc=-5 evidence), and a Windows crash filter writes exception code +

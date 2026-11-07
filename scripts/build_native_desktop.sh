@@ -121,38 +121,30 @@ export GOOS GOARCH
 # so an inherited v1 is the effective floor (and beats any go-env default).
 export GOAMD64=v1
 
-# v4.40 — THE PRE-FMA FLOOR FOR THE GO ENGINES (the owner's r86 Windows
-# report: proxy-mode connect dies with the Windows dialog "The exception
-# illegal instruction (0xc000001d)" after a short while). Root cause, proven
-# on the shipped r86 binaries by disassembly + pclntab symbol lookup: ALL 8
-# FMA sites in psiphon.exe AND all 8 in lyrebird.exe live inside
-# `math.archExp` — Go's amd64 ASSEMBLY implementation of math.Exp uses
-# vfmadd213sd UNCONDITIONALLY (no CPUID gate, and GOAMD64=v1 does not
-# disarm hand-written assembly). Intel added FMA3 with Haswell (2013); the
-# owner's CPU is an i3-3240 (Ivy Bridge — SSE4.2+AVX, NO FMA), so any
-# exponential-backoff math.Exp call in either engine hard-faults the child
-# process with STATUS_ILLEGAL_INSTRUCTION. The same binaries ship in the
-# Linux bundle and the x86_64 Android APK — same bug everywhere.
-#
-# The fix: disable the assembly path in the pinned toolchain's math package
-# (`haveArchExp`), so math.Exp takes the pure-Go implementation (plain
-# MULSD/ADDSD — baseline). Same fail-closed discipline as the boring-sys
-# patch: the exact line must match once, or the already-patched state, or
-# the build dies — a toolchain layout change must never silently re-arm FMA.
-# The produced binaries are then GATED (zero-vfmadd) by the PE/ELF ISA
-# audits in the workflow.
+# v4.40 — THE PRE-FMA FLOOR FOR THE GO ENGINES (defense in depth, the
+# honest record): Go's amd64 ASSEMBLY math.Exp (math.archExp) carries an
+# FMA path — `vfmadd213sd` sites selected by a runtime `useFMA` byte
+# (cpu.X86.HasAVX && HasFMA — the dispatch exists in Go 1.26.3, VERIFIED
+# in the shipped r86 binaries by disassembly). The floor below REMOVES
+# the assembly path entirely (`haveArchExp = false` → the pure-Go MULSD/
+# ADDSD implementation), so the engines can never execute FMA regardless
+# of dispatch — and the zero-vfmadd gates in the build scripts + the CI
+# PE audit PROVE it on every build. The first v4.40 dispatch's fail-closed
+# gate fired exactly as designed: Go 1.26.3 keeps the const in
+# src/math/exp_asm.go (NOT exp_amd64.go — that file only declares the
+# useFMA byte now); the patch below targets the real file.
 patch_go_math_exp_floor() {
-  local goroot exp_amd64
+  local goroot exp_asm
   goroot="$(go env GOROOT)"
-  exp_amd64="$goroot/src/math/exp_amd64.go"
-  [ -f "$exp_amd64" ] || die "math FMA floor: $exp_amd64 not found in the pinned Go toolchain — layout changed, refusing to build FMA-unsafe engines"
-  if grep -q '^const haveArchExp = true$' "$exp_amd64"; then
-    sed -i 's/^const haveArchExp = true$/const haveArchExp = false/' "$exp_amd64"
-    echo "[fma-floor] math.archExp (amd64 asm, unconditional vfmadd) disabled — math.Exp now pure-Go: $exp_amd64"
-  elif grep -q '^const haveArchExp = false$' "$exp_amd64"; then
-    echo "[fma-floor] math.archExp already disabled (cached toolchain): $exp_amd64"
+  exp_asm="$goroot/src/math/exp_asm.go"
+  [ -f "$exp_asm" ] || die "math FMA floor: $exp_asm not found in the pinned Go toolchain — layout changed, refusing to build FMA-unsafe engines"
+  if grep -q '^const haveArchExp = true$' "$exp_asm"; then
+    sed -i 's/^const haveArchExp = true$/const haveArchExp = false/' "$exp_asm"
+    echo "[fma-floor] math.archExp (the amd64 asm with its FMA path) disabled — math.Exp now pure-Go: $exp_asm"
+  elif grep -q '^const haveArchExp = false$' "$exp_asm"; then
+    echo "[fma-floor] math.archExp already disabled (cached toolchain): $exp_asm"
   else
-    die "math FMA floor: $exp_amd64 does not carry 'const haveArchExp = true' — the Go toolchain layout changed; refusing to build FMA-unsafe engines"
+    die "math FMA floor: $exp_asm does not carry 'const haveArchExp = true' — the Go toolchain layout changed; refusing to build FMA-unsafe engines"
   fi
 }
 patch_go_math_exp_floor
@@ -563,9 +555,10 @@ clone_pin "$PSIPHON_FORK_REPO" "$PSIPHON_FORK_SHA" "$PSIPHON_SRC"
 
 # ---------------------------- v4.40: the Go FMA-floor gate (fail-closed) ----
 # The GOROOT math patch above must actually disarm the assembly: zero
-# vfmadd/vfmsub instructions may remain in either Go engine. The r86 proof:
-# 8 unguarded scalar-FMA sites inside math.archExp in EACH engine — illegal
-# instruction on every pre-Haswell Intel CPU (see the patch block above).
+# vfmadd/vfmsub instructions may remain in either Go engine (the r86
+# binaries carried 8 sites inside math.archExp — runtime-dispatched by
+# Go's useFMA byte, but the floor removes the path ENTIRELY; the gate
+# keeps it that way on every future toolchain).
 # Tool-portable: llvm-objdump on the windows runner, objdump on ubuntu;
 # mnemonics are syntax-independent (ATT/Intel both print vfmadd…).
 go_fma_gate() { # file

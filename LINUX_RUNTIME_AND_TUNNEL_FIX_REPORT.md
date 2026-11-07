@@ -677,44 +677,52 @@ fixup). Run evidence recorded below after the dispatch.
 system proxy with the tunnel, the protocol icon set, the AUTO theme, the
 protocol-mode removal, the general-settings expansion).
 
-## 1. THE FMA FLOOR — the r86 Windows illegal instruction, at the object level
+## 1. THE FMA FLOOR — what the r86 evidence ACTUALLY proved (the honest record)
 
 The owner's report: proxy mode, click connect, a short while later Windows
 shows *The exception illegal instruction (0xc000001d) occurred in the
-application at location 0x00007ffe097190a0*. The r81 PE audit (§5 of the
-CPU report) had verified every CPUID-dispatched v3 kernel — but the r86
-bundle was re-audited HERE with a function-level map, and the verdict is
-exact:
+application at location 0x00007ffe097190a0*.
 
-* **all 8 FMA sites in psiphon.exe AND all 8 in lyrebird.exe live inside
-  `math.archExp`** — Go's amd64 ASSEMBLY implementation of `math.Exp`
-  (pclntab symbol lookup on the shipped binaries; the constant table is
-  the sine/exponential polynomial: 0.5, 1.0, 2.0, 1/6, 1/24, 1/120 …).
-* The assembly uses **`vfmadd213sd` UNCONDITIONALLY** — no CPUID gate, and
-  `GOAMD64=v1` does not disarm hand-written assembly.
-* Intel added FMA3 with **Haswell (2013)**. The owner's CPU is an
-  **i3-3240 (Ivy Bridge — SSE4.2 + AVX, NO FMA)**: any exponential-backoff
-  `math.Exp` call inside either engine hard-faults the child process with
-  STATUS_ILLEGAL_INSTRUCTION — "after a short while" is the connect
-  handshake reaching its first backoff computation.
+The object-level audit of the r86 binaries (disassembly + pclntab symbol
+lookup) found all 8 FMA sites in psiphon.exe AND all 8 in lyrebird.exe
+inside `math.archExp` — Go's amd64 ASSEMBLY `math.Exp`. The FIRST dispatch
+of this round shipped a patch built on the reading that those sites were
+UNGUARDED; its own fail-closed gate immediately fired on the real Go
+1.26.3 toolchain layout (`haveArchExp` lives in `src/math/exp_asm.go`, not
+`exp_amd64.go`), and re-reading the shipped assembly settled the question
+honestly:
 
-**The fix (three layers, all fail-closed):**
+* Go 1.26.3's `archExp` **dispatches at runtime** — `useFMA =
+  cpu.X86.HasAVX && cpu.X86.HasFMA`; the r86 binary carries `cmp BYTE PTR
+  [useFMA],1 / je` before the FMA path. On a pre-Haswell CPU the SSE2
+  Taylor series runs. **math.archExp is therefore NOT the r86 crash.**
+* The proxy-mode illegal instruction remains UNROOT-CAUSED at this
+  distance (the remaining in-process FMA — flutter_windows.dll's
+  CPUID-dispatched Skia kernels, aether.dll's caller-gated intrinsic
+  helpers — is guarded; a ud2 from a Rust UB path in aether.dll cannot be
+  excluded without a dump). This round instruments it instead of guessing:
+  **the Windows crash log** (§2) writes exception code + module + offset
+  on the very next crash, and the child engines' stderr is captured.
+
+The FMA floor stays — as DEFENSE IN DEPTH, honestly labeled: the GOROOT
+patch (`const haveArchExp = false` in `src/math/exp_asm.go`; amd64's Exp2
+is pure Go already) removes the assembly path entirely, so neither engine
+can ever EXECUTE an FMA instruction regardless of any future change in
+Go's dispatch. Three layers, all fail-closed:
 
 1. `scripts/build_native_desktop.sh` (both OS legs) and
    `scripts/build_native.sh` (the x86_64 Android leg only) patch the pinned
-   toolchain's `$GOROOT/src/math/exp_amd64.go`: `haveArchExp = true →
-   false` — `math.Exp` takes the pure-Go path (plain MULSD/ADDSD). The
-   patch refuses to build if the exact line is missing (a toolchain layout
-   change must never silently re-arm FMA).
+   toolchain's `exp_asm.go`; the patch refuses to build if the exact line
+   is missing (the gate that caught the first dispatch's wrong target).
 2. A **zero-vfmadd gate** on the produced engines (both build scripts):
    disassemble, count `vfmadd|vfmsub`, fail the leg on ANY site.
 3. The CI **PE ISA audit** moves lyrebird.exe + psiphon.exe from `report`
    to the new **`nofma` policy** (FMA sites must be 0; the runtime-
    dispatched ymm/lzcnt kernels stay counted).
 
-The same binaries ship in the Linux bundle and the x86_64 APK — same bug,
-same fix everywhere. The arm legs are untouched (FMA is baseline ISA on
-aarch64; the armv7 builder emits none).
+The same binaries ship in the Linux bundle and the x86_64 APK. The arm
+legs are untouched (FMA is baseline ISA on aarch64; the armv7 builder
+emits none).
 
 ## 2. The Windows VPN-mode failures
 
@@ -725,11 +733,12 @@ aarch64; the armv7 builder emits none).
   captured core log, and `BringUpZeptun` quotes the last wintun/route
   failure line into the `tunnelStartFailed` reason — the owner's screen
   now shows the REAL Windows error code, not just "device error".
-* **the app closing entirely** — the remaining in-process suspects were
-  zeptun's ReleaseFast `unreachable` sites (Zig compiles them to UD2 =
-  0xc000001d, no message). The desktop legs now build zeptun with
-  **ReleaseSafe**: every such site becomes a printed panic in the core log
-  followed by a clean abort — diagnosable instead of silent.
+* **the app closing entirely** — the in-process suspects (zeptun's
+  ReleaseFast `unreachable` sites — Zig compiles them to UD2 = 0xc000001d,
+  no message; or a Rust UB path inside aether.dll) all share one defect:
+  they die SILENTLY. The desktop legs now build zeptun with **ReleaseSafe**
+  (every such site becomes a printed panic in the core log followed by a
+  clean abort), and the crash log below names whatever remains.
 * **the crash log** (new, `windows/runner/main.cpp`): a
   `SetUnhandledExceptionFilter` writes exception code + address +
   **module name + offset** (Toolhelp module walk) to
