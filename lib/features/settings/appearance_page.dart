@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 
 import '../../../connection/connection_store.dart';
 import '../../../core/app_assets.dart';
+import '../../../core/app_theme.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 import '../../../l10n/app_strings.dart';
@@ -34,7 +35,36 @@ class AppearanceSettingsPage extends StatelessWidget {
       store: store,
       title: strings.settingsAppearance,
       children: () => [
+        // ---- Section: the display mode (night / light / AUTO) ----
+        // v4.40 (owner round 15: «یه مکانیزم میخوام برای حالت دارک و لایت
+        // اضافه کنی به اسم حالت خودکار و به تنظیمات ضاهری اضافه کنی»).
+        SubSectionHeading(
+          icon: AppAssets.iconMoon,
+          title: strings.secThemeMode,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingPills<AethThemePick>(
+                keyId: 'theme-pick',
+                options: [
+                  (AethThemePick.night, strings.themePickNight),
+                  (AethThemePick.light, strings.themePickLight),
+                  (AethThemePick.auto, strings.themePickAuto),
+                ],
+                selected: store.themePick,
+                onSelect: store.setThemePick,
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.themeAutoNote),
+            ],
+          ),
+        ),
+
         // ---- Section: the home screen look ----
+        SizedBox(height: 24 * s),
         SubSectionHeading(
           icon: AppAssets.iconHome1,
           title: strings.secHomeLook,

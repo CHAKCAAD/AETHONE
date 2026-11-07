@@ -2381,10 +2381,17 @@ jobs:
       #     tripwire, and the dispatch diamond must be present;
       #   * REPORTED — flutter_windows.dll (Skia/Impeller, Google),
       #     aether.dll (BoringSSL OPENSSL_ia32cap dispatch), wintun.dll
-      #     (WireGuard, feature-bit-tested paths), lyrebird.exe +
-      #     psiphon.exe (Go stdlib crypto asm, internal/cpu dispatch) all
-      #     legitimately contain CPUID-dispatched v3 kernels — counted,
-      #     never gated; their dispatch was verified in the r79 audit.
+      #     (WireGuard, feature-bit-tested paths) legitimately contain
+      #     CPUID-dispatched v3 kernels — counted, never gated; their
+      #     dispatch was verified in the r79 audit.
+      #   * NOFMA (v4.40) — lyrebird.exe + psiphon.exe: the Go engines are
+      #     built with the math.archExp floor (the GOROOT haveArchExp=false
+      #     patch, scripts/build_native_desktop.sh): ZERO vfmadd/vfmsub
+      #     instructions may remain. The r86 proof: 8 unguarded scalar-FMA
+      #     sites inside math.archExp in EACH engine — STATUS_ILLEGAL_
+      #     INSTRUCTION (0xc000001d) on every pre-Haswell Intel CPU (the
+      #     owner's i3-3240 Ivy Bridge twin). Their ymm/lzcnt sites stay
+      #     counted: Go's crypto asm is internal/cpu-dispatched.
       # Unknown PEs fail the audit: a new file without a policy is a gap.
       - name: PE ISA audit (x86_64 — llvm-objdump machine-code analysis)
         if: matrix.os == 'windows'
@@ -2403,8 +2410,12 @@ jobs:
           # because 'p' is not a size suffix.
           V3='(%ymm|%zmm|(^|[[:space:]])(lzcnt|andn|bextr|blsi|blsmsk|blsr|mulx|pdep|pext|shlx|shrx|sarx|rorx|movbe)[bwlq]?([[:space:]]|$)|(^|[[:space:]])vfmadd[0-9]*[a-z]*([[:space:]]|$)|(^|[[:space:]])vfmsub[0-9]*[a-z]*([[:space:]]|$))'
           TZ='(^|[[:space:]])tzcnt[bwlq]?([[:space:]]|$)'
+          # v4.40 — the FMA-only pattern (the Go engines' math.archExp floor
+          # gate): any vfmadd/vfmsub, alone, fails the nofma policy.
+          FMA='(^|[[:space:]])vfm(add|sub)[0-9]*[a-z]*([[:space:]]|$)'
           count()  { "$OD" -d --no-show-raw-insn "$1" 2>/dev/null | grep -cE "$V3" || true; }
           counttz() { "$OD" -d --no-show-raw-insn "$1" 2>/dev/null | grep -cE "$TZ" || true; }
+          countfma() { "$OD" -d --no-show-raw-insn "$1" 2>/dev/null | grep -cE "$FMA" || true; }
           audit() { # relpath policy ceiling
             local f="$1" policy="$2" ceiling="${3:-}"
             [ -f "$B/$f" ] || { echo "::error::PE audit: expected file missing: $f"; exit 1; }
@@ -2416,6 +2427,14 @@ jobs:
                 [ "$n" -eq 0 ] || { echo "::error::PE audit FAILED: $f contains $n v3 instruction sites — this component must be baseline-only"; exit 1; } ;;
               tzonly)
                 [ "$n" -eq 0 ] || { echo "::error::PE audit FAILED: $f contains $n non-tzcnt v3 sites — zig -Dcpu=baseline must not emit them"; exit 1; } ;;
+              nofma)
+                # v4.40 — the Go engines' math.archExp floor: zero FMA sites
+                # (unguarded scalar vfmadd is an illegal instruction on
+                # pre-Haswell CPUs); ymm/lzcnt stay counted (runtime-
+                # dispatched Go crypto asm).
+                fm=$(countfma "$B/$f")
+                echo "[pe-audit] $f: FMA sites=$fm (must be 0 — the math.archExp floor)"
+                [ "$fm" -eq 0 ] || { echo "::error::PE audit FAILED: $f contains $fm vfmadd/vfmsub sites — the Go math.archExp floor (GOROOT haveArchExp=false) did not apply; see scripts/build_native_desktop.sh"; exit 1; } ;;
               envelope)
                 [ "$n" -le "$ceiling" ] || { echo "::error::PE audit FAILED: $f v3 sites $n > ceiling $ceiling (MSVC STL dispatch envelope breached — check for /arch:AVX2)"; exit 1; }
                 if [ "$n" -gt 0 ]; then
@@ -2446,8 +2465,8 @@ jobs:
           audit "flutter_windows.dll"                 report
           audit "aether.dll"                          report
           audit "wintun.dll"                          report
-          audit "lyrebird.exe"                        report
-          audit "psiphon.exe"                         report
+          audit "lyrebird.exe"                        nofma
+          audit "psiphon.exe"                         nofma
           while IFS= read -r f; do
             case "$f" in
               aethone.exe|flutter_windows.dll|url_launcher_windows_plugin.dll|dartjni.dll|aether.dll|zeptun.dll|wintun.dll|lyrebird.exe|psiphon.exe|data/app.so) ;;
@@ -2474,7 +2493,7 @@ jobs:
             echo "run_id=${{ github.run_id }}"
             echo "commit=${{ github.sha }}"
             echo "flutter=${FLUTTER_VERSION}"
-            echo "scope=v4.39 ROOT-FROM-START + TRAY + BRAND ICONS: Linux x86_64 app bundle, same look & size as Android (402x874 window), engines embedded (bundle/lib/libaether.so + libzeptun.so; lyrebird + psiphon child cores at the bundle root). Tunnel privilege model per the owner's decree: the WHOLE app relaunches as root at launch through one pkexec prompt (ElevateAtStartup, session env preserved through /usr/bin/env; decline/headless falls back to the v4.37 helper path). The root instance installs the menu entry + hicolor icon (EnsureDesktopIntegration). Close-to-tray: the window hides to the tray (the owner's mark as-is, aethone-tray.png); the window/taskbar face is the mark on white (aethone-icon.png). Psiphon tunnel modes keep the v4.38 strict-socks keys (pipeline=false + optimistic_data=false; byte-level gate: scripts/psiphon_socks_pipeline_check.py). Aether runs fully non-interactive (explicit -4/-6/--dual, --h2/--h3, --quick-reconnect)."
+            echo "scope=v4.40 THE FMA FLOOR + CLOSE-DIALOG + AUTO THEME + ICON SET: Linux x86_64 app bundle, same look & size as Android (402x874 window, v4.40: clamped to the monitor so small screens see the whole frame), engines embedded (bundle/lib/libaether.so + libzeptun.so; lyrebird + psiphon child cores at the bundle root). THE FMA FLOOR (the r86 root cause): the Go engines' math.archExp assembly used unconditional vfmadd213sd — STATUS_ILLEGAL_INSTRUCTION on every pre-Haswell CPU (the owner's i3-3240); the GOROOT haveArchExp=false patch moves math.Exp to the pure-Go path and a zero-vfmadd gate proves it on both engines. zeptun builds ReleaseSafe now (a tunnel bug prints a panic into the core log instead of dying silently) and its logs route into the captured core log (the zeptun log bridge). The system-proxy companion: while the tunnel is up the OS proxy points at the same local SOCKS5 listener (gsettings; restored on stop + startup hygiene). Close-to-tray round 15: the close button asks (Dart ask-dialog, remember checkbox, general-settings row); the tray menu offers show / toggle connection / quit. The v4.40 Dart round: the owner's protocol icon set (dark/light pairs rendered EXACTLY as delivered), the AUTO theme schedule (06:00-18:00 light), the general-settings additions (close behavior, login auto-start, reset), the protocol-mode setting retired, the tor AUTO location resolved through TWO sources (Onionoo + ip-api)."
             echo "native_pins=${native_pins}"
             echo "x86_isa_floor=x86-64-v1 (built on the baseline ubuntu-24.04 image; runner+plugins pinned to -march=x86-64 -mtune=generic; fail-closed readelf gate over every bundled ELF — see LINUX_CPU_COMPATIBILITY_REPORT.md)"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -2496,7 +2515,7 @@ jobs:
           "run_id=${{ github.run_id }}" | Set-Content dist/BUILD_INFO.txt
           "commit=${{ github.sha }}" | Add-Content dist/BUILD_INFO.txt
           "flutter=${{ env.FLUTTER_VERSION }}" | Add-Content dist/BUILD_INFO.txt
-          "scope=v4.39 PATH FIX + TRAY + BRAND ICONS: Windows x86_64 app bundle, same look & size as Android (402x874 window), engines embedded beside aethone.exe (aether.dll + zeptun.dll + the pinned wintun.dll adapter + lyrebird.exe + psiphon.exe). The engine layer's Windows path handling is now UTF-8 end-to-end (the v4.36 byte-widening broke every non-ASCII install path — LoadLibrary zeptun.dll failed 126 under a Persian user name while the bundle was complete; fixed at the MultiByteToWideChar boundary, load error now names the absolute path). The child cores (psiphon.exe, arti's lyrebird PT, the PT probe) spawn with CREATE_NO_WINDOW — no console windows beside the GUI app; a kill-on-close job object reaps them at process exit. Close-to-tray: the window hides to the notification area (IDI_TRAY_ICON, the owner's mark as-is); the app face (IDI_APP_ICON, the same mark on white) is what the Start menu / taskbar / caption show. The exe manifest ships requireAdministrator (Wintun adapter + strict-route WFP need elevation). The -only family tunnel legs are refused up-front (platformLimit) - every other mode tunnels through the WARP-exclude route." | Add-Content dist/BUILD_INFO.txt
+          "scope=v4.40 THE FMA FLOOR + CLOSE-DIALOG + AUTO THEME + ICON SET: Windows x86_64 app bundle, same look & size as Android (402x874 window, v4.40: clamped to the monitor work area), engines embedded beside aethone.exe (aether.dll + zeptun.dll + the pinned wintun.dll adapter + lyrebird.exe + psiphon.exe). THE FMA FLOOR (the r86 root cause, proven by disassembly + pclntab lookup: all 8 FMA sites in each engine live in math.archExp): the Go assembly used unconditional vfmadd213sd — the owner's proxy-mode illegal-instruction dialog (0xc000001d) on pre-Haswell CPUs; the GOROOT haveArchExp=false patch moves math.Exp to pure Go and the CI PE audit gates both engines to ZERO vfmadd sites. zeptun builds ReleaseSafe (panics print to the captured core log — the VPN-mode silent crash becomes readable) and the zeptun log bridge surfaces the REAL wintun error inside the tunnelStartFailed reason (the rc=-5 device-error message now quotes it). The Windows crash log: an unhandled-exception filter writes exception code + module+offset to logs/crash-log.txt. The system-proxy companion: while the tunnel is up the WinInet proxy points at the local SOCKS5 listener (registry + refresh; restored on stop + startup hygiene). Close-to-tray round 15: WM_CLOSE routes into the Dart ask-dialog (remember checkbox, general-settings row); the tray menu offers show / toggle connection / quit. The v4.40 Dart round: the owner's protocol icon set (dark/light pairs, EXACTLY as delivered), the AUTO theme schedule (06:00-18:00 light), the general-settings additions (close behavior, login auto-start, reset), the protocol-mode setting retired, the tor AUTO location through TWO resolvers (Onionoo + ip-api). requireAdministrator stays (Wintun adapter + strict-route WFP); the -only family tunnel legs stay refused up-front (platformLimit)."" | Add-Content dist/BUILD_INFO.txt
           "native_pins=aether@$($pins.pins.aether) zeptun@$($pins.pins.zeptun)" | Add-Content dist/BUILD_INFO.txt
           "x86_isa_floor=x86-64 baseline (llvm-objdump machine-code audit in CI; v3-class instructions exist only inside CPUID runtime-dispatched kernels — MSVC STL/Skia/BoringSSL/Go crypto; see LINUX_CPU_COMPATIBILITY_REPORT.md)" | Add-Content dist/BUILD_INFO.txt
           "recorded_at=$(Get-Date -AsUTC -Format 'yyyy-MM-ddTHH:mm:ssZ')" | Add-Content dist/BUILD_INFO.txt

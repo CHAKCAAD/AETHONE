@@ -58,7 +58,29 @@ static void my_application_activate(GApplication* application) {
   // v4.36 — the design package's own phone frame (402x874, the
   // reference-screen CSS "iPhone 17 - 22"): the desktop window opens at
   // the same size the Android app renders, so the UI is pixel-identical.
-  gtk_window_set_default_size(window, 402, 874);
+  // v4.40 — the small-monitor fit: the design frame never exceeds the
+  // monitor's work area (a 1366x768 panel at 125% scaling has ~614 logical
+  // px of height — the unclamped window lost its caption and bottom panel
+  // off-screen). The Flutter layout scales by width, so the smaller height
+  // stays fully usable.
+  {
+    gint w = 402, h = 874;
+    GdkDisplay* display = gdk_display_get_default();
+    if (display != nullptr) {
+      // The window is not realized yet (no GdkWindow) — the primary monitor
+      // is the honest target for the boot frame.
+      GdkMonitor* monitor = gdk_display_get_monitor(display, 0);
+      if (monitor != nullptr) {
+        GdkRectangle geo{};
+        gdk_monitor_get_geometry(monitor, &geo);
+        if (geo.width > 0 && geo.height > 0) {
+          if (w > geo.width) w = geo.width;
+          if (h > geo.height) h = geo.height;
+        }
+      }
+    }
+    gtk_window_set_default_size(window, w, h);
+  }
 
   // v4.39 — the app face for the window/taskbar (the owner's mark on
   // WHITE — «آیکون اصلی اپ ... با پس زمینه سفید») + the close-to-tray

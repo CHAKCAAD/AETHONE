@@ -42,7 +42,6 @@ abstract final class AppAssets {
   static const String _patterns = 'design/patterns_png';
   static const String _logo = 'design/آیکون اپ';
   static const String _flags = 'design/flags_png';
-  static const String _protoPng = 'design/proto_icons_png';
 
   // --- app logo: 1 = green (connected artwork, rotated), 3 = clean white
   // (tintable — used for BOTH hero states with the owner's rotation
@@ -214,50 +213,57 @@ abstract final class AppAssets {
   /// its owner-given name. It sweeps with the measured download speed.
   static const String speedNeedle = '$_speedGlyphs/عقربه صفحه تست سرعت.svg';
 
-  // --- protocol logos. Tor/Psiphon ship as pre-rendered PNGs (their SVGs
-  // embed the artwork in hidden tracing layers + the real vector art,
-  // which flutter_svg renders partially) — v4.10.
-  static const String _protoMasque = '$_protocols/ماسک.svg';
-  static const String _protoWireguard = '$_protocols/وایرگارد.svg';
-  static const String _protoGool = '$_protocols/گول.svg';
-  static const String _protoGoolClassic = '$_protocols/گول کلاسیک.svg';
-  static const String _protoMim = '$_protocols/میم.svg';
-  static const String _protoTor = '$_protoPng/تور.png';
-  static const String _protoPsiphon = '$_protoPng/سایفون.png';
-
-  // v4.33 (owner round 9) — the combined-mode logos: the owner's own SVGs,
-  // committed under their owner-given names. «X اور وارپ» = X riding the
-  // WARP (Aether-wireguard) tunnel = the CHAIN mode; «وارپ اور X» = the
-  // REVERSE mode. White vector art (the drop-shadow filters inside are
-  // skipped by flutter_svg — the paths render clean).
+  // --- protocol logos. v4.40 (owner round 16) — THE OWNER'S OWN ICON
+  // FILES, verbatim: «رنگ و شکل آیکون ها باید دقیقا همین فایل هایی باشه که
+  // برات ارسال شده». Dark/light PAIRS (the owner's file names, «دارک» /
+  // «لایت» suffixes): ماسک، میم، وایرگارد، گول. IDENTICAL in both modes
+  // («هر دو حالت» — the owner's own naming): تور، سایفون، گول کلاسیک، and
+  // the four combined-mode logos (no variant files were sent — one face for
+  // both themes). The old v4.10/v4.35 tinting and shadow-rebuild rules are
+  // RETIRED: these render with their OWN colors, no colorFilter ever.
+  static const String _protoTorBoth = '$_protocols/تور هر دو حالت.svg';
+  static const String _protoPsiphonBoth =
+      '$_protocols/سایفون هر دو حالت.svg';
+  static const String _protoGoolClassicBoth =
+      '$_protocols/گول کلاسیک هردو حالت.svg';
   static const String _protoPsiphonOverWarp = '$_protocols/سایفون اور وارپ.svg';
   static const String _protoWarpOverPsiphon = '$_protocols/وارپ اور سایفون.svg';
   static const String _protoTorOverWarp = '$_protocols/تور اور وارپ.svg';
   static const String _protoWarpOverTor = '$_protocols/وارپ اور تور.svg';
 
   /// Public protocol-logo paths (the settings Psiphon/Tor pills render the
-  /// REAL logos with an accent-green tint).
-  static const String protocolTorLogo = _protoTor;
-  static const String protocolPsiphonLogo = _protoPsiphon;
+  /// REAL logos — v4.40: the owner's own «هر دو حالت» files, own colors).
+  static const String protocolTorLogo = _protoTorBoth;
+  static const String protocolPsiphonLogo = _protoPsiphonBoth;
 
-  /// Logo for a transport mode. AUTO/SMART has NO dedicated SVG in the ZIP —
-  /// pending design decision D-pending (report §6.9 suggests Shield Tick with
-  /// gold accent); until decided it maps to Shield Tick (documented stopgap).
-  static String protocolIcon(ProtocolId id) => switch (id) {
+  /// Logo for a transport mode. AUTO/SMART has NO dedicated file in the
+  /// owner's round-16 set — pending design decision D-pending (report §6.9
+  /// suggests Shield Tick with gold accent); until decided it maps to Shield
+  /// Tick (documented stopgap).
+  ///
+  /// v4.40 — THEME-AWARE: the four protocols the owner sent in TWO faces
+  /// (ماسک/میم/وایرگارد/گول) pick the «لایت» file when [light] is true, the
+  /// «دارک» file otherwise; tor/psiphon/gool-classic and the combined modes
+  /// carry one face for both themes (the owner's own «هر دو حالت" naming).
+  /// Colors and shapes are EXACTLY the owner's files — the caller never
+  /// tints them (decree: «رنگ و شکل آیکون ها باید دقیقا همین فایل هایی باشه
+  /// که برات ارسال شده»).
+  static String protocolIcon(ProtocolId id, {required bool light}) =>
+      switch (id) {
         ProtocolId.auto => iconShieldTick,
-        ProtocolId.masque => _protoMasque,
-        ProtocolId.wireguard => _protoWireguard,
-        ProtocolId.gool => _protoGool,
-        ProtocolId.goolClassic => _protoGoolClassic,
-        ProtocolId.mim => _protoMim,
-        // v4.33 — the combined modes carry their OWN owner-drawn logos
-        // (the composed aether+chevron stacks are retired by decree).
+        ProtocolId.masque =>
+          '$_protocols/ماسک ${light ? 'لایت' : 'دارک'}.svg',
+        ProtocolId.wireguard =>
+          '$_protocols/وایرگارد ${light ? 'لایت' : 'دارک'}.svg',
+        ProtocolId.gool => '$_protocols/گول ${light ? 'لایت' : 'دارک'}.svg',
+        ProtocolId.goolClassic => _protoGoolClassicBoth,
+        ProtocolId.mim => '$_protocols/میم ${light ? 'لایت' : 'دارک'}.svg',
         ProtocolId.torChain => _protoTorOverWarp,
         ProtocolId.torReverse => _protoWarpOverTor,
-        ProtocolId.torOnly => _protoTor,
+        ProtocolId.torOnly => _protoTorBoth,
         ProtocolId.psiphonChain => _protoPsiphonOverWarp,
         ProtocolId.psiphonReverse => _protoWarpOverPsiphon,
-        ProtocolId.psiphonOnly => _protoPsiphon,
+        ProtocolId.psiphonOnly => _protoPsiphonBoth,
       };
 
   /// Country flag by ISO code (lowercase), e.g. `ir` → ir.png.
@@ -334,14 +340,15 @@ abstract final class AppAssets {
         // v4.34 — the theme-toggle pair.
         iconSun1,
         iconMoon,
-        _protoMasque,
-        _protoWireguard,
-        _protoGool,
-        _protoGoolClassic,
-        _protoMim,
-        _protoTor,
-        _protoPsiphon,
-        ...ProtocolId.values.map(protocolIcon),
+        // v4.40 — the owner's round-16 protocol icons: every referenced
+        // face of every protocol (both dark and light variants where the
+        // owner sent a pair).
+        _protoTorBoth,
+        _protoPsiphonBoth,
+        _protoGoolClassicBoth,
+        ...ProtocolId.values.expand(
+          (id) => [protocolIcon(id, light: true), protocolIcon(id, light: false)],
+        ),
         flag('ir'),
         flag('tm'),
         flag('ru'),
@@ -356,10 +363,5 @@ abstract final class AppAssets {
         iconHexWave,
         // v4.33 — the dial needle (the owner's own SVG).
         speedNeedle,
-        // v4.33 — the combined-mode logos (the owner's own SVGs).
-        _protoPsiphonOverWarp,
-        _protoWarpOverPsiphon,
-        _protoTorOverWarp,
-        _protoWarpOverTor,
       ];
 }

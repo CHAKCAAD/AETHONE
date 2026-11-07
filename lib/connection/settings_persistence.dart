@@ -69,8 +69,19 @@ abstract final class SettingsKeys {
   /// v4.25 — the master animation kill-switch (default ON).
   static const animationsEnabled = 'aethone.settings.animationsEnabled';
 
-  /// v4.34 — the app theme ('night' | 'light'; default night).
+  /// v4.34 — the app theme ('night' | 'light'; default night). v4.40: the
+  /// RESOLVED mode — the persisted PREFERENCE is [themePick]; this key
+  /// stays written (the shell reads it before the store binds on cold
+  /// start) and doubles as the legacy seed for themePick.
   static const themeMode = 'aethone.settings.themeMode';
+
+  /// v4.40 — the appearance pick ('night' | 'light' | 'auto'; default
+  /// seeded from the legacy themeMode key, else night).
+  static const themePick = 'aethone.settings.themePick';
+
+  /// v4.40 — the desktop close behavior ('ask' | 'close' | 'tray'; default
+  /// ask — the owner's round-15 ask-dialog).
+  static const closeBehavior = 'aethone.settings.closeBehavior';
 
   /// v4.23 — the first-run wizard («صفحه شروع») completed flag; missing
   /// means the onboarding still owes the user a run.
@@ -210,6 +221,35 @@ class SettingsPersistence {
       } else if (themeName == AethThemeMode.light.name) {
         store.themeMode = AethThemeMode.light;
       }
+      // v4.40 — the appearance pick (owner round 15's AUTO mode): the
+      // resolved [store.themeMode] above is only the cold-start render
+      // seed; the pick owns the preference. A missing pick inherits the
+      // legacy themeMode value (an existing install keeps its face); AUTO
+      // re-resolves by the clock at restore.
+      final pickName = prefs.getString(SettingsKeys.themePick);
+      if (pickName == AethThemePick.auto.name) {
+        store.themePick = AethThemePick.auto;
+        store.themeMode = resolveAutoTheme(DateTime.now());
+      } else if (pickName == AethThemePick.light.name) {
+        store.themePick = AethThemePick.light;
+        store.themeMode = AethThemeMode.light;
+      } else if (pickName == AethThemePick.night.name) {
+        store.themePick = AethThemePick.night;
+        store.themeMode = AethThemeMode.night;
+      } else {
+        store.themePick = store.themeMode == AethThemeMode.light
+            ? AethThemePick.light
+            : AethThemePick.night;
+      }
+      // v4.40 — the desktop close behavior (owner round 15).
+      final closeName = prefs.getString(SettingsKeys.closeBehavior);
+      if (closeName == CloseBehavior.close.name) {
+        store.closeBehavior = CloseBehavior.close;
+      } else if (closeName == CloseBehavior.tray.name) {
+        store.closeBehavior = CloseBehavior.tray;
+      } else {
+        store.closeBehavior = CloseBehavior.ask;
+      }
       // v4.23 — the onboarding flag.
       store.onboardingComplete =
           prefs.getBool(SettingsKeys.onboardingComplete) ?? false;
@@ -338,10 +378,20 @@ class SettingsPersistence {
         SettingsKeys.animationsEnabled,
         store.animationsEnabled,
       );
-      // v4.34 — the app theme rides every snapshot.
+      // v4.34 — the app theme rides every snapshot (v4.40: the RESOLVED
+      // mode + the pick that owns it).
       await prefs.setString(
         SettingsKeys.themeMode,
         store.themeMode.name,
+      );
+      await prefs.setString(
+        SettingsKeys.themePick,
+        store.themePick.name,
+      );
+      // v4.40 — the desktop close behavior rides every snapshot.
+      await prefs.setString(
+        SettingsKeys.closeBehavior,
+        store.closeBehavior.name,
       );
       // v4.23 — the wizard flag rides every snapshot so a completed run
       // survives restarts (and mid-flow kills resume rather than restart

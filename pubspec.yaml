@@ -3,7 +3,7 @@ description: >-
   AETHONE — cross-platform VPN client. Flutter UI layer; network engines are
   Aether (Rust, WARP client) and zeptun (Zig, userspace TUN router).
 publish_to: none
-version: 4.36.0+1
+version: 4.40.0+1
 
 environment:
   sdk: ^3.13.0
@@ -65,15 +65,24 @@ flutter:
     - design/آیکون اپ/3.svg
     # v4.35 — the owner's round-11 green mark behind the wordmark (item 3).
     - design/آیکون اپ/آیکون بالای اپ.svg
-    # --- protocol logos (design/آیکون پروتکل ها) — Tor/Psiphon are
-    # pre-rendered PNGs (v4.10: their SVGs embed hidden tracing rasters that
-    # flutter_svg renders partially); the original SVGs stay committed as the
-    # design source of truth ---
-    - design/آیکون پروتکل ها/ماسک.svg
-    - design/آیکون پروتکل ها/میم.svg
-    - design/آیکون پروتکل ها/وایرگارد.svg
-    - design/آیکون پروتکل ها/گول.svg
-    - design/آیکون پروتکل ها/گول کلاسیک.svg
+    # --- protocol logos (design/آیکون پروتکل ها). v4.40 (owner round 16):
+    # the owner's own icon FILES, verbatim — «رنگ و شکل آیکون ها باید
+    # دقیقا همین فایل هایی باشه که برات ارسال شده». Dark/light PAIRS
+    # (ماسک/میم/وایرگارد/گول — the owner's «دارک»/«لایت" file names);
+    # ONE face for both themes (تور/سایفون/گول کلاسیک — «هر دو حالت")
+    # and the four combined-mode logos. The old single-face files stay
+    # committed as the design record but ship no longer. ---
+    - design/آیکون پروتکل ها/ماسک دارک.svg
+    - design/آیکون پروتکل ها/ماسک لایت.svg
+    - design/آیکون پروتکل ها/میم دارک.svg
+    - design/آیکون پروتکل ها/میم لایت.svg
+    - design/آیکون پروتکل ها/وایرگارد دارک.svg
+    - design/آیکون پروتکل ها/وایرگارد لایت.svg
+    - design/آیکون پروتکل ها/گول دارک.svg
+    - design/آیکون پروتکل ها/گول لایت.svg
+    - design/آیکون پروتکل ها/گول کلاسیک هردو حالت.svg
+    - design/آیکون پروتکل ها/تور هر دو حالت.svg
+    - design/آیکون پروتکل ها/سایفون هر دو حالت.svg
     # --- v4.33 (owner round 9): the combined-mode icons — the owner's own
     #     SVGs (سایفون اور وارپ / وارپ اور سایفون / تور اور وارپ / وارپ اور
     #     تور) replace the composed aether+chevron stacks on the sub-tiles;
@@ -82,7 +91,6 @@ flutter:
     - design/آیکون پروتکل ها/وارپ اور سایفون.svg
     - design/آیکون پروتکل ها/تور اور وارپ.svg
     - design/آیکون پروتکل ها/وارپ اور تور.svg
-    - design/proto_icons_png/
     # --- background patterns: pre-rendered PNGs (v4.10 — the SVGs carry
     # feGaussianBlur which flutter_svg cannot rasterize; rendered via
     # headless Chromium with filters intact; SVG sources stay committed) ---

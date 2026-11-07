@@ -284,10 +284,29 @@ abstract final class EgressLocations {
   /// Onionoo THROUGH the live tunnel's SOCKS listener on [socksPort].
   /// Never throws: null = unresolved (the UI keeps its honest unknown —
   /// the anchor pick / the AUTO globe, never a fake flag).
+  ///
+  /// v4.40 — the SECOND resolver: when Onionoo does not answer (a slow
+  /// circuit, a TLS-verification failure on an old root store — the owner's
+  /// round-15 report: tor AUTO keeps showing «خودکار» after connect), the
+  /// same SOCKS tunnel asks ip-api.com over PLAIN HTTP (no TLS handshake,
+  /// no certificate chain to verify, one small JSON reply). Two independent
+  /// sources on two ports — the resolution lands unless the exit itself is
+  /// dead.
   static Future<String?> resolveTorExitCountry({
     required int socksPort,
     required String exitIp,
     Duration timeout = const Duration(seconds: 25),
+  }) async {
+    final viaOnionoo = await _resolveViaOnionoo(
+        socksPort: socksPort, exitIp: exitIp, timeout: timeout);
+    if (viaOnionoo != null) return viaOnionoo;
+    return _resolveViaIpApi(socksPort: socksPort, timeout: timeout);
+  }
+
+  static Future<String?> _resolveViaOnionoo({
+    required int socksPort,
+    required String exitIp,
+    required Duration timeout,
   }) async {
     SocksTunnel? tunnel;
     SecureSocket? tls;
@@ -319,11 +338,72 @@ abstract final class EgressLocations {
       if (split < 0) return null;
       return parseOnionooSearchCountry(text.substring(split + 4));
     } catch (_) {
-      return null; // offline exit, blocked Onionoo, slow relay — unknown
+      return null; // offline exit, blocked Onionoo, slow relay — try ip-api
     } finally {
       tls?.destroy();
       tunnel?.destroy(); // reader already released when detached — no-op
     }
+  }
+
+  /// The ip-api.com resolver — plain HTTP on port 80 through the SAME
+  /// SOCKS tunnel: `GET /json/?fields=status,countryCode` answers
+  /// `{"status":"success","countryCode":"NL"}` (the free tier is
+  /// HTTP-only by design, 45 req/min — a per-tick retry stays far below).
+  static Future<String?> _resolveViaIpApi({
+    required int socksPort,
+    required Duration timeout,
+  }) async {
+    SocksTunnel? tunnel;
+    try {
+      tunnel = await TunnelProbe.socksConnect(
+        port: socksPort,
+        host: ipApiHost,
+        dstPort: 80,
+        timeout: timeout,
+      );
+      const request =
+          'GET /json/?fields=status,countryCode HTTP/1.1\r\n'
+          'Host: $ipApiHost\r\n'
+          'User-Agent: aethone/1\r\n'
+          'Accept: application/json\r\n'
+          'Connection: close\r\n'
+          '\r\n';
+      tunnel.socket.write(request);
+      await tunnel.socket.flush().timeout(timeout);
+      final body = await tunnel.readAll().timeout(timeout);
+      final text = utf8.decode(body, allowMalformed: true);
+      final split = text.indexOf('\r\n\r\n');
+      if (split < 0) return null;
+      return parseIpApiCountry(text.substring(split + 4));
+    } catch (_) {
+      return null;
+    } finally {
+      tunnel?.destroy();
+    }
+  }
+
+  /// The ip-api.com host (plain HTTP — the free tier serves no TLS).
+  static const String ipApiHost = 'ip-api.com';
+
+  /// Extracts the country from an ip-api.com `/json/` reply
+  /// (`{"status":"success","countryCode":"NL"}`). Returns null for
+  /// anything else — never a fabricated code.
+  static String? parseIpApiCountry(String body) {
+    Object? doc;
+    try {
+      doc = jsonDecode(body);
+    } catch (_) {
+      return null;
+    }
+    if (doc is! Map) return null;
+    if (doc['status'] != 'success') return null;
+    final country = doc['countryCode'];
+    if (country is String &&
+        country.length == 2 &&
+        _alpha2.hasMatch(country.toLowerCase())) {
+      return country.toLowerCase();
+    }
+    return null;
   }
 
   /// Reads a socket to EOF (Connection: close) with a per-chunk timeout.

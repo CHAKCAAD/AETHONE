@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'connection/connection_store.dart';
+import 'connection/desktop_window.dart';
 import 'core/app_theme.dart';
 import 'core/design_tokens.dart';
 import 'features/home/home_screen.dart';
@@ -48,6 +51,14 @@ class _AethoneAppState extends State<AethoneApp>
   /// handed us) — a store notification that does not move it is ignored.
   AethThemeMode? _clockTarget;
 
+  /// v4.40 — the AUTO schedule tick (owner round 15: «از ساعت 6 صبح تا 6
+  /// عصر حالت بایت لایت مود باشه و از ساعت 6 عصر تا 6 صبح فردا هم نایت
+  /// مود»): while the pick is AUTO, one check per 30 s moves the mode at
+  /// the 06:00/18:00 boundary through the SAME 420 ms cross-fade a manual
+  /// flip takes. A fixed pick keeps the timer idle.
+  Timer? _autoThemeTick;
+  AethThemePick? _armedForPick;
+
   static const Duration _themeFade = Duration(milliseconds: 420);
 
   @override
@@ -65,17 +76,40 @@ class _AethoneAppState extends State<AethoneApp>
     _themeClock.addListener(() => _applyPalette(_themeClock.value));
     widget.store.addListener(_onStoreChanged);
     _clockTarget = widget.store.themeMode;
+    _armAutoThemeTick();
   }
 
   @override
   void dispose() {
+    _autoThemeTick?.cancel();
     widget.store.removeListener(_onStoreChanged);
     _themeClock.dispose();
     super.dispose();
   }
 
+  /// (Re-)arms the per-minute AUTO check. Armed ONLY on a pick CHANGE —
+  /// the store notifies every stats tick (5 s) and a re-arm-per-notify
+  /// would reset the 30 s interval forever (the boundary would never
+  /// fire).
+  void _armAutoThemeTick() {
+    final pick = widget.store.themePick;
+    if (pick == _armedForPick) return;
+    _armedForPick = pick;
+    _autoThemeTick?.cancel();
+    _autoThemeTick = null;
+    if (pick != AethThemePick.auto) return;
+    _autoThemeTick = Timer.periodic(const Duration(seconds: 30), (_) {
+      widget.store.applyAutoThemeSchedule(DateTime.now());
+    });
+    // The boundary may have crossed while nobody watched (a suspended
+    // laptop, a fresh restore): resolve RIGHT NOW too.
+    widget.store.applyAutoThemeSchedule(DateTime.now());
+  }
+
   void _onStoreChanged() {
     final target = widget.store.themeMode;
+    // v4.40 — a pick change re-arms the AUTO schedule timer.
+    _armAutoThemeTick();
     if (target == _clockTarget) return;
     _clockTarget = target;
     // The master animation kill-switch collapses the cross-fade to a jump
@@ -98,6 +132,9 @@ class _AethoneAppState extends State<AethoneApp>
   void _applyPalette(double t) {
     AethThemeSync.palette =
         AethPal.lerp(AethPal.night, AethPal.light, Curves.easeInOut.transform(t));
+    // v4.40 — the binary light-ness the protocol-icon variants read: the
+    // clock's midpoint is the same moment the colors cross.
+    AethThemeSync.light = t > 0.5;
   }
 
   @override
@@ -112,6 +149,9 @@ class _AethoneAppState extends State<AethoneApp>
         return MaterialApp(
           title: 'AETHONE',
           debugShowCheckedModeBanner: false,
+          // v4.40 — the root navigator the close-dialog needs (a context
+          // that survives every route; see DesktopWindowBridge).
+          navigatorKey: appNavigatorKey,
           theme: _theme(),
           locale: _locale(widget.store.appLocale),
           supportedLocales: AethoneApp.supportedLocales,

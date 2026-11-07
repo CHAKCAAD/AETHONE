@@ -664,3 +664,160 @@ fixup). Run evidence recorded below after the dispatch.
 | scripts/syntax_check_linux_runner.sh | + the tray/engine/Win32 legs; new stubs (gtk, windows, shellapi) |
 | .github/workflows/native-ci.yml | BUILD_INFO scope lines (both legs); smoke: the two icon assertions + the Persian-path boot |
 | README.md / this report | the v4.39 records |
+
+---
+
+# v4.40 — the FMA floor, the close-dialog, the AUTO theme, the icon set (owner rounds 14–16)
+
+**Round:** v4.40 · **Branch:** `ci-bootstrap/v4.4` · **Baseline:** `cabd6b7` (v4.39)
+**Owner reports this round answers:** the r86 Windows device report (VPN-mode
+`zeptun-start-failed:rc=-5` / the app closing entirely; proxy-mode
+`illegal instruction (0xc000001d)` after a short while), tor AUTO showing
+«خودکار» after connect, the round-14–16 decrees (close-dialog + tray menu,
+system proxy with the tunnel, the protocol icon set, the AUTO theme, the
+protocol-mode removal, the general-settings expansion).
+
+## 1. THE FMA FLOOR — the r86 Windows illegal instruction, at the object level
+
+The owner's report: proxy mode, click connect, a short while later Windows
+shows *The exception illegal instruction (0xc000001d) occurred in the
+application at location 0x00007ffe097190a0*. The r81 PE audit (§5 of the
+CPU report) had verified every CPUID-dispatched v3 kernel — but the r86
+bundle was re-audited HERE with a function-level map, and the verdict is
+exact:
+
+* **all 8 FMA sites in psiphon.exe AND all 8 in lyrebird.exe live inside
+  `math.archExp`** — Go's amd64 ASSEMBLY implementation of `math.Exp`
+  (pclntab symbol lookup on the shipped binaries; the constant table is
+  the sine/exponential polynomial: 0.5, 1.0, 2.0, 1/6, 1/24, 1/120 …).
+* The assembly uses **`vfmadd213sd` UNCONDITIONALLY** — no CPUID gate, and
+  `GOAMD64=v1` does not disarm hand-written assembly.
+* Intel added FMA3 with **Haswell (2013)**. The owner's CPU is an
+  **i3-3240 (Ivy Bridge — SSE4.2 + AVX, NO FMA)**: any exponential-backoff
+  `math.Exp` call inside either engine hard-faults the child process with
+  STATUS_ILLEGAL_INSTRUCTION — "after a short while" is the connect
+  handshake reaching its first backoff computation.
+
+**The fix (three layers, all fail-closed):**
+
+1. `scripts/build_native_desktop.sh` (both OS legs) and
+   `scripts/build_native.sh` (the x86_64 Android leg only) patch the pinned
+   toolchain's `$GOROOT/src/math/exp_amd64.go`: `haveArchExp = true →
+   false` — `math.Exp` takes the pure-Go path (plain MULSD/ADDSD). The
+   patch refuses to build if the exact line is missing (a toolchain layout
+   change must never silently re-arm FMA).
+2. A **zero-vfmadd gate** on the produced engines (both build scripts):
+   disassemble, count `vfmadd|vfmsub`, fail the leg on ANY site.
+3. The CI **PE ISA audit** moves lyrebird.exe + psiphon.exe from `report`
+   to the new **`nofma` policy** (FMA sites must be 0; the runtime-
+   dispatched ymm/lzcnt kernels stay counted).
+
+The same binaries ship in the Linux bundle and the x86_64 APK — same bug,
+same fix everywhere. The arm legs are untouched (FMA is baseline ISA on
+aarch64; the armv7 builder emits none).
+
+## 2. The Windows VPN-mode failures
+
+* **rc=-5 (device error) with no evidence** — zeptun's own diagnostic
+  lines (`wintun: cannot open or create adapter … (error N)`) were written
+  into a NULL sink (zeptun's `log.zig` drops everything until a callback is
+  installed). The **zeptun log bridge** now routes every line into the
+  captured core log, and `BringUpZeptun` quotes the last wintun/route
+  failure line into the `tunnelStartFailed` reason — the owner's screen
+  now shows the REAL Windows error code, not just "device error".
+* **the app closing entirely** — the remaining in-process suspects were
+  zeptun's ReleaseFast `unreachable` sites (Zig compiles them to UD2 =
+  0xc000001d, no message). The desktop legs now build zeptun with
+  **ReleaseSafe**: every such site becomes a printed panic in the core log
+  followed by a clean abort — diagnosable instead of silent.
+* **the crash log** (new, `windows/runner/main.cpp`): a
+  `SetUnhandledExceptionFilter` writes exception code + address +
+  **module name + offset** (Toolhelp module walk) to
+  `<filesDir>/logs/crash-log.txt` before WER shows its dialog. Whatever
+  still crashes on the owner's machine names itself on the next test.
+
+## 3. The round-15 desktop UX decrees
+
+* **Close-to-tray ask-dialog** (both desktops): WM_CLOSE / delete-event now
+  route into Dart (`onWindowCloseRequested`); the ask-dialog (the app's own
+  design language, RTL) offers «رفتن به سینی سیستم» / «بستن کامل برنامه»
+  with the «انتخاب من دفعهٔ بعد هم مستقیم اعمال شود» checkbox. A
+  remembered pick applies directly; the general-settings row re-opens the
+  question. `window.hide` / `window.quit` are the answers back into the
+  runner.
+* **The tray menu** carries the owner's three entries: نمایش AETHONE /
+  **قطع و وصل اتصال** (new — forwarded into the Dart state machine) / خروج.
+  The tray icon stays the owner's mark exactly as delivered (theme-
+  independent green on transparent — the same face at night and in light,
+  by construction of the mark itself).
+* **The AUTO theme** (appearance settings): the pick is night / light /
+  **خودکار** — 06:00–18:00 light, 18:00–06:00 night (the shell re-checks
+  every 30 s; the switch rides the same 420 ms cross-fade; the top-bar
+  sun/moon exits AUTO to the opposite fixed mode). A legacy install seeds
+  the pick from the old themeMode key.
+* **The protocol-mode setting is RETIRED** (decree: «حالت پروتکل در
+  تنظیمات اتصال برنامه رو کلا حذف کن») — the connection page section and
+  the wizard's AUTO/SMART cards are gone; the engine keeps its persisted
+  value; the settings protocol card now shows the SELECTED protocol's own
+  name (the reference frames' intent).
+* **General settings expanded** (decree: «قسمت تنطیمات عمومی واقعا
+  تنطیمات زیادی رو ارایه نمیکنه»): the close-behavior row, the login
+  auto-start (HKCU Run / the session user's autostart .desktop —
+  SUDO_USER-aware under the elevated model), and the reset-to-defaults
+  (with a confirm dialog; engine-truth caches survive).
+* **The small-monitor fit**: the 402×874 phone frame never exceeds the
+  monitor's work area anymore (clamped + centred on Windows; clamped on
+  Linux) — the owner's «توی مانیتور های کوچیک هم زیبا نمایش داده بشه».
+
+## 4. The round-14 decree — the system-proxy companion of the tunnel
+
+While the tunnel is up, the core's local SOCKS5 listener is already
+tunneling; the OS proxy now points at it (`socks5://127.0.0.1:<port>`) so
+proxy-only apps (browsers first) ride the same tunnel: Windows via the
+WinInet registry keys + the SETTINGS_CHANGED/REFRESH broadcast, Linux via
+gsettings (GNOME family). The pre-session OS proxy state is saved and
+restored on stop — and **SystemProxyHygiene** restores it at every process
+start if a session died with the proxy set. Honest failures land in the
+core log; the tunnel itself is never affected.
+
+## 5. The round-16 decree — the protocol icon set
+
+The owner's 15 files, committed byte-identical under their owner-given
+names. Dark/light PAIRS (ماسک/میم/وایرگارد/گول) pick their face by the
+resolved theme (`AethThemeSync.light` — the icons cross-fade with the 420 ms
+tween and follow the AUTO schedule); tor / psiphon / gool-classic and the
+four combined modes carry ONE face (the owner's own «هر دو حالت» naming).
+Every logo renders with its OWN colors — the v4.35 tinting and the
+shadow-rebuild machinery are retired by decree («رنگ و شکل آیکون ها باید
+دقیقا همین فایل هایی باشه که برات ارسال شده»). Pixel-verified: the
+rendered ink matches the files' fills (white / #141C16 / #997A35 / the
+purple-orange-green gradients) on both card surfaces. The selected green
+tile keeps the standing all-ink-white rule (وارپ اور X is #1AD995 — the
+tile's own fill — and would vanish otherwise).
+
+## 6. The tor AUTO location (round 15)
+
+The v4.34 retry loop stayed at 4 tries against ONE resolver (Onionoo over
+TLS through the tunnel — a TLS-verification failure on an old root store
+loses silently). The resolution now has TWO independent sources: Onionoo
+first, then **ip-api.com over PLAIN HTTP** through the same SOCKS tunnel
+(no TLS handshake, no certificate chain — one small JSON reply), and the
+budget is 10 tries. The wheel lands on the real exit country unless the
+exit itself is dead.
+
+## 7. Local gates (all green before the push)
+
+`bash -n` both build scripts · the four `-fsyntax-only` legs
+(engine_channel_linux / tray_controller_linux / desktop_engine /
+tray_icon_windows) · `flutter analyze` — **No issues found** ·
+`flutter test` — **242/242** (the 4 contract tests updated to the v4.40
+decrees: the pick-owned theme, the removed protocol-mode UI, the protocol
+status card) · the icon contact sheet + the per-file pixel assertions.
+
+## 8. The commit (v4.40)
+
+The FMA floor + the zeptun log bridge + ReleaseSafe + the crash log + the
+close-dialog + the tray toggle + the AUTO theme + the icon set + the
+system-proxy companion + the tor dual resolver + the general-settings
+round land as `v4.40` on `ci-bootstrap/v4.4`. Run evidence recorded after
+the dispatch.

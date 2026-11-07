@@ -398,7 +398,10 @@ class _LookGroup extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Step 4 — «حالت اتصال» segments + the option cards + «سرعت اسکن» pills.
+// Step 4 — «حالت اتصال» segments + «سرعت اسکن» pills. v4.40 (owner round
+// 15: «صمت حالت پروتکل در تنظیمات اتصال برنامه رو کلا حذف کن»): the
+// AUTO/SMART option cards are GONE — the setting has no picker anywhere;
+// the engine keeps its persisted value.
 // ---------------------------------------------------------------------------
 
 class ObProtocolSections extends StatelessWidget {
@@ -421,29 +424,6 @@ class ObProtocolSections extends StatelessWidget {
         SizedBox(height: AethGeometry.obHeadingToSegments * s),
         _ObSegments(store: store),
         SizedBox(height: AethGeometry.obSegmentsToHeading * s),
-        _ObSectionHeading(
-          text: strings.obProtocolHeading,
-          badge: AppAssets.iconSwap1,
-        ),
-        SizedBox(height: AethGeometry.obHeadingToCard * s),
-        _ObOptionCard(
-          keyId: 'ob-card-auto',
-          selected: store.protocolModeSmart,
-          icon: AppAssets.iconShieldStar,
-          label: strings.protoAutoSheet,
-          body: strings.obAutoDesc,
-          onTap: () => store.setProtocolModeSmart(true),
-        ),
-        SizedBox(height: AethGeometry.obCardGap * s),
-        _ObOptionCard(
-          keyId: 'ob-card-manual',
-          selected: !store.protocolModeSmart,
-          icon: AppAssets.iconShield1,
-          label: strings.obManualLabel,
-          body: strings.obManualDesc,
-          onTap: () => store.setProtocolModeSmart(false),
-        ),
-        SizedBox(height: AethGeometry.obCardToHeading * s),
         _ObSectionHeading(
           text: strings.sheetHeadingScanSpeed,
           badge: AppAssets.iconScan1,
@@ -559,98 +539,6 @@ class _ObSegments extends StatelessWidget {
           SizedBox(width: AethGeometry.protoSegmentGap * s),
           segment(ConnectionMode.proxy, strings.modeProxy),
         ],
-      ),
-    );
-  }
-}
-
-/// One option card: 101 tall r24, the icon+label column 56 wide at 24
-/// from the card's RIGHT edge (amber glyph on the green selected card,
-/// white on the dark one), the 3-line body to its left.
-class _ObOptionCard extends StatelessWidget {
-  const _ObOptionCard({
-    required this.keyId,
-    required this.selected,
-    required this.icon,
-    required this.label,
-    required this.body,
-    required this.onTap,
-  });
-
-  final String keyId;
-  final bool selected;
-  final String icon;
-  final String label;
-  final String body;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    return GestureDetector(
-      key: ValueKey(keyId),
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOut,
-        height: AethGeometry.obCardH * s,
-        decoration: BoxDecoration(
-          color: selected ? AethColors.accentConnected : AethColors.cardDark,
-          borderRadius: BorderRadius.circular(AethGeometry.obCardRadius * s),
-        ),
-        child: Directionality(
-          textDirection: TextDirection.rtl,
-          child: Row(
-            children: [
-              SizedBox(width: AethGeometry.obCardColumnInset * s),
-              SizedBox(
-                width: AethGeometry.obCardColumnW * s,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SvgPicture.asset(
-                      icon,
-                      width: AethGeometry.obCardIcon * s,
-                      height: AethGeometry.obCardIcon * s,
-                      colorFilter: ColorFilter.mode(
-                        selected
-                            ? AethColors.autoShieldAmber
-                            : AethColors.textPrimary,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                    SizedBox(height: 6 * s),
-                    Text(
-                      label,
-                      textDirection: TextDirection.rtl,
-                      style: TextStyle(
-                        fontFamily: 'IRANYekanX',
-                        fontWeight: FontWeight.w600,
-                        fontSize: AethGeometry.obCardLabelSize * s,
-                        color: AethColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: AethGeometry.obCardBodyGap * s),
-              Expanded(
-                child: Text(
-                  body,
-                  textDirection: TextDirection.rtl,
-                  style: TextStyle(
-                    fontFamily: 'IRANYekanX',
-                    fontWeight: FontWeight.w400,
-                    fontSize: AethGeometry.obCardBodySize * s,
-                    height: AethGeometry.obCardBodyHeight,
-                    color: AethColors.textPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

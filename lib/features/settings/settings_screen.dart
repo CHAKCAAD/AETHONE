@@ -694,13 +694,16 @@ class _WidePill extends StatelessWidget {
             SizedBox(width: 10 * s),
             // The REAL protocol logo at the visual RIGHT edge (x148–173),
             // accent-green like the frame.
-            Image.asset(
+            // v4.40 — the owner's round-16 protocol logo files, EXACTLY as
+            // delivered (own colors; the v4.15 accent-green tint is retired
+            // by the decree «رنگ و شکل آیکون ها باید دقیقا همین فایل هایی
+            // باشه که برات ارسال شده»). The «هر دو حالت» files are pure
+            // vector SVGs — rendered through flutter_svg.
+            SvgPicture.asset(
               logo,
               width: logoBox,
               height: logoBox,
               fit: BoxFit.contain,
-              color: AethColors.accentConnected,
-              colorBlendMode: BlendMode.srcIn,
             ),
           ],
         ),
@@ -816,9 +819,13 @@ class _StatusCards extends StatelessWidget {
         Expanded(
           child: _SettingsCard(
             // v4.17 — owner round #2: the protocol card takes Swap 1.svg.
+            // v4.40 — the AUTO/SMART protocol-mode row is retired (owner
+            // round 15: «حالت پروتکل ... کلا حذف کن»); the card now shows
+            // the SELECTED protocol's own name (the reference frames'
+            // intent all along).
             asset: AppAssets.iconSwap1,
             title: strings.protocol,
-            subtitle: store.protocolModeSmart ? 'SMART' : 'AUTO / SMART',
+            subtitle: strings.protocolName(store.selectedProtocol),
             subtitleColor: AethColors.accentConnected,
             onTap: onProtocol,
           ),

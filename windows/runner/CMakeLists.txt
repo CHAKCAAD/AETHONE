@@ -52,6 +52,10 @@ target_link_libraries(${BINARY_NAME} PRIVATE
   flutter_wrapper_plugin
   flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
+# v4.40 — wininet: the system-proxy companion of the tunnel mode
+# (InternetSetOptionW notifies WinInet consumers after the registry write;
+# see desktop_shared/desktop_engine.cpp SetSystemProxy).
+target_link_libraries(${BINARY_NAME} PRIVATE "wininet.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

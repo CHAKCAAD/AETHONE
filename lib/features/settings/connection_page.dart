@@ -1,8 +1,11 @@
-/// «تنظیمات اتصال» — the connection sub-page (v4.22): the connection mode
-/// (تونل/پروکسی — the same segment look the protocol page uses), the
-/// protocol mode (AUTO/SMART — the status card's own source; SMART stays
-/// an honest not-yet-in-the-core note), and the entry row into the Aether
-/// core page (the owner's fragment/TLS layer).
+/// «تنظیمات اتصال» — the connection sub-page: the connection mode
+/// (تونل/پروکسی — the same segment look the protocol page uses) and the
+/// entry row into the Aether core page (the owner's fragment/TLS layer).
+///
+/// v4.40 (owner round 15: «صمت حالت پروتکل در تنظیمات اتصال برنامه رو
+/// کلا حذف کن») — the AUTO/SMART protocol-mode section is GONE from this
+/// page (and from the wizard's step 4): the setting no longer has any
+/// picker; the engine keeps its persisted value.
 ///
 /// v4.31c — the family-leg section MOVED OUT (owner round 8: «قسمت پایه
 /// حالت های ترکیبی باید توی زیرمجموعه تنطیمات تور و سایفون قرار بگیره»):
@@ -46,32 +49,6 @@ class ConnectionSettingsPage extends StatelessWidget {
           child: _ModeSegmentsRow(
             selected: store.connectionMode,
             onSelect: store.setConnectionMode,
-          ),
-        ),
-
-        // ---- Section: protocol mode (AUTO / SMART) ----
-        SizedBox(height: 24 * s),
-        SubSectionHeading(
-          icon: AppAssets.iconSwap1,
-          title: strings.secProtocolMode,
-        ),
-        const SubSectionGap.headingToCard(),
-        SubSectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SettingPills<bool>(
-                keyId: 'proto-mode',
-                options: [
-                  (false, strings.protoAutoSheet),
-                  (true, strings.protoModeSmart),
-                ],
-                selected: store.protocolModeSmart,
-                onSelect: store.setProtocolModeSmart,
-              ),
-              const SubSectionDivider(),
-              SettingInfoText(strings.smartNote),
-            ],
           ),
         ),
 

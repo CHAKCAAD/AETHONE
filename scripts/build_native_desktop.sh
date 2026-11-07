@@ -121,6 +121,42 @@ export GOOS GOARCH
 # so an inherited v1 is the effective floor (and beats any go-env default).
 export GOAMD64=v1
 
+# v4.40 — THE PRE-FMA FLOOR FOR THE GO ENGINES (the owner's r86 Windows
+# report: proxy-mode connect dies with the Windows dialog "The exception
+# illegal instruction (0xc000001d)" after a short while). Root cause, proven
+# on the shipped r86 binaries by disassembly + pclntab symbol lookup: ALL 8
+# FMA sites in psiphon.exe AND all 8 in lyrebird.exe live inside
+# `math.archExp` — Go's amd64 ASSEMBLY implementation of math.Exp uses
+# vfmadd213sd UNCONDITIONALLY (no CPUID gate, and GOAMD64=v1 does not
+# disarm hand-written assembly). Intel added FMA3 with Haswell (2013); the
+# owner's CPU is an i3-3240 (Ivy Bridge — SSE4.2+AVX, NO FMA), so any
+# exponential-backoff math.Exp call in either engine hard-faults the child
+# process with STATUS_ILLEGAL_INSTRUCTION. The same binaries ship in the
+# Linux bundle and the x86_64 Android APK — same bug everywhere.
+#
+# The fix: disable the assembly path in the pinned toolchain's math package
+# (`haveArchExp`), so math.Exp takes the pure-Go implementation (plain
+# MULSD/ADDSD — baseline). Same fail-closed discipline as the boring-sys
+# patch: the exact line must match once, or the already-patched state, or
+# the build dies — a toolchain layout change must never silently re-arm FMA.
+# The produced binaries are then GATED (zero-vfmadd) by the PE/ELF ISA
+# audits in the workflow.
+patch_go_math_exp_floor() {
+  local goroot exp_amd64
+  goroot="$(go env GOROOT)"
+  exp_amd64="$goroot/src/math/exp_amd64.go"
+  [ -f "$exp_amd64" ] || die "math FMA floor: $exp_amd64 not found in the pinned Go toolchain — layout changed, refusing to build FMA-unsafe engines"
+  if grep -q '^const haveArchExp = true$' "$exp_amd64"; then
+    sed -i 's/^const haveArchExp = true$/const haveArchExp = false/' "$exp_amd64"
+    echo "[fma-floor] math.archExp (amd64 asm, unconditional vfmadd) disabled — math.Exp now pure-Go: $exp_amd64"
+  elif grep -q '^const haveArchExp = false$' "$exp_amd64"; then
+    echo "[fma-floor] math.archExp already disabled (cached toolchain): $exp_amd64"
+  else
+    die "math FMA floor: $exp_amd64 does not carry 'const haveArchExp = true' — the Go toolchain layout changed; refusing to build FMA-unsafe engines"
+  fi
+}
+patch_go_math_exp_floor
+
 echo "== build_native_desktop: os=$OS rust-target=$RUST_TARGET zig=$("$ZIG" version) =="
 mkdir -p "$SRC_CACHE" "$OUT"
 
@@ -147,8 +183,7 @@ clone_pin "$ZEPTUN_REPO" "$ZEPTUN_SHA" "$ZEPTUN_SRC"
   cd "$ZEPTUN_SRC"
   rm -rf zig-out
   # Host-target build: installs zig-out/lib/<libzeptun.so|zeptun.dll> + the
-  # static lib + the CLI + include/zeptun.h. ReleaseFast mirrors the Android
-  # build's optimize mode.
+  # static lib + the CLI + include/zeptun.h.
   #
   # v4.36k: -Dcpu=baseline clamps codegen to the x86-64 floor (SSE2).
   # build.zig uses standardTargetOptions, so -Dcpu is a registered option.
@@ -156,7 +191,19 @@ clone_pin "$ZEPTUN_REPO" "$ZEPTUN_SHA" "$ZEPTUN_SRC"
   # no new failure mode); only the CPU model is pinned down. Without this,
   # zig compiles for the runner's Xeon (AVX2 + AVX-512), and glibc refuses
   # the .so on any weaker CPU: 'CPU ISA level is lower than required'.
-  "$ZIG" build -Doptimize=ReleaseFast -Dcpu=baseline
+  #
+  # v4.40: ReleaseSafe on the DESKTOP legs (Android stays ReleaseFast — it
+  # works and is frozen). In ReleaseFast, Zig compiles `unreachable` and
+  # safety-check violations to UD2 — on Windows that raises
+  # STATUS_ILLEGAL_INSTRUCTION (0xc000001d) with NO message, which is one of
+  # the owner's r86 device reports (VPN-mode connect closes the app with
+  # nothing on screen). ReleaseSafe keeps the same codegen floor but turns
+  # every one of those sites into a printed panic ("panic: reached
+  # unreachable code" etc.) on stderr — which the desktop core-log capture
+  # records — followed by a clean abort. A tunnel bug becomes a readable
+  # failure instead of a silent crash; the per-packet bounds-check cost is
+  # the price of diagnosability on the beta channel.
+  "$ZIG" build -Doptimize=ReleaseSafe -Dcpu=baseline
 )
 ZLIB="$ZEPTUN_SRC/zig-out/$ZLIB_DIR/$LIBZEPTUN"
 require_file "$ZLIB"
@@ -513,6 +560,28 @@ clone_pin "$PSIPHON_FORK_REPO" "$PSIPHON_FORK_SHA" "$PSIPHON_SRC"
   go build -trimpath -ldflags "-s -w" -o "$OUT/aether/pt/psiphon-tunnel-core$EXE" ./ConsoleClient
   [ -f "$OUT/aether/pt/psiphon-tunnel-core$EXE" ] || die "psiphon-tunnel-core missing after go build"
 )
+
+# ---------------------------- v4.40: the Go FMA-floor gate (fail-closed) ----
+# The GOROOT math patch above must actually disarm the assembly: zero
+# vfmadd/vfmsub instructions may remain in either Go engine. The r86 proof:
+# 8 unguarded scalar-FMA sites inside math.archExp in EACH engine — illegal
+# instruction on every pre-Haswell Intel CPU (see the patch block above).
+# Tool-portable: llvm-objdump on the windows runner, objdump on ubuntu;
+# mnemonics are syntax-independent (ATT/Intel both print vfmadd…).
+go_fma_gate() { # file
+  local f="$1" od out n
+  [ -f "$f" ] || die "Go FMA gate: expected artifact missing: $f"
+  od="$(command -v llvm-objdump || command -v objdump || true)"
+  [ -n "$od" ] || die "Go FMA gate: no objdump on this host — cannot prove the FMA floor"
+  out="$("$od" -d --no-show-raw-insn "$f" 2>/dev/null | grep -cE 'vfmadd|vfmsub' || true)"
+  n="${out:-0}"
+  if [ "$n" -ne 0 ]; then
+    die "Go FMA gate FAILED: $f still contains $n vfmadd/vfmsub sites — the math.archExp floor did not apply (check the pinned toolchain patch step)"
+  fi
+  echo "[fma-gate] $f: 0 vfmadd/vfmsub sites (pre-FMA CPUs safe)"
+}
+go_fma_gate "$OUT/aether/pt/lyrebird$EXE"
+go_fma_gate "$OUT/aether/pt/psiphon-tunnel-core$EXE"
 
 # ------------------------------------------------- x86 ISA gate (linux, fail-closed) ----
 # v4.36k: glibc enforces the ELF's GNU_PROPERTY 'x86 ISA needed' note at

@@ -375,6 +375,27 @@ PY_BORING_SYS
 
 # ------------------------------------------- lyrebird (Aether's frozen script, pin-hardened) ----
 echo "== [3/4] lyrebird via Aether pt-build.sh @ $AETHER_SHA (pin $LYREBIRD_PIN enforced) =="
+
+# v4.40 — the pre-FMA floor for the x86_64 leg (see build_native_desktop.sh
+# for the full evidence): Go's amd64 ASSEMBLY math.Exp (math.archExp) uses
+# vfmadd213sd unconditionally — no CPUID gate, GOAMD64=v1 does not disarm
+# hand-written assembly — and every pre-Haswell Intel CPU (the Atom tablets
+# this APK may land on included) hard-faults on it with SIGILL. The arm
+# legs are untouched (FMA is baseline ISA on aarch64; the armv7 builder
+# emits no FMA). Fail-closed like every other patch here: the exact line
+# must match, or the already-patched state, or the leg dies.
+if [ "$GOARCH" = "amd64" ]; then
+  GOEXP="$(go env GOROOT)/src/math/exp_amd64.go"
+  [ -f "$GOEXP" ] || die "math FMA floor: $GOEXP not found in the pinned Go toolchain — layout changed, refusing to build FMA-unsafe engines"
+  if grep -q '^const haveArchExp = true$' "$GOEXP"; then
+    sed -i 's/^const haveArchExp = true$/const haveArchExp = false/' "$GOEXP"
+    echo "[fma-floor x86_64] math.archExp (amd64 asm, unconditional vfmadd) disabled — math.Exp now pure-Go"
+  elif grep -q '^const haveArchExp = false$' "$GOEXP"; then
+    echo "[fma-floor x86_64] math.archExp already disabled (cached toolchain)"
+  else
+    die "math FMA floor: $GOEXP does not carry 'const haveArchExp = true' — the Go toolchain layout changed; refusing to build FMA-unsafe engines"
+  fi
+fi
 # The frozen script's fallback ("pinned commit is gone, using the default
 # branch") violates N8. Apply the recorded patch (aborts on checkout failure,
 # verifies HEAD == pin, proves the proxy zip against sum.golang.org).
@@ -452,6 +473,20 @@ clone_pin "$PSIPHON_FORK_REPO" "$PSIPHON_FORK_SHA" "$PSIPHON_SRC"
   go build -trimpath -ldflags "-s -w" -o "$OUT/aether/pt/psiphon-tunnel-core" ./ConsoleClient
   [ -f "$OUT/aether/pt/psiphon-tunnel-core" ] || { echo "FATAL: psiphon-tunnel-core missing after go build" >&2; exit 1; }
 )
+
+# v4.40 — the FMA-floor gate for the x86_64 leg (fail-closed; the same proof
+# as build_native_desktop.sh): neither Go engine may retain a single
+# vfmadd/vfmsub site after the GOROOT math patch above.
+if [ "$GOARCH" = "amd64" ]; then
+  OD="$(command -v objdump || true)"
+  [ -n "$OD" ] || die "Go FMA gate: no objdump on this host — cannot prove the FMA floor"
+  for f in "$OUT/aether/pt/lyrebird" "$OUT/aether/pt/psiphon-tunnel-core"; do
+    [ -f "$f" ] || die "Go FMA gate: expected artifact missing: $f"
+    n="$("$OD" -d --no-show-raw-insn "$f" 2>/dev/null | grep -cE 'vfmadd|vfmsub' || true)"
+    [ "${n:-0}" -eq 0 ] || die "Go FMA gate FAILED: $f still contains $n vfmadd/vfmsub sites — the math.archExp floor did not apply"
+    echo "[fma-gate x86_64] $f: 0 vfmadd/vfmsub sites (pre-FMA CPUs safe)"
+  done
+fi
 
 # ---------------------------------------------------------------- manifest ----
 MANIFEST="$OUT/manifest.json"

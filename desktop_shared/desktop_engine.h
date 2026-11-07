@@ -205,4 +205,33 @@ bool ElevateAtStartup(int* exit_code);
 // Windows keeps the embedded-resource model and needs none of this.
 void EnsureDesktopIntegration();
 
+// ---- v4.40: the system-proxy companion of the tunnel mode ----------------
+//
+// While the whole-device tunnel is up, the core's local SOCKS5 listener on
+// 127.0.0.1:<port> is already tunneling — pointing the OS proxy at it routes
+// every proxy-aware application (browsers first) through the same tunnel
+// (owner round 14: proxy-only apps must not leak around the TUN).
+//
+//  * SetSystemProxy(port)  — saves the previous OS proxy state to
+//    <filesDir>/system-proxy-backup.txt, then sets socks5://127.0.0.1:<port>.
+//  * ClearSystemProxy()    — restores the saved state (or disables the proxy
+//    when nothing was saved) and drops the backup.
+//  * SystemProxyHygiene()  — call at process start: a surviving backup file
+//    means a previous session died with the proxy set — restore immediately.
+//
+// All three return "" on success or an honest error string (logged into the
+// core log by the glue layer; never fatal — the tunnel itself is unaffected).
+std::string SetSystemProxy(int port);
+std::string ClearSystemProxy();
+std::string SystemProxyHygiene();
+
+// ---- v4.40: the login auto-start (general settings, desktop only) ---------
+// Registers/unregisters this bundle in the OS's login-start list (Windows:
+// the HKCU Run entry; Linux: the session user's ~/.config/autostart/
+// aethone.desktop — SUDO_USER-aware under the elevated model). SetAutoStart
+// returns "" on success or an honest error string; AutoStartIsEnabled reads
+// the OS's own truth (the settings toggle reads it at open).
+std::string SetAutoStart(bool enabled);
+bool AutoStartIsEnabled();
+
 }  // namespace aethone

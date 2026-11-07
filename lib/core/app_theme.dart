@@ -32,6 +32,24 @@ import 'package:flutter/painting.dart';
 /// below is the RENDER truth the tokens read.
 enum AethThemeMode { night, light }
 
+/// v4.40 — the APPEARANCE PICK (owner round 15: «یه مکانیزم میخوام برای
+/// حالت دارک و لایت اضافه کنی به اسم حالت خودکار … از ساعت 6 صبح تا 6
+/// عصر حالت بایت لایت مود باشه و از ساعت 6 عصر تا 6 صبح فردا هم نایت
+/// مود»): the persisted preference now has three faces — the two fixed
+/// modes plus AUTO, which resolves by the local clock: 06:00–18:00 light,
+/// 18:00–06:00 night. [ConnectionStore.themeMode] stays the RESOLVED mode
+/// the shell's tween reads (never `auto` itself).
+enum AethThemePick { night, light, auto }
+
+/// The AUTO schedule's resolver: light between 06:00 and 18:00 local time,
+/// night otherwise (the owner's own boundaries, on the minute).
+AethThemeMode resolveAutoTheme(DateTime localNow) {
+  final int minutes = localNow.hour * 60 + localNow.minute;
+  return (minutes >= 6 * 60 && minutes < 18 * 60)
+      ? AethThemeMode.light
+      : AethThemeMode.night;
+}
+
 /// One resolved palette. Field-for-field the themed half of `AethColors`;
 /// the accent family (green/red/gold) never changes and stays const in the
 /// tokens file.
@@ -272,4 +290,10 @@ class AethPal {
 /// and re-lerps it on every frame of the 420 ms mode tween.
 abstract final class AethThemeSync {
   static AethPal palette = AethPal.night;
+
+  /// v4.40 — the RESOLVED light-ness (the theme clock past its midpoint):
+  /// the protocol-icon variants (owner round 16) and any other binary
+  /// theme pick read this. Set by the shell's `_applyPalette`, so it
+  /// cross-fades with the same tween and follows the AUTO schedule.
+  static bool light = false;
 }

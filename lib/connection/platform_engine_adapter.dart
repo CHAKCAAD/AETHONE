@@ -639,7 +639,11 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// from the stats tick (the walk-time fetch races the circuit build;
   /// owner round 10: Tor showed «انتخاب خودکار» while the exit was
   /// actually the Netherlands).
-  static const int _exitResolveMaxTries = 4;
+  /// v4.40 — raised 4 → 10 (owner round 15: tor AUTO kept showing «خودکار»
+  /// after connect): with the ip-api fallback each retry now has TWO
+  /// independent resolvers, and a slow Tor circuit deserves more than
+  /// ~20 s of chances while the connection itself works fine.
+  static const int _exitResolveMaxTries = 10;
 
   /// The end-to-end ready budget per effective mode, mirroring the core's
   /// own timeouts (psiphon.rs READY_TIMEOUT 180 s; tor.rs DIRECT_PROBE 75 s
@@ -758,6 +762,15 @@ class PlatformEngineAdapter implements EngineAdapter {
     _channel.setMethodCallHandler(_onPlatformCall);
     _resyncAfterRestart();
   }
+
+  // ---- v4.40: the desktop window/tray hooks ---------------------------------
+  //
+  // The native runners route the close button and the tray menu's toggle
+  // entry into Dart as method calls; the DesktopWindowBridge registers
+  // itself here (main()). Null on Android and in the test hosts — the
+  // events simply never fire.
+  static void Function()? onWindowCloseRequested;
+  static void Function()? onTrayToggleConnection;
 
   @override
   Future<void> connect() async {
@@ -2245,6 +2258,16 @@ class PlatformEngineAdapter implements EngineAdapter {
             }
         }
       default:
+        // v4.40 — the desktop window/tray events (no payload; the bridge
+        // owns the decision logic). Unknown methods stay an error.
+        if (call.method == 'onWindowCloseRequested') {
+          onWindowCloseRequested?.call();
+          return;
+        }
+        if (call.method == 'onTrayToggleConnection') {
+          onTrayToggleConnection?.call();
+          return;
+        }
         throw MissingPluginException(
           'unknown aethone/engine method: ${call.method}',
         );

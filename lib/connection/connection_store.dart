@@ -430,12 +430,22 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
-  // ---- v4.34 LIGHT MODE (owner round 10) ----
+  // ---- v4.34 LIGHT MODE (owner round 10) · v4.40 the AUTO pick (round 15) ----
 
   /// The app theme — night by default (every earlier build shipped dark;
   /// the wizard frames are dark). The top-bar sun/moon tile flips it and
   /// the shell cross-fades the whole palette (see AethoneApp).
+  ///
+  /// v4.40 — this is the RESOLVED mode; the PERSISTED preference is
+  /// [themePick] (night / light / auto). While the pick is AUTO the store
+  /// keeps re-resolving this field by the local clock (06:00–18:00 light —
+  /// see [resolveAutoTheme]); a fixed pick writes its own mode here.
   AethThemeMode themeMode = AethThemeMode.night;
+
+  /// The persisted appearance pick (owner round 15: «حالت خودکار … از ساعت
+  /// 6 صبح تا 6 عصر لایت، از 6 عصر تا 6 صبح نایت»). AUTO delegates the
+  /// mode to the clock; the other two pin it.
+  AethThemePick themePick = AethThemePick.night;
 
   void setThemeMode(AethThemeMode mode) {
     if (themeMode == mode) return;
@@ -443,10 +453,78 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
-  void toggleThemeMode() =>
-      setThemeMode(themeMode == AethThemeMode.night
-          ? AethThemeMode.light
-          : AethThemeMode.night);
+  /// Commits the appearance pick: a FIXED pick resolves [themeMode] right
+  /// away; AUTO re-resolves by the clock now AND at every boundary (the
+  /// shell owns the re-check timer). Notifies exactly ONCE per change —
+  /// [setThemeMode] is not used internally for exactly that reason.
+  void setThemePick(AethThemePick pick) {
+    if (themePick == pick) return;
+    themePick = pick;
+    final AethThemeMode target = switch (pick) {
+      AethThemePick.night => AethThemeMode.night,
+      AethThemePick.light => AethThemeMode.light,
+      AethThemePick.auto => resolveAutoTheme(DateTime.now()),
+    };
+    themeMode = target; // set directly — ONE notification, below
+    notifyListeners();
+  }
+
+  /// v4.40 — the AUTO schedule tick (the shell calls it every minute while
+  /// the pick is AUTO): moves [themeMode] when the 06:00/18:00 boundary
+  /// crosses. Returns true when the mode changed (the shell re-tweens).
+  bool applyAutoThemeSchedule(DateTime localNow) {
+    if (themePick != AethThemePick.auto) return false;
+    final target = resolveAutoTheme(localNow);
+    if (themeMode == target) return false;
+    themeMode = target;
+    notifyListeners();
+    return true;
+  }
+
+  /// The top-bar tile: flips to the OPPOSITE of the currently-resolved
+  /// mode (the tile shows the sun/moon of what IS, so the tap lands on
+  /// what the user sees); an AUTO pick exits to that fixed opposite.
+  void toggleThemeMode() => setThemePick(themeMode == AethThemeMode.night
+      ? AethThemePick.light
+      : AethThemePick.night);
+
+  // ---- v4.40 — the desktop close behavior (owner round 15) ----
+
+  /// What the window's close button does (desktop only): ASK every time
+  /// (the owner's ask-dialog — the default), or a REMEMBERED direct action
+  /// («انتخابش دفعه بعد هم اعمال بشه مستقیم»). The dialog's checkbox
+  /// writes the remembered pick here.
+  CloseBehavior closeBehavior = CloseBehavior.ask;
+
+  void setCloseBehavior(CloseBehavior behavior) {
+    if (closeBehavior == behavior) return;
+    closeBehavior = behavior;
+    notifyListeners();
+  }
+
+  /// v4.40 — «بازنشانی تنظیمات» (general settings): every USER preference
+  /// returns to its factory value; the debounced save persists them all on
+  /// the next tick. The wizard flag STAYS completed (a reset must never
+  /// force a user back through onboarding), and the engine truth caches
+  /// (SMART scorecard, live egress sets) are ENGINE data, not settings —
+  /// they survive untouched.
+  void resetToDefaults() {
+    appLocale = null;
+    homeLook = HomeLook.one;
+    animationStyle = MotionStyle.standard;
+    animationsEnabled = true;
+    showPatterns = true;
+    themePick = AethThemePick.night;
+    themeMode = AethThemeMode.night;
+    closeBehavior = CloseBehavior.ask;
+    scanSpeed = 5;
+    selectedProtocol = ProtocolId.auto;
+    protocolModeSmart = false;
+    connectionMode = ConnectionMode.proxy;
+    selectedCountryCode = null;
+    coreSettings = CoreSettings();
+    notifyListeners();
+  }
 
   // ---- v4.23 onboarding («صفحه شروع») ----
 

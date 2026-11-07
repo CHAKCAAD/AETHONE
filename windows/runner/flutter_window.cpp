@@ -35,6 +35,9 @@ bool FlutterWindow::OnCreate() {
   // PluginRegistry surface (engine()->registrar() no longer exists).
   aethone::RegisterEngineChannel(
       flutter_controller_->engine()->GetRegistrarForPlugin("aethone_engine"));
+  // v4.40 — the window/tray surface: the main window handle for
+  // window.hide / window.quit, and WM_CLOSE below routes into Dart.
+  aethone::RegisterMainWindowForChannel(GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -73,11 +76,12 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
 
   switch (message) {
     case WM_CLOSE:
-      // v4.39 — close-to-tray: hide the window; the tunnel and every
-      // engine keep running in the background. The tray menu's Exit entry
-      // is the real quit. When the notification area is unavailable the
-      // default destroy path proceeds unchanged.
-      if (aethone::TrayController::Instance()->HideToTray(hwnd)) {
+      // v4.40 — the owner's round-15 decree: the close button never quits
+      // directly anymore. The decision moved to the DART layer, which shows
+      // the ask-dialog («بستن کامل / رفتن به سینی» + the remember checkbox)
+      // and answers with window.quit / window.hide. Only in the split
+      // second before the channel exists does the default close proceed.
+      if (aethone::NotifyWindowCloseRequested()) {
         return 0;
       }
       break;

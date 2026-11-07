@@ -102,9 +102,8 @@ void main() {
   });
 
   group('connection page', () {
-    testWidgets('segments + protocol mode + the core entry row', (
-      tester,
-    ) async {
+    testWidgets('segments + the core entry row (v4.40: the protocol-mode '
+        'section is REMOVED by decree)', (tester) async {
       await _useReferenceSurface(tester);
       final store = makeStore();
       await tester.pumpWidget(_booth(ConnectionSettingsPage(store: store)));
@@ -116,10 +115,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.connectionMode, ConnectionMode.tunnel);
 
-      // Protocol mode AUTO → SMART.
-      await tester.tap(find.text('اسمارت'));
-      await tester.pumpAndSettle();
-      expect(store.protocolModeSmart, isTrue);
+      // v4.40 (owner round 15: «حالت پروتکل در تنظیمات اتصال برنامه رو
+      // کلا حذف کن») — the AUTO/SMART pills are GONE.
+      expect(find.text('اسمارت'), findsNothing);
+      expect(find.text('حالت پروتکل'), findsNothing);
 
       // The core entry row opens the core page. v4.31 added the leg /
       // IP-version / upstream sections above it — scroll it into view.

@@ -11,6 +11,7 @@ namespace {
 constexpr UINT kTrayCallbackMsg = WM_APP + 101;
 constexpr int kMenuShowId = 100;
 constexpr int kMenuQuitId = 101;
+constexpr int kMenuToggleId = 102;
 constexpr wchar_t kSinkClass[] = L"AETHONE_TRAY_SINK";
 
 // Persian menu labels as explicit UTF-16 code units — the runner compiles
@@ -19,8 +20,14 @@ constexpr wchar_t kSinkClass[] = L"AETHONE_TRAY_SINK";
 // any non-Persian system codepage. The escapes are codepage-proof:
 //   نمایش = U+0646 U+0645 U+0627 U+06CC U+0634   (show)
 //   خروج  = U+062E U+0631 U+0648 U+062C          (exit)
+//   قطع و وصل اتصال (v4.40, the owner's round-15 decree — toggle):
+//     قطع = U+0642 U+0637 U+0639 · و = U+0648 · وصل = U+0648 U+0635 U+0644
+//     اتصال = U+0627 U+062A U+0635 U+0627 U+0644
 constexpr wchar_t kMenuShow[] = L"\x0646\x0645\x0627\x06CC\x0634 AETHONE";
 constexpr wchar_t kMenuQuit[] = L"\x062E\x0631\x0648\x062C";
+constexpr wchar_t kMenuToggle[] =
+    L"\x0642\x0637\x0639 \x0648 \x0648\x0635\x0644 "
+    L"\x0627\x062A\x0635\x0627\x0644";
 constexpr wchar_t kTrayTip[] = L"AETHONE";
 
 }  // namespace
@@ -89,7 +96,11 @@ void TrayController::ShowMenu() {
   GetCursorPos(&pt);
   HMENU menu = CreatePopupMenu();
   if (menu == nullptr) return;
+  // v4.40 — the owner's round-15 menu, verbatim order: show the app,
+  // disconnect/reconnect the connection, fully close the program.
   AppendMenuW(menu, MF_STRING, kMenuShowId, kMenuShow);
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, kMenuToggleId, kMenuToggle);
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(menu, MF_STRING, kMenuQuitId, kMenuQuit);
   // The classic tray quirk: without foreground + the trailing WM_NULL the
@@ -101,6 +112,10 @@ void TrayController::ShowMenu() {
   DestroyMenu(menu);
   if (picked == kMenuShowId) {
     RestoreMain();
+  } else if (picked == kMenuToggleId) {
+    // The Dart layer owns the state machine — it toggles connect/disconnect
+    // from whatever the session currently is.
+    if (toggle_cb_ != nullptr) toggle_cb_();
   } else if (picked == kMenuQuitId) {
     QuitFromTray();
   }

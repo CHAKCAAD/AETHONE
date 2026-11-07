@@ -134,10 +134,34 @@ bool Win32Window::Create(const std::wstring& title,
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
+  // v4.40 — the small-monitor fit (owner round 15: «قصد دارم در آینده سایز و
+  // ضاهر نسخه ویندوز و لینوکس رو بهینه کنم … توی مانیتور های کوچیک هم
+  // زیبا نمایش داده بشه»). The design frame is the 402x874 phone window; on
+  // a short screen (a 1366x768 panel at 125% DPI has ~614 logical px of
+  // height) the unclamped window was TALLER than the work area — the caption
+  // buttons and the bottom panel fell off-screen. The window now never
+  // exceeds the monitor's work area and centres inside it; the Flutter
+  // layout scales by width, so the app stays fully usable at the smaller
+  // height.
+  int px = Scale(origin.x, scale_factor);
+  int py = Scale(origin.y, scale_factor);
+  int pw = Scale(size.width, scale_factor);
+  int ph = Scale(size.height, scale_factor);
+  MONITORINFO mi{};
+  mi.cbSize = sizeof(mi);
+  if (GetMonitorInfoW(monitor, &mi)) {
+    const RECT work = mi.rcWork;
+    const int work_w = work.right - work.left;
+    const int work_h = work.bottom - work.top;
+    if (pw > work_w) pw = work_w;
+    if (ph > work_h) ph = work_h;
+    px = work.left + (work_w - pw) / 2;
+    py = work.top + (work_h - ph) / 2;
+  }
+
   HWND window = CreateWindow(
       window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
-      Scale(size.width, scale_factor), Scale(size.height, scale_factor),
+      px, py, pw, ph,
       nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   if (!window) {

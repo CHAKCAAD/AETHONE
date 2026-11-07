@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <deque>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -19,6 +20,7 @@
 #include <io.h>
 #include <objbase.h>
 #include <shlobj.h>
+#include <wininet.h>
 #include <windows.h>
 #define GETCWD _getcwd
 // v4.39 — the Windows path layer is UTF-8 end-to-end: every path the
@@ -29,6 +31,8 @@
 #include <arpa/inet.h>
 #include <dlfcn.h>
 #include <fcntl.h>  // O_RDONLY
+#include <pwd.h>    // v4.40 — getpwnam(SUDO_USER): the autostart lands in the
+                    // desktop session user's config, not root's
 #include <signal.h>
 #include <spawn.h>
 #include <sys/socket.h>
@@ -56,11 +60,59 @@ struct ZeptunApi {
   void (*destroy)(Zeptun*) = nullptr;
   int (*stats)(Zeptun*, ZeptunStats*) = nullptr;
   const char* (*strerror_)(int) = nullptr;
+  int (*set_log_callback)(zeptun_log_cb, void*, int) = nullptr;
 };
 
 ZeptunApi g_zeptun;
 std::once_flag g_zeptun_once;
 std::string g_zeptun_error;
+
+// v4.40 — the zeptun log bridge. Up to and including r86 the tunnel library
+// logged into a NULL sink (zeptun's log.zig: `sink orelse return`), so the
+// single most diagnostic line of a failed Windows bring-up — wintun.zig's
+// "wintun: cannot open or create adapter … (error N)" — was thrown away and
+// the owner's screen showed only the generic "rc=-5 (device error)". The
+// callback below fwrites every line to stderr, which InstallCoreLogCapture
+// has already dup2'd onto the core log — the lines become visible in the
+// in-app core log AND feed the error augmentation in BringUpZeptun. The last
+// few lines are also kept in a small ring buffer (mutex-guarded) so a failed
+// start can quote the exact wintun/zeptun error in the tunnelStartFailed
+// reason the failure screen shows.
+std::mutex g_zeptun_log_mutex;
+std::deque<std::string> g_zeptun_log_tail;
+
+void ZeptunLogLine(int level, const char* message, size_t len) {
+  if (message == nullptr || len == 0) return;
+  std::string line(message, strnlen(message, len));
+  static const char* kTag[] = {"[zeptun err] ", "[zeptun warn] ",
+                               "[zeptun info] ", "[zeptun debug] ",
+                               "[zeptun trace] "};
+  const char* tag = kTag[(level >= 0 && level <= 4) ? level : 1];
+  {
+    std::lock_guard<std::mutex> lock(g_zeptun_log_mutex);
+    g_zeptun_log_tail.push_back(line);
+    while (g_zeptun_log_tail.size() > 16) g_zeptun_log_tail.pop_front();
+  }
+  // stderr here IS the captured core log (dup2'd before any engine work).
+  fflush(stdout);
+  fprintf(stderr, "%s%s\n", tag, line.c_str());
+  fflush(stderr);
+}
+
+// The last zeptun line that names a bring-up failure (wintun/route/config) —
+// quoted into the start error so the real Windows error code reaches the
+// owner's screen (the strerror of rc=-5 is only "device error").
+std::string LastZeptunFailureLine() {
+  std::lock_guard<std::mutex> lock(g_zeptun_log_mutex);
+  for (auto it = g_zeptun_log_tail.rbegin(); it != g_zeptun_log_tail.rend();
+       ++it) {
+    if (it->rfind("wintun:", 0) == 0 || it->rfind("route:", 0) == 0 ||
+        it->rfind("tun:", 0) == 0 || it->rfind("device:", 0) == 0) {
+      return *it;
+    }
+  }
+  return std::string();
+}
 
 #ifdef _WIN32
 // v4.39 — the UTF-8/W boundary helpers. The v4.36 code used the ANSI
@@ -179,10 +231,25 @@ void LoadZeptunOnce() {
       Sym<decltype(g_zeptun.stats)>(g_zeptun.handle, "zeptun_stats");
   g_zeptun.strerror_ =
       Sym<decltype(g_zeptun.strerror_)>(g_zeptun.handle, "zeptun_strerror");
+  g_zeptun.set_log_callback =
+      Sym<decltype(g_zeptun.set_log_callback)>(g_zeptun.handle,
+                                               "zeptun_set_log_callback");
   if (!g_zeptun.create_from_toml || !g_zeptun.start || !g_zeptun.stop ||
       !g_zeptun.destroy || !g_zeptun.stats || !g_zeptun.strerror_) {
     g_zeptun_error = "zeptun shared library is missing required symbols";
     g_zeptun = ZeptunApi{};  // refuse a half-loaded engine
+    return;
+  }
+  // v4.40 — route zeptun's own log into the captured core log (see
+  // ZeptunLogLine). set_log_callback may be absent in an older pin — the
+  // bridge is then simply inactive (the required symbols above already
+  // gated the load).
+  if (g_zeptun.set_log_callback != nullptr) {
+    g_zeptun.set_log_callback(
+        [](void*, int level, const char* msg, size_t len) {
+          ZeptunLogLine(level, msg, len);
+        },
+        nullptr, /*level=*/2 /*err+warn+info*/);
   }
 }
 
@@ -1032,6 +1099,12 @@ TunnelStartResult BringUpZeptun(const std::string& toml) {
     res.reason = std::string("zeptun-start-failed:rc=") + std::to_string(rc) +
                  " (" + (g_zeptun.strerror_ ? g_zeptun.strerror_(rc) : "?") +
                  ")";
+    // v4.40 — quote the tunnel library's own failure line (the wintun
+    // error code) into the reason: "rc=-5 (device error)" alone never told
+    // the owner WHAT failed; with the log bridge the exact Windows error
+    // (adapter creation, driver install, …) reaches the failure screen.
+    const std::string detail = LastZeptunFailureLine();
+    if (!detail.empty()) res.reason += " [" + detail + "]";
     return res;
   }
   const int rc2 = g_zeptun.start(engine);
@@ -1040,6 +1113,8 @@ TunnelStartResult BringUpZeptun(const std::string& toml) {
     res.reason = std::string("zeptun-start-failed:rc=") + std::to_string(rc2) +
                  " (" + (g_zeptun.strerror_ ? g_zeptun.strerror_(rc2) : "?") +
                  ")";
+    const std::string detail2 = LastZeptunFailureLine();
+    if (!detail2.empty()) res.reason += " [" + detail2 + "]";
     return res;
   }
   g_tunnel.engine = engine;
@@ -1086,6 +1161,23 @@ TunnelStartResult StartTunnel(int port, int session, bool tcpOnly,
     g_tunnel.tcpOnly = tcpOnly;
     g_tunnel.session = session;
     if (session > g_tunnel.liveSession) g_tunnel.liveSession = session;
+    // v4.40 — the system-proxy companion (owner round 14): while the
+    // whole-device tunnel is up, the OS proxy points at the same local
+    // SOCKS5 listener so proxy-only apps (browsers first) ride the tunnel
+    // too. Honest failure: the outcome lands in the captured core log,
+    // the tunnel itself is unaffected.
+    const std::string proxy_err = SetSystemProxy(port);
+    if (!proxy_err.empty()) {
+      fprintf(stderr,
+              "system-proxy: NOT set (err=\"%s\") — the tunnel still "
+              "works; proxy-aware apps may not follow it\n",
+              proxy_err.c_str());
+    } else {
+      fprintf(stderr,
+              "system-proxy: OS proxy -> socks5://127.0.0.1:%d "
+              "(restored on stop)\n",
+              port);
+    }
   }
   return res;
 }
@@ -1187,6 +1279,19 @@ void HelperBringUpWorker(int port, int session, bool tcpOnly,
     }
     HelperLog(
         HelperLogLine("tunnel: up (helper fd adopted, zeptun running)"));
+    // v4.40 — the system-proxy companion on the helper path too (the
+    // same round-14 decree; see StartTunnel).
+    {
+      const std::string proxy_err = SetSystemProxy(port);
+      if (!proxy_err.empty()) {
+        HelperLog(HelperLogLine("system-proxy: NOT set (" + proxy_err +
+                                ") — the tunnel still works"));
+      } else {
+        HelperLog(HelperLogLine(
+            "system-proxy: OS proxy -> socks5://127.0.0.1:" +
+            std::to_string(port) + " (restored on stop)"));
+      }
+    }
     EmitTunnelEvent(true, port, session, "");
   } else {
     close(fd);
@@ -1284,6 +1389,16 @@ int StopTunnel() {
   StopHelperPair();
   HelperLog(HelperLogLine("tunnel: down (user stop)"));
 #endif
+  // v4.40 — the system-proxy companion goes down with the tunnel: the
+  // user's own pre-session OS proxy state is restored (the backup file was
+  // written at set time; SystemProxyHygiene covers a crashed session).
+  {
+    const std::string proxy_err = ClearSystemProxy();
+    if (!proxy_err.empty()) {
+      fprintf(stderr, "system-proxy: restore failed (err=\"%s\")\n",
+              proxy_err.c_str());
+    }
+  }
   return g_tunnel.session;
 }
 
@@ -1478,6 +1593,375 @@ void EnsureDesktopIntegration() {
 
 bool ElevateAtStartup(int*) { return false; }  // the exe manifest already carries requireAdministrator
 void EnsureDesktopIntegration() {}             // Windows uses embedded resources
+
+#endif  // !_WIN32
+
+// ---------------------------------------------------------------------------
+// v4.40 — the SYSTEM-PROXY COMPANION of the tunnel mode (owner round 14:
+// «وقتی حالت تونل فعاله ... علاوه بر این که تونل فعال میشه پروکسی سیستم هم
+// ست بشه تا مرورگر ها و برنامه هایی که پروکسی فقط ساپورت میکنن تونل بشن»).
+//
+// While the whole-device tunnel is up, the core's local SOCKS5 listener is
+// ALREADY reachable on 127.0.0.1:<port> — pointing the OS proxy at it routes
+// every proxy-aware application (browsers first) through the very same
+// tunnel, so proxy-only apps no longer leak around the TUN.
+//
+//  * SetSystemProxy(port): saves the OS's previous proxy state to
+//    <filesDir>/system-proxy-backup.txt, then points the OS at
+//    socks5://127.0.0.1:<port>.
+//  * ClearSystemProxy(): restores the saved state (or disables the proxy
+//    when nothing was saved).
+//  * SystemProxyHygiene(): called at EVERY process start — if a previous
+//    session crashed while the proxy was set (the backup file survived),
+//    the state is restored right there, before the UI even comes up.
+//
+// Honest-failure discipline: every function returns an error string (empty
+// = success) which the glue layer logs into the core log; a desktop
+// without a supported proxy backend (no gsettings, exotic DE) keeps the
+// tunnel — only the companion is missing.
+// ---------------------------------------------------------------------------
+namespace {
+
+std::string ProxyBackupPath() { return Paths().filesDir + "/system-proxy-backup.txt"; }
+
+bool ProxyFileRead(const std::string& path, std::string* out) {
+  FILE* f = FileOpen(path, "rb");
+  if (f == nullptr) return false;
+  std::string data;
+  char buf[4096];
+  size_t got;
+  while ((got = fread(buf, 1, sizeof(buf), f)) > 0) data.append(buf, got);
+  fclose(f);
+  *out = data;
+  return true;
+}
+
+bool ProxyFileWrite(const std::string& path, const std::string& data) {
+  FILE* f = FileOpen(path, "wb");
+  if (f == nullptr) return false;
+  const size_t wrote = fwrite(data.data(), 1, data.size(), f);
+  fclose(f);
+  return wrote == data.size();
+}
+
+#ifdef _WIN32
+
+// The WinInet proxy (the setting Chrome/Edge/FollowSystem read):
+// HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings.
+constexpr wchar_t kInetSettingsKey[] =
+    L"Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
+
+bool RegReadString(HKEY key, const wchar_t* name, std::string* out) {
+  DWORD type = 0, size = 0;
+  if (RegQueryValueExW(key, name, nullptr, &type, nullptr, &size) !=
+          ERROR_SUCCESS ||
+      (type != REG_SZ && type != REG_EXPAND_SZ) || size == 0 || size > 8192) {
+    return false;
+  }
+  std::wstring wide(size / sizeof(wchar_t), L'\0');
+  if (RegQueryValueExW(key, name, nullptr, &type,
+                       reinterpret_cast<LPBYTE>(&wide[0]), &size) !=
+      ERROR_SUCCESS) {
+    return false;
+  }
+  wide.resize(size / sizeof(wchar_t));
+  while (!wide.empty() && wide.back() == L'\0') wide.pop_back();
+  *out = WideToUtf8(wide);
+  return true;
+}
+
+bool RegWriteString(HKEY key, const wchar_t* name, const std::string& value) {
+  const std::wstring wide = Utf8ToWide(value);
+  return RegSetValueExW(key, name, 0, REG_SZ,
+                        reinterpret_cast<const BYTE*>(wide.c_str()),
+                        static_cast<DWORD>((wide.size() + 1) *
+                                           sizeof(wchar_t))) == ERROR_SUCCESS;
+}
+
+bool RegReadDword(HKEY key, const wchar_t* name, DWORD* out) {
+  DWORD type = 0, size = sizeof(DWORD);
+  return RegQueryValueExW(key, name, nullptr, &type,
+                          reinterpret_cast<LPBYTE>(out), &size) ==
+             ERROR_SUCCESS &&
+         type == REG_DWORD;
+}
+
+bool RegWriteDword(HKEY key, const wchar_t* name, DWORD value) {
+  return RegSetValueExW(key, name, 0, REG_DWORD,
+                        reinterpret_cast<const BYTE*>(&value),
+                        sizeof(value)) == ERROR_SUCCESS;
+}
+
+void NotifyWininetSettingsChanged() {
+  InternetSetOptionW(nullptr, INTERNET_OPTION_SETTINGS_CHANGED, nullptr, 0);
+  InternetSetOptionW(nullptr, INTERNET_OPTION_REFRESH, nullptr, 0);
+}
+
+// The one-line backup format (parsed by the restore, written once):
+//   enable=<0|1>\nserver=<raw ProxyServer value>\n
+bool WinProxySaveBackup(HKEY key) {
+  DWORD enable = 0;
+  RegReadDword(key, L"ProxyEnable", &enable);
+  std::string server;
+  RegReadString(key, L"ProxyServer", &server);
+  return ProxyFileWrite(ProxyBackupPath(),
+                        "enable=" + std::to_string(enable) + "\n" +
+                            "server=" + server + "\n");
+}
+
+bool WinProxyApplySaved(HKEY key, const std::string& saved) {
+  DWORD enable = 0;
+  std::string server;
+  size_t e = saved.find("enable="), s = saved.find("server=");
+  if (e == std::string::npos || s == std::string::npos) return false;
+  enable = static_cast<DWORD>(atoi(saved.c_str() + e + 7));
+  server = saved.substr(s + 7);
+  while (!server.empty() && (server.back() == '\n' || server.back() == '\r'))
+    server.pop_back();
+  const bool ok = RegWriteDword(key, L"ProxyEnable", enable) &&
+                  (server.empty() ? true
+                                  : RegWriteString(key, L"ProxyServer", server));
+  NotifyWininetSettingsChanged();
+  return ok;
+}
+
+#else  // !_WIN32 — gsettings (GNOME family; other DEs log honestly)
+
+// Runs `gsettings <args>` capturing stdout ("" on failure).
+std::string GSettings(const std::string& args, bool* ok) {
+  *ok = false;
+  FILE* p = popen(("gsettings " + args + " 2>/dev/null").c_str(), "r");
+  if (p == nullptr) return std::string();
+  std::string out;
+  char buf[512];
+  while (fgets(buf, sizeof(buf), p) != nullptr) out += buf;
+  const int rc = pclose(p);
+  *ok = (rc == 0);
+  return out;
+}
+
+std::string GSettingsTrim(const std::string& v) {
+  std::string s = v;
+  while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' '))
+    s.pop_back();
+  // strip the single quotes gsettings get wraps values in
+  if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'')
+    s = s.substr(1, s.size() - 2);
+  return s;
+}
+
+#endif  // !_WIN32
+
+}  // namespace
+
+std::string SetSystemProxy(int port) {
+  if (port <= 0 || port > 65535) return "invalid port";
+#ifdef _WIN32
+  HKEY key = nullptr;
+  if (RegOpenKeyExW(HKEY_CURRENT_USER, kInetSettingsKey, 0, KEY_READ | KEY_WRITE,
+                    &key) != ERROR_SUCCESS) {
+    return "cannot open the Internet Settings registry key";
+  }
+  std::string err;
+  do {
+    if (!WinProxySaveBackup(key)) {
+      err = "cannot write the proxy backup file";
+      break;
+    }
+    // "socks=host:port" — the WinInet form every system-proxy follower reads;
+    // browsers resolve it as the SOCKS endpoint for all protocols.
+    if (!RegWriteDword(key, L"ProxyEnable", 1) ||
+        !RegWriteString(key, L"ProxyServer",
+                        "socks=127.0.0.1:" + std::to_string(port))) {
+      err = "cannot write the proxy registry values";
+      break;
+    }
+    NotifyWininetSettingsChanged();
+  } while (false);
+  RegCloseKey(key);
+  return err;
+#else
+  bool ok = false;
+  // Probe gsettings first (honest error when the desktop has none).
+  GSettings("get org.gnome.system.proxy mode", &ok);
+  if (!ok) return "gsettings not available on this desktop";
+  std::string mode = GSettingsTrim(GSettings("get org.gnome.system.proxy mode", &ok));
+  std::string host = GSettingsTrim(GSettings("get org.gnome.system.proxy.socks host", &ok));
+  std::string port_s = GSettingsTrim(GSettings("get org.gnome.system.proxy.socks port", &ok));
+  if (!ProxyFileWrite(ProxyBackupPath(),
+                      "mode=" + mode + "\nsocks-host=" + host + "\nsocks-port=" +
+                          port_s + "\n")) {
+    return "cannot write the proxy backup file";
+  }
+  const std::string p = std::to_string(port);
+  bool all = true;
+  GSettings("set org.gnome.system.proxy mode 'manual'", &ok); all = all && ok;
+  GSettings("set org.gnome.system.proxy.socks host '127.0.0.1'", &ok); all = all && ok;
+  GSettings("set org.gnome.system.proxy.socks port " + p, &ok); all = all && ok;
+  GSettings("set org.gnome.system.proxy ignore-hosts \"['localhost', '127.0.0.0/8', '::1']\"", &ok); all = all && ok;
+  if (!all) return "one of the gsettings writes failed (see the core log)";
+  return std::string();
+#endif
+}
+
+std::string ClearSystemProxy() {
+#ifdef _WIN32
+  std::string saved;
+  const bool had = ProxyFileRead(ProxyBackupPath(), &saved);
+  HKEY key = nullptr;
+  if (RegOpenKeyExW(HKEY_CURRENT_USER, kInetSettingsKey, 0, KEY_READ | KEY_WRITE,
+                    &key) != ERROR_SUCCESS) {
+    return "cannot open the Internet Settings registry key";
+  }
+  std::string err;
+  if (had) {
+    if (!WinProxyApplySaved(key, saved)) err = "cannot restore the saved proxy values";
+  } else {
+    if (!RegWriteDword(key, L"ProxyEnable", 0)) err = "cannot disable the system proxy";
+    NotifyWininetSettingsChanged();
+  }
+  RegCloseKey(key);
+  FileRemove(ProxyBackupPath());
+  return err;
+#else
+  std::string saved;
+  const bool had = ProxyFileRead(ProxyBackupPath(), &saved);
+  bool ok = false;
+  if (had) {
+    // restore line-by-line: mode / socks-host / socks-port
+    size_t pos = 0;
+    while (pos < saved.size()) {
+      size_t nl = saved.find('\n', pos);
+      if (nl == std::string::npos) nl = saved.size();
+      std::string line = saved.substr(pos, nl - pos);
+      pos = nl + 1;
+      if (line.rfind("mode=", 0) == 0) {
+        GSettings("set org.gnome.system.proxy mode '" + line.substr(5) + "'", &ok);
+      } else if (line.rfind("socks-host=", 0) == 0) {
+        GSettings("set org.gnome.system.proxy.socks host '" + line.substr(11) + "'", &ok);
+      } else if (line.rfind("socks-port=", 0) == 0) {
+        GSettings("set org.gnome.system.proxy.socks port " + line.substr(11), &ok);
+      }
+    }
+  } else {
+    GSettings("set org.gnome.system.proxy mode 'none'", &ok);
+    if (!ok) return "gsettings not available on this desktop";
+  }
+  FileRemove(ProxyBackupPath());
+  return std::string();
+#endif
+}
+
+std::string SystemProxyHygiene() {
+  std::string saved;
+  if (!ProxyFileRead(ProxyBackupPath(), &saved)) return std::string();
+  // A backup file at boot = a previous session died with the proxy set —
+  // restore the user's own state right now.
+  const std::string err = ClearSystemProxy();
+  fprintf(stderr,
+          "system-proxy: restored the pre-session OS proxy state at startup "
+          "(a previous session left it set; err=\"%s\")\n",
+          err.c_str());
+  return err;
+}
+
+// ---- v4.40: the login auto-start (general settings, desktop only) ---------
+
+#ifdef _WIN32
+
+bool AutoStartSet(bool enabled) {
+  HKEY key = nullptr;
+  if (RegOpenKeyExW(HKEY_CURRENT_USER,
+                    L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0,
+                    KEY_READ | KEY_WRITE,
+                    &key) != ERROR_SUCCESS) {
+    return false;
+  }
+  bool ok;
+  if (enabled) {
+    char self[MAX_PATH] = {};
+    GetModuleFileNameA(nullptr, self, MAX_PATH);
+    ok = RegWriteString(key, L"AETHONE", self);
+  } else {
+    ok = RegDeleteValueW(key, L"AETHONE") == ERROR_SUCCESS ||
+         GetLastError() == ERROR_FILE_NOT_FOUND;
+  }
+  RegCloseKey(key);
+  return ok;
+}
+
+bool AutoStartIsEnabled() {
+  HKEY key = nullptr;
+  if (RegOpenKeyExW(HKEY_CURRENT_USER,
+                    L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0,
+                    KEY_READ, &key) != ERROR_SUCCESS) {
+    return false;
+  }
+  std::string v;
+  const bool present = RegReadString(key, L"AETHONE", &v);
+  RegCloseKey(key);
+  return present;
+}
+
+std::string SetAutoStart(bool enabled) {
+  return AutoStartSet(enabled) ? std::string()
+                               : "cannot write the HKCU Run entry";
+}
+
+#else  // Linux: the freedesktop autostart .desktop
+
+std::string AutoStartDesktopPath() {
+  // v4.40 — the app runs ELEVATED on Linux (the v4.39 root-from-start
+  // model), so $HOME is root's — the login autostart must land in the
+  // DESKTOP session user's config. Polkit hands the original user over in
+  // SUDO_USER; without it we fall back to $HOME (a normal-user run).
+  const char* sudo_user = getenv("SUDO_USER");
+  std::string base;
+  if (sudo_user != nullptr && sudo_user[0] != '\0') {
+    const passwd* pw = getpwnam(sudo_user);
+    if (pw != nullptr && pw->pw_dir != nullptr) {
+      base = std::string(pw->pw_dir) + "/.config";
+    }
+  }
+  if (base.empty()) {
+    const char* config = getenv("XDG_CONFIG_HOME");
+    base = (config != nullptr && config[0] != '\0')
+               ? std::string(config)
+               : std::string(getenv("HOME") ? getenv("HOME") : "/root") +
+                     "/.config";
+  }
+  return base + "/autostart/aethone.desktop";
+}
+
+bool AutoStartIsEnabled() {
+  std::string data;
+  return ProxyFileRead(AutoStartDesktopPath(), &data);
+}
+
+std::string SetAutoStart(bool enabled) {
+  const std::string path = AutoStartDesktopPath();
+  if (!enabled) {
+    FileRemove(path);
+    return std::string();
+  }
+  const DesktopPaths& p = Paths();
+  const std::string entry =
+      "[Desktop Entry]\n"
+      "Type=Application\n"
+      "Name=AETHONE\n"
+      "Exec=" + p.exeDir + "/aethone\n"
+      "Icon=com.chakcaad.aethone\n"
+      "Terminal=false\n"
+      "X-GNOME-Autostart-enabled=true\n";
+  std::string dir = path;
+  const size_t slash = dir.rfind('/');
+  if (slash != std::string::npos) {
+    dir.resize(slash);
+    MkDirAll(dir);
+  }
+  return ProxyFileWrite(path, entry) ? std::string()
+                                     : "cannot write " + path;
+}
 
 #endif  // !_WIN32
 

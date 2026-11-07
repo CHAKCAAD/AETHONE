@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aethone/app.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
+import 'package:aethone/core/app_assets.dart';
 import 'package:aethone/features/settings/settings_screen.dart';
 
 Widget _booth(Widget child) => MaterialApp(
@@ -56,10 +57,12 @@ void main() {
     expect(find.text('وضعیت پیکربندی'), findsOneWidget);
     expect(find.text('آدرس هسته ها'), findsOneWidget);
 
-    // Status values — the REAL store defaults (ON / Iran / AUTO).
+    // Status values — the REAL store defaults (ON / Iran / the selected
+    // protocol's own name — v4.40: the AUTO/SMART protocol-mode row is
+    // retired, the card shows the protocol itself).
     expect(find.text('ON'), findsOneWidget);
     expect(find.text('Iran'), findsOneWidget);
-    expect(find.text('AUTO / SMART'), findsOneWidget);
+    expect(find.text('وایرگارد'), findsOneWidget); // default protocol name
 
     // Server pills.
     expect(find.text('Zeptun Tunnel'), findsOneWidget);
@@ -72,19 +75,21 @@ void main() {
     await tester.pumpWidget(_booth(SettingsScreen(store: store)));
     await tester.pumpAndSettle();
 
-    // Defaults — the protocol card renders the mode's Latin name exactly
-    // like the frame («AUTO / SMART»).
+    // Defaults — the protocol card renders the SELECTED protocol's own
+    // name (v4.40: the AUTO/SMART mode row is retired by decree).
     expect(find.text('ON'), findsOneWidget);
-    expect(find.text('AUTO / SMART'), findsOneWidget);
+    expect(find.text('وایرگارد'), findsOneWidget);
 
     // Flip every preference — the cards must re-render.
     store.setKillSwitch(false);
-    store.setProtocolModeSmart(true);
+    store.selectProtocol(ProtocolId.torOnly);
     store.setRoutingRegion(null);
     await tester.pumpAndSettle();
 
     expect(find.text('OFF'), findsOneWidget);
-    expect(find.text('SMART'), findsOneWidget);
+    // «تور» twice: the Tor PILL (standing) + the protocol status card
+    // (v4.40: the card shows the selected protocol's own name).
+    expect(find.text('تور'), findsNWidgets(2));
     expect(find.text('None'), findsOneWidget);
     expect(find.text('ON'), findsNothing);
   });

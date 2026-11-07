@@ -27,6 +27,14 @@ enum VpnState {
 /// frame ships پروکسی selected as the default.
 enum ConnectionMode { tunnel, proxy }
 
+/// v4.40 — the desktop close behavior (owner round 15: «وقتی روی دکمه ضربدر
+/// کلیک میشه برنامه باید یک پنجره نمایش بده و از کاربر بپرسه که میخواد
+/// برنامه کلا بسته بشه یا اینکه بره تو تری سیستم … یه گزینه هم باید باشه
+/// که کاربر بتونه تیک بزنه که آیا این انتخابش دفعه بعد هم اعمال بشه
+/// مستقیم»). ASK is the default; a remembered pick applies directly (and the
+/// general-settings row re-opens the question).
+enum CloseBehavior { ask, close, tray }
+
 /// Pure, side-effect-free transition table — fully unit-tested.
 class VpnStateMachine {
   VpnState _current = VpnState.disconnected;

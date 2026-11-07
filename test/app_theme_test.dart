@@ -189,13 +189,79 @@ void main() {
     test('the mode persists and restores (missing key = night)', () async {
       SharedPreferences.setMockInitialValues({});
       final a = store();
-      a.setThemeMode(AethThemeMode.light);
+      // v4.40 — the PICK owns the preference (night / light / auto);
+      // [themeMode] is the resolved render mode.
+      a.setThemePick(AethThemePick.light);
       await SettingsPersistence().save(a);
 
       final b = store();
       expect(b.themeMode, AethThemeMode.night); // before: the default
       await SettingsPersistence().restore(b);
       expect(b.themeMode, AethThemeMode.light); // after: the saved pick
+      expect(b.themePick, AethThemePick.light);
+    });
+
+    test('v4.40 — a legacy install (only the old themeMode key) seeds the '
+        'pick and keeps its face', () async {
+      SharedPreferences.setMockInitialValues({
+        'aethone.settings.themeMode': 'light',
+      });
+      final b = store();
+      await SettingsPersistence().restore(b);
+      expect(b.themePick, AethThemePick.light);
+      expect(b.themeMode, AethThemeMode.light);
+    });
+
+    test('v4.40 — AUTO resolves by the clock and follows the boundary', () {
+      // The owner's schedule: 06:00–18:00 light, 18:00–06:00 night.
+      expect(
+        resolveAutoTheme(DateTime(2026, 11, 7, 6, 0)),
+        AethThemeMode.light,
+      );
+      expect(
+        resolveAutoTheme(DateTime(2026, 11, 7, 11, 59)),
+        AethThemeMode.light,
+      );
+      expect(
+        resolveAutoTheme(DateTime(2026, 11, 7, 17, 59)),
+        AethThemeMode.light,
+      );
+      expect(
+        resolveAutoTheme(DateTime(2026, 11, 7, 18, 0)),
+        AethThemeMode.night,
+      );
+      expect(
+        resolveAutoTheme(DateTime(2026, 11, 7, 5, 59)),
+        AethThemeMode.night,
+      );
+      expect(
+        resolveAutoTheme(DateTime(2026, 11, 7, 0, 0)),
+        AethThemeMode.night,
+      );
+    });
+
+    test('v4.40 — the AUTO schedule tick moves the resolved mode only at the '
+        'boundary', () {
+      final s = store();
+      s.setThemePick(AethThemePick.auto);
+      final AethThemeMode now = s.themeMode; // whatever the wall clock says
+      // A same-side tick is a silent no-op.
+      final sameSide = now == AethThemeMode.night
+          ? DateTime(2026, 11, 7, 23, 0) // night-side too
+          : DateTime(2026, 11, 7, 12, 0); // day-side too
+      expect(s.applyAutoThemeSchedule(sameSide), false);
+      expect(s.themeMode, now);
+      // Crossing to the other side moves the mode and notifies.
+      final other = now == AethThemeMode.night
+          ? DateTime(2026, 11, 7, 12, 0) // daytime — light
+          : DateTime(2026, 11, 7, 23, 0); // night — night
+      expect(s.applyAutoThemeSchedule(other), true);
+      expect(
+        s.themeMode,
+        now == AethThemeMode.night
+            ? AethThemeMode.light
+            : AethThemeMode.night,
+      );
     });
   });
 

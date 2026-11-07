@@ -13,6 +13,7 @@
 
 #include "desktop_shared/desktop_engine.h"
 #include "engine_channel_linux.h"
+#include "tray_controller_linux.h"
 
 namespace {
 
@@ -313,6 +314,57 @@ void HandleMethodCall(FlMethodChannel* channel, FlMethodCall* call,
     RespondSuccess(call, nullptr);
     return;
   }
+  // ---- v4.40: the window/tray surface (the close-to-tray ask-dialog) ----
+  if (g_strcmp0(name, "window.hide") == 0) {
+    if (!aethone::HideToTrayFromDart()) {
+      RespondError(call, "trayUnavailable",
+                   "the session has no system tray");
+      return;
+    }
+    RespondSuccess(call, nullptr);
+    return;
+  }
+  if (g_strcmp0(name, "window.quit") == 0) {
+    aethone::QuitFromDart();  // destroy → the app ends with its last window
+    RespondSuccess(call, nullptr);
+    return;
+  }
+  // ---- v4.40: the system-proxy companion of the tunnel mode ----
+  if (g_strcmp0(name, "setSystemProxy") == 0) {
+    const std::string err = aethone::SetSystemProxy(ArgInt(args, "port", 0));
+    if (!err.empty()) {
+      RespondError(call, "systemProxyFailed", err.c_str());
+    } else {
+      RespondSuccess(call, nullptr);
+    }
+    return;
+  }
+  if (g_strcmp0(name, "clearSystemProxy") == 0) {
+    const std::string err = aethone::ClearSystemProxy();
+    if (!err.empty()) {
+      RespondError(call, "systemProxyFailed", err.c_str());
+    } else {
+      RespondSuccess(call, nullptr);
+    }
+    return;
+  }
+  // ---- v4.40: the login auto-start (general settings) ----
+  if (g_strcmp0(name, "setAutoStart") == 0) {
+    const std::string err = aethone::SetAutoStart(ArgBool(args, "enabled", false));
+    if (!err.empty()) {
+      RespondError(call, "autoStartFailed", err.c_str());
+    } else {
+      RespondSuccess(call, nullptr);
+    }
+    return;
+  }
+  if (g_strcmp0(name, "autoStartStatus") == 0) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "enabled",
+                             fl_value_new_bool(aethone::AutoStartIsEnabled()));
+    RespondSuccess(call, result);
+    return;
+  }
   fl_method_call_respond(
       call, FL_METHOD_RESPONSE(fl_method_not_implemented_response_new()),
       nullptr);
@@ -321,6 +373,20 @@ void HandleMethodCall(FlMethodChannel* channel, FlMethodCall* call,
 }  // namespace
 
 namespace aethone {
+
+// v4.40 — the tray controller's sink: close-request and toggle-connection
+// forward into Dart on the GTK main thread (these fire from GTK signals,
+// which ARE the main loop — the direct invoke is the Emit pattern without
+// the worker-thread idle hop).
+void TrayEventToDart(const char* event) {
+  if (g_channel == nullptr) return;
+  const char* method =
+      g_strcmp0(event, "close_requested") == 0
+          ? "onWindowCloseRequested"
+          : "onTrayToggleConnection";
+  fl_method_channel_invoke_method(g_channel, method, nullptr, nullptr,
+                                  nullptr, nullptr);
+}
 
 void RegisterEngineChannel(FlEngine* engine) {
   g_return_if_fail(engine != nullptr);
@@ -335,6 +401,8 @@ void RegisterEngineChannel(FlEngine* engine) {
   // OnTunnelEvent (file scope), NOT the same-named type alias hidden inside
   // this namespace.
   SetTunnelEventSink(OnTunnelEvent, nullptr);
+  // v4.40 — the close-to-tray ask-dialog + the tray menu's toggle entry.
+  SetTrayEventSink(&TrayEventToDart);
 }
 
 void UnregisterEngineChannel() {

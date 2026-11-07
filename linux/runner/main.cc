@@ -38,6 +38,15 @@ int main(int argc, char** argv) {
   // v4.39 — the root instance's idempotent system integration (the menu
   // entry + the hicolor icon); its outcome lands in the captured core log.
   aethone::EnsureDesktopIntegration();
+  // v4.40 — the system-proxy hygiene: a previous session that died with the
+  // OS proxy set (the tunnel-mode companion) gets its state restored here,
+  // before the UI comes up.
+  {
+    const std::string proxy_err = aethone::SystemProxyHygiene();
+    if (!proxy_err.empty()) {
+      g_warning("aethone: system-proxy hygiene: %s", proxy_err.c_str());
+    }
+  }
 
   g_autoptr(MyApplication) app = my_application_new();
   return g_application_run(G_APPLICATION(app), argc, argv);

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'connection/connection_store.dart';
+import 'connection/desktop_window.dart';
 import 'connection/egress_locations.dart';
 import 'connection/settings_persistence.dart';
 import 'connection/smart_scorecard.dart';
@@ -41,6 +42,11 @@ Future<void> main() async {
   unawaited(
     EgressLocations.refreshTorExits(store.applyTorExitCountries),
   );
+
+  // v4.40 — the desktop window/tray bridge (owner round 15): the close
+  // button's ask-dialog, the remembered pick, and the tray menu's toggle
+  // entry. No-op on Android.
+  DesktopWindowBridge(store).bind();
 
   runApp(AethoneApp(store: store));
 }

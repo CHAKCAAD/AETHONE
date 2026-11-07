@@ -6,6 +6,38 @@ bundle v1, v2, v3, v4, the v4.1 addendum, v4.2 and v4.3 (2026-10-31 / 2026-11-01
 pin (source commits, Rust/Go/Zig versions, NDK r26d, API 29, three-ABI matrix, N1–N8)
 was changed in v4.2, v4.3, v4.4, v4.5, v4.6, v4.7, v4.8 or v4.9.
 
+## v4.40 — the FMA floor, the close-dialog, the AUTO theme, the icon set (2026-11-07)
+
+Owner rounds 14–16. **The r86 Windows root cause, at the object level**: all 8
+FMA sites in psiphon.exe AND all 8 in lyrebird.exe live inside `math.archExp` —
+Go's amd64 ASSEMBLY `math.Exp` uses `vfmadd213sd` UNCONDITIONALLY (no CPUID
+gate; GOAMD64=v1 does not disarm assembly). On the owner's pre-Haswell CPU
+(i3-3240, Ivy Bridge — no FMA3) any exponential-backoff call in either engine
+dies with STATUS_ILLEGAL_INSTRUCTION — exactly the proxy-mode «illegal
+instruction» dialog. The fix: the GOROOT `haveArchExp=false` patch (pure-Go
+math.Exp) on every amd64 Go build (desktop legs + the Android x86_64 leg), a
+zero-vfmadd build gate on both engines, and the CI PE audit's new `nofma`
+policy. The desktop zeptun builds move to ReleaseSafe (a tunnel bug prints a
+panic into the core log instead of a silent UD2 crash), the zeptun log bridge
+surfaces the REAL wintun error inside the `tunnelStartFailed` reason (the
+rc=-5 evidence), and a Windows crash filter writes exception code +
+module+offset to `logs/crash-log.txt`. **Round 15**: the close button asks
+(«رفتن به سینی سیستم» / «بستن کامل» + the remember checkbox — a remembered
+pick applies directly, the general-settings row re-opens it); the tray menu
+gains «قطع و وصل اتصال»; the AUTO theme (06:00–18:00 light, 18:00–06:00
+night) joins the appearance settings; the protocol-mode setting is retired
+(decree); the general settings gain the close-behavior row, the login
+auto-start and the reset; the window never exceeds the monitor work area
+(small screens see the whole phone frame). **Round 14**: while the tunnel is
+up the OS proxy points at the same local SOCKS5 listener (WinInet registry /
+gsettings — saved, restored on stop, hygiene-restored at boot) so proxy-only
+apps ride the tunnel. **Round 16**: the owner's 15 protocol icon files, byte
+identical, dark/light pairs picked by the resolved theme, rendered with their
+OWN colors (the tint machinery retired by decree) — pixel-verified. The tor
+AUTO location resolution now has two independent sources (Onionoo + plain-HTTP
+ip-api through the same tunnel) and 10 retries. Local gates: analyze clean,
+242/242 tests, the four C++ syntax legs, the icon pixel checks.
+
 ## v4.39 — root-from-start, close-to-tray, brand icons; the Windows path fix (2026-11-07)
 
 Owner decree (device report on the r85 bundles): «فقط تونل نباید با درخواست sudo

@@ -95,7 +95,9 @@ void main() {
     await _save(tester, 'ob_step3');
     await tester.tap(find.byKey(const ValueKey('ob-cta')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const ValueKey('ob-card-auto')));
+    // v4.40 — the AUTO/SMART option cards are gone (owner round 15); the
+    // step-4 frame is the mode segments + the scan pills.
+    await tester.ensureVisible(find.byKey(const ValueKey('ob-scan-2')));
     await _save(tester, 'ob_step4_top');
   });
 }

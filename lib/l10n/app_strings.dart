@@ -229,6 +229,32 @@ class AppStrings {
   String get secNotifications => _v['secNotifications']!;
   String get notificationsComing => _v['notificationsComing']!;
 
+  // v4.40 — the desktop close behavior (owner round 15)
+  String get secCloseBehavior => _v['secCloseBehavior']!;
+  String get closeBehaviorAsk => _v['closeBehaviorAsk']!;
+  String get closeBehaviorTray => _v['closeBehaviorTray']!;
+  String get closeBehaviorClose => _v['closeBehaviorClose']!;
+  String get closeBehaviorDesc => _v['closeBehaviorDesc']!;
+  String get closeDialogTitle => _v['closeDialogTitle']!;
+  String get closeDialogBody => _v['closeDialogBody']!;
+  String get closeDialogToTray => _v['closeDialogToTray']!;
+  String get closeDialogFullClose => _v['closeDialogFullClose']!;
+  String get closeDialogRemember => _v['closeDialogRemember']!;
+  String get closeDialogCancel => _v['closeDialogCancel']!;
+
+  // v4.40 — the login auto-start (general settings)
+  String get secAutoStart => _v['secAutoStart']!;
+  String get autoStartTitle => _v['autoStartTitle']!;
+  String get autoStartDesc => _v['autoStartDesc']!;
+  String get autoStartFailed => _v['autoStartFailed']!;
+
+  // v4.40 — the reset-to-defaults (general settings)
+  String get secReset => _v['secReset']!;
+  String get resetTitle => _v['resetTitle']!;
+  String get resetDesc => _v['resetDesc']!;
+  String get resetConfirmBody => _v['resetConfirmBody']!;
+  String get resetConfirmYes => _v['resetConfirmYes']!;
+
   // language page
   String get secAppLanguage => _v['secAppLanguage']!;
   String get langSystem => _v['langSystem']!;
@@ -238,6 +264,13 @@ class AppStrings {
   String get secHomeLook => _v['secHomeLook']!;
   String get lookOne => _v['lookOne']!;
   String get lookTwo => _v['lookTwo']!;
+
+  // v4.40 — the display mode (night / light / AUTO — owner round 15)
+  String get secThemeMode => _v['secThemeMode']!;
+  String get themePickNight => _v['themePickNight']!;
+  String get themePickLight => _v['themePickLight']!;
+  String get themePickAuto => _v['themePickAuto']!;
+  String get themeAutoNote => _v['themeAutoNote']!;
   String get secMotion => _v['secMotion']!;
   String get motionStandard => _v['motionStandard']!;
   String get motionSmooth => _v['motionSmooth']!;
@@ -595,6 +628,31 @@ class AppStrings {
       'githubRow': 'مخزن گیت‌هاب',
       'secNotifications': 'اعلان و رویداد',
       'notificationsComing': 'اعلان‌های وضعیت اتصال همراه یکپارچه‌سازی سیستم‌عامل اضافه می‌شود',
+      'secCloseBehavior': 'رفتار دکمهٔ بستن',
+      'closeBehaviorAsk': 'پرسیدن',
+      'closeBehaviorTray': 'رفتن به سینی',
+      'closeBehaviorClose': 'بستن کامل',
+      'closeBehaviorDesc': 'انتخاب می‌کند که با کلیک روی ضربدر چه اتفاقی بیفتد: هر بار پرسیده شود، مستقیم برنامه به سینی سیستم برود یا کلا بسته شود.',
+      'closeDialogTitle': 'بستن برنامه',
+      'closeDialogBody': 'می‌خواهید برنامه کلا بسته شود یا در سینی سیستم باقی بماند و اتصال ادامه پیدا کند؟',
+      'closeDialogToTray': 'رفتن به سینی سیستم',
+      'closeDialogFullClose': 'بستن کامل برنامه',
+      'closeDialogRemember': 'انتخاب من دفعهٔ بعد هم مستقیم اعمال شود',
+      'closeDialogCancel': 'انصراف',
+      'secAutoStart': 'شروع خودکار',
+      'autoStartTitle': 'اجرا با روشن شدن سیستم',
+      'autoStartDesc': 'برنامه هنگام ورود به سیستم به‌صورت خودکار اجرا شود.',
+      'autoStartFailed': 'ثبت شروع خودکار ممکن نشد',
+      'secReset': 'بازنشانی',
+      'resetTitle': 'بازنشانی تنظیمات',
+      'resetDesc': 'برگرداندن همهٔ تنظیمات به حالت پیش‌فرض کارخانه.',
+      'resetConfirmBody': 'همهٔ تنظیمات به حالت اولیه برمی‌گردد. این کار قابل بازگشت نیست.',
+      'resetConfirmYes': 'بازنشانی شود',
+      'secThemeMode': 'حالت نمایش',
+      'themePickNight': 'نایت',
+      'themePickLight': 'لایت',
+      'themePickAuto': 'خودکار',
+      'themeAutoNote': 'در حالت خودکار از ساعت ۶ صبح تا ۶ عصر حالت لایت و از ساعت ۶ عصر تا ۶ صبح حالت نایت فعال است.',
       'secAppLanguage': 'زبان برنامه',
       'langSystem': 'همراه سیستم',
       'langDesc': 'زبان رابط کاربری — پیش‌فرض فارسی',
@@ -859,6 +917,31 @@ class AppStrings {
       'githubRow': 'GitHub repository',
       'secNotifications': 'Notifications & events',
       'notificationsComing': 'Connection notifications land with the OS integration step',
+      'secCloseBehavior': 'Close-button behavior',
+      'closeBehaviorAsk': 'Ask every time',
+      'closeBehaviorTray': 'Go to tray',
+      'closeBehaviorClose': 'Close fully',
+      'closeBehaviorDesc': 'Chooses what the close button does: ask each time, hide straight to the system tray, or close the app completely.',
+      'closeDialogTitle': 'Closing AETHONE',
+      'closeDialogBody': 'Should the app close completely, or stay in the system tray with the connection running?',
+      'closeDialogToTray': 'Go to system tray',
+      'closeDialogFullClose': 'Close completely',
+      'closeDialogRemember': 'Remember my choice for next time',
+      'closeDialogCancel': 'Cancel',
+      'secAutoStart': 'Auto-start',
+      'autoStartTitle': 'Launch at sign-in',
+      'autoStartDesc': 'Start AETHONE automatically when you sign in to the system.',
+      'autoStartFailed': 'Could not register the auto-start',
+      'secReset': 'Reset',
+      'resetTitle': 'Reset settings',
+      'resetDesc': 'Return every setting to its factory default.',
+      'resetConfirmBody': 'All settings return to their defaults. This cannot be undone.',
+      'resetConfirmYes': 'Reset now',
+      'secThemeMode': 'Display mode',
+      'themePickNight': 'Night',
+      'themePickLight': 'Light',
+      'themePickAuto': 'Auto',
+      'themeAutoNote': 'Auto: light from 6 AM to 6 PM, night from 6 PM to 6 AM.',
       'secAppLanguage': 'App language',
       'langSystem': 'Follow system',
       'langDesc': 'The interface language — Persian by default',
@@ -1120,6 +1203,31 @@ class AppStrings {
       'githubRow': 'Репозиторий GitHub',
       'secNotifications': 'Уведомления и события',
       'notificationsComing': 'Уведомления о подключении появятся вместе с интеграцией с ОС',
+      'secCloseBehavior': 'Поведение кнопки закрытия',
+      'closeBehaviorAsk': 'Спрашивать',
+      'closeBehaviorTray': 'В трей',
+      'closeBehaviorClose': 'Закрыть полностью',
+      'closeBehaviorDesc': 'Что делает кнопка закрытия: спрашивать каждый раз, сразу свернуть в системный трей или полностью закрыть приложение.',
+      'closeDialogTitle': 'Закрытие AETHONE',
+      'closeDialogBody': 'Закрыть приложение полностью или оставить в системном трее с работающим подключением?',
+      'closeDialogToTray': 'Свернуть в системный трей',
+      'closeDialogFullClose': 'Закрыть полностью',
+      'closeDialogRemember': 'Запомнить мой выбор на будущее',
+      'closeDialogCancel': 'Отмена',
+      'secAutoStart': 'Автозапуск',
+      'autoStartTitle': 'Запускать при входе в систему',
+      'autoStartDesc': 'AETHONE запускается автоматически при входе в систему.',
+      'autoStartFailed': 'Не удалось зарегистрировать автозапуск',
+      'secReset': 'Сброс',
+      'resetTitle': 'Сброс настроек',
+      'resetDesc': 'Вернуть все настройки к заводским значениям.',
+      'resetConfirmBody': 'Все настройки вернутся к значениям по умолчанию. Действие необратимо.',
+      'resetConfirmYes': 'Сбросить',
+      'secThemeMode': 'Режим оформления',
+      'themePickNight': 'Ночной',
+      'themePickLight': 'Светлый',
+      'themePickAuto': 'Авто',
+      'themeAutoNote': 'Авто: светлый с 6:00 до 18:00, ночной с 18:00 до 6:00.',
       'secAppLanguage': 'Язык приложения',
       'langSystem': 'Как в системе',
       'langDesc': 'Язык интерфейса — по умолчанию персидский',
@@ -1381,6 +1489,31 @@ class AppStrings {
       'githubRow': 'GitHub 仓库',
       'secNotifications': '通知与事件',
       'notificationsComing': '连接通知将随系统集成步骤加入',
+      'secCloseBehavior': '关闭按钮行为',
+      'closeBehaviorAsk': '每次询问',
+      'closeBehaviorTray': '最小化到托盘',
+      'closeBehaviorClose': '完全关闭',
+      'closeBehaviorDesc': '决定点击关闭按钮时的行为：每次询问、直接最小化到系统托盘，或完全关闭程序。',
+      'closeDialogTitle': '关闭 AETHONE',
+      'closeDialogBody': '要完全关闭程序，还是保留在系统托盘中并保持连接？',
+      'closeDialogToTray': '最小化到系统托盘',
+      'closeDialogFullClose': '完全关闭程序',
+      'closeDialogRemember': '记住我的选择，下次直接执行',
+      'closeDialogCancel': '取消',
+      'secAutoStart': '自动启动',
+      'autoStartTitle': '随系统登录启动',
+      'autoStartDesc': '登录系统时自动运行 AETHONE。',
+      'autoStartFailed': '无法注册自动启动',
+      'secReset': '重置',
+      'resetTitle': '重置设置',
+      'resetDesc': '将所有设置恢复为出厂默认值。',
+      'resetConfirmBody': '所有设置将恢复默认值，此操作无法撤销。',
+      'resetConfirmYes': '立即重置',
+      'secThemeMode': '显示模式',
+      'themePickNight': '夜间',
+      'themePickLight': '浅色',
+      'themePickAuto': '自动',
+      'themeAutoNote': '自动：早 6 点至晚 6 点使用浅色模式，晚 6 点至次日早 6 点使用夜间模式。',
       'secAppLanguage': '应用语言',
       'langSystem': '跟随系统',
       'langDesc': '界面语言 — 默认波斯语',

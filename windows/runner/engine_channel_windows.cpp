@@ -26,6 +26,7 @@
 
 #include "desktop_shared/desktop_engine.h"
 #include "engine_channel_windows.h"
+#include "tray_icon_windows.h"
 
 namespace {
 
@@ -85,6 +86,22 @@ void Emit(const char* event, int port, const char* reason, int session) {
       "onTunnelEvent",
       std::make_unique<flutter::EncodableValue>(args));
 }
+
+// v4.40 — the window/tray events (no payload; the Dart layer owns the
+// decision logic). onWindowCloseRequested: the close button was clicked —
+// Dart shows the owner's ask-dialog (close vs tray, with the remember
+// checkbox) and answers with window.hide / window.quit. onTrayToggle-
+// Connection: the «قطع و وصل اتصال» tray entry was picked — Dart toggles
+// the connection from whatever the session state is.
+bool EmitWindowEvent(const char* method) {
+  if (g_channel == nullptr) return false;
+  g_channel->InvokeMethod(method, nullptr);
+  return true;
+}
+
+HWND g_main_window = nullptr;
+
+void EmitTrayToggle() { EmitWindowEvent("onTrayToggleConnection"); }
 
 void HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue>& call,
@@ -222,6 +239,63 @@ void HandleMethodCall(
     result->Success();
     return;
   }
+  // ---- v4.40: the window/tray surface (the close-to-tray ask-dialog) ----
+  if (name == "window.hide") {
+    if (g_main_window == nullptr) {
+      result->Error("windowMissing", "the main window is not registered");
+      return;
+    }
+    if (!aethone::TrayController::Instance()->HideToTray(g_main_window)) {
+      result->Error("trayUnavailable",
+                    "the notification area rejected the tray icon");
+      return;
+    }
+    result->Success();
+    return;
+  }
+  if (name == "window.quit") {
+    // The real quit: tray icon away + DestroyWindow → the message loop
+    // ends → the process exits (the kill-on-close job object reaps every
+    // child core).
+    aethone::TrayController::Instance()->QuitFromTray();
+    result->Success();
+    return;
+  }
+  // ---- v4.40: the system-proxy companion of the tunnel mode ----
+  if (name == "setSystemProxy") {
+    const std::string err = aethone::SetSystemProxy(ArgInt(args, "port", 0));
+    if (!err.empty()) {
+      result->Error("systemProxyFailed", err);
+    } else {
+      result->Success();
+    }
+    return;
+  }
+  if (name == "clearSystemProxy") {
+    const std::string err = aethone::ClearSystemProxy();
+    if (!err.empty()) {
+      result->Error("systemProxyFailed", err);
+    } else {
+      result->Success();
+    }
+    return;
+  }
+  // ---- v4.40: the login auto-start (general settings) ----
+  if (name == "setAutoStart") {
+    const std::string err = aethone::SetAutoStart(ArgBool(args, "enabled", false));
+    if (!err.empty()) {
+      result->Error("autoStartFailed", err);
+    } else {
+      result->Success();
+    }
+    return;
+  }
+  if (name == "autoStartStatus") {
+    flutter::EncodableMap out;
+    SetBool(out, "enabled", aethone::AutoStartIsEnabled());
+    result->Success(flutter::EncodableValue(out));
+    return;
+  }
   result->NotImplemented();
 }
 
@@ -250,6 +324,22 @@ void RegisterEngineChannel(FlutterDesktopPluginRegistrarRef registrar) {
         HandleMethodCall(call, std::move(result));
       });
   g_channel = parked.get();
+  // v4.40 — the tray menu's «قطع و وصل اتصال» entry forwards into Dart
+  // (the connection state machine lives there).
+  TrayController::Instance()->SetToggleConnectionCallback(&EmitTrayToggle);
+}
+
+void RegisterMainWindowForChannel(HWND window) {
+  g_main_window = window;
+  // The tray controller must know the window even before the first hide.
+  TrayController::Instance()->RememberMain(window);
+}
+
+bool NotifyWindowCloseRequested() {
+  // WM_CLOSE → the DART layer (the owner's round-15 ask-dialog). False =
+  // the channel is not up yet (the split second before the first frame) —
+  // the caller then keeps the default close semantics.
+  return EmitWindowEvent("onWindowCloseRequested");
 }
 
 void UnregisterEngineChannel() {

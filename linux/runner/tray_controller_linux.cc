@@ -27,6 +27,15 @@ struct TrayState {
 
 TrayState g_tray;
 
+// v4.40 — the engine channel's sink (null until RegisterEngineChannel).
+aethone::TrayEventSink g_tray_sink = nullptr;
+
+bool EmitTrayEvent(const char* event) {
+  if (g_tray_sink == nullptr) return false;
+  g_tray_sink(event);
+  return true;
+}
+
 void ShowMainWindow() {
   if (g_tray.window == nullptr) return;
   gtk_widget_show(GTK_WIDGET(g_tray.window));
@@ -51,12 +60,20 @@ void OnTrayPopup(GtkStatusIcon* icon, guint, guint, gpointer) {
   GtkWidget* menu = gtk_menu_new();
   // Persian labels, the app's own language — the strings are plain UTF-8
   // source bytes (GTK expects UTF-8; no codepage games on Linux).
+  // v4.40 — the owner's round-15 menu, verbatim order: show the app,
+  // disconnect/reconnect the connection, fully close the program.
   GtkWidget* const show = gtk_menu_item_new_with_label("نمایش AETHONE");
+  GtkWidget* const toggle = gtk_menu_item_new_with_label("قطع و وصل اتصال");
   GtkWidget* const quit = gtk_menu_item_new_with_label("خروج");
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), show);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), toggle);
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), quit);
   g_signal_connect_swapped(show, "activate",
                            G_CALLBACK(ShowMainWindow), nullptr);
+  g_signal_connect_swapped(
+      toggle, "activate",
+      G_CALLBACK(+[](gpointer) { EmitTrayEvent("toggle_connection"); }),
+      nullptr);
   g_signal_connect_swapped(quit, "activate",
                            G_CALLBACK(QuitFromTray), nullptr);
   gtk_widget_show_all(menu);
@@ -81,7 +98,15 @@ gboolean EmbedCheckTimeout(gpointer) {
 }
 
 gboolean OnWindowDelete(GtkWidget*, GdkEvent*, gpointer) {
+  // v4.40 — the owner's round-15 decree: the close button never quits
+  // directly. With the channel up, the decision belongs to the DART layer
+  // (the ask-dialog with the remember checkbox); without it (the split
+  // second before the engine registers) the v4.39 direct hide keeps the
+  // window recoverable.
   if (g_tray.tray_usable && g_tray.window != nullptr) {
+    if (EmitTrayEvent("close_requested")) {
+      return TRUE;  // stop the default destroy — Dart answers
+    }
     gtk_widget_hide(GTK_WIDGET(g_tray.window));
     if (g_tray.embed_timer == 0) {
       g_tray.embed_timer =
@@ -135,6 +160,20 @@ void AttachTray(GtkWindow* window) {
   g_signal_connect(window, "delete-event", G_CALLBACK(OnWindowDelete),
                    nullptr);
 }
+
+void SetTrayEventSink(TrayEventSink sink) { g_tray_sink = sink; }
+
+bool HideToTrayFromDart() {
+  if (!g_tray.tray_usable || g_tray.window == nullptr) return false;
+  gtk_widget_hide(GTK_WIDGET(g_tray.window));
+  if (g_tray.embed_timer == 0) {
+    g_tray.embed_timer =
+        g_timeout_add_seconds(3, EmbedCheckTimeout, nullptr);
+  }
+  return true;
+}
+
+void QuitFromDart() { QuitFromTray(); }
 
 }  // namespace aethone
 

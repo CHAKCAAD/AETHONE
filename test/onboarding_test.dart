@@ -148,27 +148,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.homeLook, HomeLook.two);
 
-      // Step 4 — «حالت اتصال» segments, the option cards, «سرعت اسکن».
+      // Step 4 — «حالت اتصال» segments, «سرعت اسکن». v4.40 (owner round 15:
+      // «حالت پروتکل در تنظیمات اتصال برنامه رو کلا حذف کن»): the AUTO/
+      // SMART option cards are GONE — the step is the mode segments and
+      // the scan pills only.
       await _advance(tester, 1);
       expect(find.text('برو بریم!'), findsOneWidget);
-      expect(find.text('پروتکل اتوماتیک میخوای؟'), findsOneWidget);
-      expect(find.text('اتوماتیک'), findsOneWidget);
-      expect(find.text('دستی'), findsOneWidget);
+      expect(find.text('اتوماتیک'), findsNothing);
+      expect(find.text('دستی'), findsNothing);
       // v4.33 — the section headings share the SAME 20px as the question
       // headings, and sit flush right next to their badges (the flex-split
       // float is gone).
-      final h4 = tester.widget<Text>(find.text('پروتکل اتوماتیک میخوای؟'));
-      expect(h4.style?.fontSize, AethGeometry.obHeadingSize);
       final hMode = tester.widget<Text>(find.text('حالت اتصال').first);
       expect(hMode.style?.fontSize, AethGeometry.obHeadingSize);
 
       await tester.tap(find.byKey(const ValueKey('ob-segment-tunnel')));
       await tester.pumpAndSettle();
       expect(store.connectionMode, ConnectionMode.tunnel);
-
-      await tester.tap(find.byKey(const ValueKey('ob-card-auto')));
-      await tester.pumpAndSettle();
-      expect(store.protocolModeSmart, isTrue);
 
       await tester.ensureVisible(find.byKey(const ValueKey('ob-scan-2')));
       await tester.tap(find.byKey(const ValueKey('ob-scan-2')));
