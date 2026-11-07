@@ -847,3 +847,19 @@ signature-faithful stub surface (windows.h extended with the registry/
 time/wide-CRT entries + the new wininet/shlobj/objbase/direct/io/tlhelp32
 stubs). The exact class of mistake run 88 burned a CI cycle on is now a
 local error.
+
+## 9. The run evidence (v4.40)
+
+| run | sha | result |
+|---|---|---|
+| 87 (42374939110) | `1ffd48a` | **failure** — the FMA-floor gate itself: Go 1.26.3 keeps `haveArchExp` in `exp_asm.go`, not `exp_amd64.go` (the fail-closed design doing its job on the first try) |
+| 88 (42376020823) | `fc53a77` | **failure** — Windows bundle: `error C2660` (RegReadString's 1-arg WideToUtf8 call), a Windows-half mistake the local gate never compiled; fixed both the call and the gate (the fifth syntax leg) |
+| 89 (42378279263) | `7ce7caa` | **failure** — Windows bundle: a doubled closing quote in my BUILD_INFO scope line (in PowerShell `""` inside a string is an escaped quote — the string never closed and the next line parsed bare) |
+| **90 (42380411949)** | `47bf972` | **SUCCESS — 17/17 legs green** |
+
+The shipped r90 Windows bundle, verified here by disassembly BEFORE the
+release: psiphon.exe **0 vfmadd/vfmsub sites**, lyrebird.exe **0**; zeptun.dll
+carries the ReleaseSafe panic strings; all 15 protocol icon SVGs ship in
+flutter_assets; the old proto_icons_png set is gone. The release:
+`v4.40-beta` (prerelease) — 10 assets (per-ABI APKs ×3, universal + preview
+APKs, the Linux tar.gz, the Windows zip, BUILD_INFO ×2, SHA256SUMS).
