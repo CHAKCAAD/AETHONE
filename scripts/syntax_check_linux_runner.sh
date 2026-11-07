@@ -54,3 +54,18 @@ g++ -fsyntax-only -std=c++17 -Wall -Wextra -Werror \
   -I "$REPO_ROOT/windows/runner" \
   "$REPO_ROOT/windows/runner/tray_icon_windows.cpp"
 echo "SYNTAX GREEN: windows/runner/tray_icon_windows.cpp (stub Win32/shellapi surface — MSVC-side pre-flight)"
+
+# v4.40 (run 88's lesson: the MSVC leg died on a WideToUtf8 argument-count
+# mistake the Linux half can never see) — the WINDOWS half of the shared
+# engine layer, compiled against the signature-faithful stub surface in
+# scripts/stub_include (windows.h + wininet/shlobj/objbase/direct/io/tlhelp32).
+# _WIN32 selects the Windows branch of every #ifdef in the TU; the stubs
+# shadow the system headers so g++ -fsyntax-only catches the argument
+# mistakes before they burn a CI cycle.
+g++ -fsyntax-only -std=c++17 -Wall -Wextra -Werror \
+  -D_WIN32 \
+  -I "$REPO_ROOT/scripts/stub_include" \
+  -I "$REPO_ROOT" \
+  -I "$REPO_ROOT/native/zeptun/include" \
+  "$REPO_ROOT/desktop_shared/desktop_engine.cpp"
+echo "SYNTAX GREEN: desktop_shared/desktop_engine.cpp (WINDOWS half — the stub Win32/registry/wininet surface)"

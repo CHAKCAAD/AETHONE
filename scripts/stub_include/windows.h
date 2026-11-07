@@ -10,8 +10,11 @@
 #include <cstdint>
 #include <cstring>
 #include <cwchar>
+#include <ctime>
 
+typedef int errno_t;
 typedef unsigned long DWORD;
+typedef long LONG;
 typedef long LONG_PTR;
 typedef int BOOL;
 typedef unsigned short WORD;
@@ -130,6 +133,81 @@ inline int wcscpy_s(wchar_t* dest, size_t destsz, const wchar_t* src) {
   dest[i] = L'\0';
   return 0;
 }
+
+// ---- v4.40: the registry / time / file surface (the desktop_engine.cpp
+// WINDOWS-half leg — the system-proxy companion + the auto-start). The
+// signature-faithful mirror of the SDK pins, so g++ -fsyntax-only catches
+// the argument mistakes before they burn a CI cycle (exactly what run 88's
+// Windows leg died on: WideToUtf8's 2-arg form).
+typedef struct HKEY__* HKEY;
+typedef HKEY* PHKEY;
+typedef DWORD REGSAM;
+typedef unsigned char BYTE;
+typedef BYTE* LPBYTE;
+typedef const BYTE* LPCBYTE;
+typedef char* LPSTR;
+
+typedef struct _SYSTEMTIME {
+  WORD wYear;
+  WORD wMonth;
+  WORD wDayOfWeek;
+  WORD wDay;
+  WORD wHour;
+  WORD wMinute;
+  WORD wSecond;
+  WORD wMilliseconds;
+} SYSTEMTIME;
+typedef SYSTEMTIME* LPSYSTEMTIME;
+
+#define HKEY_CURRENT_USER ((HKEY)0x80000001)
+#define KEY_READ 0x20019
+#define KEY_WRITE 0x20006
+#define ERROR_SUCCESS 0L
+#define ERROR_FILE_NOT_FOUND 2L
+#define REG_SZ 1
+#define REG_EXPAND_SZ 2
+#define REG_DWORD 4
+
+LONG RegOpenKeyExW(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult);
+LONG RegQueryValueExW(HKEY hKey, LPCWSTR lpValueName, LPVOID lpReserved, DWORD* lpType, LPBYTE lpData, DWORD* lpcbData);
+LONG RegSetValueExW(HKEY hKey, LPCWSTR lpValueName, DWORD Reserved, DWORD dwType, const BYTE* lpData, DWORD cbData);
+LONG RegDeleteValueW(HKEY hKey, LPCWSTR lpValueName);
+LONG RegCloseKey(HKEY hKey);
+
+void GetLocalTime(LPSYSTEMTIME lpSystemTime);
+DWORD GetModuleFileNameA(HMODULE hModule, LPSTR lpFilename, DWORD nSize);
+DWORD GetModuleFileNameW(HMODULE hModule, LPWSTR lpFilename, DWORD nSize);
+BOOL CloseHandle(HANDLE hObject);
+DWORD GetCurrentProcessId(void);
+HANDLE GetCurrentProcess(void);
+
+// ---- the v4.39 UTF-8/W boundary + library-loading surface ----
+typedef LONG HRESULT;
+#define CP_UTF8 65001
+int MultiByteToWideChar(UINT CodePage, DWORD dwFlags, const char* lpMultiByteStr,
+                        int cbMultiByte, LPWSTR lpWideCharStr, int cchWideChar);
+int WideCharToMultiByte(UINT CodePage, DWORD dwFlags, const wchar_t* lpWideCharStr,
+                        int cchWideChar, LPSTR lpMultiByteStr, int cbMultiByte,
+                        const char* lpDefaultChar, BOOL* lpUsedDefaultChar);
+DWORD GetLastError(void);
+#define LOAD_LIBRARY_SEARCH_APPLICATION_DIR 0x00000800
+#define LOAD_LIBRARY_SEARCH_SYSTEM32 0x00000800
+#define LOAD_WITH_ALTERED_SEARCH_PATH 0x00000008
+HMODULE LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags);
+BOOL FreeLibrary(HMODULE hLibModule);
+typedef void (*FARPROC)(void);  // placeholder under g++ (never linked)
+FARPROC GetProcAddress(HMODULE hModule, const char* lpProcName);
+DWORD GetFileAttributesW(LPCWSTR lpFileName);
+FILE* _wfopen(const wchar_t* filename, const wchar_t* mode);
+int _wremove(const wchar_t* path);
+int _wrename(const wchar_t* oldname, const wchar_t* newname);
+errno_t fopen_s(FILE** pFile, const char* filename, const char* mode);
+wchar_t* _wgetcwd(wchar_t* buffer, int maxlen);
+int _read(int fd, void* buffer, unsigned int count);
+errno_t localtime_s(struct tm* const tmDest, time_t const* const source);
+#define SUCCEEDED(hr) (((HRESULT)(hr)) >= 0)
+#define FILE_ATTRIBUTE_DIRECTORY 0x00000010
+BOOL SetUnhandledExceptionFilter(void* lpTopLevelExceptionFilter);
 
 #define ZeroMemory(p, n) memset((p), 0, (n))
 #define DefWindowProc DefWindowProcW

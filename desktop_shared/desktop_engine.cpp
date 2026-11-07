@@ -1666,7 +1666,7 @@ bool RegReadString(HKEY key, const wchar_t* name, std::string* out) {
   }
   wide.resize(size / sizeof(wchar_t));
   while (!wide.empty() && wide.back() == L'\0') wide.pop_back();
-  *out = WideToUtf8(wide);
+  *out = WideToUtf8(wide.c_str(), wide.size());
   return true;
 }
 

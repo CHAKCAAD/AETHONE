@@ -830,3 +830,20 @@ close-dialog + the tray toggle + the AUTO theme + the icon set + the
 system-proxy companion + the tor dual resolver + the general-settings
 round land as `v4.40` on `ci-bootstrap/v4.4`. Run evidence recorded after
 the dispatch.
+
+## 8a. The run-88 lesson (recorded for the record)
+
+Run 88 (the first v4.40 dispatch) died on the Windows bundle leg:
+`error C2660: WideToUtf8: function does not take 1 arguments` — my new
+`RegReadString` called the 2-argument helper with one argument, INSIDE the
+`#ifdef _WIN32` half the local syntax gate never compiled (the v4.39 gate
+covered desktop_engine.cpp's LINUX half only; the Windows half had no
+local pre-flight at all — it relied on the MSVC build itself).
+
+The fix went both ways: the call site (wide.c_str(), wide.size()), and the
+GATE — `scripts/syntax_check_linux_runner.sh` now carries a fifth leg that
+compiles desktop_engine.cpp with `-D_WIN32` against the
+signature-faithful stub surface (windows.h extended with the registry/
+time/wide-CRT entries + the new wininet/shlobj/objbase/direct/io/tlhelp32
+stubs). The exact class of mistake run 88 burned a CI cycle on is now a
+local error.
