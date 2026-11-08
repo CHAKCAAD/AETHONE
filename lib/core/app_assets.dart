@@ -20,6 +20,14 @@ enum ProtocolId {
   psiphonChain,
   psiphonReverse,
   psiphonOnly,
+
+  /// PHASE-1 (firefox-vpn, private branch): the Firefox VPN engine — a
+  /// DEDICATED communication engine (Go child process `libfirefoxvpn.so`,
+  /// local SOCKS5 on 127.0.0.1:1822), NOT an aether overlay: no aether
+  /// core runs for this mode. The protocol tile/UI presentation is
+  /// Phase 2's scope; the engine wiring lives in
+  /// lib/connection/firefox/ + the adapter's firefox branch.
+  firefoxOnly,
 }
 
 extension ProtocolIdX on ProtocolId {
@@ -34,6 +42,9 @@ extension ProtocolIdX on ProtocolId {
       this == ProtocolId.psiphonChain ||
       this == ProtocolId.psiphonReverse ||
       this == ProtocolId.psiphonOnly;
+
+  /// PHASE-1 (firefox-vpn): the dedicated Firefox VPN engine mode.
+  bool get isFirefox => this == ProtocolId.firefoxOnly;
 }
 
 abstract final class AppAssets {
@@ -280,6 +291,10 @@ abstract final class AppAssets {
         ProtocolId.psiphonChain => _protoPsiphonOverWarp,
         ProtocolId.psiphonReverse => _protoWarpOverPsiphon,
         ProtocolId.psiphonOnly => _protoPsiphonBoth,
+        // PHASE-1 (firefox-vpn): placeholder until the owner's own
+        // Firefox VPN tile artwork lands (Phase 2) — the auto shield is
+        // the standing stand-in, NOT a new design.
+        ProtocolId.firefoxOnly => iconShieldTick,
       };
 
   /// Country flag by ISO code (lowercase), e.g. `ir` → ir.png.

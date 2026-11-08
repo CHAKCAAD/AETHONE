@@ -8,7 +8,16 @@ library;
 import '../core/app_assets.dart';
 
 /// What leaves the tunnel (defines which listener Zeptun must use).
-enum ExitKind { warp, torExit, psiphonExit }
+enum ExitKind {
+  warp,
+  torExit,
+  psiphonExit,
+
+  /// PHASE-1 (firefox-vpn): the exit is a Firefox VPN (Fastly MASQUE)
+  /// egress — reported from the REAL tunnel probe, never assumed from
+  /// the selected country (docs/FIREFOX_VPN_SERVER_DISCOVERY.md §6).
+  firefoxExit,
+}
 
 class TransportMode {
   const TransportMode({
@@ -160,6 +169,24 @@ abstract final class TransportModes {
     evidence: 'cli.rs L600 (no tunnel; --bind serves plain psiphon)',
   );
 
+  /// PHASE-1 (firefox-vpn, private branch) — FIREFOX VPN ONLY: the
+  /// dedicated Go engine (libfirefoxvpn.so) serving SOCKS5 CONNECT on
+  /// 127.0.0.1:1822. Port 1822 was vetted against the evidence-locked
+  /// map (1819 aether --bind, 1820 --tor-bind, 1821 --psiphon-bind) and
+  /// the adapter asserts it free at runtime before every connect.
+  /// `cliValue` documents that NO aether CLI exists for this mode — the
+  /// aether core never starts; the child process is driven over its
+  /// stdin/stdout contract (docs/FIREFOX_VPN_ENGINE.md).
+  static final TransportMode firefoxOnly = TransportMode(
+    id: ProtocolId.firefoxOnly,
+    label: 'FIREFOX VPN',
+    cliValue: '(no aether core — dedicated engine child process)',
+    socksEndpoint: Uri(scheme: 'socks5', host: _host, port: 1822),
+    exitKind: ExitKind.firefoxExit,
+    tcpOnly: true,
+    evidence: 'fxv cmd/libfirefoxvpn (engine contract; phase-1 pin)',
+  );
+
   static final List<TransportMode> all = [
     masque,
     wireguard,
@@ -172,6 +199,7 @@ abstract final class TransportModes {
     psiphonChain,
     psiphonReverse,
     psiphonOnly,
+    firefoxOnly,
   ];
 
   static TransportMode byId(ProtocolId id) => all.firstWhere((m) => m.id == id);

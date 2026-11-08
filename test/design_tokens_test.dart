@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aethone/core/design_tokens.dart';
 import 'package:aethone/core/motion.dart';
 import 'package:aethone/connection/transport_modes.dart';
+import 'package:aethone/core/app_assets.dart';
 
 /// Locks the evidence-locked token values (report tables 7/8/15 + table 11).
 /// If a test here fails, a token was changed without a design decision —
@@ -135,8 +136,20 @@ void main() {
       expect(TransportModes.psiphonOnly.tcpOnly, isTrue);
     });
 
-    test('all 11 modes are in the table', () {
-      expect(TransportModes.all.length, 11);
+    test('the aether family kept its 11 modes; firefox makes 12', () {
+      // PHASE-1 (firefox-vpn): the dedicated engine ADDS one mode — the
+      // 11 aether modes above are untouched (regression guard).
+      expect(
+        TransportModes.all
+            .where((m) => m.id != ProtocolId.firefoxOnly)
+            .length,
+        11,
+      );
+      expect(TransportModes.all.length, 12);
+      expect(
+        TransportModes.all.where((m) => m.id == ProtocolId.firefoxOnly),
+        isNotEmpty,
+      );
     });
   });
 }
