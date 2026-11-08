@@ -5,10 +5,14 @@ Status: **Phase 1, private branch `phase1/firefox-vpn` only.**
 ## 1. Single rule set (the phase-1 decrees)
 
 1. Session tokens NEVER appear in argv, the process environment, stdout
-   (other than the `authRefreshed` private event), stderr, logs, or a
-   plain file. The ONLY carriers are (a) the child's stdin pipe during a
-   connect — one JSON line — and (b) the Android-Keystore-encrypted
-   vault at rest.
+   (other than the `authRefreshed` / `loginCompleted` private events),
+   stderr, logs, or a plain file. The ONLY carriers are (a) the child's
+   stdin pipe during a connect or a login exchange — one JSON line —
+   and (b) the Android-Keystore-encrypted vault at rest. The PHASE-2
+   WebChannel layer adds one in-process hop for the FxA session token
+   (the WebView→Dart `JavaScriptChannel` message, never persisted);
+   the account PASSWORD never transits AETHONE code at all (the sign-in
+   happens on Mozilla's own page — docs/FIREFOX_VPN_LOGIN.md §4).
 2. **Single account**: exactly one session, one child process, one
    upstream session. No token pools, no multi-account, no
    quota-dodging rotation — the upstream pool machinery was deliberately
@@ -36,6 +40,12 @@ child stdin (private pipe)  ──►  engine reads it, parses, DROPS the buffer
    └────────────────────────────────────┘
 ```
 
+* Login flow (Phase 2): the captured FxA session token goes from the
+  bridge straight into the `--login` child's stdin pipe; the minted
+  pair arrives on `loginCompleted` and is vaulted by the same
+  `FirefoxSessionStore.save()` (the adapter's `firefoxWebChannelLogin`
+  routes it — never logged, tested). The WebView's cookies are cleared
+  after the exchange, killing the browser session locally.
 * Vault at rest: `<filesDir>/firefox/session.vault` —
   `IV(12) || AES/GCM ciphertext+tag`, key inside AndroidKeyStore (256
   bit, `PURPOSE_ENCRYPT|DECRYPT`, `BLOCK_MODE_GCM`, randomized IV

@@ -61,7 +61,8 @@ the Android-Keystore vault on the Dart side).
 ## 3. Process contract
 
 Fixed and versioned by `engine.ConfigVersion = 1` / `EngineVersion
-"1.0.0-phase1"` (bump both on breaking change).
+"1.1.0-phase2"` (bump both on breaking change; the 1.1.0 bump is the
+additive `--login` role — the tunnel contract is unchanged).
 
 * **stdin** — exactly ONE JSON line (`engine.Config`), written by the host
   right after spawn. The line is bounded to 1 MiB (`readConfigLine`);
@@ -69,9 +70,10 @@ Fixed and versioned by `engine.ConfigVersion = 1` / `EngineVersion
   KEEPS the pipe open; **closing it is the shutdown request** (the
   engine drains, refuses new work, and exits 0).
 * **stdout** — JSON-lines status events (`engine.Event`), flushed per
-  event. The only event that ever carries secret material is
-  `authRefreshed` (the refreshed same-account OAuth pair) on this private
-  parent↔child pipe; the host routes it straight into the Keystore vault.
+  event. The only events that ever carry secret material are
+  `authRefreshed` (the tunnel role) and `loginCompleted` (the `--login`
+  role) — the same-account OAuth pair on this private parent↔child
+  pipe; the host routes both straight into the Keystore vault.
 * **stderr** — human-readable, level-tagged logs, redacted by
   `internal/redact` (the access/refresh tokens are the scrub set).
 * **Exit codes** — `0` clean stop (stdin closed / drained) · `1` startup
@@ -81,6 +83,14 @@ Fixed and versioned by `engine.ConfigVersion = 1` / `EngineVersion
   server list (upstream uTLS Firefox ClientHello) and prints the
   discovery JSON on stdout; no stdin, no secrets. The Dart-side
   `FirefoxDiscovery` uses it for the pre-connect location model.
+* **`--login` role** (PHASE 2, `docs/FIREFOX_VPN_LOGIN.md`) —
+  `libfirefoxvpn.so --login` exchanges a WebChannel-captured FxA session
+  token (ONE JSON line on stdin, `engine.LoginConfig` v1) for the
+  same-account OAuth pair through the pinned upstream's
+  `vpnclient.FxaOAuthToken` (HAWK + uTLS + the anti-bot retry),
+  retrying unverified sessions inside a 300 s budget and emitting the
+  pair on the secret-carrying `loginCompleted` event. Short-lived
+  child; stdin EOF = clean cancel (exit 0).
 
 ### Config (stdin line; `engine.Config`)
 

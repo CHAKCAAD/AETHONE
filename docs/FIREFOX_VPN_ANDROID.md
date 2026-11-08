@@ -123,6 +123,21 @@ the three jniLibs ABIs packaged. Phase 1 ships no release APK publicly
 CI stays private-environment-only for the same reason; there is no
 public artifact and no public release containing the engine.
 
+### Phase-2 rebuild (2026-11-08, the `--login` role)
+
+* Toolchain identical to the Phase-1 pins (Go 1.25.0, NDK r28c
+  28.2.13676358, `build_engine.sh`); `EngineVersion 1.1.0-phase2`.
+* `phase1/build/SHA256SUMS.txt` (the four rebuilt artifacts):
+  `arm64-v8a 7954241b… · armeabi-v7a a6732e21… · x86_64 aa3c444f… ·
+  host aa383c39…` — jniLibs re-deployed and hash-verified ≡ build.
+* `assembleDebug` (7 m 30 s, bounded heaps 1536M/1024M): BUILD
+  SUCCESSFUL. APK carries all three engine ABIs with the SAME Go
+  BuildIDs as the pinned build (`gRcOic2NG…` v7a, `Iide0tOaW…`
+  x86_64; AGP's standard llvm-strip applies, hence the size
+  difference — same binaries). The `webview_flutter_android` plugin
+  (4.14.1, BSD-3-Clause — the Phase-2 login page's WebView) is
+  packaged (classes5/6/11.dex).
+
 ## 5. Desktop platforms
 
 Out of Phase 1 scope by decree (Android only). The adapter carries one
