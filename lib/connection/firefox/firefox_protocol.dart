@@ -1,0 +1,218 @@
+/// Firefox VPN engine wire types — the Dart mirror of the Go engine's
+/// contract (cmd/libfirefoxvpn at the phase-1 pin; see
+/// docs/FIREFOX_VPN_ENGINE.md):
+///
+///  * config: ONE JSON line written to the child's stdin right after
+///    spawn — the ONLY sanctioned carrier of session tokens (never argv,
+///    never environment, never files, never logs);
+///  * events: JSON lines on stdout; `authRefreshed` is the only event
+///    carrying secret material (the refreshed same-account OAuth pair)
+///    and must go straight into the Keystore-backed store;
+///  * shutdown: closing the child's stdin is the shutdown request.
+///
+/// Phase 1 of the Firefox VPN integration (private branch
+/// `phase1/firefox-vpn`; engine license status UNRESOLVED — nothing here
+/// ships publicly until the owner settles it).
+library;
+
+/// The engine's config object (engine.Config on the Go side).
+class FirefoxEngineConfig {
+  const FirefoxEngineConfig({
+    required this.socksListen,
+    required this.auth,
+    this.guardian = 'https://vpn.mozilla.org',
+    this.country = '',
+    this.transport = 'h2',
+    this.upstreamOverride = '',
+    this.logLevel = 'normal',
+  });
+
+  /// Loopback listener ONLY (the engine refuses anything else).
+  final String socksListen;
+
+  /// The same-account OAuth pair (from the Keystore-backed store or a
+  /// controlled test injection).
+  final FirefoxSessionAuth auth;
+
+  final String guardian;
+
+  /// '' (auto/REC), 'REC', or an ISO-3166-1 alpha-2 code / country name.
+  final String country;
+
+  /// 'h2' (default) or 'h3'.
+  final String transport;
+
+  /// Explicit upstream "host:port" (transparent override; empty = live
+  /// RemoteSettings discovery).
+  final String upstreamOverride;
+
+  final String logLevel;
+
+  Map<String, dynamic> toJson() => {
+        'version': 1,
+        'socksListen': socksListen,
+        'guardian': guardian,
+        'country': country,
+        'transport': transport,
+        if (upstreamOverride.isNotEmpty) 'upstreamOverride': upstreamOverride,
+        'logLevel': logLevel,
+        'auth': {
+          'accessToken': auth.accessToken,
+          'refreshToken': auth.refreshToken,
+          if (auth.expiresAt != null)
+            'expiresAt': auth.expiresAt!.toIso8601String(),
+        },
+      };
+}
+
+/// The same-account OAuth pair. NEVER log, NEVER put in argv/env, NEVER
+/// persist outside the Keystore-backed store.
+class FirefoxSessionAuth {
+  const FirefoxSessionAuth({
+    required this.accessToken,
+    this.refreshToken = '',
+    this.expiresAt,
+  });
+
+  final String accessToken;
+  final String refreshToken;
+  final DateTime? expiresAt;
+
+  Map<String, dynamic> toJson() => {
+        'accessToken': accessToken,
+        'refreshToken': refreshToken,
+        if (expiresAt != null) 'expiresAt': expiresAt!.toIso8601String(),
+      };
+
+  static FirefoxSessionAuth fromJson(Map<String, dynamic> raw) =>
+      FirefoxSessionAuth(
+        accessToken: raw['accessToken'] as String? ?? '',
+        refreshToken: raw['refreshToken'] as String? ?? '',
+        expiresAt: raw['expiresAt'] == null
+            ? null
+            : DateTime.tryParse(raw['expiresAt'] as String),
+      );
+}
+
+/// One engine status event (engine.Event on the Go side). Field names
+/// mirror the wire exactly.
+class FirefoxEngineEvent {
+  FirefoxEngineEvent.fromJson(Map<String, dynamic> raw)
+      : name = raw['event'] as String? ?? '',
+        message = raw['message'] as String? ?? '',
+        failCode = raw['failCode'] as String? ?? '',
+        reason = raw['reason'] as String? ?? '',
+        exitCode = (raw['code'] as num?)?.toInt() ?? 0,
+        addr = raw['addr'] as String? ?? '',
+        transport = raw['transport'] as String? ?? '',
+        proxyHost = raw['proxyHost'] as String? ?? '',
+        country = raw['country'] as String? ?? '',
+        countryName = raw['countryName'] as String? ?? '',
+        cityCode = raw['cityCode'] as String? ?? '',
+        cityName = raw['cityName'] as String? ?? '',
+        hostname = raw['hostname'] as String? ?? '',
+        port = (raw['port'] as num?)?.toInt() ?? 0,
+        selectionSource = raw['selectionSource'] as String? ?? '',
+        recommended = raw['recommended'] == true,
+        passExpiresAt = raw['passExpiresAt'] as String? ?? '',
+        quotaLeft = raw['quotaLeft'] as String? ?? '',
+        quotaReset = raw['quotaReset'] as String? ?? '',
+        exitIp = raw['exitIp'] as String? ?? '',
+        exitCountry = raw['exitCountry'] as String? ?? '',
+        configuredCountry = raw['configuredCountry'] as String? ?? '',
+        exitCountryMatches = raw['exitCountryMatches'] as bool?,
+        latencyMs = (raw['latencyMs'] as num?)?.toInt() ?? 0,
+        line = raw['line'] as String? ?? '',
+        // authRefreshed only — the PRIVATE refreshed pair; the host routes
+        // it straight into the Keystore store and never logs it.
+        accessToken = raw['accessToken'] as String? ?? '',
+        refreshToken = raw['refreshToken'] as String? ?? '';
+
+  final String name;
+  final String message;
+  final String failCode;
+  final String reason;
+  final int exitCode;
+  final String addr;
+  final String transport;
+  final String proxyHost;
+  final String country;
+  final String countryName;
+  final String cityCode;
+  final String cityName;
+  final String hostname;
+  final int port;
+  final String selectionSource;
+  final bool recommended;
+  final String passExpiresAt;
+  final String quotaLeft;
+  final String quotaReset;
+  final String exitIp;
+  final String exitCountry;
+  final String configuredCountry;
+  final bool? exitCountryMatches;
+  final int latencyMs;
+  final String line;
+  final String accessToken;
+  final String refreshToken;
+
+  /// True for the one event that carries secret material.
+  bool get carriesSecrets =>
+      name == 'authRefreshed' &&
+      (accessToken.isNotEmpty || refreshToken.isNotEmpty);
+
+  /// Redacted rendering for logs/diagnostics — NEVER includes tokens.
+  String get logLine {
+    switch (name) {
+      case 'authRefreshed':
+        return 'engine: session tokens refreshed by the engine '
+            '(stored; access<redacted> refresh<redacted>)';
+      case 'failed':
+        return 'engine failed ($failCode): $message';
+      default:
+        return 'engine: $name${message.isEmpty ? '' : ' — $message'}';
+    }
+  }
+}
+
+/// Engine event names (mirrors engine.Ev* on the Go side).
+abstract final class FirefoxEngineEvents {
+  static const started = 'started';
+  static const discoveryFetched = 'discoveryFetched';
+  static const selected = 'selected';
+  static const passAcquired = 'passAcquired';
+  static const upstreamReady = 'upstreamReady';
+  static const socksReady = 'socksReady';
+  static const exitVerified = 'exitVerified';
+  static const exitVerifyFailed = 'exitVerifyFailed';
+  static const authRefreshed = 'authRefreshed';
+  static const renewed = 'renewed';
+  static const renewalFailed = 'renewalFailed';
+  static const quotaExhausted = 'quotaExhausted';
+  static const stopping = 'stopping';
+  static const stopped = 'stopped';
+  static const failed = 'failed';
+  static const log = 'log';
+}
+
+/// Engine failure codes (mirrors engine.Err*).
+abstract final class FirefoxEngineFailure {
+  static const badConfig = 'badConfig';
+  static const discoveryFailed = 'discoveryFailed';
+  static const noMatchForCountry = 'noMatchForCountry';
+  static const passFetchFailed = 'passFetchFailed';
+  static const quotaExhausted = 'quotaExhausted';
+  static const upstreamSessionFailed = 'upstreamSessionFailed';
+  static const socksListenFailed = 'socksListenFailed';
+  static const renewalTimeout = 'renewalTimeout';
+  static const internalError = 'internalError';
+}
+
+/// Engine exit codes (mirrors engine.Exit*).
+abstract final class FirefoxEngineExitCode {
+  static const clean = 0;
+  static const startup = 1;
+  static const quota = 2;
+  static const renewal = 3;
+  static const internal = 4;
+}
