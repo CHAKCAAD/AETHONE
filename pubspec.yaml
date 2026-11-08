@@ -28,6 +28,12 @@ dependencies:
   # انتخاب های تنظیمات رو یادش نمیمونه»). Storage: Android
   # SharedPreferences via the first-party plugin.
   shared_preferences: 2.5.3
+  # ---- phase-2 (firefox-vpn): the FxA WebChannel login page ----
+  # accounts.firefox.com loaded with context=fx_desktop_v3 inside the app
+  # (the password never transits AETHONE code — the sign-in happens on
+  # Mozilla's own page; only the session token is captured and piped to
+  # the engine). First-party plugin, BSD-3-Clause.
+  webview_flutter: 4.14.1
 
 dev_dependencies:
   flutter_test:

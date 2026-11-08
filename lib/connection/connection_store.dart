@@ -23,6 +23,7 @@ import 'connection_state.dart';
 import 'core_settings.dart';
 import 'egress_locations.dart';
 import 'engine.dart';
+import 'firefox/firefox_protocol.dart';
 import 'app_tunnel.dart';
 import 'platform_engine_adapter.dart';
 import 'smart_scorecard.dart';
@@ -31,6 +32,11 @@ import 'transport_modes.dart';
 /// The two selectable home-screen looks (owner: identical logic, different
 /// layout — report §11.2).
 enum HomeLook { one, two }
+
+/// PHASE-2 (firefox-vpn) — the Firefox account's signed-in state, from
+/// the Keystore vault's presence (honest: unknown until the first check,
+/// then signedIn / signedOut; nothing simulated).
+enum FirefoxAccountStatus { unknown, signedIn, signedOut }
 
 class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   /// v4.32 — [scorecard] defaults ONCE (the redirecting constructor) so the
@@ -256,6 +262,87 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
+  // ---- PHASE-2 (firefox-vpn) — the firefox family's own surface ----
+
+  /// The firefox location pick ('auto' = Mozilla's REC anycast, else a
+  /// lowercase ISO code from the LIVE RemoteSettings list) — remembered
+  /// and persisted like the family picks above.
+  @override
+  String firefoxLocation = LocationWheelPolicy.autoCode;
+
+  /// The firefox data-plane transport ('h2' default / 'h3' optional).
+  @override
+  String firefoxTransport = 'h2';
+
+  /// The LIVE firefox country set (the engine's --discover role; null
+  /// until the first refresh — the wheel falls back to the standing
+  /// seed, firefoxCountrySnapshot). Engine truth, never a preference.
+  List<String>? liveFirefoxCountries;
+
+  /// The honesty label of the last location refresh: true = live fetch,
+  /// false = disk cache (offline start). The settings page surfaces it —
+  /// a cache is never presented as live data.
+  bool firefoxLocationsLive = false;
+  DateTime? firefoxLocationsFetchedAt;
+
+  /// The signed-in state of the Firefox account (vault presence —
+  /// honest: no session = signedOut, nothing simulated).
+  FirefoxAccountStatus firefoxAccount = FirefoxAccountStatus.unknown;
+
+  /// Consumes the adapter's [EngineFirefoxLocations] event: swaps in the
+  /// sanitized live set + its honesty labels. A no-change swap does not
+  /// wake the listeners.
+  void applyFirefoxLocations(List<String> codes, bool live, DateTime fetchedAt) {
+    final clean = EgressLocations.sanitizeCodes(codes);
+    if (clean == null) return; // garbage is not a live set — keep the seed
+    final changed = !listEquals(clean, liveFirefoxCountries) ||
+        firefoxLocationsLive != live;
+    liveFirefoxCountries = clean;
+    firefoxLocationsLive = live;
+    firefoxLocationsFetchedAt = fetchedAt;
+    if (changed) notifyListeners();
+  }
+
+  /// PHASE-2 — asks the adapter for the live Firefox location list (the
+  /// engine's --discover role; the result arrives as an event — see
+  /// [applyFirefoxLocations]). Fire-and-forget: the picker renders the
+  /// standing seed until the refresh lands.
+  void refreshFirefoxLocations() {
+    unawaited(_engine.refreshFirefoxLocations());
+  }
+
+  /// PHASE-2 — refreshes the signed-in state from the vault. Called at
+  /// app start and after every login/logout.
+  Future<void> refreshFirefoxAccount() async {
+    final has = await _engine.firefoxHasSession();
+    final next = has ? FirefoxAccountStatus.signedIn : FirefoxAccountStatus.signedOut;
+    if (firefoxAccount == next) return;
+    firefoxAccount = next;
+    notifyListeners();
+  }
+
+  /// PHASE-2 — the sign-out: if a firefox session is LIVE it is
+  /// disconnected first (the store owns user intent), then the vault is
+  /// wiped (the logout-grade clear) and the state refreshed.
+  Future<void> firefoxSignOut() async {
+    if (state == VpnState.connected &&
+        effectiveProtocol.isFirefox) {
+      await disconnect();
+    }
+    await _engine.firefoxClearSession();
+    await refreshFirefoxAccount();
+  }
+
+  /// PHASE-2 — runs the WebChannel login exchange (the login screen's
+  /// captured token → the engine's --login role → the Keystore vault).
+  Future<FirefoxLoginResult> firefoxCompleteLogin(String sessionToken) {
+    return _engine.firefoxWebChannelLogin(sessionToken);
+  }
+
+  /// PHASE-2 — cancels an in-flight login exchange (the login screen's
+  /// dispose path): stdin close → grace → kill; no orphan survives.
+  Future<void> firefoxLoginCancel() => _engine.firefoxLoginCancel();
+
   /// v4.22 — direct setters for the SETTINGS pages (the Psiphon/Tor pages
   /// write their own family field regardless of the currently selected
   /// protocol; [selectLocation] stays the home-wheel path).
@@ -279,6 +366,28 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
+  /// PHASE-2 — the firefox settings page's direct setter (same contract
+  /// as the family setters: 'auto' or a lowercase ISO-2 pick; anything
+  /// else falls back to auto — the LIVE list is the source of truth, an
+  /// unknown code would fail inside the engine honestly anyway).
+  void setFirefoxLocation(String code) {
+    final pick = LocationWheelPolicy.autoCode == code ||
+            (code.length == 2 && code == code.toLowerCase())
+        ? code
+        : LocationWheelPolicy.autoCode;
+    if (firefoxLocation == pick) return;
+    firefoxLocation = pick;
+    notifyListeners();
+  }
+
+  /// PHASE-2 — the transport pick ('h2' | 'h3'; anything else → 'h2').
+  void setFirefoxTransport(String transport) {
+    final pick = transport == 'h3' ? 'h3' : 'h2';
+    if (firefoxTransport == pick) return;
+    firefoxTransport = pick;
+    notifyListeners();
+  }
+
   /// v4.21 — ONE commit path for every wheel settle/tap: routes the pick
   /// into the current family's field (psiphon / tor), or the plain wheel
   /// pick for non-family protocols. Never fires while a transition is in
@@ -294,6 +403,10 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
       if (torLocation == code) return;
       torLocation = code;
       notifyListeners();
+    } else if (effective.isFirefox) {
+      if (firefoxLocation == code) return;
+      firefoxLocation = code;
+      notifyListeners();
     } else {
       selectCountry(code);
     }
@@ -307,6 +420,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     final effective = effectiveProtocol;
     if (effective.isPsiphon) return psiphonLocation;
     if (effective.isTor) return torLocation;
+    if (effective.isFirefox) return firefoxLocation;
     return selectedCountryCode ?? 'ir';
   }
 
@@ -331,6 +445,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         effectiveProtocol,
         psiphonRegions: livePsiphonRegions,
         torExits: liveTorExitCountries,
+        firefoxCountries: liveFirefoxCountries,
       );
 
   /// v4.21 — true when the wheel runs on the FULL manifest with the AUTO
@@ -723,6 +838,8 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         if (exitCountryCode != null) this.exitCountryCode = exitCountryCode;
       case EngineEgressRegions(:final regions):
         applyPsiphonEgressRegions(regions);
+      case EngineFirefoxLocations(:final countries, :final live, :final fetchedAt):
+        applyFirefoxLocations(countries, live, fetchedAt);
       case EngineExitCountryResolved(:final code):
         // v4.31 — the REAL country behind a Tor exit (the trace only says
         // T1): apply it while — and only while — a session is actually

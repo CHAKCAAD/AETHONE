@@ -123,8 +123,12 @@ class FirefoxEngineEvent {
         exitCountryMatches = raw['exitCountryMatches'] as bool?,
         latencyMs = (raw['latencyMs'] as num?)?.toInt() ?? 0,
         line = raw['line'] as String? ?? '',
-        // authRefreshed only — the PRIVATE refreshed pair; the host routes
-        // it straight into the Keystore store and never logs it.
+        loginMode = raw['loginMode'] as String? ?? '',
+        attempt = (raw['attempt'] as num?)?.toInt() ?? 0,
+        expiresIn = (raw['expiresIn'] as num?)?.toInt() ?? 0,
+        obtainedAt = DateTime.tryParse(raw['obtainedAt'] as String? ?? ''),
+        // authRefreshed / loginCompleted only — the PRIVATE pair; the host
+        // routes it straight into the Keystore store and never logs it.
         accessToken = raw['accessToken'] as String? ?? '',
         refreshToken = raw['refreshToken'] as String? ?? '';
 
@@ -153,12 +157,19 @@ class FirefoxEngineEvent {
   final bool? exitCountryMatches;
   final int latencyMs;
   final String line;
+  final String loginMode;
+  final int attempt;
+
+  /// loginCompleted / authRefreshed: the pair's lifetime facts (never
+  /// secret; the tokens themselves live only in the private fields).
+  final int expiresIn;
+  final DateTime? obtainedAt;
   final String accessToken;
   final String refreshToken;
 
-  /// True for the one event that carries secret material.
+  /// True for the events that carry secret material.
   bool get carriesSecrets =>
-      name == 'authRefreshed' &&
+      (name == 'authRefreshed' || name == 'loginCompleted') &&
       (accessToken.isNotEmpty || refreshToken.isNotEmpty);
 
   /// Redacted rendering for logs/diagnostics — NEVER includes tokens.
@@ -167,6 +178,12 @@ class FirefoxEngineEvent {
       case 'authRefreshed':
         return 'engine: session tokens refreshed by the engine '
             '(stored; access<redacted> refresh<redacted>)';
+      case 'loginCompleted':
+        return 'login: session tokens minted by the exchange '
+            '(stored; access<redacted> refresh<redacted>)';
+      case 'loginRetry':
+        return 'login: session not confirmed yet '
+            '(attempt $attempt, retrying)';
       case 'failed':
         return 'engine failed ($failCode): $message';
       default:
@@ -189,6 +206,10 @@ abstract final class FirefoxEngineEvents {
   static const renewed = 'renewed';
   static const renewalFailed = 'renewalFailed';
   static const quotaExhausted = 'quotaExhausted';
+  // --login role (Phase 2)
+  static const loginStarted = 'loginStarted';
+  static const loginRetry = 'loginRetry';
+  static const loginCompleted = 'loginCompleted';
   static const stopping = 'stopping';
   static const stopped = 'stopped';
   static const failed = 'failed';
@@ -206,6 +227,12 @@ abstract final class FirefoxEngineFailure {
   static const socksListenFailed = 'socksListenFailed';
   static const renewalTimeout = 'renewalTimeout';
   static const internalError = 'internalError';
+  // --login role (Phase 2)
+  static const loginModeUnsupported = 'loginModeUnsupported';
+  static const sessionTokenInvalid = 'sessionTokenInvalid';
+  static const sessionRejected = 'sessionRejected';
+  static const loginTimeout = 'loginTimeout';
+  static const exchangeFailed = 'exchangeFailed';
 }
 
 /// Engine exit codes (mirrors engine.Exit*).
@@ -216,3 +243,36 @@ abstract final class FirefoxEngineExitCode {
   static const renewal = 3;
   static const internal = 4;
 }
+
+/// Terminal outcome of one `--login` exchange (Phase 2).
+class FirefoxLoginResult {
+  const FirefoxLoginResult({
+    required this.state,
+    this.auth,
+    this.failCode = '',
+    this.message = '',
+  });
+
+  factory FirefoxLoginResult.cancelled() =>
+      const FirefoxLoginResult(state: FirefoxLoginState.cancelled);
+
+  factory FirefoxLoginResult.failed(String failCode, String message) =>
+      FirefoxLoginResult(
+        state: FirefoxLoginState.failed,
+        failCode: failCode,
+        message: message,
+      );
+
+  final FirefoxLoginState state;
+
+  /// The minted pair — present ONLY on [FirefoxLoginState.completed];
+  /// the caller persists it in the Keystore vault immediately.
+  final FirefoxSessionAuth? auth;
+
+  final String failCode;
+  final String message;
+
+  bool get isCompleted => state == FirefoxLoginState.completed;
+}
+
+enum FirefoxLoginState { running, completed, cancelled, failed }

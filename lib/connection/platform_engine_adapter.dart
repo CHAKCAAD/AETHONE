@@ -72,6 +72,7 @@ import 'engine.dart';
 // Keystore-backed session store. See docs/FIREFOX_VPN_ENGINE.md.
 import 'firefox/firefox_discovery.dart';
 import 'firefox/firefox_engine.dart';
+import 'firefox/firefox_login.dart';
 import 'firefox/firefox_protocol.dart';
 import 'firefox/firefox_session_store.dart';
 import 'smart_scorecard.dart';
@@ -2166,17 +2167,95 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// only, the Phase-2 location UI binds to this).
   FirefoxDiscovery? _firefoxDiscovery;
 
-  /// PHASE-1 (firefox-vpn) — the internal locations API (no UI): fetches
-  /// the live RemoteSettings list through the engine binary's --discover
-  /// role (labeled live/cached; quarantined flagged; CatchAll excluded by
-  /// the engine). The phase-2 location picker binds to this.
+  /// The --login role child (Phase 2): one short-lived exchange per
+  /// sign-in attempt; null while idle.
+  FirefoxLoginClient? _firefoxLogin;
+
+  /// PHASE-2 (firefox-vpn) — the WebChannel login exchange. Takes the
+  /// session token captured by the login page's WebChannel bridge and
+  /// runs the engine's `--login` role (spawn discipline: bare argv,
+  /// empty env; the token travels ONLY on the stdin pipe). On success
+  /// the minted OAuth pair is saved straight into the Keystore vault
+  /// (never logged, never a plain file) and a completed result returns;
+  /// the UI then clears the WebView cookies.
+  @override
+  Future<FirefoxLoginResult> firefoxWebChannelLogin(
+    String sessionToken, {
+    void Function(String line)? onLog,
+  }) async {
+    final paths = await _paths();
+    final client = _firefoxLogin = FirefoxLoginClient(
+      binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
+      onLog: onLog ?? _debugLog,
+    );
+    try {
+      final result = await client.runWebChannel(sessionToken: sessionToken);
+      if (result.isCompleted && result.auth != null) {
+        final vault = await _firefoxVault();
+        await vault.save(result.auth!);
+      }
+      return result;
+    } finally {
+      _firefoxLogin = null;
+    }
+  }
+
+  /// Cancels an in-flight login exchange (the login screen's back
+  /// gesture): stdin close → grace → kill; no orphan survives.
+  @override
+  Future<void> firefoxLoginCancel() async {
+    await _firefoxLogin?.cancel();
+    _firefoxLogin = null;
+  }
+
+  /// PHASE-2 — whether a session pair lives in the Keystore vault (the
+  /// account UI's signed-in state; honest: vault presence, nothing
+  /// simulated).
+  @override
+  Future<bool> firefoxHasSession() async {
+    final vault = await _firefoxVault();
+    final auth = await vault.load();
+    return auth != null && auth.accessToken.isNotEmpty;
+  }
+
+  /// PHASE-2 — the sign-out: the logout-grade vault wipe (file + the
+  /// in-memory copy). A live firefox session is stopped by the STORE
+  /// before this is called (the store owns user intent).
+  @override
+  Future<void> firefoxClearSession() async {
+    final vault = await _firefoxVault();
+    await vault.clear();
+  }
+
+  /// PHASE-1/-2 (firefox-vpn) — the internal locations API: fetches the
+  /// live RemoteSettings list through the engine binary's --discover
+  /// role (labeled live/cached; quarantined flagged; CatchAll excluded
+  /// by the engine) AND emits [EngineFirefoxLocations] so the store's
+  /// wheel list + honesty labels follow (the phase-2 location picker
+  /// binds to the store's copy).
   Future<FirefoxLocationList?> firefoxLocations() async {
     final paths = await _paths();
     final discovery = _firefoxDiscovery ??= FirefoxDiscovery(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
       cachePath: '${paths.filesDir}/firefox/serverlist.json',
     );
-    return discovery.refresh();
+    final list = await discovery.refresh();
+    if (list != null) {
+      _emit(EngineFirefoxLocations(
+        list.selectableCountryCodes,
+        list.live,
+        list.fetchedAt,
+      ));
+    }
+    return list;
+  }
+
+  /// PHASE-2 — the EngineAdapter surface: one --discover round per call
+  /// (the store fire-and-forgets this at app start + on the firefox
+  /// settings page).
+  @override
+  Future<void> refreshFirefoxLocations() async {
+    await firefoxLocations();
   }
 
   /// Budget for the engine's startup walk (config → discovery → pass →
@@ -2191,6 +2270,22 @@ class PlatformEngineAdapter implements EngineAdapter {
     return _firefoxStore = FirefoxSessionStore(
       vaultPath: '${paths.filesDir}/firefox/session.vault',
     );
+  }
+
+  /// Maps the store's firefox location pick to the engine's `country`:
+  /// 'auto' (or empty) → '' (the engine's AUTO = the REC anycast); else
+  /// the picked ISO code (the engine matches code or name,
+  /// case-insensitive — the code is the stable key).
+  static String _firefoxCountryForEngine(EngineConfigSource config) {
+    final pick = config.firefoxLocation;
+    if (pick.isEmpty || pick == LocationWheelPolicy.autoCode) return '';
+    return pick.toUpperCase();
+  }
+
+  /// Maps the transport pick: 'h3' passes through, anything else → 'h2'
+  /// (the engine's default and the evidence-backed path).
+  static String _firefoxTransportForEngine(EngineConfigSource config) {
+    return config.firefoxTransport == 'h3' ? 'h3' : 'h2';
   }
 
   /// The firefox walk (the aether skeleton, engine swapped in).
@@ -2252,8 +2347,8 @@ class PlatformEngineAdapter implements EngineAdapter {
     if (auth == null || auth.accessToken.isEmpty) {
       fail(
         'firefoxNoSession',
-        'no Firefox VPN session is stored — inject one first (Phase 1) '
-        'or sign in (Phase 2)',
+        'no Firefox VPN session is stored — sign in from Settings → '
+        'Firefox VPN first',
       );
       return false;
     }
@@ -2344,8 +2439,12 @@ class PlatformEngineAdapter implements EngineAdapter {
       FirefoxEngineConfig(
         socksListen: '127.0.0.1:$_activePort',
         auth: auth,
-        country: '', // Phase 1: AUTO (the REC anycast) — Phase 2's UI adds the pick
-        transport: 'h2',
+        // PHASE-2: the UI's location pick ('auto' → the engine's AUTO =
+        // the REC anycast; else the picked ISO country) and transport
+        // (h2 default / h3 optional) — the same contract, now fed by the
+        // wheel + the firefox settings page.
+        country: _firefoxCountryForEngine(config),
+        transport: _firefoxTransportForEngine(config),
       ),
       onAuthRefreshed: (refreshed) {
         // The private channel: straight back into the Keystore vault,

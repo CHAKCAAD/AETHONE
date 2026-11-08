@@ -21,7 +21,7 @@ import 'package:aethone/features/home/home_screen.dart';
 import 'package:aethone/features/home/protocol_sheet/protocol_sheet.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-class ScriptedEngine implements EngineAdapter {
+class ScriptedEngine extends EngineAdapter {
   final StreamController<EngineEvent> _controller =
       StreamController<EngineEvent>.broadcast();
   @override
@@ -30,6 +30,8 @@ class ScriptedEngine implements EngineAdapter {
   Future<void> connect() async {}
   @override
   Future<void> disconnect() async {}
+  @override
+  @override
   @override
   void bind(EngineConfigSource config) {} // scripted — config never read
 }

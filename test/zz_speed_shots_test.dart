@@ -68,7 +68,7 @@ Future<void> _save(WidgetTester tester, String name) async {
   print('SAVED /tmp/ui_shots/$name.png');
 }
 
-class ScriptedTransport implements EngineAdapter {
+class ScriptedTransport extends EngineAdapter {
   final StreamController<EngineEvent> _controller =
       StreamController<EngineEvent>.broadcast();
   void emit(EngineEvent e) => _controller.add(e);
@@ -78,6 +78,7 @@ class ScriptedTransport implements EngineAdapter {
   Future<void> connect() async {}
   @override
   Future<void> disconnect() async {}
+  @override
   @override
   void bind(EngineConfigSource config) {}
 }
