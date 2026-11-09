@@ -37,6 +37,26 @@ android {
             // release keystore + signing workflow is a recorded open item —
             // no public release may ship from this config.
             signingConfig = signingConfigs.getByName("debug")
+            // The launcher label of the MAIN package (the manifest reads
+            // @string/app_name so the DA variant below can differ).
+            resValue("string", "app_name", "AETHONE")
+        }
+        debug {
+            // DA — Device-Acceptance (the 2026-11-08 precedent, now in the
+            // standard low-change form): the debug variant installs BESIDE
+            // the main app under its own package id com.chakcaad.aethone.da
+            // and its own label. The main applicationId above is NEVER
+            // touched — release builds stay com.chakcaad.aethone.
+            //
+            // Suffix-safety review (PHASE 2, 2026-11-09): the manifest has
+            // NO provider authorities, NO deep links and NO custom
+            // permissions; both services use RELATIVE class names and are
+            // not exported; the DISCONNECT action string is app-internal
+            // (never cross-app). Nothing else resolves the package id at
+            // build time.
+            applicationIdSuffix = ".da"
+            versionNameSuffix = "-da"
+            resValue("string", "app_name", "AETHONE DA")
         }
     }
 
