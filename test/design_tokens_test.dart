@@ -35,6 +35,12 @@ void main() {
     test('reference frame and key sizes', () {
       expect(AethGeometry.refWidth, 402);
       expect(AethGeometry.refHeight, 874);
+      // PHASE B (Part 1): the protocol page's own column is TALLER than
+      // the frame (the Firefox account card) and scrolls; the frame
+      // constant the pattern composition uses is untouched.
+      expect(AethGeometry.protoPageContentH, 1005);
+      expect(AethGeometry.protoCardTopFirefox,
+          AethGeometry.protoCardTopTor + AethGeometry.protoCardH + 15);
       expect(AethGeometry.heroSize, 164);
       expect(AethGeometry.connectButtonSize, 48);
       expect(AethGeometry.connectButtonRise, 72);

@@ -128,6 +128,17 @@ Failure codes: `badConfig`, `discoveryFailed`, `noMatchForCountry`,
 negotiation included), `socksListenFailed`, `renewalTimeout`,
 `internalError`.
 
+PHASE B (Part 2, 2026-11-09) — the `failed` event additionally carries
+OPTIONAL `httpStatus` (int, the REAL status code on HTTP-level
+failures) and `retryable` (bool) fields, and `failCode` may carry the
+granular transport classes (`dnsError` · `networkUnavailable` ·
+`timeout` · `tlsError` · `sessionRejected` · `tokenExchange` ·
+`invalidTokenResponse` · `serverRejection` · `unknown`) from the
+engine-side classifier (`docs/phaseb-engine-patch/`; type-based
+`errors.As` discrimination, no string matching). Additive only — the
+1.1.0 field names and codes remain valid forever; the raw Go chain
+stays in the engine's stderr log (redacted), never in the UI.
+
 ## 4. Data plane (upstream session)
 
 One session at a time (`upstream.Controller`, single-session policy):

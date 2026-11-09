@@ -10,10 +10,34 @@
 ///    and must go straight into the Keystore-backed store;
 ///  * shutdown: closing the child's stdin is the shutdown request.
 ///
+/// PHASE B (Part 2) — the `failed` event contract, extended additively
+/// (EngineVersion 1.2.0-phaseb; nothing existing is renamed or removed):
+///
+/// ```json
+/// {"event":"failed","failCode":"dnsError","httpStatus":0,
+///  "retryable":true,"message":"<raw Go chain — LOG ONLY>"}
+/// ```
+///
+///  * `failCode` — the legacy single-word codes (exchangeFailed, …) keep
+///    working forever; a rebuilt engine emits the granular Phase B
+///    transport classes (dnsError | networkUnavailable | timeout |
+///    tlsError | sessionRejected | tokenExchange | invalidTokenResponse |
+///    serverRejection | unknown — fferr.Code on the Go side);
+///  * `httpStatus` — OPTIONAL int, the REAL status code on HTTP-level
+///    failures (absent/0 on transport-level ones);
+///  * `retryable` — OPTIONAL bool, the engine's retry policy hint;
+///  * `message` — unchanged, and STILL never rendered by the UI (the
+///    FirefoxErrors layer maps the class code to static text).
+///
+/// The Dart parser tolerates missing, null and wrong-typed extras
+/// (hostile/broken JSON never throws the process managers).
+///
 /// Phase 1 of the Firefox VPN integration (private branch
 /// `phase1/firefox-vpn`; engine license status UNRESOLVED — nothing here
 /// ships publicly until the owner settles it).
 library;
+
+import 'firefox_errors.dart';
 
 /// The engine's config object (engine.Config on the Go side).
 class FirefoxEngineConfig {
@@ -127,10 +151,19 @@ class FirefoxEngineEvent {
         attempt = (raw['attempt'] as num?)?.toInt() ?? 0,
         expiresIn = (raw['expiresIn'] as num?)?.toInt() ?? 0,
         obtainedAt = DateTime.tryParse(raw['obtainedAt'] as String? ?? ''),
+        // PHASE B (Part 2): the optional failed-event extras — tolerant
+        // reads (wrong JSON types degrade to the defaults, never throw).
+        httpStatus = _tolerantInt(raw['httpStatus']),
+        // null when the engine did not send it (legacy engines) or
+        // sent a wrong type — the per-class default then applies.
+        retryable = raw['retryable'] is bool ? raw['retryable'] as bool? : null,
         // authRefreshed / loginCompleted only — the PRIVATE pair; the host
         // routes it straight into the Keystore store and never logs it.
-        accessToken = raw['accessToken'] as String? ?? '',
-        refreshToken = raw['refreshToken'] as String? ?? '';
+        // PHASE B (Part 3): tolerant string reads — a wrong-typed token
+        // field degrades to '' (the pair guard then rejects it) instead
+        // of throwing the whole event parse.
+        accessToken = _tolerantString(raw['accessToken']),
+        refreshToken = _tolerantString(raw['refreshToken']);
 
   final String name;
   final String message;
@@ -166,6 +199,17 @@ class FirefoxEngineEvent {
   final DateTime? obtainedAt;
   final String accessToken;
   final String refreshToken;
+
+  /// PHASE B (Part 2) — the failed-event extras (0/absent on legacy
+  /// engines and on transport-level failures). `retryable` is NULL when
+  /// the engine did not send the hint — the class default applies then.
+  final int httpStatus;
+  final bool? retryable;
+
+  /// Wrong-typed JSON degrade helpers (Part 3's type-correctness rule:
+  /// a hostile or broken engine response never throws the parse).
+  static String _tolerantString(Object? v) => v is String ? v : '';
+  static int _tolerantInt(Object? v) => v is num ? v.toInt() : 0;
 
   /// True for the events that carry secret material.
   bool get carriesSecrets =>
@@ -233,6 +277,18 @@ abstract final class FirefoxEngineFailure {
   static const sessionRejected = 'sessionRejected';
   static const loginTimeout = 'loginTimeout';
   static const exchangeFailed = 'exchangeFailed';
+
+  /// PHASE B (Part 2) — the granular transport classes a v1.2.0-phaseb
+  /// engine emits for the exchange/login failures (fferr.Code; the
+  /// legacy codes above stay valid forever — see firefox_errors.dart).
+  static const dnsError = FirefoxTransportError.dnsError;
+  static const networkUnavailable = FirefoxTransportError.networkUnavailable;
+  static const timeout = FirefoxTransportError.timeout;
+  static const tlsError = FirefoxTransportError.tlsError;
+  static const tokenExchange = FirefoxTransportError.tokenExchange;
+  static const invalidTokenResponse = FirefoxTransportError.invalidTokenResponse;
+  static const serverRejection = FirefoxTransportError.serverRejection;
+  static const unknown = FirefoxTransportError.unknown;
 }
 
 /// Engine exit codes (mirrors engine.Exit*).

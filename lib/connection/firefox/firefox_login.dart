@@ -23,6 +23,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'firefox_errors.dart';
 import 'firefox_protocol.dart';
 
 /// The terminal outcome types live in firefox_protocol.dart
@@ -115,6 +116,27 @@ class FirefoxLoginClient {
         if (event.carriesSecrets) {
           // PRIVATE: the minted pair — held for the caller's vault; the
           // log rendering is redacted (never the tokens).
+          //
+          // PHASE B (Part 3) — the pair guard: "completed" requires BOTH
+          // tokens to be real strings, non-empty and non-blank (the same
+          // rule as the engine's Go guard — defense in depth: a broken
+          // or hostile engine event can never mint a garbage session).
+          final guardReason = FirefoxErrors.invalidPairReason(
+            event.accessToken,
+            event.refreshToken,
+          );
+          if (guardReason != null) {
+            onLog?.call(FirefoxErrors.redactLine(
+                'firefox-login: loginCompleted rejected by the pair guard '
+                '($guardReason)'));
+            // Terminal, honest failure — NOT "cancelled": the exchange
+            // itself answered with an unusable pair.
+            resolve(FirefoxLoginResult.failed(
+              FirefoxTransportError.invalidTokenResponse,
+              guardReason,
+            ));
+            return;
+          }
           final obtained = event.obtainedAt ?? DateTime.now();
           minted = FirefoxSessionAuth(
             accessToken: event.accessToken,
@@ -132,7 +154,7 @@ class FirefoxLoginClient {
           }
           return;
         }
-        onLog?.call(event.logLine);
+        onLog?.call(FirefoxErrors.redactLine(event.logLine));
         if (event.name == FirefoxEngineEvents.failed) {
           failCode = event.failCode;
           failMessage = event.message;

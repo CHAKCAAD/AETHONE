@@ -12,6 +12,7 @@ library;
 import 'package:flutter/widgets.dart';
 
 import '../connection/core_settings.dart';
+import '../connection/firefox/firefox_errors.dart';
 import '../core/app_assets.dart';
 
 class AppStrings {
@@ -350,6 +351,30 @@ class AppStrings {
   String get firefoxLoginTimeout => _v['firefoxLoginTimeout']!;
   String get firefoxLoginUnavailable => _v['firefoxLoginUnavailable']!;
 
+  // PHASE B (Part 2) — the login-failure classes (firefox_errors.dart).
+  // Static per-class text; the engine's raw chain is never rendered.
+  String get firefoxErrDns => _v['firefoxErrDns']!;
+  String get firefoxErrNetwork => _v['firefoxErrNetwork']!;
+  String get firefoxErrTls => _v['firefoxErrTls']!;
+  String get firefoxErrTokenExchange => _v['firefoxErrTokenExchange']!;
+  String get firefoxErrInvalidToken => _v['firefoxErrInvalidToken']!;
+  String get firefoxErrServerRejected => _v['firefoxErrServerRejected']!;
+
+  /// The localized text for a CLASSIFIED Firefox transport failure
+  /// ([FirefoxErrors.classify] output). Unknown/unmapped classes fall
+  /// back to the generic [firefoxLoginFailed] — never the raw chain.
+  String firefoxErrorText(String classifiedCode) => switch (classifiedCode) {
+        FirefoxTransportError.dnsError => firefoxErrDns,
+        FirefoxTransportError.networkUnavailable => firefoxErrNetwork,
+        FirefoxTransportError.timeout => firefoxLoginTimeout,
+        FirefoxTransportError.tlsError => firefoxErrTls,
+        FirefoxTransportError.sessionRejected => firefoxLoginRejected,
+        FirefoxTransportError.tokenExchange => firefoxErrTokenExchange,
+        FirefoxTransportError.invalidTokenResponse => firefoxErrInvalidToken,
+        FirefoxTransportError.serverRejection => firefoxErrServerRejected,
+        _ => firefoxLoginFailed,
+      };
+
   // tor page
   String get torLocationDesc => _v['torLocationDesc']!;
   String get secTorBridges => _v['secTorBridges']!;
@@ -585,6 +610,13 @@ class AppStrings {
       'firefoxLoginRejected': 'نشست ورود پذیرفته نشد؛ دوباره وارد شوید',
       'firefoxLoginTimeout': 'تأیید ورود بیش از حد طول کشید؛ دوباره تلاش کنید',
       'firefoxLoginUnavailable': 'صفحهٔ ورود روی این دستگاه در دسترس نیست',
+      // PHASE B (Part 2) — the login-failure classes.
+      'firefoxErrDns': 'نام سرور حساب حل نشد (DNS)؛ اتصال دستگاه را بررسی کنید',
+      'firefoxErrNetwork': 'سرور حساب در دسترس نبود؛ اتصال شبکه را بررسی کنید',
+      'firefoxErrTls': 'اتصال امن به سرور حساب برقرار نشد',
+      'firefoxErrTokenExchange': 'تبادل ورود با سرور حساب ناتمام ماند؛ دوباره تلاش کنید',
+      'firefoxErrInvalidToken': 'پاسخ سرور حساب معتبر نبود؛ دوباره تلاش کنید',
+      'firefoxErrServerRejected': 'سرور حساب درخواست را رد کرد',
       'settingsPillSub': 'انتخاب لوکیشن و ...',
       'settingsAdvancedStatus': 'وضعیت پیکربندی',
       'settingsRoutingArea': 'منطقهٔ مسیریابی',
@@ -912,6 +944,13 @@ class AppStrings {
       'firefoxLoginRejected': 'The sign-in session was rejected; sign in again',
       'firefoxLoginTimeout': 'Sign-in confirmation took too long; try again',
       'firefoxLoginUnavailable': 'The sign-in page is not available on this device',
+      // PHASE B (Part 2) — the login-failure classes.
+      'firefoxErrDns': 'The account server name could not be resolved (DNS); check the connection',
+      'firefoxErrNetwork': 'The account server was unreachable; check the network connection',
+      'firefoxErrTls': 'A secure connection to the account server could not be established',
+      'firefoxErrTokenExchange': 'The sign-in exchange with the account server did not complete; try again',
+      'firefoxErrInvalidToken': 'The account server response was invalid; try again',
+      'firefoxErrServerRejected': 'The account server rejected the request',
       'settingsPillSub': 'Location & more …',
       'settingsAdvancedStatus': 'Configuration status',
       'settingsRoutingArea': 'Routing region',
@@ -1237,6 +1276,13 @@ class AppStrings {
       'firefoxLoginRejected': 'Сессия входа отклонена; войдите снова',
       'firefoxLoginTimeout': 'Подтверждение входа заняло слишком много времени; попробуйте снова',
       'firefoxLoginUnavailable': 'Страница входа недоступна на этом устройстве',
+      // PHASE B (Part 2) — the login-failure classes.
+      'firefoxErrDns': 'Не удалось разрешить имя сервера аккаунтов (DNS); проверьте подключение',
+      'firefoxErrNetwork': 'Сервер аккаунтов недоступен; проверьте сетевое подключение',
+      'firefoxErrTls': 'Не удалось установить защищённое соединение с сервером аккаунтов',
+      'firefoxErrTokenExchange': 'Обмен входа с сервером аккаунтов не завершился; попробуйте снова',
+      'firefoxErrInvalidToken': 'Ответ сервера аккаунтов был недействительным; попробуйте снова',
+      'firefoxErrServerRejected': 'Сервер аккаунтов отклонил запрос',
       'settingsPillSub': 'Локация и другое …',
       'settingsAdvancedStatus': 'Статус конфигурации',
       'settingsRoutingArea': 'Регион маршрутизации',
@@ -1560,6 +1606,13 @@ class AppStrings {
       'firefoxLoginRejected': '登录会话被拒绝；请重新登录',
       'firefoxLoginTimeout': '登录确认超时；请重试',
       'firefoxLoginUnavailable': '此设备上无法打开登录页面',
+      // PHASE B (Part 2) — the login-failure classes.
+      'firefoxErrDns': '无法解析账户服务器域名（DNS）；请检查网络连接',
+      'firefoxErrNetwork': '无法连接账户服务器；请检查网络',
+      'firefoxErrTls': '无法与账户服务器建立安全连接',
+      'firefoxErrTokenExchange': '与账户服务器的登录交换未完成；请重试',
+      'firefoxErrInvalidToken': '账户服务器响应无效；请重试',
+      'firefoxErrServerRejected': '账户服务器拒绝了请求',
       'settingsPillSub': '位置等 …',
       'settingsAdvancedStatus': '配置状态',
       'settingsRoutingArea': '路由区域',
@@ -1889,6 +1942,13 @@ class AppStrings {
       'firefoxLoginRejected': 'Giriş sessiýasy kabul edilmedi; ýene gir',
       'firefoxLoginTimeout': 'Girişi tassyklamak wagtynyň üstünden geçdi; ýene synanyş',
       'firefoxLoginUnavailable': 'Bu enjamda giriş sahypasy elýeterli däl',
+      // PHASE B (Part 2) — the login-failure classes.
+      'firefoxErrDns': 'Hasap serweriniň ady çözülmedi (DNS); birikmegi barlaň',
+      'firefoxErrNetwork': 'Hasap serweri elýeterli däldi; tor birikmesini barlaň',
+      'firefoxErrTls': 'Hasap serweri bilen howpsuz birikme düzülmedi',
+      'firefoxErrTokenExchange': 'Hasap serweri bilen giriş çalşygy tamamlanmady; ýene synanyş',
+      'firefoxErrInvalidToken': 'Hasap serweriniň jogaby nädogrydy; ýene synanyş',
+      'firefoxErrServerRejected': 'Hasap serweri sowaly ret etdi',
       'settingsPillSub': 'Ýerleşýän ýer we başgalar …',
       'settingsAdvancedStatus': 'Konfigurasiýa ýagdaýy',
       'settingsRoutingArea': 'Marşrutizasiýa sebiti',

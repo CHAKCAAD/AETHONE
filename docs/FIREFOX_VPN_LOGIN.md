@@ -98,6 +98,31 @@ Versioned by `engine.LoginConfigVersion = 1`; the engine reports
 | `exchangeFailed` | transport / anti-bot challenge failure (redacted) | retry, possibly on another network |
 | `sessionTokenInvalid` | the captured token was not 64-hex (a bridge/papering bug) | sign in again |
 
+PHASE B (Part 2, 2026-11-09) — the `failed` event's contract is extended
+**additively** (EngineVersion 1.2.0-phaseb; the codes above stay valid
+forever — the Dart mapper accepts both, see
+`lib/connection/firefox/firefox_errors.dart` and the engine-side patch
+`docs/phaseb-engine-patch/`):
+
+* `failCode` may carry the granular transport classes — `dnsError` ·
+  `networkUnavailable` · `timeout` · `tlsError` · `sessionRejected` ·
+  `tokenExchange` · `invalidTokenResponse` · `serverRejection` ·
+  `unknown` — classified by ERROR TYPE on the Go side (`errors.As`,
+  never string matching);
+* two OPTIONAL fields join the event: `httpStatus` (the REAL status
+  code when a response arrived; 0/absent on transport failures) and
+  `retryable` (the engine's retry hint);
+* `message` remains the static English text; the raw Go chain goes to
+  the engine's stderr log ONLY (redacted) — it NEVER reaches a
+  user-visible surface (the Dart UI renders the per-class localized
+  text, chosen by the class code alone);
+* `loginCompleted` is only emitted for a WELL-FORMED pair (Part 3): both
+  `accessToken` and `refreshToken` present as JSON strings, non-empty,
+  non-blank — anything else is the `invalidTokenResponse` failure. The
+  Dart side applies the same guard as defense in depth
+  (`FirefoxErrors.invalidPairReason` — a broken pair is rejected, never
+  vaulted, and a clean child exit cannot mask it).
+
 ## 4. Security rules (the phase-1 decree, extended)
 
 1. The session token's ONLY carriers: (a) the WebView→Dart

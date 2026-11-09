@@ -25,6 +25,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../connection/connection_store.dart';
+import '../../../connection/firefox/firefox_errors.dart';
 import '../../../connection/firefox/firefox_protocol.dart';
 import '../../../connection/firefox/firefox_web_channel.dart';
 import '../../../core/design_tokens.dart';
@@ -89,18 +90,27 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
     }
   }
 
+  /// PHASE B (Part 2) — the failure text is chosen by the CLASSIFIED
+  /// code only ([FirefoxErrors.classify]): every granular transport class
+  /// and every legacy engine code maps to its static localized text; the
+  /// engine's raw `message` chain is never rendered (log-only), and an
+  /// unknown/empty code degrades to the generic text — the raw code is
+  /// not echoed to the user either.
   String _failureText(String failCode, String message) {
     final strings = AppStrings.of(context);
-    switch (failCode) {
-      case 'sessionRejected':
-        return strings.firefoxLoginRejected;
-      case 'loginTimeout':
-        return strings.firefoxLoginTimeout;
-      case 'sessionTokenInvalid':
-        return strings.firefoxLoginRejected;
-      default:
-        return '${strings.firefoxLoginFailed}: $failCode';
+    if (failCode == 'sessionTokenInvalid') {
+      // the captured token was not a 64-hex session token — the same
+      // user remedy as a rejected session (sign in again).
+      return strings.firefoxLoginRejected;
     }
+    if (failCode == 'loginTimeout') {
+      // the DART-side safety net (the exchange never finished in the
+      // bounded budget) — its own text, distinct from a transport
+      // timeout reported by the engine.
+      return strings.firefoxLoginTimeout;
+    }
+    return strings.firefoxErrorText(
+        FirefoxErrors.classify(failCode).code);
   }
 
   @override

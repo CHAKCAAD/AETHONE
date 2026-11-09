@@ -72,6 +72,7 @@ import 'engine.dart';
 // Keystore-backed session store. See docs/FIREFOX_VPN_ENGINE.md.
 import 'firefox/firefox_discovery.dart';
 import 'firefox/firefox_engine.dart';
+import 'firefox/firefox_errors.dart';
 import 'firefox/firefox_login.dart';
 import 'firefox/firefox_protocol.dart';
 import 'firefox/firefox_session_store.dart';
@@ -2473,16 +2474,33 @@ class PlatformEngineAdapter implements EngineAdapter {
         // Quota exhaustion is its OWN error so the user can pick another
         // engine (the owner decree; never a silent fallback).
         if (o.failCode == FirefoxEngineFailure.quotaExhausted) {
+          _debugLog(FirefoxErrors.redactLine(
+              'firefox engine failed (quotaExhausted): ${o.message}'));
           fail(
             'firefoxQuotaExhausted',
-            'this Firefox account\'s monthly quota is exhausted '
-            '(${o.message}) — pick another communication engine',
+            'this Firefox account\'s monthly quota is exhausted — pick '
+                'another communication engine',
           );
           return false;
         }
-        fail('firefoxEngineFailed', o.message.isEmpty
-            ? 'the Firefox VPN engine failed to start (${o.failCode})'
-            : o.message);
+        // PHASE B (Part 2) — the classified failure seam: the engine's
+        // raw Go chain goes to the diagnostics log ONLY (redacted); the
+        // store/UI receive the transport class code + the static
+        // diagnostic (never the chain, never host/port, never tokens).
+        // Legacy engines (the exchangeFailed umbrella) classify to the
+        // token-exchange class; v1.2.0-phaseb engines emit the granular
+        // codes with the real httpStatus/retryable.
+        final failure = FirefoxErrors.classify(
+          o.failCode,
+          httpStatus: o.httpStatus,
+          retryable: o.retryable,
+        );
+        _debugLog(FirefoxErrors.redactLine(
+            'firefox engine failed (${o.failCode}): ${o.message}'));
+        fail(
+          'firefoxTransport:${failure.code}',
+          FirefoxErrors.diagnostic(failure),
+        );
       } else {
         fail(
           'firefoxEngineStartTimeout',

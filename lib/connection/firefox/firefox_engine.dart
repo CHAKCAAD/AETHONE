@@ -32,6 +32,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'firefox_errors.dart';
 import 'firefox_protocol.dart';
 
 /// The observable states of the engine child process.
@@ -54,12 +55,23 @@ class FirefoxEngineOutcome {
     required this.exitCode,
     this.failCode = '',
     this.message = '',
+    this.httpStatus = 0,
+    this.retryable,
   });
 
   final FirefoxEngineState state;
   final int exitCode;
   final String failCode;
+
+  /// The raw engine chain — LOG-ONLY material (the adapter classifies it
+  /// through [FirefoxErrors] before anything user-visible is emitted).
   final String message;
+
+  /// PHASE B (Part 2) — the failed-event extras, passthrough from the
+  /// wire (0/null on legacy engines and transport-level failures; a
+  /// null retryable means "the engine did not say").
+  final int httpStatus;
+  final bool? retryable;
 
   bool get cleanStop =>
       (state == FirefoxEngineState.stopped && exitCode == 0) ||
@@ -148,12 +160,27 @@ class FirefoxVpnEngine {
         final event = FirefoxEngineEvent.fromJson(raw);
         if (event.carriesSecrets) {
           // PRIVATE: straight to the store callback; never to the log.
-          onAuthRefreshed?.call(FirefoxSessionAuth(
-            accessToken: event.accessToken,
-            refreshToken: event.refreshToken,
-          ));
+          //
+          // PHASE B (Part 3) — the pair guard on the refresh path too: a
+          // broken refresh response NEVER overwrites the vault's live
+          // pair (the old pair stays; the raw reason goes to the log,
+          // redacted). Same rule as the login client's guard.
+          final guardReason = FirefoxErrors.invalidPairReason(
+            event.accessToken,
+            event.refreshToken,
+          );
+          if (guardReason != null) {
+            onLog?.call(FirefoxErrors.redactLine(
+                'firefox-engine: authRefreshed rejected by the pair guard '
+                '($guardReason) — keeping the stored pair'));
+          } else {
+            onAuthRefreshed?.call(FirefoxSessionAuth(
+              accessToken: event.accessToken,
+              refreshToken: event.refreshToken,
+            ));
+          }
         } else {
-          onLog?.call(event.logLine);
+          onLog?.call(FirefoxErrors.redactLine(event.logLine));
         }
         switch (event.name) {
           case FirefoxEngineEvents.socksReady:
@@ -167,6 +194,8 @@ class FirefoxVpnEngine {
               exitCode: event.exitCode,
               failCode: event.failCode,
               message: event.message,
+              httpStatus: event.httpStatus,
+              retryable: event.retryable,
             ));
           default:
             break;

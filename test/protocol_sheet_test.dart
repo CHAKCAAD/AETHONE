@@ -274,6 +274,19 @@ void main() {
     // Still open — the page did not pop.
     expect(find.byType(ProtocolPage), findsOneWidget);
 
+    // PHASE B (Part 1): the scan section moved below the Firefox card
+    // (the page column grew 874 → 1005) — scroll the pills into view
+    // before tapping (the assertion semantics are unchanged).
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('proto-pill-2')),
+      120,
+      scrollable: find.descendant(
+        of: find.byType(ProtocolPage),
+        matching: find.byType(Scrollable),
+      ).first,
+    );
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const ValueKey('proto-pill-2')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -336,5 +349,125 @@ void main() {
     expect(titleFinder, findsOneWidget);
     final context = tester.element(titleFinder);
     expect(Material.maybeOf(context), isNotNull);
+  });
+
+  // ------------------------------------------------------------------
+  // PHASE B (Part 1) — the Firefox account card joins the page through
+  // the STANDARD protocol path: one more full-width card after the Tor
+  // card, the same single-knob selection, the same auto-pop. No parallel
+  // channel: the card only commits the protocol; the account chip is a
+  // read-only display of the existing Firefox service state.
+  // ------------------------------------------------------------------
+
+  testWidgets(
+      'PHASE B: the Firefox card renders after the Tor card and commits '
+      'firefoxOnly through the standard selection path', (tester) async {
+    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final store = ConnectionStore(engine: ScriptedEngine());
+    await _openPage(tester, store);
+
+    // The card exists with its label and sits in the 15-gap rhythm
+    // below the Tor card (594 + 116 + 15 = 725).
+    final card = tester.getRect(
+      find.byKey(const ValueKey('proto-card-firefox')),
+    );
+    expect(card.top, closeTo(AethGeometry.protoCardTopFirefox, 2));
+    expect(card.top,
+        closeTo(AethGeometry.protoCardTopTor + AethGeometry.protoCardH + 15, 2));
+    expect(find.text('فایرفاکس'), findsOneWidget);
+
+    // The account chip mirrors the service state (signed-out wording for
+    // the unknown/absent vault — the settings page's convention).
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('proto-card-firefox-chip')),
+        matching: find.text('حساب فایرفاکس متصل نیست'),
+      ),
+      findsOneWidget,
+    );
+
+    // Tap → commit + auto-pop (the owner's v4.16 decree path).
+    await _tapAndAutoPop(
+      tester,
+      find.byKey(const ValueKey('proto-card-firefox')),
+    );
+    expect(store.selectedProtocol, ProtocolId.firefoxOnly);
+    expect(store.effectiveProtocol, ProtocolId.firefoxOnly);
+    expect(find.byType(ProtocolPage), findsNothing);
+
+    // Selection alone NEVER claims a connection: no engine effective
+    // event arrived, so the state machine is still at rest.
+    expect(store.state, VpnState.disconnected);
+  });
+
+  testWidgets(
+      'PHASE B: the Firefox selection REPLACES a family member (the '
+      'single-knob exclusivity) and the family cards keep their geometry',
+    (tester) async {
+    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final store = ConnectionStore(engine: ScriptedEngine());
+    await _openPage(tester, store);
+
+    // Commit a psiphon family member first…
+    await _tapAndAutoPop(
+      tester,
+      find.byKey(const ValueKey('proto-subtile-psiphonChain')),
+    );
+    expect(store.selectedProtocol, ProtocolId.psiphonChain);
+
+    // …then the Firefox card: the single knob moves — no dual state.
+    await tester.tap(find.text('سایفون').first);
+    await tester.pump();
+    await tester.pumpAndSettle();
+    await _tapAndAutoPop(
+      tester,
+      find.byKey(const ValueKey('proto-card-firefox')),
+    );
+    expect(store.selectedProtocol, ProtocolId.firefoxOnly);
+    expect(store.selectedProtocol.isPsiphon, isFalse);
+    expect(store.selectedProtocol.isTor, isFalse);
+
+    // And back: a plain tile replaces the Firefox selection the same way.
+    await tester.tap(find.text('فایرفاکس').first);
+    await tester.pump();
+    await tester.pumpAndSettle();
+    await _tapAndAutoPop(tester, find.byKey(const ValueKey('proto-tile-gool')));
+    expect(store.selectedProtocol, ProtocolId.gool);
+  });
+
+  testWidgets(
+      'PHASE B: the account chip follows the Firefox service state '
+      '(read-only display; a sign-in is never a connection)', (tester) async {
+    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final store = ConnectionStore(engine: ScriptedEngine());
+    // The existing service surface: a signed-in vault presence.
+    store.firefoxAccount = FirefoxAccountStatus.signedIn;
+    await _openPage(tester, store);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('proto-card-firefox-chip')),
+        matching: find.text('حساب فایرفاکس متصل است'),
+      ),
+      findsOneWidget,
+    );
+
+    // The chip NEVER claims a tunnel: with a signed-in account and the
+    // card committed, the state machine stays disconnected until the
+    // engine's own effective events say otherwise.
+    await _tapAndAutoPop(
+      tester,
+      find.byKey(const ValueKey('proto-card-firefox')),
+    );
+    expect(store.selectedProtocol, ProtocolId.firefoxOnly);
+    expect(store.state, VpnState.disconnected);
   });
 }
