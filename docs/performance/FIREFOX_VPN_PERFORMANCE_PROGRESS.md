@@ -172,4 +172,4 @@ uid خود اپ از TUN مستثنا — جلوگیری از حلقه مسیر.
 
 | مرحله | Commit | عنوان |
 |---|---|---|
-| 0 | `69a1970` | docs(performance): stage 0 — version match, data path, ping method, progress file |
+| 0 | `3639838` | docs(performance): stage 0 — version match, data path, ping method, progress file |
