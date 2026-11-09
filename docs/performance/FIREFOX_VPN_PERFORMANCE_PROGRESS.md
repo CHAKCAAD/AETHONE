@@ -216,4 +216,4 @@ uid خود اپ از TUN مستثنا — جلوگیری از حلقه مسیر.
 | مرحله | Commit | عنوان |
 |---|---|---|
 | 0 | `3639838` | docs(performance): stage 0 — version match, data path, ping method, progress file |
-| 1 | (درج پس از commit همین مرحله) | docs(performance): stage 1 — ping measurement audit (method sound, 8000ms real) |
+| 1 | `c1951a7` | docs(performance): stage 1 — ping measurement audit (method sound, 8000ms real) |
