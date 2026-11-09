@@ -405,3 +405,4 @@ TunnelWriteBuffer کراندار 1MB (بدنه درخواست CONNECT) → TLS1.
 | 1 | `c1951a7` | docs(performance): stage 1 — ping measurement audit (method sound, 8000ms real) |
 | 2 | `8865a8e` | fix(engine): restore the upstream max-conns cap (256), fix rejection slot-steal, live-conn diagnostics |
 | 3 | `6e78ed3` | fix(engine): restore the upstream session-established transport logging (stage 3) |
+| 4 | `2869f7c` | docs(performance): stage 4 — MTU audit (L4 termination: no wire fragmentation, download already jumbo, Arman Android also 1500; no default change) |
