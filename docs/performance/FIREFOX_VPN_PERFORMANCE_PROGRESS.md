@@ -289,4 +289,4 @@ TunnelWriteBuffer کراندار 1MB (بدنه درخواست CONNECT) → TLS1.
 |---|---|---|
 | 0 | `3639838` | docs(performance): stage 0 — version match, data path, ping method, progress file |
 | 1 | `c1951a7` | docs(performance): stage 1 — ping measurement audit (method sound, 8000ms real) |
-| 2 | (پس از commit این جلسه تکمیل شود) | fix(engine): restore the upstream max-conns cap (256), fix rejection slot-steal, live-conn diagnostics |
+| 2 | `8865a8e` | fix(engine): restore the upstream max-conns cap (256), fix rejection slot-steal, live-conn diagnostics |
