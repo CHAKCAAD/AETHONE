@@ -13,8 +13,8 @@
 | Branch کاری | `performance/firefox-vpn-optimization` |
 | Commit پایه شاخه | `ff9bc38` (= tip شاخه `integration/firefox-vpn-debug`) |
 | Commit آخرین مرحله تکمیل‌شده | (در انتهای همین فایل — بخش «گیت مرحله آخر») |
-| مرحله تکمیل‌شده آخر | **Stage 2 — مسیر انتقال داده، TUN و صف بسته‌ها: PASS** (بازگرداندن سقف upstream + رفع باگ slot-steal + تست‌ها سبز) |
-| مرحله فعلی برای اجرای بعدی | **Stage 3 — Transport و نسخه HTTP** |
+| مرحله تکمیل‌شده آخر | **Stage 3 — Transport و نسخه HTTP: PASS** (حسابرسی کامل transport + بازگرداندن لاگ session-established که در تطبیق فاز ۱ حذف شده بود) |
+| مرحله فعلی برای اجرای بعدی | **Stage 4 — MTU** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### جدول مراحل
@@ -24,7 +24,7 @@
 | 0 — تثبیت نسخه و خط مبنا | **PASS** (بدون تغییر کد؛ فقط این فایل) |
 | 1 — بررسی Ping و صحت اندازه‌گیری | **PASS** (شواهد ثبت شد؛ روش سالم؛ بدون تغییر کد — بخش «نتیجه Stage 1») |
 | 2 — مسیر انتقال داده، TUN و صف‌ها | **PASS** (اصلاح واقعی: maxConns=256 پیش‌فرض upstream + رفع باگ slot-steal + لاگ تشخیصی + ۶ تست جدید — بخش «نتیجه Stage 2») |
-| 3 — Transport و نسخه HTTP | PENDING |
+| 3 — Transport و نسخه HTTP | **PASS** (حسابرسی کامل + اصلاح واقعی: بازگرداندن لاگ session-established برای رؤیت transport واقعی on-device + تست جدید — بخش «نتیجه Stage 3») |
 | 4 — MTU | PENDING |
 | 5 — IPv4/IPv6 و Endpoint | PENDING |
 | 6 — CPU/حافظه/Go Child Process | PENDING |
@@ -131,6 +131,7 @@ uid خود اپ از TUN مستثنا — جلوگیری از حلقه مسیر.
 | O-8 | همه جریان‌های دستگاه روی یک اتصال TLS+h2 مالتی‌پلکس → HoL تحت loss | upstream/h2.go (تک session، تک ClientConn) | **تایید شد (S2)**: تک‌اتصال = طراحی خود upstream (defaultUpstreamConnections=1؛ pool گزینه‌ای است که فاز ۱ آگاهانه حذف کرده). مکانیزم دقیق: x/net/http2 awaitOpenSlotForStreamLocked منتظر نامحدود slot می‌ماند وقتی استریم‌های باز به MAX_CONCURRENT_STREAMS سرور برسند → رشد تدریجی ping. سقف 256 بازگردانده شد؛ تجزیه pool به Stage 3 موکول |
 | O-9 | **جدید (S2)**: باگ slot-steal — defer releaseConnSlot قبل از acquire ثبت شده بود؛ هر اتصال ردشده توکن یک اتصال زنده را می‌دزدد و سقف را فرسوده می‌کند | socks/server.go handleConn (قبل از اصلاح) در برابر upstream:2026-2033 | **اصلاح شد (S2)**: ترتیب defer مطابق upstream شد؛ تست رگرسیون دو-رد شدن متوالی را تضمین می‌کند (روی کد باگ‌دار FAIL شد، روی اصلاح PASS) |
 | O-10 | **جدید (S2)**: مقدار واقعی SETTINGS_MAX_CONCURRENT_STREAMS سرور فایرفاکس و رفتار on-device نامشخص | — | NOT TESTED — نیاز به گوشی؛ لاگ تشخیصی live=N + رد سقف با پیام `connection limit reached` برای پایش اضافه شد |
+| O-11 | **جدید (S3)**: لاگ session-established خود upstream (شامل transport واقعی) در تطبیق فاز ۱ حذف شده بود؛ رویداد upstreamReady هم transport را می‌فرستد ولی Dart آن را در لاگ رندر نمی‌کند → transport فعال در زمان اجرا روی گوشی قابل راستی‌آزمایی نبود (همان مورد تأییدنشده Stage 0 §11) | upstream main.go:2493,2717,351-353 در برابر h2.go/h3.go/controller.go (بدون لاگ) + firefox_protocol.dart logLine (default case) | **اصلاح شد (S3)**: لاگ `upstream session established transport=%s proxy=%s establish_latency=%s` در Controller.Start بازگردانده شد (آینه رفتار upstream؛ بدون تغییر رفتاری) |
 
 علت ریشه‌ای: **دو عامل ساختاری با شواهد کد اثبات شد (S2)** — (۱) حذف سقف اتصال upstream (maxConns=256→unlimited) + (۲) مسدودشدن نامحدود http2 در awaitOpenSlotForStreamLocked هنگام پرشدن سقف استریم سرور؛ ترکیب این دو، رشد تدریجی ping 200→8000ms را توضیح می‌دهد (هر اتصال دستگاه = یک استریم باز روی تک ClientConn؛ probe هر ۵s باید برای slot صف بگیرد). باگ slot-steal (O-9) هم که در سقف جدید فعال می‌شد، رفع شد. تأیید نهایی on-device (مقدار سقف سرور + عدد live=N در عمل) NOT TESTED — معیارهای تأیید در بخش Stage 2.
 
@@ -267,15 +268,76 @@ TunnelWriteBuffer کراندار 1MB (بدنه درخواست CONNECT) → TLS1.
 
 ---
 
+## نتیجه Stage 3 (اجرای 2026-11-09) — Transport و نسخه HTTP
+
+### ۱. فهرست کامل Transport واقعی (از سورس — همه با شواهد)
+
+| قابلیت | وضعیت | شواهد |
+|---|---|---|
+| Transport پیش‌فرض | **h2** — TLS1.2+ با ALPN h2، تک `tls.Conn` + تک `http2.ClientConn`؛ همه جریان‌های دستگاه = استریم CONNECT روی همان یک اتصال (multiplex کامل) | controller.go Start/default + h2.go NewH2ProxySession + engine/config.go Validate (transport==''→h2) |
+| HTTP/3 | **واقعی و قابل انتخاب** — QUIC (quic-go v0.59.0) + TLS1.3 + ALPN h3؛ dial ترتیبی روی همه IPها با بودجه per-attempt؛ InitialPacketSize=1200 (کف RFC 9000؛ DPLPMTUD/RFC 8899 بزرگش می‌کند)؛ KeepAlivePeriod=30s | h3.go NewH3ProxySession + quic-go |
+| HTTP/1.1 | **وجود ندارد** — موتور فقط h2/h3 دارد (هم upstream و هم AETHONE)؛ مقایسه h1 در برابر h2 در سطح API موتور «غیرممکن» است؛ افزودن h1 = قابلیت جدید بدون پشتوانه upstream (ممنوع طبق مأموریت) | upstream main.go (فقط newH2/newH3ProxySession) + engine/config.go detailTransportUnknown |
+| انتخاب Transport از UI | **موجود و کامل** — SettingPills های h2/h3 در صفحه تنظیمات Firefox → store (setFirefoxTransport) → persistence → adapter (_firefoxTransportForEngine: 'h3' پاس، بقیه→'h2') → stdin JSON → engine | firefox_page.dart:166-174 + connection_store.dart:383-385 + platform_engine_adapter.dart:2286-2289,2448 |
+| Connection Reuse | حداکثری — تک session طولانی‌عمر؛ renewal توکن را درجا عوض می‌کند (UpdateToken بدون rebuild)؛ keepalive جلوی مرگ خاموش را می‌گیرد | controller.go renew/UpdateToken + h2.go runKeepAlive |
+| Multiplexing | تک‌اتصال (upstream defaultUpstreamConnections=1)؛ pool بالادست (-upstream-conns با client-IP affinity + failover) در فاز  ۱ آگاهانه حذف شده — بازگرداندنش تغییر معماری بزرگ است و طبق برنامه فقط با شواهد on-device و تأیید جداگانه مالک | upstream main.go:188 + حذف‌های مستندشده در controller.go header |
+| Keepalive/سلامت h2 | app-level: PING هر ۱۰s با مهلت ۵s (یک miss ⇒ مرگ session) + transport-level: ReadIdleTimeout=30s / PingTimeout=15s / WriteByteTimeout=30s — همه **bit-identical با upstream پین‌شده** | h2.go:27-28,105-107 vs upstream main.go:66-67,2484-2486 |
+| Keepalive/سلامت h3 | QUIC-level: KeepAlivePeriod=30s؛ liveness از Context اتصال؛ بدون حلقه PING app-level (همان upstream) | h3.go:80,206-211 vs upstream main.go:2665 |
+
+### ۲. تحلیل زیر loss (سطح کد — مقایسه h2/h3)
+
+- **h2**: همه استریم‌ها روی یک TCP ⇒ Head-of-Line واقعی تحت loss (تأیید O-8 از Stage 2)؛ در loss پایدار، ReadIdleTimeout/PingTimeout بعد از ~30-45s اتصال را می‌بندد (بازتعریف به‌جای hang بی‌نهایت). مکانیک دقیق سقف استریم (بازبینی S3 از x/net/http2 v0.53.0): تا رسیدن SETTINGS سرور سقف=۱۰۰ است؛ اگر SETTINGS اولیه سرور فیلد را ذکر نکند سقف=۱۰۰۰ می‌شود؛ در هر حالت `cc.RoundTrip` مستقیم (بدون pool) در `awaitOpenSlotForStreamLocked` تا آزادشدن slot می‌ماند — تنها مرز = مهلت OpenTunnel (۲۰s).
+- **h3**: هر استریم QUIC بازیابی loss مستقل دارد (بدون HoL بین استریم‌ها)؛ InitialPacketSize=1200 + DPLPMTUD با MTU پایین سازگار است. حالت شکست: UDP مسدود ⇒ dial شکست می‌خورد ⇒ موتور صادقانه fail می‌شود (بدون fallback خودکار به h2 — تصمیم upstream: انتخاب سخت).
+- **نتیجه سطح کد**: h3 ذاتاً زیر loss بهتر است؛ h2 مسیر اثبات‌شده پیش‌فرض است. **مقایسه عملی on-device: NOT TESTED** (نیاز به گوشی مالک؛ انتخابگر UI + لاگ جدید stage 3 ثبت نتیجه را ممکن می‌کند). پیش‌فرض طبق قانون مأموریت بدون اندازه‌گیری تغییر نکرد (h2 ماند).
+
+### ۳. مقایسه با Arman (مرجع — فقط تحلیل، بدون کپی)
+
+| مورد | AETHONE (upstream فایرفاکس) | Arman | تصمیم |
+|---|---|---|---|
+| keepalive app-level | PING هر ۱۰s / ۵s مهلت / ۱ miss ⇒ مرگ | PING هر ۵s / ۵s مهلت / ۲ miss متوالی ⇒ مرگ | تفاوت جزئی در سرعت تشخیص (~۱۰-۱۵s هر دو)؛ مقدار خود upstream است؛ بدون شواهد on-device تغییر نشد |
+| ReadIdleTimeout/PingTimeout/WriteByteTimeout | 30/15/30s | 30/15/30s (یکسان) | — |
+| StrictMaxConcurrentStreams | تنظیم نشده | true | فقط روی مسیر pool سطح Transport اثر دارد (جلوگیری از dial اتصال جدید)؛ AETHONE مستقیم cc.RoundTrip می‌زند و مسدودسازی slot مسیر واحدش است — **قابل‌انتقال نیست، صرفاً مستند شد** |
+| adapterMTU | TUN=1500 هاردکد | 9000 (session در [1280,9000]) | موضوع Stage 4 |
+| h3 | موجود (قابل انتخاب) | موجود (PMTU-aware initial size) | — |
+
+### ۴. مشکل اثبات‌شده و اصلاح اعمال‌شده (یک تغییر منطقی، بدون تغییر رفتاری)
+
+- **مشکل (O-11)**: تطبیق فاز ۱ هر سه لاگ session-established بالادست را حذف کرده بود (`upstream HTTP/2 session established proxy=…` / `upstream HTTP/3 session established proxy=… remote=…` / `transport=http2|http3 …`)؛ رویداد upstreamReady هم transport را می‌فرستاد ولی Dart فقط `engine: upstreamReady` خالی لاگ می‌کرد. نتیجه: transport فعال روی گوشی (فیلد «Transport واقعی» جدول خط مبنا مأموریت) قابل ثبت نبود و هیچ مقایسه h2/h3 قابل استناد نمی‌شد.
+- **اصلاح**: `Controller.Start` بعد از برقراری session با موفقیت، از طریق `cfg.Logf` (→ Info → stderr → core-log.txt مالک) لاگ می‌زند: `upstream session established transport=%s proxy=%s establish_latency=%s` — آینه‌ای از همان حقایقی که upstream در همان نقطه لاگ می‌کند (proxy + transport + latency). تابع کمکی `sessionEstablishedLog` + تست رگرسیون `TestSessionEstablishedLog` (قرارداد سه فیلد برای هر دو h2/h3).
+- **چرا این محل**: کنترلر هم logger را دارد هم می‌داند کدام شاخه (h2/h3) واقعاً بالا آمده؛ لاگ فقط بعد از موفقیت واقعی session صادر می‌شود (نه صرف پیکربندی)؛ امضای سازنده‌های session دست نخورد.
+- **تغییر رفتاری: هیچ** — فقط یک خط لاگ Info. معماری/پورت/pin/CGO/Child-Process/پیش‌فرض‌ها همه دست‌نخورده. (یادداشت Stage 5: نسخه upstream برای h3 فیلد remote=IP را هم لاگ می‌کند؛ آن فیلد عمداً به Stage 5 موکول شد تا endpoint تفکیک شود.)
+
+### ۵. تست‌های Stage 3 (Go 1.25.0 — همان نسخه CI؛ ابزار دوباره در sandbox نصب شد)
+
+| تست | نتیجه |
+|---|---|
+| `gofmt -e` روی هر دو فایل تغییرکرده | PASS — بدون خطای parse |
+| ماژول مستقل با کد عیناً کپی‌شده از فایل‌های واقعی (`sessionEstablishedLog` + `TestSessionEstablishedLog`) | **PASS** — `ok stage3verify 0.001s` (قرارداد قالب: transport=/proxy=/establish_latency= با گردکردن صحیح: 1234ms→`1.234s`، 0→`0s`) |
+| رگرسیون Stage 2: `go test ./internal/socks/ ./internal/engine/` | PASS (هر دو پکیج سبز؛ cache گرم) |
+| `go test ./internal/upstream/` (کل پکیج با quic-go/utls) | **NOT RUN محلی** — محدودیت دیسک sandbox (۲۰MB آزاد؛ کامپایل quic-go نمی‌گنجد)؛ **معیار CI**: `go vet ./...` + `go test ./...` در job «Firefox engine» (بعد از merge به integration/firefox-vpn-debug یا dispatch مالک) باید سبز شود — تست جدید دقیقاً همانجاست |
+| تست‌های Flutter/Dart | NOT RUN — SDK موجود نیست؛ تغییر Dart در این مرحله وجود ندارد |
+
+### ۶. موارد NOT TESTED
+
+- **مقایسه عملکرد واقعی h2 در برابر h3** (و اثر Keepalive/Multiplexing روی اعداد) — نیاز به گوشی مالک با روش یکسان. روش پیشنهادی ثبت: در تنظیمات Firefox هر دو حالت را وصل کنید؛ برای هر حالت خط `upstream session established transport=… proxy=…` در core-log.txt باید مطابق انتخاب باشد (راستی‌آزمایی زنده)؛ سپس Idle/Loaded Ping + Download/Upload + Packet Loss هر دو حالت ثبت شود.
+- **transport فعال on-device تا قبل از اجرای مالک** — لاگ جدید الآن موجود است ولی خروجی واقعی گوشی هنوز جمع نشده.
+- **تصمیم pool بالادست** — موکول به شواهد on-device (HoL ماندگار زیر loss که با سقف ۲۵۶ حل نشد) + تأیید جداگانه مالک (طبق برنامه Stage 2).
+
+### ۷. وضعیت گیت Stage 3
+
+- Commit کد: مستقل روی `performance/firefox-vpn-optimization` (جدول انتهای فایل)؛ فایل‌های تغییرکرده: `phase1/fxv/internal/upstream/{controller.go,upstream_test.go}` (+ همین فایل پیشرفت در commit جداگانه docs).
+- کپی upstream دوباره با pin بررسی شد: `55ad91a` — همه مقادیر transport تطبیق bit-identical؛ فایل upstream هرگز commit نمی‌شود.
+
+---
+
 ## دستور دقیق ادامه کار (جلسه بعدی)
 
 1. همین فایل را بخوان؛ `git -C <repo> log --oneline -3` و `git status` را بررسی کن.
-2. **فقط Stage 3 را اجرا کن**: Transport و نسخه HTTP —
-   - از سورس واقعی مشخص کن موتور الان از چه استفاده می‌کند (تأیید فعلی: transport='h2' پیش‌فرض؛ h3 هم پیاده‌سازی شده و از config قابل انتخاب است — هر دو TunnelConn یکسان برمی‌گردانند).
-   - ارزیابی: upstream خودش گزینه `-upstream-conns` (pool با client-IP affinity + failover) دارد که فاز ۱ آگاهانه حذف کرده — افزودن pool تغییر معماری بزرگ است؛ فقط با شواهد on-device (مثلاً HoL ماندگار زیر loss که با سقف 256 حل نشد) و با تأیید جداگانه مالک.
-   - مقایسه h2/h3 در سطح API موجود موتور (config transport)؛ اثر keepaliveها (PING هر 10s/مهلت 5s) و ReadIdleTimeout/PingTimeout/WriteByteTimeout (30/15/30s) را روی رفتار زیر loss تحلیل کن.
-   - اگر تغییری اعمال شد: فقط همان یک متغیر + تست + commit مستقل.
-   - نکته Stage 2 برای ادامه: لاگ‌های `live=N` باید از گوشی مالک جمع شوند تا تصمیم idle timeout / سقف / pool مبتنی بر داده باشد (در NOT TESTED بخش Stage 2 معیارها ثبت شده).
+2. **فقط Stage 4 را اجرا کن**: MTU —
+   - وضعیت فعلی: MTU رابط TUN = **۱۵۰۰ هاردکد** در `AethoneVpnService.kt` (~خط 407) — O-3؛ آدرس 172.19.0.1/30؛ DNS 172.19.0.2.
+   - از سورس استخراج کن: MTU رابط TUN، رفتار پکت‌های بزرگ در zeptun (بافرهای rx 64KB/tx 128KB/tx budget 4MB از Stage 2 مستند شده)، TCP MSS در استک userspace، PMTU discovery، ICMP Packet-Too-Big، و رابطه با InitialPacketSize=1200 هنگام h3 (DPLPMTUD).
+   - مقایسه با Arman: adapterMTU=9000 (tunservice/server.go) — فقط مرجع؛ بدون دلیل فنی کپی نشود.
+   - مقادیر آزمایشی مأموریت (۱۴۲۰/۱۴۰۰/۱۳۶۰/۱۳۰۰/۱۲۸۰) فقط با اندازه‌گیری on-device و هر بار فقط یک متغیر؛ بدون اندازه‌گیری هیچ پیش‌فرضی تغییر نکند.
+   - اگر تغییری اعمال شد: همان یک متغیر + تست + commit مستقل + ثبت در همین فایل.
 3. قوانین: فقط مخزن `CHAKCAAD/AETHONE`؛ push فقط به `performance/firefox-vpn-optimization`؛ بدون Force Push/Release/تغییر pin upstream؛ CGO اندروید دست‌نخورده؛ چند متغیر هم‌زمان تغییر نکند.
 4. پایان مرحله: commit مستقل + به‌روزرسانی همین فایل + push + گزارش با قالب ۱۰ بندی مأموریت + توقف.
 
@@ -290,3 +352,4 @@ TunnelWriteBuffer کراندار 1MB (بدنه درخواست CONNECT) → TLS1.
 | 0 | `3639838` | docs(performance): stage 0 — version match, data path, ping method, progress file |
 | 1 | `c1951a7` | docs(performance): stage 1 — ping measurement audit (method sound, 8000ms real) |
 | 2 | `8865a8e` | fix(engine): restore the upstream max-conns cap (256), fix rejection slot-steal, live-conn diagnostics |
+| 3 | `6e78ed3` | fix(engine): restore the upstream session-established transport logging (stage 3) |
