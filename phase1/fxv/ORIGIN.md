@@ -133,3 +133,30 @@ prompt and its multi-architecture amendment:
 * all-ABI CGO enforcement in the build script (the A1 decree, now
   applied to arm64-v8a AND verified for armeabi-v7a/x86_64 — see
   `../scripts/build_engine.sh` and `../docs/BUILD.md`).
+
+## 2026-11-09 amendment — the public integration branch (owner-authorized)
+
+The standing rule above ("nothing is pushed to `CHAKCAAD/AETHONE`")
+was written for the phase-1 containment. On 2026-11-09 the owner
+issued the PHASE-2 decree: the completed Firefox work is transferred
+to the PUBLIC repository's integration branch
+`integration/firefox-vpn-debug` (merge `5562e60`, preserving every
+original commit hash and order) so that GitHub Actions — never the
+agent's constrained sandbox — builds the DA debug APK.
+
+What changed, and what did NOT:
+
+* the engine SOURCE now lives on that public integration branch — the
+  owner's explicit instruction, superseding the phase-1 containment
+  FOR THIS BRANCH ONLY;
+* the public repository's default branch (`ci-bootstrap/v4.4`) is
+  untouched: no merge, no release, no tag has been made, and none may
+  be until the owner explicitly confirms after the device test;
+* the delivery vehicle is expiring GitHub Actions artifacts
+  (14-day retention), NOT GitHub Releases;
+* the LICENSE status itself is UNCHANGED and UNRESOLVED: no license
+  file exists at the upstream pin, so PUBLIC DISTRIBUTION (releases,
+  default-branch promotion, anything that outlives the containment)
+  remains BLOCKED until the owner resolves it — written permission
+  from the upstream author, a licensed alternative, or indefinite
+  private containment.
