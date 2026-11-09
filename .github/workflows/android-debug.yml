@@ -461,14 +461,18 @@ jobs:
             done
           done
 
-          # 4) the packaged engine IS the built engine (byte-identical)
+          # 4) the packaged engine IS the built engine (byte-identical —
+          #    sizes printed for diagnosis; keepDebugSymbols keeps AGP's
+          #    strip task away from the Firefox engine)
           EB="fxv-engine/phase1/build"
           for abi in arm64-v8a armeabi-v7a x86_64; do
             in_apk="$(unzip -p "$APK" "lib/$abi/libfirefoxvpn.so" | sha256sum | cut -d' ' -f1)"
             built="$(sha256sum "$EB/android/$abi/libfirefoxvpn.so" | cut -d' ' -f1)"
+            in_sz="$(unzip -l "$APK" "lib/$abi/libfirefoxvpn.so" | tail -2 | head -1 | awk '{print $1}')"
+            b_sz="$(stat -c%s "$EB/android/$abi/libfirefoxvpn.so")"
+            echo "engine ($abi): in-apk ${in_sz}B/$in_apk vs built ${b_sz}B/$built"
             [ "$in_apk" = "$built" ] \
               || { echo "::error::lib/$abi/libfirefoxvpn.so in APK ($in_apk) != built ($built)"; exit 1; }
-            echo "engine hash match ($abi): $built"
           done
           echo "APK verification: ALL PASS (archive, package id, label, 3 ABIs x 5 libs, engine hashes)"
 

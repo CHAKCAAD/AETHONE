@@ -75,6 +75,14 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
+            // PHASE-2 CI lesson (run 42617837962): AGP's
+            // StripDebugSymbolsTask llvm-strips packaged .so files EVEN IN
+            // DEBUG builds when an NDK is present (flutter.ndkVersion pulls
+            // r28c on CI). That silently breaks the byte-identity gate — the
+            // APK's engine must BE the built engine, sha256-verified — and
+            // throws away the symbols the owner wants for on-device crash
+            // diagnostics. Keep the Firefox engine EXACTLY as built.
+            keepDebugSymbols.add("**/libfirefoxvpn.so")
         }
     }
 }
