@@ -8,13 +8,13 @@
 
 | فیلد | مقدار |
 |---|---|
-| تاریخ آخرین اجرا | 2026-11-09 |
+| تاریخ آخرین اجرا | 2026-11-10 |
 | Repository | `CHAKCAAD/AETHONE` (تنها مخزن مجاز) |
 | Branch کاری | `performance/firefox-vpn-optimization` |
 | Commit پایه شاخه | `ff9bc38` (= tip شاخه `integration/firefox-vpn-debug`) |
 | Commit آخرین مرحله تکمیل‌شده | (در انتهای همین فایل — بخش «گیت مرحله آخر») |
-| مرحله تکمیل‌شده آخر | **Stage 3 — Transport و نسخه HTTP: PASS** (حسابرسی کامل transport + بازگرداندن لاگ session-established که در تطبیق فاز ۱ حذف شده بود) |
-| مرحله فعلی برای اجرای بعدی | **Stage 4 — MTU** |
+| مرحله تکمیل‌شده آخر | **Stage 4 — MTU: PASS** (حسابرسی کامل MTU؛ معماری L4-termination → هیچ پکت داخلی به سیم نمی‌رسد؛ دانلود از قبل jumbo؛ پیش‌فرض ۱۵۰۰ بدون تغییر — بخش «نتیجه Stage 4») |
+| مرحله فعلی برای اجرای بعدی | **Stage 5 — IPv4/IPv6 و Endpoint** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### جدول مراحل
@@ -25,7 +25,7 @@
 | 1 — بررسی Ping و صحت اندازه‌گیری | **PASS** (شواهد ثبت شد؛ روش سالم؛ بدون تغییر کد — بخش «نتیجه Stage 1») |
 | 2 — مسیر انتقال داده، TUN و صف‌ها | **PASS** (اصلاح واقعی: maxConns=256 پیش‌فرض upstream + رفع باگ slot-steal + لاگ تشخیصی + ۶ تست جدید — بخش «نتیجه Stage 2») |
 | 3 — Transport و نسخه HTTP | **PASS** (حسابرسی کامل + اصلاح واقعی: بازگرداندن لاگ session-established برای رؤیت transport واقعی on-device + تست جدید — بخش «نتیجه Stage 3») |
-| 4 — MTU | PENDING |
+| 4 — MTU | **PASS** (حسابرسی کامل با شواهد کد؛ بدون تغییر کد — بخش «نتیجه Stage 4») |
 | 5 — IPv4/IPv6 و Endpoint | PENDING |
 | 6 — CPU/حافظه/Go Child Process | PENDING |
 | 7 — TLS Fragmentation | PENDING |
@@ -123,7 +123,7 @@ uid خود اپ از TUN مستثنا — جلوگیری از حلقه مسیر.
 |---|---|---|---|
 | O-1 | probe زنده سنگین از آرمان است (هر ۵s اتصال+CONNECT+HTTP کامل+close) | tunnel_probe.dart + adapter:1984 | **تحلیل شد (S1)**: عدد ~۲-۳× معنای ping آرمان است (CONNECT+درخواست/پاسخ+انتشار close)؛ DNS محلی و TLS در هر probe انجام نمی‌شود؛ سربار ترافیک/CPU ناچیز |
 | O-2 | علامت ۸۰۰۰ms | _probeTimeout=20s | **حل شد (S1)**: ۸۰۰۰ms یک اندازه‌گیری موفق واقعی است، نه آرتیفکت timeout/retry (timeout به مسیر خطا/strike می‌رود نه عدد)؛ رشد 200→8000 = تخریب واقعی مسیر داده |
-| O-3 | MTU رابط TUN هاردکد 1500 (در برابر 9000 آداپتور آرمان) — بدون اندازه‌گیری تغییری نباید کند | AethoneVpnService.kt:407 | Stage 4 — بدون اندازه‌گیری تغییری نکرد |
+| O-3 | MTU رابط TUN هاردکد ۱۵۰۰ (تصور اولیه: در برابر ۹۰۰۰ آرمان) | AethoneVpnService.kt:407 | **بررسی و بسته شد (S4)**: مقایسه «۹۰۰۰ آرمان» مربوط به سرویس TUN دسکتاپ آرمان بود (wintun)؛ **پیش‌فرض اندروید آرمان هم ۱۵۰۰ است** (CoreService.kt:594 + tun.mtu اختیاری کاربر). MTU در این معماری فقط روی پای upload محلی اثر دارد؛ دانلود از قبل jumbo است؛ هیچ مکانیزم fragmentation/loss مرتبط با MTU وجود ندارد — جزئیات در بخش Stage 4 |
 | O-4 | transport پیش‌فرض h2 است (config Validate: transport==''→h2؛ Dart هم 'h2') | engine/config.go + firefox_protocol.dart | Stage 3 — تایید شد که upstream هم defaultUpstreamConnections=1 (تک‌اتصال) دارد |
 | O-5 | رفتار صف/buffer/backpressure در zeptun و internal/socks | — | **بررسی شد (S2)**: TunnelWriteBuffer کراندار 1MB + backpressure صحیح؛ copyConn 64KB pool + drain نیم‌بسته ۲ دقیقه؛ بدون صف نامحدود در Go. بافرهای zeptun هم کراندار (rx 64KB/tx 128KB/tx budget 4MB) |
 | O-6 | idleTimeout جریان‌های SOCKS نامحدود (پیش‌فرض 0 = unlimited) | engine/config.go + firefox_protocol.dart | **تحلیل شد (S2)**: پیش‌فرض upstream demo هم 0 است؛ zeptun جریان idle دستگاه را بعد از ۶۰۰s می‌بندد (cascade به بستن استریم h2) — بدون شواهد on-device تغییری نکرد؛ لاگ تشخیصی live=N برای پایش اضافه شد |
@@ -329,15 +329,67 @@ TunnelWriteBuffer کراندار 1MB (بدنه درخواست CONNECT) → TLS1.
 
 ---
 
+## نتیجه Stage 4 (اجرای 2026-11-10) — بررسی و بهینه‌سازی MTU
+
+### ۱. نقشه کامل MTU در کل مسیر (استخراج‌شده از سورس)
+
+| لایه | مقدار | شواهد |
+|---|---|---|
+| MTU رابط TUN (Android VpnService) | **۱۵۰۰ هاردکد** | `AethoneVpnService.kt:407` (`.setMtu(1500)`؛ آدرس 172.19.0.1/30 فقط IPv4، route 0.0.0.0/0، DNS 172.19.0.2) |
+| باور zeptun از MTU (caps.mtu) | **۱۵۰۰** — منطبق با Builder | TOML کاتلین کلید `[tun] mtu` ندارد → preset mobile → `config.zig:466` (`c.device.mtu = 1500`) → `engine.zig:1223` (`capabilities(cfg.device.mtu)`)؛ پیش‌فرض عمومی هم ۱۵۰۰ (`config.zig:263`)؛ بازه مجاز پیکربندی [576, 65535] (`config.zig:493`) |
+| MSS اعلامی zeptun به کرنل اپ | **۱۴۶۰** = caps.mtu − (20 IP + 20 TCP) | `tcp.zig:678` (`adv = caps.mtu − hdr_overhead`)؛ بدون clamp (`tcp_mss_clamp=0`)؛ timestamps در preset mobile خاموش است (`config.zig:474`) |
+| MSS ارسالی کرنل اپ (upload) | **۱۴۶۰** = min(MSS اعلامی zeptun، route MTU 1500−40) | رفتار استاندارد کرنل + `tcp.zig:526-532` (سمت zeptun: `c.mss = min(peer_mss, mtu_mss)`) |
+| سگمنت‌های zeptun به اپ (download) | **Jumbo/Super-packet تا ~۶۴KB** — مستقل از MTU رابط | `device/android.zig:26` (`jumbo_tx = sys.is_linux`؛ اندروید = os tag linux → true) + `config.zig:269` (`DeviceConfig.jumbo=true` پیش‌فرض؛ preset mobile آن را خاموش نمی‌کند) + `tcp.zig:844` (`gso_ok`) + `tcp.zig:820-824` (`gsoLimit ≈ max_super_packet−hdr`؛ `pool.zig:85`: max_super_packet=65535) + بودجه ۳۲ سگمنت در هر output (`tcp.zig:867`)؛ نوشتن با writev روی بافرهای زنجیره‌ای |
+| قابلیت‌های offload روی اندروید | vnet_hdr/tso/uso/csum همگی **غیرممکن** (API اندروید)؛ `offload=false, multi_queue=false, queues=1` در preset | `device/android.zig:19-30` + `config.zig:467-469` |
+| بافر خواندن TUN (rx) | ≥ ~۱۶.۹KB (پس از انقباض بودجه ۲۴MB برای ≥۱۰۲۴ بافر/worker) — همیشه ≫ MTU | `device.zig:31-39` (`bufferSize ≥ 65535+40+headroom`) + `config.zig:523-548` (size) + `linux.zig:574` (خواندن در `[headroom..cap]`) |
+| ICMP | echo به‌صورت محلی بازتاب می‌شود؛ مسیر Packet-Too-Big روی پای TUN وجود ندارد | `stack/icmp.zig:24-38` (reflectEcho) |
+| UDP در حالت Firefox | **غیرفعال عمدی** (`tcpOnly: true`) → zeptun با ICMP port-unreachable رد می‌کند → اپ‌ها سریع به TCP برمی‌گردند | `transport_modes.dart:186` (firefoxOnly tcpOnly=true) + `AethoneVpnService.kt:495` (`udp = false` در TOML) + موتور Go فقط CONNECT (سرصفحه `socks/server.go`: UDP ASSOCIATE رد می‌شود) |
+| MTU پای سیم (upstream) | مستقل از TUN — سوکت‌های protect شده موتور؛ TCP: PMTUD کرنل روی اینترفیس فیزیکی؛ h3: QUIC با `InitialPacketSize: 1200` + DPLPMTUD (RFC 8899) | `h3.go:45,81` (کامنت صریح: «below-RFC-floor start … on low-MTU paths, with PMTU discovery growing it») |
+
+### ۲. نتیجه معماری — چرا MTU اینجا با VPN های کلاسیک فرق دارد
+
+مسیر داده Firefox **L4-termination است، نه tunnel**: هیچ پکت IP داخلی هرگز به شبکه فیزیکی نمی‌رسد. TCP در zeptun خاتمه می‌یابد و جریان‌ها از طریق SOCKS5 → TLS/h2 (یا QUIC/h3) روی سوکت‌های protect شده موتور حمل می‌شوند؛ اندازه پکت‌های سیم را کرنل بر اساس MTU اینترفیس فیزیکی تعیین می‌کند. بنابراین منطق کلاسیک «MTU داخلی باید به‌خاطر سربار کپسوله‌سازی کوچک‌تر شود» **در این معماری وجود خارجی ندارد**:
+
+- **Fragmentation روی سیم**: ناممکن — پکت داخلی forward نمی‌شود.
+- **Packet Loss مرتبط با MTU**: مکانیزمی ندارد — بافرها jumbo-پذیرند، MSS دو سمت منطبق‌اند (۱۴۶۰/۱۴۶۰)، هیچ truncation در هیچ MTU مجازی رخ نمی‌دهد.
+- **Throughput دانلود**: از قبل بهینه است — jumbo_tx روی اندروید روشن است و سگمنت‌های تا ~۶۴KB مستقل از MTU=1500 رابط نوشته می‌شوند (طرح پیش‌فرض خود zeptun؛ `docs/wiki/Configuration.md`: «allow segments larger than the MTU towards the client» = true).
+- **تنها پای حساس به MTU = upload محلی**: کرنل اپ سگمنت‌های ≤۱۴۶۰ بایت در TUN می‌نویسد (هر سگمنت = یک read + یک چرخه پردازش zeptun). بزرگ‌کردن هم‌زمان Builder.setMtu و `[tun] mtu` (مثل نمونه ۸۵۰۰ در `docs/wiki/Android.md` خود zeptun) این سقف را بالا می‌برد — اما این فقط بهینگی محلی CPU/syscall است، اثربخشی‌اش روی POCO X3 **اندازه‌گیری نشده** و طبق قانون مأموریت پیش‌فرض بدون اندازه‌گیری تغییر نکرد.
+
+### ۳. مقایسه با Arman (اصلاح‌شده — مرجع، بدون کپی)
+
+| مورد | AETHONE (اندروید) | Arman (اندروید) | Arman (دسکتاپ) |
+|---|---|---|---|
+| MTU رابط | ۱۵۰۰ هاردکد | **۱۵۰۰ پیش‌فرض** + تنظیم اختیاری کاربر `tun.mtu` (به Builder و tun2socks هم‌زمان داده می‌شود) | adapterMTU=9000 (سرویس TUN ویندوز/wintun؛ sessionMTU در [1280,9000]) |
+| شواهد | AethoneVpnService.kt:407 | CoreService.kt:286-294 (`TunMTU() ?: MTU`) + :593-594 (`MTU = 1500`، «The VPN interface's MTU, which the tunnel gets too») + mobile.go:294-369 (TunConfig→tun2socks.yml `mtu:`) | tunservice/server.go:23-27 |
+
+**نکته اصلاحی مهم**: ثبت قبلی «آرمان ۹۰۰۰» مربوط به سرویس TUN دسکتاپ آرمان بود، نه اپ اندروید. **پیش‌فرض اندروید هر دو اپ ۱۵۰۰ است** → اختلاف سرعت مشاهده‌شده توسط مالک روی یک گوشی **نمی‌تواند ناشی از MTU رابط TUN باشد**. الگوی قابل‌یادگیری از آرمان (برای روز اندازه‌گیری): یک منبع واحد MTU که هم‌زمان به Builder و استک userspace داده شود (AETHONE هم همین invariant را دارد: preset mobile ≡ Builder).
+
+### ۴. مقادیر آزمایشی مأموریت (۱۴۲۰/۱۴۰۰/۱۳۶۰/۱۳۰۰/۱۲۸۰)
+
+این مقادیر برای تونل‌های کپسوله‌سازی‌دار طراحی شده‌اند؛ در معماری L4-termination فعلی فقط MSS upload را کوچک‌تر می‌کنند و هیچ مکانیزمی برای بهبود ندارند (پکت داخلی به سیم نمی‌رسد). جهت آزمایش معنادار (در صورت دسترسی به گوشی و با تأیید مالک) **بالا بردن** MTU است (مثلاً ۸۵۰۰ مطابق مثال رسمی zeptun اندروید؛ Builder.setMtu و `[tun] mtu` هم‌زمان، هر بار فقط همین یک متغیر) با سنجه‌های Idle/Loaded Ping، Download/Upload، Packet Loss، CPU و پایداری. تا آن اندازه‌گیری، **هیچ تغییری در پیش‌فرض ۱۵۰۰ اعمال نشد** (قانون مأموریت: «در صورت نبود اندازه‌گیری، مقدار پیش‌فرض را حدسی تغییر نده»). افزودن تنظیم اختیاری MTU (UI/تنظیم کاربر) هم عمداً به بعد از اثبات نیاز موکول شد — درس Stage 3: «قابلیت ظاهری یا غیرفعال به UI اضافه نکن».
+
+### ۵. نتیجه Stage 4
+
+- **روش و مقدار MTU سالم است** → مطابق الگوی Stage 1، شواهد ثبت شد و هیچ تغییر کدی انجام نشد.
+- علت رشد 200→8000ms از قبل در Stage 2 ریشه‌یابی و اصلاح شده (سقف اتصال + slot-steal)؛ MTU در هیچ مسیر شواهدی نقش نداشت — این بار با اثبات ساختاری (عدم وجود مکانیزم اثرگذاری روی سیم) تکمیل شد.
+- O-3 بسته شد؛ مقایسه آرمان اصلاح شد (اندروید = ۱۵۰۰).
+- وضعیت‌های on-device (MTU شبکه زیرین، Wi-Fi/Data، اثر بالابردن MTU روی CPU/throughput upload): **NOT TESTED** — پروتکل اندازه‌گیری در بند ۴ آماده است.
+
+### ۶. تست‌های Stage 4
+
+- **NOT RUN — هیچ کدی تغییر نکرد** (تحلیل + مستندسازی صرف؛ دقیقاً مطابق Stage 1). همه شواهد از خواندن سورس zeptun 1.1.3 پین‌شده، کاتلین، Dart و مرجع آرمان است. Flutter SDK در محیط ایجنت موجود نیست؛ سمت Dart/Kotlin تغییری وجود ندارد.
+
+---
+
 ## دستور دقیق ادامه کار (جلسه بعدی)
 
 1. همین فایل را بخوان؛ `git -C <repo> log --oneline -3` و `git status` را بررسی کن.
-2. **فقط Stage 4 را اجرا کن**: MTU —
-   - وضعیت فعلی: MTU رابط TUN = **۱۵۰۰ هاردکد** در `AethoneVpnService.kt` (~خط 407) — O-3؛ آدرس 172.19.0.1/30؛ DNS 172.19.0.2.
-   - از سورس استخراج کن: MTU رابط TUN، رفتار پکت‌های بزرگ در zeptun (بافرهای rx 64KB/tx 128KB/tx budget 4MB از Stage 2 مستند شده)، TCP MSS در استک userspace، PMTU discovery، ICMP Packet-Too-Big، و رابطه با InitialPacketSize=1200 هنگام h3 (DPLPMTUD).
-   - مقایسه با Arman: adapterMTU=9000 (tunservice/server.go) — فقط مرجع؛ بدون دلیل فنی کپی نشود.
-   - مقادیر آزمایشی مأموریت (۱۴۲۰/۱۴۰۰/۱۳۶۰/۱۳۰۰/۱۲۸۰) فقط با اندازه‌گیری on-device و هر بار فقط یک متغیر؛ بدون اندازه‌گیری هیچ پیش‌فرضی تغییر نکند.
-   - اگر تغییری اعمال شد: همان یک متغیر + تست + commit مستقل + ثبت در همین فایل.
+2. **فقط Stage 5 را اجرا کن**: IPv4/IPv6 و Endpoint —
+   - از سورس استخراج کن: DNS Resolution موتور (کدام resolver، کدام خانواده IP)، انتخاب IPv4/IPv6 در dial بالادست (h2.go: `LookupNetIP(ctx, "ip", host)` همه خانواده‌ها را می‌دهد — ترتیب انتخاب و بودجه per-attempt را از `h2.go`/`h3.go` دقیق بکن)، Happy Eyeballs (وجود/عدم وجود)، Timeout و Fallback مسیر dial، رفتار تغییر شبکه حین اتصال.
+   - نکته از Stage 4: رابط TUN فقط IPv4 است (172.19.0.1/30، بدون آدرس/route v6) — مطابق توصیه خود zeptun («اپ‌ها timeout اتصال را روی IPv6 بی‌خروج نمی‌سوزانند»)؛ سمت سرور موتور جدا است و باید در همین مرحله بررسی شود.
+   - یادداشت موکول‌شده از Stage 3: نسخه upstream برای h3 در لاگ session-established فیلد `remote=IP` را هم ثبت می‌کند؛ بازگرداندن آن فیلد در لاگ `Controller.Start` (فقط h3) به همین مرحله موکول شده تا endpoint واقعی on-device قابل ثبت شود — اگر با شواهد بی‌ضرر بود، همان‌جا اعمال و تست کن (الگوی Stage 3).
+   - مقایسه با Arman فقط مرجع است؛ هیچ چیزی بدون دلیل فنی کپی نشود.
+   - اگر مشکل انتخاب آدرس/مسیر با شواهد اثبات شد: کوچک‌ترین اصلاح (fallback/timeout/انتخاب بهتر) + تست + commit مستقل؛ بدون اندازه‌گیری هیچ خانواده IP غیرفعال نشود.
 3. قوانین: فقط مخزن `CHAKCAAD/AETHONE`؛ push فقط به `performance/firefox-vpn-optimization`؛ بدون Force Push/Release/تغییر pin upstream؛ CGO اندروید دست‌نخورده؛ چند متغیر هم‌زمان تغییر نکند.
 4. پایان مرحله: commit مستقل + به‌روزرسانی همین فایل + push + گزارش با قالب ۱۰ بندی مأموریت + توقف.
 
