@@ -60,3 +60,13 @@ Thumbs.db
 .srccache*/
 # local validation bundles staged by hand
 /native-out/
+
+# PHASE-2 (firefox-vpn rebuild): the pinned upstream core is FETCHED,
+# never committed (no license at the pin — see phase1/fxv/ORIGIN.md);
+# phase1/scripts/fetch_upstream.sh + the SHA256 manifest pin it.
+/phase1/firefox-vpn-client/
+
+# PHASE-2 rebuild: engine build outputs — binaries never enter git;
+# the manifest + inspection evidence stay (the deploy check reads them).
+/phase1/build/android/**/libfirefoxvpn.so
+/phase1/build/host/libfirefoxvpn

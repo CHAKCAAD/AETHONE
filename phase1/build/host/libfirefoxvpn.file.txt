@@ -1,0 +1,1 @@
+/home/z/my-project/aethonepriv/phase1/build/host/libfirefoxvpn: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, BuildID[sha1]=9fb912d0cb462e4eb1ae8f70cdb2d591d98e584a, with debug_info, not stripped
