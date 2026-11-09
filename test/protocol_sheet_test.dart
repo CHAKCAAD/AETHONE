@@ -88,10 +88,12 @@ void main() {
     final infoX = tester.getCenter(find.byKey(const ValueKey('proto-page-info'))).dx;
     expect(backX, greaterThan(infoX));
 
-    // Section headings (verbatim frame text).
+    // Section headings (verbatim frame text). PHASE-2 REBUILD
+    // (2026-11-09): «سرعت اسکن» is GONE — it lives in Connection
+    // Settings now (the settings_subpages suite covers it there).
     expect(find.text('حالت اتصال'), findsOneWidget);
     expect(find.text('پروتکل'), findsWidgets);
-    expect(find.text('سرعت اسکن'), findsOneWidget);
+    expect(find.text('سرعت اسکن'), findsNothing);
 
     // The mode segments (frame: تونل right / پروکسی left, proxy selected).
     expect(find.text('تونل'), findsOneWidget);
@@ -106,9 +108,10 @@ void main() {
     expect(find.text('میم'), findsOneWidget);
     expect(find.text('سایفون'), findsOneWidget);
     expect(find.text('تور'), findsOneWidget);
-    // 5 unlabeled pills.
-    expect(find.byKey(const ValueKey('proto-pill-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('proto-pill-5')), findsOneWidget);
+    // PHASE-2 REBUILD: the 5 unlabeled scan pills are GONE from this
+    // page (Connection Settings owns them now).
+    expect(find.byKey(const ValueKey('proto-pill-1')), findsNothing);
+    expect(find.byKey(const ValueKey('proto-pill-5')), findsNothing);
 
     // RTL grid order (frame row 1): اتوماتیک rightmost, وایرگارد leftmost.
     final auto = tester.getCenter(find.text('اتوماتیک'));
@@ -148,10 +151,19 @@ void main() {
       ),
     );
 
-    final p5 = tester.getRect(find.byKey(const ValueKey('proto-pill-5')));
-    expect(p5.top, closeTo(AethGeometry.protoPillTop, 2));
-    // The pills row is CENTERED (frame x33..367) — pill 5 right edge ≈367.
-    expect(p5.right, closeTo(367, 3));
+    // PHASE-2 REBUILD (2026-11-09): the content column ends with the
+    // Firefox card (no scan section below it) — the page's own content
+    // fits the 874-logical viewport again without scrolling.
+    final fx = tester.getRect(
+      find.byKey(const ValueKey('proto-card-firefox')),
+    );
+    expect(fx.top, closeTo(AethGeometry.protoCardTopFirefox, 2));
+    expect(
+      fx.bottom,
+      lessThanOrEqualTo(AethGeometry.refHeight),
+      reason: 'the Firefox card is the LAST element; nothing renders below '
+          'the frame line anymore (the scan section moved away)',
+    );
 
     // v4.19: the app's cold DEFAULT is WireGuard (owner decree #4 — until
     // the settings redesign ships), so ITS tile renders selected (green).
@@ -243,8 +255,8 @@ void main() {
   });
 
   testWidgets(
-      'the mode segments and the scan pills apply INSTANTLY (v4.17: the page '
-      'listens to the store — no protocol pick needed first) and stay open',
+      'the mode segments apply INSTANTLY (v4.17: the page listens to the '
+      'store — no protocol pick needed first) and stay open',
       (tester) async {
     tester.view.physicalSize = const Size(402 * 3, 874 * 3);
     tester.view.devicePixelRatio = 3.0;
@@ -253,7 +265,9 @@ void main() {
     final store = ConnectionStore(engine: ScriptedEngine());
     await _openPage(tester, store);
     expect(store.connectionMode, ConnectionMode.proxy); // frame default
-    expect(store.scanSpeed, 5); // frame default
+    // PHASE-2 REBUILD: the scan pills' default lives on — the VALUE is
+    // untouched by the move (Connection Settings renders it now).
+    expect(store.scanSpeed, 5);
 
     await tester.tap(find.text('تونل'));
     await tester.pump();
@@ -273,41 +287,12 @@ void main() {
     );
     // Still open — the page did not pop.
     expect(find.byType(ProtocolPage), findsOneWidget);
-
-    // PHASE B (Part 1): the scan section moved below the Firefox card
-    // (the page column grew 874 → 1005) — scroll the pills into view
-    // before tapping (the assertion semantics are unchanged).
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('proto-pill-2')),
-      120,
-      scrollable: find.descendant(
-        of: find.byType(ProtocolPage),
-        matching: find.byType(Scrollable),
-      ).first,
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('proto-pill-2')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(store.scanSpeed, 2);
-    // The tapped pill turns green instantly too.
-    final pill2 = tester.widget<AnimatedContainer>(
-      find.descendant(
-        of: find.byKey(const ValueKey('proto-pill-2')),
-        matching: find.byType(AnimatedContainer),
-      ).first,
-    );
-    expect(
-      (pill2.decoration as BoxDecoration).color,
-      AethColors.accentConnected,
-    );
-    expect(find.byType(ProtocolPage), findsOneWidget);
   });
 
   testWidgets(
-      'the v4.17 heading badges: Swap 1 on «پروتکل», Scan 1 on «سرعت اسکن», '
-      'Password 1 on «حالت اتصال»', (tester) async {
+      'the v4.17 heading badges: Swap 1 on «پروتکل», Password 1 on '
+      '«حالت اتصال» (PHASE-2 REBUILD: the Scan 1 badge moved with its '
+      'section to Connection Settings)', (tester) async {
     tester.view.physicalSize = const Size(402 * 3, 874 * 3);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
@@ -327,10 +312,10 @@ void main() {
 
     expect(badgeLoaded(AppAssets.iconSwap1), isTrue,
         reason: '«پروتکل» badge = Swap 1.svg (v4.17 #8)');
-    expect(badgeLoaded(AppAssets.iconScan1), isTrue,
-        reason: '«سرعت اسکن» badge = Scan 1.svg (v4.17 #7)');
     expect(badgeLoaded(AppAssets.iconPassword1), isTrue,
         reason: '«حالت اتصال» badge = Password 1.svg');
+    expect(badgeLoaded(AppAssets.iconScan1), isFalse,
+        reason: 'the «سرعت اسکن» badge is gone with its section (2026-11-09)');
   });
 
   testWidgets(
@@ -469,5 +454,60 @@ void main() {
     );
     expect(store.selectedProtocol, ProtocolId.firefoxOnly);
     expect(store.state, VpnState.disconnected);
+  });
+
+  // ------------------------------------------------------------------
+  // PHASE-2 REBUILD (2026-11-09) — the OFFICIAL Firefox artwork (the
+  // owner-delivered mozilla-vpn-seeklogo.svg) renders on the card: the
+  // glyph is the official file (the Shield-Tick stopgap is retired),
+  // and the monochrome mark carries the ink treatment (the theme ink
+  // unselected, the standing all-ink white on the selected green card).
+  // ------------------------------------------------------------------
+  testWidgets(
+      'PHASE-2 REBUILD: the Firefox card renders the OFFICIAL logo '
+      '(asset + ink treatment, both selection states)', (tester) async {
+    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final store = ConnectionStore(engine: ScriptedEngine());
+    await _openPage(tester, store);
+
+    SvgPicture cardGlyph() => tester.widget<SvgPicture>(
+          find.descendant(
+            of: find.byKey(const ValueKey('proto-card-firefox')),
+            matching: find.byType(SvgPicture),
+          ).first,
+        );
+
+    // UNSELECTED: the official asset, tinted with the theme ink (the
+    // card label's own color — a monochrome black file would vanish on
+    // the dark card).
+    var glyph = cardGlyph();
+    expect(
+      (glyph.bytesLoader as SvgAssetLoader).assetName,
+      AppAssets.protocolFirefoxLogo,
+      reason: 'the card must render the OFFICIAL Firefox mark',
+    );
+    expect(
+      glyph.colorFilter,
+      ColorFilter.mode(AethColors.textPrimary, BlendMode.srcIn),
+      reason: 'unselected: the theme-ink treatment',
+    );
+
+    // SELECTED (the green card): the standing all-ink WHITE rule.
+    await tester.tap(find.byKey(const ValueKey('proto-card-firefox')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    glyph = cardGlyph();
+    expect(
+      (glyph.bytesLoader as SvgAssetLoader).assetName,
+      AppAssets.protocolFirefoxLogo,
+    );
+    expect(
+      glyph.colorFilter,
+      const ColorFilter.mode(Color(0xFFFFFFFF), BlendMode.srcIn),
+      reason: 'selected: the all-ink white rule (the v4.35 precedent)',
+    );
   });
 }

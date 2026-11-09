@@ -35,10 +35,14 @@ void main() {
     test('reference frame and key sizes', () {
       expect(AethGeometry.refWidth, 402);
       expect(AethGeometry.refHeight, 874);
-      // PHASE B (Part 1): the protocol page's own column is TALLER than
-      // the frame (the Firefox account card) and scrolls; the frame
-      // constant the pattern composition uses is untouched.
-      expect(AethGeometry.protoPageContentH, 1005);
+      // PHASE-2 REBUILD (2026-11-09): the scan section MOVED to
+      // Connection Settings; the protocol page's own column ends with
+      // the Firefox card (725 + 116) + the frame's own 62 bottom rhythm
+      // = 903 — the page fits the 874 frame again without scrolling;
+      // the frame constant the pattern composition uses is untouched.
+      expect(AethGeometry.protoPageContentH, 903);
+      expect(AethGeometry.protoPageContentH,
+          AethGeometry.protoCardTopFirefox + AethGeometry.protoCardH + 62);
       expect(AethGeometry.protoCardTopFirefox,
           AethGeometry.protoCardTopTor + AethGeometry.protoCardH + 15);
       expect(AethGeometry.heroSize, 164);

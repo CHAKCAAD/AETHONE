@@ -71,13 +71,28 @@ func runLogin() int {
         cfg, err := engine.ParseLoginConfig(line)
         if err != nil {
                 var cfgErr *engine.ConfigError
-                detail := "badConfig"
+                detail := "configNotJSON"
                 if errors.As(err, &cfgErr) {
                         detail = cfgErr.DetailCode()
                 }
+                // The login role's own failure codes (docs/FIREFOX_VPN_LOGIN.md
+                // §3): the token-shape and mode rejections are THEIR OWN codes,
+                // never the tunnel role's badConfig umbrella. The message is the
+                // static English text (the Dart UI localizes by code and never
+                // renders it).
+                failCode := engine.ErrBadConfig
+                message := detail
+                switch detail {
+                case "sessionTokenInvalid":
+                        failCode = engine.ErrSessionTokenInvalid
+                        message = "the session token must be exactly 64 hexadecimal characters"
+                case "loginModeUnsupported":
+                        failCode = engine.ErrLoginModeUnsupported
+                        message = "this login mode is not supported (password mode is reserved and refused)"
+                }
                 _ = emit.Emit(engine.Event{
-                        Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
-                        Message: detail, Code: engine.ExitStartup,
+                        Name: engine.EvFailed, FailCode: failCode,
+                        Message: message, Code: engine.ExitStartup,
                 })
                 return engine.ExitStartup
         }

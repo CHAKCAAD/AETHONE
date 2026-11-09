@@ -6,7 +6,7 @@
 //    (recorded from the engine binary's live lifecycle-test runs);
 //  * the engine-state contract (socksReady/failed/authRefreshed routing)
 //    is exercised against the REAL host binary
-//    (FXV_ENGINE_BIN=/home/z/my-project/phase1/build/host/libfirefoxvpn)
+//    (FXV_ENGINE_BIN=… or the repo's own phase1/build/host output)
 //    through the same stdin/stdout contract the adapter uses;
 //  * the vault tests use a fake codec (plaintext IN TESTS ONLY — never
 //    presented as a live session).
@@ -20,6 +20,23 @@ import 'package:aethone/connection/firefox/firefox_session_store.dart';
 import 'package:aethone/connection/transport_modes.dart';
 import 'package:aethone/core/app_assets.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+
+/// Resolves the REAL host engine binary for the live lifecycle tests:
+/// the FXV_ENGINE_BIN override first, then the repo's own build output
+/// (phase1/build/host — `phase1/scripts/build_engine.sh host`), then
+/// the legacy workspace path. Absent → the suite's own honest skip.
+String resolveEngineBin() {
+  final candidates = <String>[
+    ?Platform.environment['FXV_ENGINE_BIN'],
+    '${Directory.current.path}/phase1/build/host/libfirefoxvpn',
+    '/home/z/my-project/phase1/build/host/libfirefoxvpn',
+  ];
+  for (final path in candidates) {
+    if (File(path).existsSync()) return path;
+  }
+  return candidates.first;
+}
 
 void main() {
   group('firefox wire protocol', () {
@@ -282,7 +299,7 @@ void main() {
   // stdin-EOF shutdown, no orphan).
   // ------------------------------------------------------------------
   group('FirefoxVpnEngine against the REAL host binary', () {
-    const bin = '/home/z/my-project/phase1/build/host/libfirefoxvpn';
+    final bin = resolveEngineBin();
 
     test('binary exists and is executable', () {
       // NOT TESTED on CI machines without the build — this suite runs in

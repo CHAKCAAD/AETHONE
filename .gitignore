@@ -70,3 +70,4 @@ Thumbs.db
 # the manifest + inspection evidence stay (the deploy check reads them).
 /phase1/build/android/**/libfirefoxvpn.so
 /phase1/build/host/libfirefoxvpn
+phase1/build/SHA256SUMS.txt.bak

@@ -9,7 +9,7 @@
 //  * the login-protocol tests parse REAL engine JSON lines (the --login
 //    role's events, recorded from the engine's lifecycle-test runs);
 //  * the login-client tests spawn the REAL host binary
-//    (FXV_ENGINE_BIN=/home/z/my-project/phase1/build/host/libfirefoxvpn)
+//    (FXV_ENGINE_BIN=… or the repo's own phase1/build/host output)
 //    with the --login role through the same stdin/stdout contract the
 //    adapter uses — config validation, bare argv, stdin-EOF clean
 //    cancel, and no secret on stdout/stderr are proven on the REAL
@@ -38,6 +38,23 @@ String _envelope(String command, Map<String, dynamic> data,
       'id': id,
       'message': {'messageId': messageId, 'command': command, 'data': data},
     });
+
+
+/// Resolves the REAL host engine binary for the live lifecycle tests:
+/// the FXV_ENGINE_BIN override first, then the repo's own build output
+/// (phase1/build/host — `phase1/scripts/build_engine.sh host`), then
+/// the legacy workspace path. Absent → the suite's own honest skip.
+String resolveEngineBin() {
+  final candidates = <String>[
+    ?Platform.environment['FXV_ENGINE_BIN'],
+    '${Directory.current.path}/phase1/build/host/libfirefoxvpn',
+    '/home/z/my-project/phase1/build/host/libfirefoxvpn',
+  ];
+  for (final path in candidates) {
+    if (File(path).existsSync()) return path;
+  }
+  return candidates.first;
+}
 
 void main() {
   // ------------------------------------------------------------------
@@ -291,7 +308,7 @@ void main() {
   // through the same FirefoxLoginClient class the adapter uses.
   // ------------------------------------------------------------------
   group('FirefoxLoginClient against the REAL host binary', () {
-    const bin = '/home/z/my-project/phase1/build/host/libfirefoxvpn';
+    final bin = resolveEngineBin();
 
     bool binReady() => File(bin).existsSync();
 

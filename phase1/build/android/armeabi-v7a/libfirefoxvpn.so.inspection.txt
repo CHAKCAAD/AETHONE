@@ -1,5 +1,5 @@
 == file ==
-/home/z/my-project/aethonepriv/phase1/build/android/armeabi-v7a/libfirefoxvpn.so: ELF 32-bit LSB pie executable, ARM, EABI5 version 1 (SYSV), dynamically linked, interpreter /system/bin/linker, for Android 34, built by NDK r28c (13676358), Go BuildID=e_jCkrfQyUflkOzzrcgP/OSYofKIHQA4Z5ln6_GaF/5meS3aPo4LE-eaKzKm1y/UlPW4Ogig6wA895cqXpZ, BuildID[sha1]=bbf060630124da1481bef50412c05dc4a1313728, with debug_info, not stripped
+/home/z/my-project/aethonepriv/phase1/build/android/armeabi-v7a/libfirefoxvpn.so: ELF 32-bit LSB pie executable, ARM, EABI5 version 1 (SYSV), dynamically linked, interpreter /system/bin/linker, for Android 34, built by NDK r28c (13676358), Go BuildID=zbXvYOF-BBP8Piumiz1-/SdCQcx0smUYVPnmH-Tlq/MFXfD8gObhUL5daF-CxH/yzYBBsE8aXAcqEPRdCKz, BuildID[sha1]=ebcb43528653db075b12c8a2e7f9eb67384d142f, with debug_info, not stripped
 
 == readelf -h (header) ==
 ELF Header:
@@ -12,9 +12,9 @@ ELF Header:
   Type:                              DYN (Position-Independent Executable file)
   Machine:                           ARM
   Version:                           0x1
-  Entry point address:               0x111cb8
+  Entry point address:               0x111d50
   Start of program headers:          52 (bytes into file)
-  Start of section headers:          14262068 (bytes into file)
+  Start of section headers:          14262240 (bytes into file)
   Flags:                             0x5000200, Version5 EABI, soft-float ABI
   Size of this header:               52 (bytes)
   Size of program headers:           32 (bytes)
@@ -25,7 +25,7 @@ ELF Header:
 
 == readelf -d (dynamic) ==
 
-Dynamic section at offset 0x9324f4 contains 24 entries:
+Dynamic section at offset 0x93266c contains 24 entries:
   Tag        Type                         Name/Value
  0x00000001 (NEEDED)                     Shared library: [liblog.so]
  0x00000001 (NEEDED)                     Shared library: [libdl.so]
@@ -40,7 +40,7 @@ Dynamic section at offset 0x9324f4 contains 24 entries:
  0x6ffffffa (RELCOUNT)                   43921
  0x00000017 (JMPREL)                     0x566d0
  0x00000002 (PLTRELSZ)                   392 (bytes)
- 0x00000003 (PLTGOT)                     0x9345d0
+ 0x00000003 (PLTGOT)                     0x934748
  0x00000014 (PLTREL)                     REL
  0x00000006 (SYMTAB)                     0x2e8
  0x0000000b (SYMENT)                     16 (bytes)
@@ -65,4 +65,4 @@ Dynamic section at offset 0x9324f4 contains 24 entries:
 
 == build id ==
   GNU                  0x00000014	NT_GNU_BUILD_ID (unique build ID bitstring)
-    Build ID: bbf060630124da1481bef50412c05dc4a1313728
+    Build ID: ebcb43528653db075b12c8a2e7f9eb67384d142f

@@ -60,6 +60,26 @@ class ProtocolGlyph extends StatelessWidget {
       );
     }
 
+    // FIREFOX — the owner's OFFICIAL mark (2026-11-09): a MONOCHROME
+    // single-path file (default-black ink). Its GEOMETRY renders exactly
+    // as delivered; the INK follows the surface so the mark stays visible
+    // where the file's own black cannot: the theme's ink color
+    // ([AethColors.textPrimary] — precisely the card label's own color)
+    // on unselected cards, and the standing all-ink white on the selected
+    // green tile (the v4.35 rule every protocol follows).
+    if (id == ProtocolId.firefoxOnly) {
+      return SvgPicture.asset(
+        asset,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        colorFilter: ColorFilter.mode(
+          white ? const Color(0xFFFFFFFF) : AethColors.textPrimary,
+          BlendMode.srcIn,
+        ),
+      );
+    }
+
     // Every real protocol: the owner's own file, EXACTLY as delivered.
     // `white` (the selected green tile) keeps the standing all-ink rule.
     if (white) {

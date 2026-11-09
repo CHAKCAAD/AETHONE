@@ -19,7 +19,9 @@ func TestLoginSessionTokenInvalid(t *testing.T) {
         defer s.kill()
         s.send(`{"version":1,"mode":"webchannel","sessionToken":"tooshort"}`)
         ev := s.waitEvent(t, "failed", 5*time.Second)
-        if ev["failCode"] != "badConfig" || ev["message"] != "sessionTokenInvalid" {
+        // The login role's OWN code (docs/FIREFOX_VPN_LOGIN.md §3), never
+        // the tunnel role's badConfig umbrella.
+        if ev["failCode"] != "sessionTokenInvalid" {
                 t.Fatalf("event = %v", ev)
         }
         if code := s.waitExit(t, 5*time.Second); code != 1 {
@@ -32,7 +34,7 @@ func TestLoginPasswordModeRefused(t *testing.T) {
         defer s.kill()
         s.send(`{"version":1,"mode":"password","sessionToken":"` + hex64Token() + `"}`)
         ev := s.waitEvent(t, "failed", 5*time.Second)
-        if ev["message"] != "loginModeUnsupported" {
+        if ev["failCode"] != "loginModeUnsupported" {
                 t.Fatalf("event = %v", ev)
         }
         if code := s.waitExit(t, 5*time.Second); code != 1 {

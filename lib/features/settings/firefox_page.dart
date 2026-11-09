@@ -76,7 +76,10 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
       children: () => [
         // ---- Section: the account (Phase 2: the WebChannel sign-in) ----
         SubSectionHeading(
-          icon: AppAssets.iconShieldTick,
+          // PHASE-2 REBUILD (2026-11-09): the OFFICIAL Firefox mark
+          // (the owner-delivered artwork) — the Shield-Tick stopgap
+          // retires here too (open item G2, both surfaces).
+          icon: AppAssets.protocolFirefoxLogo,
           title: strings.secFirefoxAccount,
         ),
         const SubSectionGap.headingToCard(),

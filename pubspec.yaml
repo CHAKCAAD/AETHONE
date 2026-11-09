@@ -89,6 +89,10 @@ flutter:
     - design/آیکون پروتکل ها/گول کلاسیک هردو حالت.svg
     - design/آیکون پروتکل ها/تور هر دو حالت.svg
     - design/آیکون پروتکل ها/سایفون هر دو حالت.svg
+    # --- PHASE-2 REBUILD (2026-11-09): the OFFICIAL Firefox mark
+    #     (owner-delivered mozilla-vpn-seeklogo.svg, the single-face
+    #     «هر دو حالت» naming; monochrome — renders through the ink). ---
+    - design/آیکون پروتکل ها/فایرفاکس هر دو حالت.svg
     # --- v4.33 (owner round 9): the combined-mode icons — the owner's own
     #     SVGs (سایفون اور وارپ / وارپ اور سایفون / تور اور وارپ / وارپ اور
     #     تور) replace the composed aether+chevron stacks on the sub-tiles;
