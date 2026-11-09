@@ -108,28 +108,44 @@ func TestOpenTunnelContextCancel(t *testing.T) {
         }
 }
 
-// TestSessionEstablishedLog pins the stage-3 diagnostics contract: the
-// on-device log line (controller.Start → host Logf → core-log.txt) must
-// carry the ACTUALLY-live transport, the proxy, and the establish
-// latency for BOTH h2 and h3 — the fields the owner greps the log for
-// when recording the mission's "real Transport" baseline field or
-// comparing h2 vs h3 on-device.
+// TestSessionEstablishedLog pins the stage-3/stage-5 diagnostics
+// contract: the on-device log line (controller.Start → host Logf →
+// core-log.txt) must carry the ACTUALLY-live transport, the proxy, the
+// connected endpoint (remote, when the session reports one), and the
+// establish latency for BOTH h2 and h3 — the fields the owner greps
+// the log for when recording the mission's "real Transport" and
+// "Endpoint" baseline fields or comparing h2 vs h3 on-device.
 func TestSessionEstablishedLog(t *testing.T) {
-        line := sessionEstablishedLog("h3", "lfpb115.m1.fastly-masque.net:2499", 1234*time.Millisecond)
+        line := sessionEstablishedLog("h3", "lfpb115.m1.fastly-masque.net:2499", "192.0.2.10:443", 1234*time.Millisecond)
         for _, want := range []string{
                 "transport=h3",
                 "proxy=lfpb115.m1.fastly-masque.net:2499",
+                "remote=192.0.2.10:443",
                 "establish_latency=1.234s",
         } {
                 if !strings.Contains(line, want) {
                         t.Fatalf("line = %q, missing %q", line, want)
                 }
         }
-        h2 := sessionEstablishedLog("h2", "p.example.net:443", 0)
+        h2 := sessionEstablishedLog("h2", "p.example.net:443", "23.192.228.80:443", 0)
         if !strings.Contains(h2, "transport=h2") {
                 t.Fatalf("h2 line = %q", h2)
         }
+        if !strings.Contains(h2, "remote=23.192.228.80:443") {
+                t.Fatalf("h2 line must carry the connected endpoint too: %q", h2)
+        }
         if !strings.Contains(h2, "establish_latency=0s") {
                 t.Fatalf("zero latency must render as 0s: %q", h2)
+        }
+        // An IPv6 endpoint renders with the bracketed host form.
+        v6 := sessionEstablishedLog("h2", "p.example.net:443", "[2001:db8::1]:443", time.Second)
+        if !strings.Contains(v6, "remote=[2001:db8::1]:443") {
+                t.Fatalf("v6 endpoint must render bracketed: %q", v6)
+        }
+        // A session that cannot report a remote omits the field — it is
+        // never rendered empty.
+        bare := sessionEstablishedLog("h2", "p.example.net:443", "", time.Second)
+        if strings.Contains(bare, "remote=") {
+                t.Fatalf("empty remote must omit the field: %q", bare)
         }
 }

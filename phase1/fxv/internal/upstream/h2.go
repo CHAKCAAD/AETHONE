@@ -130,6 +130,18 @@ func NewH2ProxySession(proxyURL *url.URL, token string, timeout time.Duration) (
 // ProxyHost reports the dial target (the upstreamReady event).
 func (s *H2ProxySession) ProxyHost() string { return s.proxyHost }
 
+// RemoteAddr reports the connected proxy address — the endpoint IP
+// (and its family) the session is actually pinned to. The upstream's
+// session-established log carries the same fact for h3; AETHONE
+// mirrors it for BOTH transports so the default h2 path records the
+// real endpoint on-device too (stage 5 of the performance mission).
+func (s *H2ProxySession) RemoteAddr() string {
+	if s.raw == nil {
+		return ""
+	}
+	return s.raw.RemoteAddr().String()
+}
+
 func (s *H2ProxySession) runKeepAlive(ctx context.Context) {
 	ticker := time.NewTicker(upstreamKeepAliveInterval)
 	defer ticker.Stop()

@@ -170,10 +170,14 @@ func (c *Controller) Start(ctx context.Context, pass *vpnclient.ProxyPassInfo) (
         // without it the ACTUALLY-live transport is invisible on-device
         // (core-log.txt), so the mission's "real Transport" baseline
         // field can never be evidenced and an h2/h3 comparison can never
-        // be recorded. Info-level through the host's Logf; no behavioral
-        // change.
+        // be recorded. Stage 5 extends the same line with the connected
+        // endpoint (remote=IP, the upstream's h3 field, mirrored for BOTH
+        // transports) so the mission's "Endpoint" baseline field is
+        // recordable too. Info-level through the host's Logf; no
+        // behavioral change.
         if host, ok := c.SessionHost(); ok {
-                c.cfg.Logf("%s", sessionEstablishedLog(c.cfg.Transport, host, time.Since(started)))
+                remote, _ := c.SessionRemote()
+                c.cfg.Logf("%s", sessionEstablishedLog(c.cfg.Transport, host, remote, time.Since(started)))
         }
         go c.runRenewalLoop(ctx)
         return time.Since(started), nil
@@ -181,12 +185,19 @@ func (c *Controller) Start(ctx context.Context, pass *vpnclient.ProxyPassInfo) (
 
 // sessionEstablishedLog renders the upstream session-established log
 // line: the transport that is REALLY live (h2 | h3), the proxy it is
-// pinned to, and the session build latency (the upstream proxy-demo
-// logs the same facts at the same point — "upstream HTTP/{2,3} session
-// established proxy=…" and "upstream_session_establish_latency=…").
-func sessionEstablishedLog(transport, proxyHost string, latency time.Duration) string {
-        return fmt.Sprintf("upstream session established transport=%s proxy=%s establish_latency=%s",
-                transport, proxyHost, latency.Round(time.Millisecond))
+// pinned to, the connected remote address when known (the upstream's
+// h3 line logs remote=conn.RemoteAddr(); AETHONE mirrors the field for
+// BOTH transports so the default h2 path also records the endpoint IP
+// on-device — stage 5 of the performance mission), and the session
+// build latency (the upstream proxy-demo logs the same facts at the
+// same point — "upstream HTTP/{2,3} session established proxy=…
+// [remote=…]" and "upstream_session_establish_latency=…").
+func sessionEstablishedLog(transport, proxyHost, remote string, latency time.Duration) string {
+        line := fmt.Sprintf("upstream session established transport=%s proxy=%s", transport, proxyHost)
+        if remote != "" {
+                line += fmt.Sprintf(" remote=%s", remote)
+        }
+        return line + fmt.Sprintf(" establish_latency=%s", latency.Round(time.Millisecond))
 }
 
 func (c *Controller) setSession(s Session, pass *vpnclient.ProxyPassInfo) {
@@ -209,6 +220,26 @@ func (c *Controller) SessionHost() (string, bool) {
                 return s.ProxyHost(), true
         case *H3ProxySession:
                 return s.ProxyHost(), true
+        }
+        return "", false
+}
+
+// SessionRemote reports the connected remote address of the live
+// session — the real endpoint IP (and its family) the engine is
+// pinned to. The upstream logs the same fact (remote=…) at the
+// session-established point for h3; the controller exposes it so the
+// host-side log line can carry it for BOTH transports (stage 5).
+func (c *Controller) SessionRemote() (string, bool) {
+        c.mu.Lock()
+        defer c.mu.Unlock()
+        if c.session == nil {
+                return "", false
+        }
+        switch s := c.session.(type) {
+        case *H2ProxySession:
+                return s.RemoteAddr(), true
+        case *H3ProxySession:
+                return s.RemoteAddr(), true
         }
         return "", false
 }

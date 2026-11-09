@@ -146,6 +146,18 @@ func NewH3ProxySession(proxyURL *url.URL, token string, timeout time.Duration) (
 // ProxyHost reports the dial target (the upstreamReady event).
 func (s *H3ProxySession) ProxyHost() string { return s.proxyHost }
 
+// RemoteAddr reports the connected proxy address — the endpoint IP
+// (and its family) the session is actually pinned to. The upstream's
+// h3 session-established log carries conn.RemoteAddr() at this exact
+// point; AETHONE routes the same fact through its own log line
+// (stage 5 of the performance mission).
+func (s *H3ProxySession) RemoteAddr() string {
+        if s.conn == nil {
+                return ""
+        }
+        return s.conn.RemoteAddr().String()
+}
+
 // OpenTunnel opens one CONNECT tunnel through the QUIC session
 // (ADAPTED).
 func (s *H3ProxySession) OpenTunnel(authority string) (net.Conn, error) {
