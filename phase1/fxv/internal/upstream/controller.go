@@ -163,8 +163,30 @@ func (c *Controller) Start(ctx context.Context, pass *vpnclient.ProxyPassInfo) (
         if err != nil {
                 return 0, err
         }
+        // Stage 3 (performance mission): mirror the pinned upstream's
+        // session-established logging ("upstream HTTP/2 session established
+        // proxy=…", "upstream HTTP/3 session established proxy=…",
+        // "transport=http2|http3 …") that the phase-1 adaptation dropped —
+        // without it the ACTUALLY-live transport is invisible on-device
+        // (core-log.txt), so the mission's "real Transport" baseline
+        // field can never be evidenced and an h2/h3 comparison can never
+        // be recorded. Info-level through the host's Logf; no behavioral
+        // change.
+        if host, ok := c.SessionHost(); ok {
+                c.cfg.Logf("%s", sessionEstablishedLog(c.cfg.Transport, host, time.Since(started)))
+        }
         go c.runRenewalLoop(ctx)
         return time.Since(started), nil
+}
+
+// sessionEstablishedLog renders the upstream session-established log
+// line: the transport that is REALLY live (h2 | h3), the proxy it is
+// pinned to, and the session build latency (the upstream proxy-demo
+// logs the same facts at the same point — "upstream HTTP/{2,3} session
+// established proxy=…" and "upstream_session_establish_latency=…").
+func sessionEstablishedLog(transport, proxyHost string, latency time.Duration) string {
+        return fmt.Sprintf("upstream session established transport=%s proxy=%s establish_latency=%s",
+                transport, proxyHost, latency.Round(time.Millisecond))
 }
 
 func (c *Controller) setSession(s Session, pass *vpnclient.ProxyPassInfo) {
