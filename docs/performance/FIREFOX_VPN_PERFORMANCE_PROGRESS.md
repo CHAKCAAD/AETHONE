@@ -13,8 +13,8 @@
 | Branch کاری | `performance/firefox-vpn-optimization` |
 | Commit پایه شاخه | `ff9bc38` (= tip شاخه `integration/firefox-vpn-debug`) |
 | Commit آخرین مرحله تکمیل‌شده | (در انتهای همین فایل — بخش «گیت مرحله آخر») |
-| مرحله تکمیل‌شده آخر | **Stage 4 — MTU: PASS** (حسابرسی کامل MTU؛ معماری L4-termination → هیچ پکت داخلی به سیم نمی‌رسد؛ دانلود از قبل jumbo؛ پیش‌فرض ۱۵۰۰ بدون تغییر — بخش «نتیجه Stage 4») |
-| مرحله فعلی برای اجرای بعدی | **Stage 5 — IPv4/IPv6 و Endpoint** |
+| مرحله تکمیل‌شده آخر | **Stage 5 — IPv4/IPv6 و Endpoint: PASS** (تحلیل کامل DNS/خانواده/Happy-Eyeballs/Endpoint + اصلاح واقعی: فیلد remote=IP در لاگ session-established برای هر دو transport — بخش «نتیجه Stage 5») |
+| مرحله فعلی برای اجرای بعدی | **Stage 6 — CPU، حافظه و Go Child Process** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### جدول مراحل
@@ -26,7 +26,7 @@
 | 2 — مسیر انتقال داده، TUN و صف‌ها | **PASS** (اصلاح واقعی: maxConns=256 پیش‌فرض upstream + رفع باگ slot-steal + لاگ تشخیصی + ۶ تست جدید — بخش «نتیجه Stage 2») |
 | 3 — Transport و نسخه HTTP | **PASS** (حسابرسی کامل + اصلاح واقعی: بازگرداندن لاگ session-established برای رؤیت transport واقعی on-device + تست جدید — بخش «نتیجه Stage 3») |
 | 4 — MTU | **PASS** (حسابرسی کامل با شواهد کد؛ بدون تغییر کد — بخش «نتیجه Stage 4») |
-| 5 — IPv4/IPv6 و Endpoint | PENDING |
+| 5 — IPv4/IPv6 و Endpoint | **PASS** (تحلیل کامل + اصلاح واقعی: لاگ endpoint واقعی remote=IP هر دو transport — بخش «نتیجه Stage 5») |
 | 6 — CPU/حافظه/Go Child Process | PENDING |
 | 7 — TLS Fragmentation | PENDING |
 | 8 — مقایسه نهایی و Build | PENDING |
@@ -132,6 +132,8 @@ uid خود اپ از TUN مستثنا — جلوگیری از حلقه مسیر.
 | O-9 | **جدید (S2)**: باگ slot-steal — defer releaseConnSlot قبل از acquire ثبت شده بود؛ هر اتصال ردشده توکن یک اتصال زنده را می‌دزدد و سقف را فرسوده می‌کند | socks/server.go handleConn (قبل از اصلاح) در برابر upstream:2026-2033 | **اصلاح شد (S2)**: ترتیب defer مطابق upstream شد؛ تست رگرسیون دو-رد شدن متوالی را تضمین می‌کند (روی کد باگ‌دار FAIL شد، روی اصلاح PASS) |
 | O-10 | **جدید (S2)**: مقدار واقعی SETTINGS_MAX_CONCURRENT_STREAMS سرور فایرفاکس و رفتار on-device نامشخص | — | NOT TESTED — نیاز به گوشی؛ لاگ تشخیصی live=N + رد سقف با پیام `connection limit reached` برای پایش اضافه شد |
 | O-11 | **جدید (S3)**: لاگ session-established خود upstream (شامل transport واقعی) در تطبیق فاز ۱ حذف شده بود؛ رویداد upstreamReady هم transport را می‌فرستد ولی Dart آن را در لاگ رندر نمی‌کند → transport فعال در زمان اجرا روی گوشی قابل راستی‌آزمایی نبود (همان مورد تأییدنشده Stage 0 §11) | upstream main.go:2493,2717,351-353 در برابر h2.go/h3.go/controller.go (بدون لاگ) + firefox_protocol.dart logLine (default case) | **اصلاح شد (S3)**: لاگ `upstream session established transport=%s proxy=%s establish_latency=%s` در Controller.Start بازگردانده شد (آینه رفتار upstream؛ بدون تغییر رفتاری) |
+| O-12 | **جدید (S5)**: h3 بدون Happy Eyeballs است — dial ترتیبی روی همه IPها به ترتیب resolver؛ خانواده مرده فقط زمان راه‌اندازی session را طولانی می‌کند (نه ping پایدار)؛ h2 (پیش‌فرض) با happy eyeballs کتابخانه (race ۳۰۰ms) از این نظر مصون است | h3.go:66-119 (bit-identical با upstream) در برابر net/dial.go:291,573,624 | **مستند شد (S5)**؛ بدون شواهد on-device و به‌دلیل identical بودن با upstream، تغییری وارد نشد (قانون مأموریت) |
+| O-13 | **جدید (S5)**: endpoint واقعی (IP + خانواده) روی دستگاه قابل ثبت نبود — upstream برای h3 فیلد remote=conn.RemoteAddr() را لاگ می‌کند ولی AETHONE آن را (و معادل h2 را) نداشت؛ ستون «Endpoint» خط مبنا بدون آن قابل تکمیل نبود | upstream main.go:2717 در برابر controller.go/h2.go/h3.go (قبلی) | **اصلاح شد (S5)**: فیلد `remote=IP` به لاگ session-established اضافه شد (هر دو transport؛ nil-safe؛ بدون تغییر رفتاری) — commit `cbc83f5` |
 
 علت ریشه‌ای: **دو عامل ساختاری با شواهد کد اثبات شد (S2)** — (۱) حذف سقف اتصال upstream (maxConns=256→unlimited) + (۲) مسدودشدن نامحدود http2 در awaitOpenSlotForStreamLocked هنگام پرشدن سقف استریم سرور؛ ترکیب این دو، رشد تدریجی ping 200→8000ms را توضیح می‌دهد (هر اتصال دستگاه = یک استریم باز روی تک ClientConn؛ probe هر ۵s باید برای slot صف بگیرد). باگ slot-steal (O-9) هم که در سقف جدید فعال می‌شد، رفع شد. تأیید نهایی on-device (مقدار سقف سرور + عدد live=N در عمل) NOT TESTED — معیارهای تأیید در بخش Stage 2.
 
@@ -381,16 +383,108 @@ TunnelWriteBuffer کراندار 1MB (بدنه درخواست CONNECT) → TLS1.
 
 ---
 
+## نتیجه Stage 5 (اجرای 2026-11-10) — IPv4، IPv6 و Endpoint
+
+### ۱. زنجیره انتخاب Endpoint (استخراج‌شده از سورس)
+
+```text
+RemoteSettings زنده (vpnclient.FetchServerList با uTLS Firefox ClientHello)
+  → discovery.Select(fetched, cfg.Country):
+      • country "" یا "REC" → رکورد anycast (autoRec) = p.m1.fastly-masque.net
+      • کشور مشخص → اولین تطابق قطعی در ترتیب لیست (بدون تصادف)
+      • upstreamOverride (فقط از stdin JSON) → میزبان صریح برای تست
+  → proxyURL = https://<hostname>:<port>
+  → Controller.Start → NewH2ProxySession / NewH3ProxySession (dial)
+```
+
+- Dart فقط `country` می‌فرستد (`'auto'→''`، وگرنه کد ISO) — `upstreamTimeoutMs`/`upstreamOverride` هرگز از Dart ارسال نمی‌شود → پیش‌فرض‌های موتور معتبرند.
+- Speed Scan در UI: انتخاب بهترین ping بین «مکان‌ها» با probe (سطح مکان، نه edge) — Stage 0 §5.
+- DNS داده از داخل تونل سمت سرور حل می‌شود (ATYP=domain، Stage 1) → مقایسه آرمان روی «سرور یکسان» فقط وقتی معتبر است که hostname یکسان باشد.
+
+### ۲. DNS Resolution موتور (کدام resolver، کدام مسیر)
+
+| لایه | resolver | مسیر |
+|---|---|---|
+| Control-plane (FxA/RemoteSettings/Guardian) + resolve میزبان پراکسی | `net.DefaultResolver` (h2 داخل `tls.DialWithDialer`؛ h3 با `LookupNetIP(ctx,"ip",host)` صریح) | روی اندروید CGO → getaddrinfo پلتفرم (تصمیم A1) → شبکه فیزیکی؛ سوکت موتور از TUN مستثنا |
+| Data-plane (نام‌های دامنه‌ای که اپ‌ها می‌خواهند) | سمت سرور | از داخل تونل (SOCKS5 ATYP=domain) |
+
+- DoH در موتور وجود ندارد (آرمان resolver خودش را با DoH دارد — فقط مرجع، بدون نیاز اثبات‌شده کپی نشد).
+- role آماده `--dns-probe` برای شواهد per-domain روی دستگاه موجود است (سه دامنه control-plane).
+
+### ۳. انتخاب خانواده IP و Happy Eyeballs (شواهد از Go 1.25.0 = نسخه CI)
+
+| مسیر | رفتار | شواهد |
+|---|---|---|
+| h2 (پیش‌فرض) | **Happy Eyeballs استاندارد-کتابخانه**: `dualStack()` (FallbackDelay≥0؛ پیش‌فرض ۳۰۰ms)، `partition(isIPv4)`: خانواده «اولین آدرسِ» resolver لیست primary می‌شود و خانواده دیگر fallback؛ `dialParallel`: بعد از ۳۰۰ms خانواده fallback موازی race می‌شود؛ در هر خانواده `dialSerial` ترتیبی | `net/dial.go:291,573,624` + `ipsock.go:115` (Go 1.25.0) + `h2.go:89-94` |
+| h3 | **بدون Happy Eyeballs**: حلقه ترتیبی روی همه IPها به ترتیب resolver؛ per-attempt = timeout/N با کف ۳s؛ ctx بیرونی (OpenTimeout) کل را می‌بندد | `h3.go:66-119` (bit-identical با upstream main.go:2651-2712) |
+
+- **نتیجه ساختاری برای h2**: هیچ خانواده مرده نمی‌تواند بیش از ~۳۰۰ms مسدود کند؛ dial TCP + TLS handshake همه زیر OpenTimeout (۲۰s) — پاسخ سؤال مأموریت («آیا یکی از خانواده‌ها باعث Timeout می‌شود؟») برای مسیر پیش‌فرض: **خیر**.
+- **h3**: خانواده مرده فقط «زمان راه‌اندازی session» را یک‌بار طولانی می‌کند (نه ping پایدار)؛ چون bit-identical با upstream است و on-device شاهدی نیست، تغییری وارد نشد (قانون مأموریت) — O-12.
+- هیچ خانواده‌ای غیرفعال نیست؛ اولویت صریحی هم اعمال نشده (ترتیب = ترتیب پلتفرم resolver).
+
+### ۴. Timeout و Fallback و تغییر شبکه
+
+- **OpenTimeout پیش‌فرض = ۲۰s** (`DefaultUpstreamMs=20_000`؛ Dart هیچ‌وقت نمی‌فرستد). h2: dial TCP + TLS handshake همه زیر همین سقف (`tls.DialWithDialer`). h3: resolve + همه تلاش‌ها زیر ctx.
+- **Fallback بین transportها: وجود ندارد** (انتخاب سخت — Stage 3). درون transport: h2 race خانواده‌ها؛ h3 ترتیبی.
+- **مرگ session / تغییر شبکه حین اتصال**: keepalive (PING ۱۰s / مهلت ۵s) → alive=false → `OpenTunnel` صادقانه fail («upstream session is not alive») → سلامت سمت Dart (listener رد شد→۲ strike؛ پاسخ داد→۱۲ تیک) → restart کل child (discovery+pass+dial تازه). موتور session را rebuild نمی‌کند — طراحی خود upstream؛ بازیابی صادق اما سنگین (پروسه جدید).
+
+### ۵. مسیر پیش‌فرض شبکه
+
+- سوکت‌های موتور (uid خود اپ) از TUN مستثنا + کال‌بک protect خود zeptun → dial روی شبکه فیزیکی (`AethoneVpnService.kt:27-28,416-450`). رابط TUN فقط IPv4 است (Stage 4) — اپ‌ها v6 بی‌خروج نمی‌سوزانند؛ سمت سرور موتور مستقل است.
+
+### ۶. مقایسه با Arman (مرجع — بدون کپی)
+
+| مورد | AETHONE (upstream فایرفاکس) | Arman |
+|---|---|---|
+| سیاست خانواده IP بالادست | h2: happy eyeballs کتابخانه (ترتیب resolver + race ۳۰۰ms)؛ h3: ترتیبی | `proxy.ip_version` صریح: auto (پیش‌فرض) = **IPv4-first** با نصف‌کردن بودجه هر گام؛ dual = interleave RFC 8305 (`DialBoth`)؛ ipv6_first/ipv4/ipv6 |
+| Resolver | پلتفرم (CGO/A1) | پکیج resolver خودش (DoH-پذیر، مرتب‌سازی IPv4-first صریح) |
+| شواهد | h2.go/h3.go + net/dial.go | ipversion.go + resolver/resolver.go:728-806 |
+
+- نتیجه: هر دو در برابر خانواده مرده مقاوم‌اند (ساختاری). هیچ شواهدی از مشکل انتخاب خانواده در AETHONE وجود ندارد → چیزی کپی نشد؛ هیچ خانواده‌ای غیرفعال نشد.
+
+### ۷. مشکل اثبات‌شده و اصلاح اعمال‌شده (یادداشت موکول‌شده Stage 3)
+
+- **مشکل (O-13)**: endpoint واقعی (IP + خانواده) روی دستگاه قابل ثبت نبود — upstream برای h3 فیلد `remote=conn.RemoteAddr()` را در نقطه session-established لاگ می‌کند (main.go:2717)؛ AETHONE آن فیلد را (و معادل h2 را که در upstream اصلاً لاگ نمی‌شود) نداشت. ستون «Endpoint: IP و خانواده IP واقعی» جدول خط مبنا مأموریت بدون آن قابل تکمیل نبود.
+- **اصلاح (الگوی Stage 3، بدون تغییر رفتاری)**: خط لاگ session-established حالا `remote=IP` را هم دارد — هر دو transport؛ فقط وقتی session آدرس می‌دهد (هرگز خالی رندر نمی‌شود)؛ ترتیب فیلد proxy→remote مطابق upstream. `RemoteAddr()` nil-safe روی هر دو session (tls.Conn / quic.Conn — API در quic-go@v0.59.0 connection.go:3056 راستی‌آزمایی شد)؛ `Controller.SessionRemote` با همان شکل type-switch خود `SessionHost`.
+- **فایل‌ها**: `fxv/internal/upstream/{h2.go,h3.go,controller.go,upstream_test.go}` — commit مستقل `cbc83f5`.
+- قرارداد stdin/stdout دست نخورد (رویداد upstreamReady بدون تغییر؛ کانال شواهد = core-log.txt مطابق الگوی Stage 2/3).
+
+### ۸. تست‌های Stage 5 (Go 1.25.0 — همان نسخه CI)
+
+| تست | نتیجه |
+|---|---|
+| `gofmt -e` روی ۴ فایل تغییرکرده | PASS — بدون خطای parse (سبک فایل‌ها intentional غیر-کانوینشنال است؛ دلتای gofmt ه۲ قبل/بعد یکسان — انحراف جدیدی معرفی نشد) |
+| ماژول standalone با کد عیناً کپی‌شده (الگوی Stage 3): `TestSessionEstablishedLog` گسترش‌یافته (remote= برای h2 و h3 + شکل براکت v6 + حذف فیلد خالی + گردکردن) | **PASS** |
+| ماژول standalone: `TestRemoteAddrAccessors` (accessor + type-switch روی net.Pipe واقعی + nil-safe) | **PASS** |
+| رگرسیون: `go test ./internal/socks/ ./internal/engine/ -count=1` | PASS |
+| رگرسیون با `-race` (همان دو پکیج) | PASS (1.098s / 1.029s) |
+| `go test ./internal/upstream/` (کل پکیج با quic-go/utls) | **NOT RUN محلی** — تلاش واقعی انجام شد و روی «no space left on device» شکست خورد (دیسک sandbox)؛ پاکسازی شد؛ معیار CI: job «Firefox engine» باید سبز شود |
+| تست‌های Flutter/Dart | NOT RUN — تغییر Dart وجود ندارد؛ SDK موجود نیست |
+
+### ۹. موارد NOT TESTED
+
+- **endpoint واقعی + خانواده IP روی گوشی** — الان با خط لاگ جدید قابل ثبت است: در core-log.txt دنبال `upstream session established transport=… proxy=… remote=IP` بگردید؛ exit probe موجود (`EvExitVerified.ExitIP`) IP خروجی (egress سرور) را می‌دهد که چیز دیگری است.
+- ترتیب واقعی resolver روی شبکه‌های مالک (v6-first یا v4-first) و هزینه خانواده v6 برای h3 روی آن شبکه.
+- تفاوت کیفیت edgeهای Fastly (anycast REC در برابر میزبان کشور) — روش ثبت: مقایسه remote= و پینگ بین حالت AUTO و کشور ثابت.
+- اثر تغییر شبکه حین اتصال روی گوشی (مکانیسم بازیابی از کد مستند شد؛ رفتار زمانی اندازه‌گیری نشده).
+
+### ۱۰. نکات عملی جلسه (برای جلسات بعد)
+
+- حادثه کوچک ابزار: ویرایشگر h2.go را یک‌باره tab→space بازنویسی کرد (۴۴۰ خط diff فقط whitespace)؛ در بازبینی git diff Caught شد؛ فایل با `git checkout` restore و تغییر با اسکریپت python با همان tab ها اعمال شد — diff نهایی = دقیقاً ۱۲ خط درج. برای فایل‌های tab-indent (h2.go) از ویرایش متن خودکار پرهیز شود یا بعدش diff --ignore-all-space چک شود.
+- دیسک sandbox: `go clean -cache` + حذف ماژول‌های دانلودی تلاش ناموفق (~۵۰MB بازگردانده شد)؛ فضای آزاد ~۸۵-۱۵۳MB — کامپایل کامل upstream ممکن نیست؛ الگوی standalone-verification + معیار CI حفظ شد.
+
+---
+
 ## دستور دقیق ادامه کار (جلسه بعدی)
 
 1. همین فایل را بخوان؛ `git -C <repo> log --oneline -3` و `git status` را بررسی کن.
-2. **فقط Stage 5 را اجرا کن**: IPv4/IPv6 و Endpoint —
-   - از سورس استخراج کن: DNS Resolution موتور (کدام resolver، کدام خانواده IP)، انتخاب IPv4/IPv6 در dial بالادست (h2.go: `LookupNetIP(ctx, "ip", host)` همه خانواده‌ها را می‌دهد — ترتیب انتخاب و بودجه per-attempt را از `h2.go`/`h3.go` دقیق بکن)، Happy Eyeballs (وجود/عدم وجود)، Timeout و Fallback مسیر dial، رفتار تغییر شبکه حین اتصال.
-   - نکته از Stage 4: رابط TUN فقط IPv4 است (172.19.0.1/30، بدون آدرس/route v6) — مطابق توصیه خود zeptun («اپ‌ها timeout اتصال را روی IPv6 بی‌خروج نمی‌سوزانند»)؛ سمت سرور موتور جدا است و باید در همین مرحله بررسی شود.
-   - یادداشت موکول‌شده از Stage 3: نسخه upstream برای h3 در لاگ session-established فیلد `remote=IP` را هم ثبت می‌کند؛ بازگرداندن آن فیلد در لاگ `Controller.Start` (فقط h3) به همین مرحله موکول شده تا endpoint واقعی on-device قابل ثبت شود — اگر با شواهد بی‌ضرر بود، همان‌جا اعمال و تست کن (الگوی Stage 3).
-   - مقایسه با Arman فقط مرجع است؛ هیچ چیزی بدون دلیل فنی کپی نشود.
-   - اگر مشکل انتخاب آدرس/مسیر با شواهد اثبات شد: کوچک‌ترین اصلاح (fallback/timeout/انتخاب بهتر) + تست + commit مستقل؛ بدون اندازه‌گیری هیچ خانواده IP غیرفعال نشود.
-3. قوانین: فقط مخزن `CHAKCAAD/AETHONE`؛ push فقط به `performance/firefox-vpn-optimization`؛ بدون Force Push/Release/تغییر pin upstream؛ CGO اندروید دست‌نخورده؛ چند متغیر هم‌زمان تغییر نکند.
+2. **فقط Stage 6 را اجرا کن**: CPU، حافظه و عملکرد Go Child Process (دستگاه هدف مالک: POCO X3 / ARM64 / HyperOS) —
+   - تحلیل کد مسیر داده Go برای الگوهای هزینه: allocationهای تکراری در هر تونل (`copyConn` با بافر pooled 64KB — socks/server.go)، عملیات copy غیرضروری، lockهای طولانی (mutex های controller/socks)، overhead لاگ (هر لاگ = نوشتن در stderr → core-log.txt)، نشت goroutine/conn (تست‌های Stage 2 سبزند ولی فقط مسیرهای تست‌شده را می‌پوشانند).
+   - نکته مهم: profiling واقعی نیاز به گوشی دارد؛ env پردازه عمداً خالی است (`includeParentEnvironment=false`, argv خالی) → GODEBUG/GODEBUG-pprof قابل تزریق نیست — هر knob آماری باید از stdin JSON بیاید یا اصلا اضافه نشود. اگر برای جمع‌آوری شواهد on-device (مثلاً رویداد دوره‌ای آمار goroutine/heap در لاگ) تغییر کوچکی لازم شد: فقط با کوچک‌ترین اصلاح + تست + commit مستقل و مطابق الگوی Stage 2/3/5.
+   - شواهد موجود قابل استفاده: خط `socks: conn tracked/untracked live=N` (Stage 2)، خط `upstream session established … remote=IP` (Stage 5)، شمارنده‌های zeptun (rx/tx) از MethodChannel.
+   - تنظیم GC/حافظه صرفاً برای کاهش مصرف ممنوع؛ اول profiling (قانون مأموریت). تغییر هم‌زمان چند متغیر ممنوع.
+   - مقایسه با Arman فقط مرجع؛ بدون دلیل فنی کپی نشود.
+3. قوانین: فقط مخزن `CHAKCAAD/AETHONE`؛ push فقط به `performance/firefox-vpn-optimization`؛ بدون Force Push/Release/تغییر pin upstream؛ CGO اندروید دست‌نخورده؛ محدودیت دیسک sandbox (کامپایل کامل upstream ممکن نیست — الگوی standalone-verification بخش ۱۰ Stage 5).
 4. پایان مرحله: commit مستقل + به‌روزرسانی همین فایل + push + گزارش با قالب ۱۰ بندی مأموریت + توقف.
 
 *(Token دسترسی در دستور مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
@@ -406,3 +500,4 @@ TunnelWriteBuffer کراندار 1MB (بدنه درخواست CONNECT) → TLS1.
 | 2 | `8865a8e` | fix(engine): restore the upstream max-conns cap (256), fix rejection slot-steal, live-conn diagnostics |
 | 3 | `6e78ed3` | fix(engine): restore the upstream session-established transport logging (stage 3) |
 | 4 | `2869f7c` | docs(performance): stage 4 — MTU audit (L4 termination: no wire fragmentation, download already jumbo, Arman Android also 1500; no default change) |
+| 5 | `cbc83f5` | fix(engine): record the connected endpoint (remote=IP) in the session-established log (stage 5) |
