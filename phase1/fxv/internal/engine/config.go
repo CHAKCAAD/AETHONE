@@ -24,20 +24,20 @@ type AuthConfig struct {
 // Config is the tunnel-role stdin line (engine.Config v1). Zero-valued
 // optional durations fall back to the upstream defaults.
 type Config struct {
-	Version            int         `json:"version"`
-	SocksListen        string      `json:"socksListen"`
-	Guardian           string      `json:"guardian"`
-	Country            string      `json:"country"`
-	Transport          string      `json:"transport"`
-	UpstreamOverride   string      `json:"upstreamOverride"`
-	UpstreamTimeoutMs  int64       `json:"upstreamTimeoutMs"`
-	HandshakeTimeoutMs int64       `json:"handshakeTimeoutMs"`
-	IdleTimeoutMs      int64       `json:"idleTimeoutMs"`
-	MaxConns           int         `json:"maxConns"`
-	ExitCheckURL       string      `json:"exitCheckUrl"`
-	ExitTimeoutMs      int64       `json:"exitTimeoutMs"`
-	LogLevel           string      `json:"logLevel"`
-	Auth               AuthConfig  `json:"auth"`
+	Version            int        `json:"version"`
+	SocksListen        string     `json:"socksListen"`
+	Guardian           string     `json:"guardian"`
+	Country            string     `json:"country"`
+	Transport          string     `json:"transport"`
+	UpstreamOverride   string     `json:"upstreamOverride"`
+	UpstreamTimeoutMs  int64      `json:"upstreamTimeoutMs"`
+	HandshakeTimeoutMs int64      `json:"handshakeTimeoutMs"`
+	IdleTimeoutMs      int64      `json:"idleTimeoutMs"`
+	MaxConns           int        `json:"maxConns"`
+	ExitCheckURL       string     `json:"exitCheckUrl"`
+	ExitTimeoutMs      int64      `json:"exitTimeoutMs"`
+	LogLevel           string     `json:"logLevel"`
+	Auth               AuthConfig `json:"auth"`
 
 	// cfgLine is the raw buffer reference, dropped (nil-ed) after the
 	// parse so the tokens do not linger in a second copy.
@@ -52,6 +52,20 @@ const (
 	DefaultHandshakeMs   = 10_000
 	DefaultExitCheckURL  = "https://www.cloudflare.com/cdn-cgi/trace"
 	DefaultExitTimeoutMs = 10_000
+
+	// DefaultMaxConns restores the upstream proxy-demo's
+	// defaultMaxConnections (256). Stage 2 of the performance
+	// mission found the adaptation had DROPPED it: a zero value
+	// reached the SOCKS server, whose contract reads <= 0 as
+	// UNLIMITED — every device flow then opened an h2 stream on the
+	// single upstream ClientConn with no ceiling, and x/net/http2
+	// blocks new streams indefinitely once the server's
+	// SETTINGS_MAX_CONCURRENT_STREAMS is reached
+	// (awaitOpenSlotForStreamLocked) — the mechanism behind the
+	// 200ms→8000ms ping creep. 256 is the upstream author's own
+	// shipped default, not a tuned guess; the host can still send
+	// an explicit maxConns to override.
+	DefaultMaxConns = 256
 )
 
 // ReadConfigLine reads exactly ONE JSON line from r (bounded by
@@ -112,6 +126,12 @@ func (c Config) Validate() (Config, error) {
 	}
 	if c.HandshakeTimeoutMs == 0 {
 		c.HandshakeTimeoutMs = DefaultHandshakeMs
+	}
+	if c.MaxConns == 0 {
+		c.MaxConns = DefaultMaxConns
+	}
+	if c.MaxConns < 0 {
+		return c, &ConfigError{Detail: detailMaxConnsNegative}
 	}
 	if c.ExitCheckURL == "" {
 		c.ExitCheckURL = DefaultExitCheckURL

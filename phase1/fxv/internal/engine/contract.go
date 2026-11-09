@@ -98,6 +98,7 @@ const (
         detailAuthAccessTokenMiss   = "authAccessTokenMissing"
         detailConfigNotJSON         = "configNotJSON"
         detailUpstreamOverrideBad   = "upstreamOverrideInvalid"
+        detailMaxConnsNegative      = "maxConnsNegative"
 )
 
 // Event is one stdout JSON line. Only authRefreshed and loginCompleted

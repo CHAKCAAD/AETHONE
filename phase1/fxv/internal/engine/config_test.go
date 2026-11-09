@@ -108,6 +108,36 @@ func TestDefaultsFilled(t *testing.T) {
 	if v.LogLevel != "normal" {
 		t.Fatalf("log level default = %q", v.LogLevel)
 	}
+	// Stage 2: an omitted maxConns must fall back to the upstream
+	// proxy-demo default (256), never the SOCKS server's 0=unlimited.
+	if v.MaxConns != DefaultMaxConns {
+		t.Fatalf("max conns default = %d, want %d", v.MaxConns, DefaultMaxConns)
+	}
+	if v.MaxConns != 256 {
+		t.Fatalf("upstream defaultMaxConnections drifted: %d", v.MaxConns)
+	}
+}
+
+func TestMaxConnsExplicitPreserved(t *testing.T) {
+	c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","maxConns":64,"auth":{"accessToken":"a"}}`)
+	v, err := c.Validate()
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if v.MaxConns != 64 {
+		t.Fatalf("explicit max conns = %d, want 64", v.MaxConns)
+	}
+}
+
+func TestMaxConnsNegativeRejected(t *testing.T) {
+	c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","maxConns":-1,"auth":{"accessToken":"a"}}`)
+	_, err := c.Validate()
+	if err == nil {
+		t.Fatal("negative max conns must be refused")
+	}
+	if !strings.Contains(err.Error(), detailMaxConnsNegative) {
+		t.Fatalf("expected %s, got %v", detailMaxConnsNegative, err)
+	}
 }
 
 func TestIPv6LoopbackListen(t *testing.T) {

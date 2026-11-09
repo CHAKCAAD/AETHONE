@@ -13,8 +13,8 @@
 | Branch کاری | `performance/firefox-vpn-optimization` |
 | Commit پایه شاخه | `ff9bc38` (= tip شاخه `integration/firefox-vpn-debug`) |
 | Commit آخرین مرحله تکمیل‌شده | (در انتهای همین فایل — بخش «گیت مرحله آخر») |
-| مرحله تکمیل‌شده آخر | **Stage 1 — بررسی Ping و صحت اندازه‌گیری: PASS** (روش سالم؛ بدون تغییر کد) |
-| مرحله فعلی برای اجرای بعدی | **Stage 2 — مسیر انتقال داده، TUN و صف بسته‌ها (اولویت بسیار بالا)** |
+| مرحله تکمیل‌شده آخر | **Stage 2 — مسیر انتقال داده، TUN و صف بسته‌ها: PASS** (بازگرداندن سقف upstream + رفع باگ slot-steal + تست‌ها سبز) |
+| مرحله فعلی برای اجرای بعدی | **Stage 3 — Transport و نسخه HTTP** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### جدول مراحل
@@ -23,7 +23,7 @@
 |---|---|
 | 0 — تثبیت نسخه و خط مبنا | **PASS** (بدون تغییر کد؛ فقط این فایل) |
 | 1 — بررسی Ping و صحت اندازه‌گیری | **PASS** (شواهد ثبت شد؛ روش سالم؛ بدون تغییر کد — بخش «نتیجه Stage 1») |
-| 2 — مسیر انتقال داده، TUN و صف‌ها | PENDING |
+| 2 — مسیر انتقال داده، TUN و صف‌ها | **PASS** (اصلاح واقعی: maxConns=256 پیش‌فرض upstream + رفع باگ slot-steal + لاگ تشخیصی + ۶ تست جدید — بخش «نتیجه Stage 2») |
 | 3 — Transport و نسخه HTTP | PENDING |
 | 4 — MTU | PENDING |
 | 5 — IPv4/IPv6 و Endpoint | PENDING |
@@ -123,14 +123,16 @@ uid خود اپ از TUN مستثنا — جلوگیری از حلقه مسیر.
 |---|---|---|---|
 | O-1 | probe زنده سنگین از آرمان است (هر ۵s اتصال+CONNECT+HTTP کامل+close) | tunnel_probe.dart + adapter:1984 | **تحلیل شد (S1)**: عدد ~۲-۳× معنای ping آرمان است (CONNECT+درخواست/پاسخ+انتشار close)؛ DNS محلی و TLS در هر probe انجام نمی‌شود؛ سربار ترافیک/CPU ناچیز |
 | O-2 | علامت ۸۰۰۰ms | _probeTimeout=20s | **حل شد (S1)**: ۸۰۰۰ms یک اندازه‌گیری موفق واقعی است، نه آرتیفکت timeout/retry (timeout به مسیر خطا/strike می‌رود نه عدد)؛ رشد 200→8000 = تخریب واقعی مسیر داده |
-| O-3 | MTU رابط TUN هاردکد 1500 (در برابر 9000 آداپتور آرمان) — بدون اندازه‌گیری تغییری نباید کند | AethoneVpnService.kt:407 | Stage 4 |
-| O-4 | transport پیش‌فرض h2 است (config Validate: transport==''→h2؛ Dart هم 'h2') | engine/config.go + firefox_protocol.dart | Stage 3 |
-| O-5 | رفتار صف/buffer/backpressure در zeptun و internal/socks هنوز بررسی نشده | — | Stage 2 |
-| O-6 | **جدید (S1)**: idleTimeout جریان‌های SOCKS نامحدود است (Dart فیلد idleTimeoutMs نمی‌فرستد؛ پیش‌فرض 0 = unlimited) → جریان‌های بازِ اپ‌های دیگر روی استریم‌های h2 تا ابد می‌مانند | engine/config.go (بدون پیش‌فرض idle) + socks/server.go NewServer | Stage 2 |
-| O-7 | **جدید (S1)**: maxConns نامحدود (0 = unlimited) — بدون سقف اتصال هم‌زمان به موتور | همان شواهد O-6 | Stage 2 |
-| O-8 | **جدید (S1)**: همه جریان‌های دستگاه روی «یک» اتصال TLS+h2 مالتی‌پلکس‌شده برای حمل می‌شوند → head-of-line blocking تحت packet loss کل تونل را کند می‌کند (توضیح‌دهنده قوی برای رشد 200→8000) | upstream/h2.go (تک session، تک ClientConn) | Stage 2/3 |
+| O-3 | MTU رابط TUN هاردکد 1500 (در برابر 9000 آداپتور آرمان) — بدون اندازه‌گیری تغییری نباید کند | AethoneVpnService.kt:407 | Stage 4 — بدون اندازه‌گیری تغییری نکرد |
+| O-4 | transport پیش‌فرض h2 است (config Validate: transport==''→h2؛ Dart هم 'h2') | engine/config.go + firefox_protocol.dart | Stage 3 — تایید شد که upstream هم defaultUpstreamConnections=1 (تک‌اتصال) دارد |
+| O-5 | رفتار صف/buffer/backpressure در zeptun و internal/socks | — | **بررسی شد (S2)**: TunnelWriteBuffer کراندار 1MB + backpressure صحیح؛ copyConn 64KB pool + drain نیم‌بسته ۲ دقیقه؛ بدون صف نامحدود در Go. بافرهای zeptun هم کراندار (rx 64KB/tx 128KB/tx budget 4MB) |
+| O-6 | idleTimeout جریان‌های SOCKS نامحدود (پیش‌فرض 0 = unlimited) | engine/config.go + firefox_protocol.dart | **تحلیل شد (S2)**: پیش‌فرض upstream demo هم 0 است؛ zeptun جریان idle دستگاه را بعد از ۶۰۰s می‌بندد (cascade به بستن استریم h2) — بدون شواهد on-device تغییری نکرد؛ لاگ تشخیصی live=N برای پایش اضافه شد |
+| O-7 | maxConns نامحدود (0 = unlimited) — بدون سقف اتصال هم‌زمان | engine/config.go + main.go:270 | **اصلاح شد (S2)**: پیش‌فرض 256 موتور بازگردانده شد (= defaultMaxConnections خود upstream که در تطبیق حذف شده بود) + رد مقدار منفی + باگ slot-steal در handleConn رفع شد |
+| O-8 | همه جریان‌های دستگاه روی یک اتصال TLS+h2 مالتی‌پلکس → HoL تحت loss | upstream/h2.go (تک session، تک ClientConn) | **تایید شد (S2)**: تک‌اتصال = طراحی خود upstream (defaultUpstreamConnections=1؛ pool گزینه‌ای است که فاز ۱ آگاهانه حذف کرده). مکانیزم دقیق: x/net/http2 awaitOpenSlotForStreamLocked منتظر نامحدود slot می‌ماند وقتی استریم‌های باز به MAX_CONCURRENT_STREAMS سرور برسند → رشد تدریجی ping. سقف 256 بازگردانده شد؛ تجزیه pool به Stage 3 موکول |
+| O-9 | **جدید (S2)**: باگ slot-steal — defer releaseConnSlot قبل از acquire ثبت شده بود؛ هر اتصال ردشده توکن یک اتصال زنده را می‌دزدد و سقف را فرسوده می‌کند | socks/server.go handleConn (قبل از اصلاح) در برابر upstream:2026-2033 | **اصلاح شد (S2)**: ترتیب defer مطابق upstream شد؛ تست رگرسیون دو-رد شدن متوالی را تضمین می‌کند (روی کد باگ‌دار FAIL شد، روی اصلاح PASS) |
+| O-10 | **جدید (S2)**: مقدار واقعی SETTINGS_MAX_CONCURRENT_STREAMS سرور فایرفاکس و رفتار on-device نامشخص | — | NOT TESTED — نیاز به گوشی؛ لاگ تشخیصی live=N + رد سقف با پیام `connection limit reached` برای پایش اضافه شد |
 
-علت ریشه‌ای: **هنوز اثبات نشده**. پس از Stage 1: روش اندازه‌گیری ping متهم تبرئه شد؛ ظن قوی به تخریب مسیر داده (تک‌اتصال h2 + جریان‌های بی‌پایان idle) — نیازمند شواهد Stage 2.
+علت ریشه‌ای: **دو عامل ساختاری با شواهد کد اثبات شد (S2)** — (۱) حذف سقف اتصال upstream (maxConns=256→unlimited) + (۲) مسدودشدن نامحدود http2 در awaitOpenSlotForStreamLocked هنگام پرشدن سقف استریم سرور؛ ترکیب این دو، رشد تدریجی ping 200→8000ms را توضیح می‌دهد (هر اتصال دستگاه = یک استریم باز روی تک ClientConn؛ probe هر ۵s باید برای slot صف بگیرد). باگ slot-steal (O-9) هم که در سقف جدید فعال می‌شد، رفع شد. تأیید نهایی on-device (مقدار سقف سرور + عدد live=N در عمل) NOT TESTED — معیارهای تأیید در بخش Stage 2.
 
 ### ۸. خط مبنا (Baseline)
 
@@ -195,15 +197,85 @@ uid خود اپ از TUN مستثنا — جلوگیری از حلقه مسیر.
 
 ---
 
+## نتیجه Stage 2 (اجرای 2026-11-09) — مسیر انتقال داده، TUN و صف بسته‌ها
+
+### ۱. مسیر کامل داده (رفت و برگشت) — استخراج‌شده از سورس
+
+```text
+رفت: اپ → TUN fd → zeptun (Zig userspace stack، preset mobile: rx window 64KB،
+tx buffer 128KB، tx budget 4MB، max_tcp_sessions=1200، tcp_idle_timeout 600s،
+1 io worker) → TCP به 127.0.0.1:1822 → socks.Server.handleConn (سقف جدید ۲۵۶) →
+controller.OpenTunnel → H2ProxySession.OpenTunnel (تک ClientConn) →
+TunnelWriteBuffer کراندار 1MB (بدنه درخواست CONNECT) → TLS1.2+ALPN-h2 → سرور
+برگشت: سرور → resp.Body (استریم h2) → TunnelConn.Read → copyConn (بافر pooled 64KB)
+→ سوکت loopback → zeptun → TUN → اپ
+پاک‌سازی: EOF هر جهت → بستن هر دو conn → TunnelConn.Close → CloseWrite(END_STREAM)
++ CloseRead + cancel؛ zeptun هم جریان idle >600s را abort و سوکت handler را می‌بندد
+(sys.close(up.fd) در tryFree) → cascade به EOF سمت Go
+```
+
+### ۲. شواهد کلیدی (همه از سورس؛ بدون حدس)
+
+| شواهد | محل |
+|---|---|
+| پیش‌فرض‌های upstream demo: handshake=10s، idle=0، **maxConns=256**، upstreamConns=1 | `phase1/firefox-vpn-client/cmd/proxy-demo/main.go:59-62` (پین 55ad91a2 تأیید bit-exact با fetch_upstream.sh) |
+| AETHONE فقط پیش‌فرض handshake را حفظ کرده بود؛ MaxConns بدون پیش‌فرض → 0 → unlimited | `fxv/internal/engine/config.go` (قبل از اصلاح) + `main.go:270-273` |
+| Dart هیچ‌گاه idleTimeoutMs/maxConns نمی‌فرستد | `firefox_protocol.dart` toJson (فیلدها اصلا وجود ندارند) |
+| ترتیب defer صحیح upstream (release فقط بعد از acquire) | upstream main.go:2026-2033 در برابر نسخه تطبیق‌یافته |
+| مسدود شدن نامحدود RoundTrip وقتی استریم‌های باز = MAX_CONCURRENT_STREAMS سرور | x/net/http2 v0.53.0 transport.go:1741 `awaitOpenSlotForStreamLocked` → `cc.cond.Wait()` |
+| مرگ جریان idle توسط zeptun بعد از 600s + بستن سوکت handler | native/zeptun src/stack/tcp.zig:1747-1752 + tryFree (sys.close(up.fd)) |
+| کراندار بودن بافرها: TunnelWriteBuffer 1MB + notFull.Wait (backpressure) | fxv/internal/upstream/tunnel.go:76-108 |
+| drain نیم‌بسته کراندار (۲ دقیقه) | fxv/internal/socks/server.go halfCloseDrainTimeout |
+
+### ۳. علت ریشه‌ای اثبات‌شده (سطح کد)
+
+۱. **حذف سقف اتصال**: تطبیق فاز ۱ پیش‌فرض maxConns=256 خود upstream را حذف کرد → موتور با سقف نامحدود اجرا می‌شد. هر جریان TCP دستگاه = یک استریم h2 باز روی تک ClientConn.
+۲. **مسدودسازی نامحدود http2**: وقتی تعداد استریم‌های باز به SETTINGS_MAX_CONCURRENT_STREAMS سرور برسد، هر CONNECT جدید (شامل probe هر ۵s) در `awaitOpenSlotForStreamLocked` به‌صورت نامحدود منتظر slot می‌ماند (تنها مرز = OpenTunnel timeout ۲۰s که به مسیر خطا می‌رود). با انباشت جریان‌ها (zeptun تا 1200 session و 600s idle اجازه می‌دهد)، زمان انتظار probe به‌تدریج رشد می‌کند → **الگوی دقیق 200→8000ms**.
+۳. **باگ slot-steal (کشف جدید)**: `defer s.releaseConnSlot()` قبل از acquire ثبت شده بود → هر اتصال ردشده یک توکن از اتصال زنده می‌دزدید → سقف با هر رد شدن یکی فرسوده می‌شد (روی کد قبلی با maxConns=0 نامرئی؛ با هر سقفی فعال). نسخه upstream ترتیب صحیح دارد.
+
+### ۴. اصلاح اعمال‌شده (کوچک‌ترین اصلاح مؤثر — یک متغیر عملکردی)
+
+- **`fxv/internal/engine/config.go`**: ثابت `DefaultMaxConns = 256` + در Validate: صفر→۲۵۶ + رد مقدار منفی (`maxConnsNegative`). این بازگرداندن پیش‌فرض خود upstream است، نه مقدار tune‌شده. مقدار صریح Dart همچنان معتبر است (override).
+- **`fxv/internal/engine/contract.go`**: جزئیات خطای جدید `maxConnsNegative`.
+- **`fxv/internal/socks/server.go`**: (الف) رفع باگ slot-steal — ترتیب defer مطابق upstream؛ (ب) لاگ تشخیصی `socks: conn tracked/untracked live=N` (Debug، از طریق stderr → core-log.txt مالک) برای پایش انباشت جریان on-device.
+- **`fxv/cmd/libfirefoxvpn/main.go`**: خط راه‌اندازی به سبک upstream با حدود مؤثر: `socks5 ready on %s handshake_timeout=%s idle_timeout=%s max_conns=%d`.
+- **idleTimeout عمداً دست نخورد** — پیش‌فرض upstream (0) است؛ تغییرش بدون اندازه‌گیری حدسی می‌بود (قانون ماموریت). پایش با live=N انجام می‌شود؛ تصمیم در مراحل بعد با شواهد on-device.
+- معماری/پورت/pin/CGO/Child-Process همه دست‌نخورده.
+
+### ۵. تست‌های Stage 2 (Go 1.25.0 — همان نسخه CI؛ ابزار در sandbox نصب شد)
+
+| تست | نتیجه |
+|---|---|
+| `go test ./internal/socks/ ./internal/engine/` (قبل از تغییرات — baseline) | PASS |
+| `TestConnectionLimitRejectsBeyondCap` (رد سریع فراتر از سقف + عدم فرسایش سقف + بازیابی پس از آزادسازی slot) | PASS — و روی کد باگ‌دار FAIL شد (اثبات اثر تست رگرسیون) |
+| `TestConcurrentTunnelsBelowCapRelay` (۱۶ تونل هم‌زمان زیر سقف ۱۶) | PASS |
+| `TestSequentialTunnelsNoConnOrGoroutineLeak` (۱۰۰ چرخه؛ صفر conn باقی‌مانده؛ goroutine ≤ baseline+2؛ شمارش لاگ تشخیصی) | PASS |
+| `TestMaxConns*` (پیش‌فرض 256 / حفظ مقدار صریح 64 / رد -1) — سه تست جدید در engine | PASS |
+| کل بسته‌ها با `-race` (socks + engine) | PASS (1.06s / 1.02s) |
+| fakeOpener ارتقا یافت: `halfClosePipeConn` با CloseWrite واقعی (مثل TunnelConn) تا drain نیم‌بسته در تست‌ها فوری تمام شود | PASS |
+
+### ۶. موارد NOT TESTED
+
+- **Build کامل موتور (cmd/libfirefoxvpn با quic-go/utls) محلی ممکن نشد** — محدودیت دیسک sandbox (~180MB آزاد؛ درخت وابستگی‌ها بیشتر می‌خواهد). کامپایل parse-check شد (gofmt -e) و هر دو پکیج تغییریافته کامل تست شدند. **معیار تأیید**: job «Firefox engine (Go 1.25.0 — CGO + NDK r28c, all ABIs)» در CI (workflow_dispatch روی integration/firefox-vpn-debug بعد از merge، یا دستور مالک) باید سبز شود.
+- **رفتار on-device**: مقدار واقعی MAX_CONCURRENT_STREAMS سرور، مسیر رشد live=N، و اثر اصلاح بر رشد ping — نیاز به گوشی مالک. **معیار تأیید**: در core-log.txt، خط `socks5 ready ... max_conns=256` باید دیده شود؛ روند live=N باید زیر 256 بماند؛ اگر `connection limit reached` ظاهر شد یعنی دستگاه واقعا >256 جریان هم‌زمان دارد (آن موقع باید سقف بازبینی شود)؛ رشد ping باید متوقف/کند شود.
+- تست‌های Flutter/Dart اجرا نشدند (SDK موجود نیست؛ تغییر Dart وجود ندارد).
+
+### ۷. وضعیت گیت Stage 2
+
+- Commit مستقل روی `performance/firefox-vpn-optimization` (جدول انتهای فایل)؛ فایل‌های تغییرکرده: `phase1/fxv/internal/engine/{config.go,config_test.go,contract.go}`، `phase1/fxv/internal/socks/{server.go,server_test.go}`، `phase1/fxv/cmd/libfirefoxvpn/main.go`، همین فایل پیشرفت.
+- کپی upstream پس از بررسی دوباره fetch شد و manifest SHA256 بدون تغییر ماند (پین سالم؛ فایل upstream هرگز commit نمی‌شود).
+
+---
+
 ## دستور دقیق ادامه کار (جلسه بعدی)
 
 1. همین فایل را بخوان؛ `git -C <repo> log --oneline -3` و `git status` را بررسی کن.
-2. **فقط Stage 2 را اجرا کن** (اولویت بسیار بالا): مسیر انتقال داده، TUN و صف بسته‌ها —
-   - مسیر برگشت ترافیک را جداگانه استخراج کن.
-   - `phase1/fxv/internal/upstream/tunnel.go` (TunnelConn + write buffer + backpressure) را کامل بخوان؛ `h2.go`/`h3.go` فقط در حد رفتار استریم و بستن.
-   - سرنخ‌های O-6/O-7/O-8 را با شواهد کد اثبات یا رد کن: شمارش جریان‌های هم‌زمان/نشت goroutine/FD در `socks/server.go` و `h2.go`؛ رفتار zeptun (تعداد flowها، طول عمر، keepalive) در سطح toml/preset.
-   - سناریوی «بار سنگین + packet loss» را از کد بازسازی کن (تک ClientConn h2 → HoL)؛ اگر مشکل با شواهد کد اثبات شد، کوچک‌ترین اصلاح (مثلاً idle timeout متناهی برای جریان‌های SOCKS یا drain بهینه) + تست Go (`go test` موجود در فاز تا جایی که toolchain اجازه دهد) — بدون تغییر معماری/پورت/pin.
-   - اگر تست محلی ممکن نبود: NOT TESTED صریح + معیار تأیید برای مالک/CI ثبت شود.
+2. **فقط Stage 3 را اجرا کن**: Transport و نسخه HTTP —
+   - از سورس واقعی مشخص کن موتور الان از چه استفاده می‌کند (تأیید فعلی: transport='h2' پیش‌فرض؛ h3 هم پیاده‌سازی شده و از config قابل انتخاب است — هر دو TunnelConn یکسان برمی‌گردانند).
+   - ارزیابی: upstream خودش گزینه `-upstream-conns` (pool با client-IP affinity + failover) دارد که فاز ۱ آگاهانه حذف کرده — افزودن pool تغییر معماری بزرگ است؛ فقط با شواهد on-device (مثلاً HoL ماندگار زیر loss که با سقف 256 حل نشد) و با تأیید جداگانه مالک.
+   - مقایسه h2/h3 در سطح API موجود موتور (config transport)؛ اثر keepaliveها (PING هر 10s/مهلت 5s) و ReadIdleTimeout/PingTimeout/WriteByteTimeout (30/15/30s) را روی رفتار زیر loss تحلیل کن.
+   - اگر تغییری اعمال شد: فقط همان یک متغیر + تست + commit مستقل.
+   - نکته Stage 2 برای ادامه: لاگ‌های `live=N` باید از گوشی مالک جمع شوند تا تصمیم idle timeout / سقف / pool مبتنی بر داده باشد (در NOT TESTED بخش Stage 2 معیارها ثبت شده).
 3. قوانین: فقط مخزن `CHAKCAAD/AETHONE`؛ push فقط به `performance/firefox-vpn-optimization`؛ بدون Force Push/Release/تغییر pin upstream؛ CGO اندروید دست‌نخورده؛ چند متغیر هم‌زمان تغییر نکند.
 4. پایان مرحله: commit مستقل + به‌روزرسانی همین فایل + push + گزارش با قالب ۱۰ بندی مأموریت + توقف.
 
@@ -217,3 +289,4 @@ uid خود اپ از TUN مستثنا — جلوگیری از حلقه مسیر.
 |---|---|---|
 | 0 | `3639838` | docs(performance): stage 0 — version match, data path, ping method, progress file |
 | 1 | `c1951a7` | docs(performance): stage 1 — ping measurement audit (method sound, 8000ms real) |
+| 2 | (پس از commit این جلسه تکمیل شود) | fix(engine): restore the upstream max-conns cap (256), fix rejection slot-steal, live-conn diagnostics |

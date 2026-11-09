@@ -131,13 +131,20 @@ func (s *Server) Listen(addr string) (net.Addr, error) {
 func (s *Server) track(conn net.Conn) {
 	s.mu.Lock()
 	s.conns[conn] = struct{}{}
+	n := len(s.conns)
 	s.mu.Unlock()
+	// Stage-2 diagnostic: the live count rides the existing debug
+	// line so the owner's core-log.txt shows the stream-accumulation
+	// trajectory of the single upstream session over time.
+	s.log.Debugf("socks: conn tracked live=%d", n)
 }
 
 func (s *Server) untrack(conn net.Conn) {
 	s.mu.Lock()
 	delete(s.conns, conn)
+	n := len(s.conns)
 	s.mu.Unlock()
+	s.log.Debugf("socks: conn untracked live=%d", n)
 }
 
 // Close stops accepting and closes every live client connection.
@@ -178,13 +185,21 @@ func (s *Server) releaseConnSlot() {
 }
 
 func (s *Server) handleConn(conn net.Conn) {
-	defer s.releaseConnSlot()
+	// Stage-2 fix (upstream parity): the deferred release must be
+	// registered ONLY after a successful acquire. Registering it
+	// before the acquire — as the adaptation had — makes every
+	// REJECTED connection run releaseConnSlot anyway: a receive
+	// from the full buffered channel that STEALS a live
+	// connection's slot, so each rejection erodes the cap by one
+	// (cap=N degrades toward unlimited under rejection storms).
+	// The upstream registers the release after the acquire; so do we.
 	defer conn.Close()
 	clientAddr := logAddr(conn.RemoteAddr())
 	if !s.acquireConnSlot() {
 		s.log.Warnf("socks: client rejected: connection limit reached client=%s", clientAddr)
 		return
 	}
+	defer s.releaseConnSlot()
 	s.log.Debugf("socks: client connected client=%s", clientAddr)
 
 	if s.handshakeTimeout > 0 {
@@ -507,4 +522,4 @@ func logAddr(addr net.Addr) string {
 type discardSink struct{}
 
 func (discardSink) Debugf(string, ...any) {}
-func (discardSink) Warnf(string, ...any) {}
+func (discardSink) Warnf(string, ...any)  {}

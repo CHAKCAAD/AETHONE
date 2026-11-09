@@ -281,7 +281,15 @@ func runTunnel() int {
         }
         defer server.Close()
         _ = emit.Emit(engine.Event{Name: engine.EvSocksReady, Addr: addr.String()})
-        log.Infof("socks5 ready on %s", addr.String())
+        // Stage 2: mirror the upstream proxy-demo's startup log so the
+        // effective SOCKS-layer limits are visible on-device (core-log.txt)
+        // — maxConns now defaults to the upstream's 256 when the host
+        // sends 0; idleTimeout stays 0 (the upstream demo default).
+        log.Infof("socks5 ready on %s handshake_timeout=%s idle_timeout=%s max_conns=%d",
+                addr.String(),
+                time.Duration(cfg.HandshakeTimeoutMs)*time.Millisecond,
+                time.Duration(cfg.IdleTimeoutMs)*time.Millisecond,
+                cfg.MaxConns)
 
         // 6. the engine-side exit probe — NON-FATAL evidence only.
         go func() {
