@@ -14,6 +14,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // AGP 9 disables buildFeatures.resValues BY DEFAULT (the phase-2 CI
+    // failure: "Build Type debug contains custom resource values, but the
+    // feature is disabled") — the DA variant's resValue app_name needs the
+    // feature explicitly back on.
+    buildFeatures {
+        resValues = true
+    }
+
     defaultConfig {
         applicationId = "com.chakcaad.aethone"
         // minSdk 24 = the recorded CANDIDATE (workflow env note + employer note
