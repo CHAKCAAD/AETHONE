@@ -13,8 +13,8 @@
 | Branch کاری | `performance/firefox-vpn-optimization` |
 | Commit پایه شاخه | `ff9bc38` (= tip شاخه `integration/firefox-vpn-debug`) |
 | Commit آخرین مرحله تکمیل‌شده | (در انتهای همین فایل — بخش «گیت مرحله آخر») |
-| مرحله تکمیل‌شده آخر | **Stage 0 — تثبیت نسخه و خط مبنا: PASS** |
-| مرحله فعلی برای اجرای بعدی | **Stage 1 — بررسی Ping و صحت اندازه‌گیری** |
+| مرحله تکمیل‌شده آخر | **Stage 1 — بررسی Ping و صحت اندازه‌گیری: PASS** (روش سالم؛ بدون تغییر کد) |
+| مرحله فعلی برای اجرای بعدی | **Stage 2 — مسیر انتقال داده، TUN و صف بسته‌ها (اولویت بسیار بالا)** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### جدول مراحل
@@ -22,7 +22,7 @@
 | مرحله | وضعیت |
 |---|---|
 | 0 — تثبیت نسخه و خط مبنا | **PASS** (بدون تغییر کد؛ فقط این فایل) |
-| 1 — بررسی Ping و صحت اندازه‌گیری | PENDING (بعدی) |
+| 1 — بررسی Ping و صحت اندازه‌گیری | **PASS** (شواهد ثبت شد؛ روش سالم؛ بدون تغییر کد — بخش «نتیجه Stage 1») |
 | 2 — مسیر انتقال داده، TUN و صف‌ها | PENDING |
 | 3 — Transport و نسخه HTTP | PENDING |
 | 4 — MTU | PENDING |
@@ -119,15 +119,18 @@ uid خود اپ از TUN مستثنا — جلوگیری از حلقه مسیر.
 
 ### ۷. مشکل‌های شناسایی‌شده و مشاهدات (فرضیه — علت ریشه‌ای هنوز اثبات نشده)
 
-| # | مشاهده | شواهد | مرحله بررسی |
+| # | مشاهده | شواهد | وضعیت |
 |---|---|---|---|
-| O-1 | probe زنده سنگین‌تر از لازم است: هر ۵ ثانیه اتصال+CONNECT+HTTP کامل+close؛ عدد شامل DNS هسته و راه‌اندازی جریان است | tunnel_probe.dart + platform_engine_adapter.dart:1984 | Stage 1 |
-| O-2 | علامت ۸۰۰۰ms زیر timeout پروب (۲۰s) است → تأخیر واقعی/صف‌بندی است نه آرتیفکت timeout — اما دقیق‌بودن عدد باید در Stage 1 روشن شود | _probeTimeout=20s | Stage 1 |
+| O-1 | probe زنده سنگین از آرمان است (هر ۵s اتصال+CONNECT+HTTP کامل+close) | tunnel_probe.dart + adapter:1984 | **تحلیل شد (S1)**: عدد ~۲-۳× معنای ping آرمان است (CONNECT+درخواست/پاسخ+انتشار close)؛ DNS محلی و TLS در هر probe انجام نمی‌شود؛ سربار ترافیک/CPU ناچیز |
+| O-2 | علامت ۸۰۰۰ms | _probeTimeout=20s | **حل شد (S1)**: ۸۰۰۰ms یک اندازه‌گیری موفق واقعی است، نه آرتیفکت timeout/retry (timeout به مسیر خطا/strike می‌رود نه عدد)؛ رشد 200→8000 = تخریب واقعی مسیر داده |
 | O-3 | MTU رابط TUN هاردکد 1500 (در برابر 9000 آداپتور آرمان) — بدون اندازه‌گیری تغییری نباید کند | AethoneVpnService.kt:407 | Stage 4 |
-| O-4 | upstream موتور هم h2.go و هم h3.go دارد؛ transport فعال واقعی و امکان انتخاب آن هنوز از سورس استخراج نشده | phase1/fxv/internal/upstream/ | Stage 3 |
+| O-4 | transport پیش‌فرض h2 است (config Validate: transport==''→h2؛ Dart هم 'h2') | engine/config.go + firefox_protocol.dart | Stage 3 |
 | O-5 | رفتار صف/buffer/backpressure در zeptun و internal/socks هنوز بررسی نشده | — | Stage 2 |
+| O-6 | **جدید (S1)**: idleTimeout جریان‌های SOCKS نامحدود است (Dart فیلد idleTimeoutMs نمی‌فرستد؛ پیش‌فرض 0 = unlimited) → جریان‌های بازِ اپ‌های دیگر روی استریم‌های h2 تا ابد می‌مانند | engine/config.go (بدون پیش‌فرض idle) + socks/server.go NewServer | Stage 2 |
+| O-7 | **جدید (S1)**: maxConns نامحدود (0 = unlimited) — بدون سقف اتصال هم‌زمان به موتور | همان شواهد O-6 | Stage 2 |
+| O-8 | **جدید (S1)**: همه جریان‌های دستگاه روی «یک» اتصال TLS+h2 مالتی‌پلکس‌شده برای حمل می‌شوند → head-of-line blocking تحت packet loss کل تونل را کند می‌کند (توضیح‌دهنده قوی برای رشد 200→8000) | upstream/h2.go (تک session، تک ClientConn) | Stage 2/3 |
 
-علت ریشه‌ای: **هنوز مشخص نیست** — هیچ اصلاح حدسی در Stage 0 انجام نشد.
+علت ریشه‌ای: **هنوز اثبات نشده**. پس از Stage 1: روش اندازه‌گیری ping متهم تبرئه شد؛ ظن قوی به تخریب مسیر داده (تک‌اتصال h2 + جریان‌های بی‌پایان idle) — نیازمند شواهد Stage 2.
 
 ### ۸. خط مبنا (Baseline)
 
@@ -157,11 +160,51 @@ uid خود اپ از TUN مستثنا — جلوگیری از حلقه مسیر.
 
 ---
 
+## نتیجه Stage 1 (اجرای 2026-11-09) — بررسی Ping و صحت اندازه‌گیری
+
+### پاسخ پرسش‌های مأموریت (با شواهد کد)
+
+| پرسش | پاسخ | شواهد |
+|---|---|---|
+| مقصد Ping | `www.cloudflare.com:80` — مقصد اینترنتی (نه سرور VPN)، از داخل تونل | tunnel_probe.dart:71-72 |
+| اندازه‌گیری از داخل تونل؟ | بله — SOCKS5 موتور روی 127.0.0.1:1822 (loopback؛ ترافیک خود اپ از TUN مستثنا) | tunnel_probe.dart + AethoneVpnService.kt (disallow خود اپ) |
+| DNS در هر probe؟ | خیر محلی — CONNECT با ATYP=domain است؛ «پراکسی» دامنه را سمت سرور حل می‌کند (هر probe = ۱ استریم h2 جدید) | socks/server.go Handshake/ReadAddr + h2.go OpenTunnel |
+| TLS در هر probe؟ | خیر — session طولانی‌عمر TLS1.2+ALPN-h2 یک‌بار برقرار می‌شود؛ خود trace روی پورت 80 plain است | h2.go NewH2ProxySession |
+| Timeoutها | probe دات: ۲۰s (تیکر) / ۸s (اسکن هوشمند)؛ engine: handshake ۱۰s ، OpenTunnel ۲۰s؛ keepalive: PING هر ۱۰s با مهلت ۵s | adapter:598,655 + engine/config.go + h2.go:27-28 |
+| Probe هم‌زمان | دقیقاً ۱ — گارد `_ticking` + تیکر تکی + اسکن ترتیبی؛ probeها stack نمی‌شوند (v4.26) | adapter:1987-1998 |
+| باقی‌ماندن probe بعد از timeout | خیر — Dart در finally سیکت را destroy می‌کند؛ engine با خطای copy هر دو conn را می‌بندد و استریم h2 کنسل می‌شود | tunnel_probe.dart trace/finally + socks/server.go ProxyBidirectional/copyConn |
+| مدیریت Retry | walk اتصال: هر ۲s داخل بودجه؛ حالت متصل: سلامت درجه‌بندی‌شده — listener رد شد→۲ strike؛ listener جواب داد→۱۲ تیک (۶۰s) کاهش‌یافته→EngineHealthProbeFailed؛ بدون طوفان retry | adapter:1845-1855, 2097-2118 |
+| سربار CPU/ترافیک سیستم ping | ناچیز — چند صد بایت هر ۵s + PING h2 هر ۱۰s + یک exit probe فقط در راه‌اندازی | adapter _tick + h2.go runKeepAlive + main.go:288 |
+| ۸۰۰۰ms واقعی یا آرتیفکت؟ | **واقعی** — عدد یک probe موفق است (۸۰۰۰ < timeout ۲۰s)؛ timeout به مسیر خطا می‌رود نه به عدد؛ retry در عدد وارد نمی‌شود | تحلیل کامل مسیر بالا |
+
+### تحلیل ساختاری عدد (مقایسه با Arman)
+
+- probe آرمان: فقط RTT دستور CONNECT روی جلسه H2 موجود (best-of-2) ≈ ~۲ مسیر RTT.
+- probe AETHONE: CONNECT (شامل اتصال سمت سرور پراکسی به cloudflare) + درخواست/پاسخ HTTP + انتشار close ≈ ~۳-۴ مسیر RTT.
+- نتیجه: برای یک کیفیت شبکه یکسان، عدد AETHONE ساختاراً ~۲-۳× بزرگ‌تر از آرمان است (200ms در AETHONE ≈ ~70-100ms در آرمان). این تورم «ثابت» است و رشد تدریجی 200→8000 را توضیح نمی‌دهد.
+
+### نتیجه Stage 1
+
+- **روش Ping سالم است** → طبق دستور مأموریت («اگر روش Ping سالم بود، شواهد را ثبت و سراغ مرحله بعد برو») هیچ تغییر کدی انجام نشد. حفظ روش فعلی همچنین مقایسه before/after مرحله ۸ را معتبر نگه می‌دارد.
+- **رشد 200→8000ms تخریب واقعی مسیر داده است** (نه خطای اندازه‌گیری) → شکار علت در Stage 2، با سه سرنخ جدید مستندشده: O-6 (idle نامحدود) ، O-7 (maxConns نامحدود) ، O-8 (تک‌اتصال h2 مالتی‌پلکس همه جریان‌های دستگاه → head-of-line blocking تحت loss).
+- موارد جانبی تأییدشده: پورت 1822 فقط برای موتور Firefox (zeptun در حالت تونل به آن سوکت می‌زند)؛ exit probe موتور فقط یک‌بار در راه‌اندازی اجرا می‌شود؛ renewal مسیر کنترلی جدا دارد (FetchProxyPass به guardian) و روی session داده h2 سوار نیست.
+
+### تست‌های Stage 1
+
+- **NOT RUN** — هیچ کدی تغییر نکرد (تحلیل + مستندسازی). Flutter SDK در محیط ایجنت موجود نیست؛ تستی از probe در `test/` موجود نیست (بررسی شد — ۲۵ فایل تست، هیچ‌کدام tunnel_probe).
+
+---
+
 ## دستور دقیق ادامه کار (جلسه بعدی)
 
 1. همین فایل را بخوان؛ `git -C <repo> log --oneline -3` و `git status` را بررسی کن.
-2. **فقط Stage 1 را اجرا کن**: بررسی Ping و صحت اندازه‌گیری — تحلیل کامل `tunnel_probe.dart` + تیکر `platform_engine_adapter.dart` (خطوط ~542، ~1061-1100، ~1560-1600، ~1960-2100) + مصرف‌کنندگان pingMs؛ تعیین اینکه عدد ۸۰۰۰ms تأخیر واقعی است یا حاصل جزئیات اندازه‌گیری (DNS/CONNECT/close)؛ در صورت اثبات نقص روش، کوچک‌ترین اصلاح + تست؛ در غیر این صورت ثبت شواهد صحت.
-3. قوانین: فقط مخزن `CHAKCAAD/AETHONE`؛ push فقط به `performance/firefox-vpn-optimization`؛ بدون Force Push/Release/تغییر pin upstream؛ CGO اندروید دست‌نخورده.
+2. **فقط Stage 2 را اجرا کن** (اولویت بسیار بالا): مسیر انتقال داده، TUN و صف بسته‌ها —
+   - مسیر برگشت ترافیک را جداگانه استخراج کن.
+   - `phase1/fxv/internal/upstream/tunnel.go` (TunnelConn + write buffer + backpressure) را کامل بخوان؛ `h2.go`/`h3.go` فقط در حد رفتار استریم و بستن.
+   - سرنخ‌های O-6/O-7/O-8 را با شواهد کد اثبات یا رد کن: شمارش جریان‌های هم‌زمان/نشت goroutine/FD در `socks/server.go` و `h2.go`؛ رفتار zeptun (تعداد flowها، طول عمر، keepalive) در سطح toml/preset.
+   - سناریوی «بار سنگین + packet loss» را از کد بازسازی کن (تک ClientConn h2 → HoL)؛ اگر مشکل با شواهد کد اثبات شد، کوچک‌ترین اصلاح (مثلاً idle timeout متناهی برای جریان‌های SOCKS یا drain بهینه) + تست Go (`go test` موجود در فاز تا جایی که toolchain اجازه دهد) — بدون تغییر معماری/پورت/pin.
+   - اگر تست محلی ممکن نبود: NOT TESTED صریح + معیار تأیید برای مالک/CI ثبت شود.
+3. قوانین: فقط مخزن `CHAKCAAD/AETHONE`؛ push فقط به `performance/firefox-vpn-optimization`؛ بدون Force Push/Release/تغییر pin upstream؛ CGO اندروید دست‌نخورده؛ چند متغیر هم‌زمان تغییر نکند.
 4. پایان مرحله: commit مستقل + به‌روزرسانی همین فایل + push + گزارش با قالب ۱۰ بندی مأموریت + توقف.
 
 *(Token دسترسی در دستور مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
@@ -173,3 +216,4 @@ uid خود اپ از TUN مستثنا — جلوگیری از حلقه مسیر.
 | مرحله | Commit | عنوان |
 |---|---|---|
 | 0 | `3639838` | docs(performance): stage 0 — version match, data path, ping method, progress file |
+| 1 | (درج پس از commit همین مرحله) | docs(performance): stage 1 — ping measurement audit (method sound, 8000ms real) |
