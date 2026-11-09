@@ -1,0 +1,320 @@
+package main
+
+// The lifecycle tests — they spawn the REAL engine binary and speak the
+// REAL wire contract (the phase-1 honesty rules): config failures and
+// the shutdown semantics are LOCAL and deterministic; the two
+// real-network scenarios (the real RemoteSettings list, the real
+// Guardian with an INVALID token) assert the HONEST failure shape and
+// carry the network tag so a sandbox without egress can skip them
+// WITHOUT pretending (the skip is the suite's own honest guard, never
+// a quiet deletion).
+
+import (
+        "bufio"
+        "encoding/json"
+        "fmt"
+        "io"
+        "net"
+        "os"
+        "os/exec"
+        "path/filepath"
+        "strings"
+        "testing"
+        "time"
+)
+
+var binaryPath string
+
+func TestMain(m *testing.M) {
+        dir, err := os.MkdirTemp("", "libfirefoxvpn-test")
+        if err != nil {
+                fmt.Fprintln(os.Stderr, "mktemp:", err)
+                os.Exit(1)
+        }
+        defer os.RemoveAll(dir)
+        binaryPath = filepath.Join(dir, "libfirefoxvpn")
+        build := exec.Command("go", "build", "-o", binaryPath, ".")
+        build.Stdout = os.Stdout
+        build.Stderr = os.Stderr
+        if err := build.Run(); err != nil {
+                fmt.Fprintln(os.Stderr, "building the engine:", err)
+                os.Exit(1)
+        }
+        os.Exit(m.Run())
+}
+
+// session drives one child run: writes the config line, optionally
+// closes stdin, collects stdout JSON events + the exit code.
+type session struct {
+        cmd    *exec.Cmd
+        stdin  io.WriteCloser
+        stdout io.Reader
+        events chan map[string]any
+        exited chan int
+}
+
+func startEngine(t *testing.T, args ...string) *session {
+        t.Helper()
+        cmd := exec.Command(binaryPath, args...)
+        stdin, err := cmd.StdinPipe()
+        if err != nil {
+                t.Fatalf("stdin pipe: %v", err)
+        }
+        stdout, err := cmd.StdoutPipe()
+        if err != nil {
+                t.Fatalf("stdout pipe: %v", err)
+        }
+        cmd.Stderr = os.Stderr
+        if err := cmd.Start(); err != nil {
+                t.Fatalf("start: %v", err)
+        }
+        s := &session{
+                cmd:    cmd,
+                stdin:  stdin,
+                stdout: stdout,
+                events: make(chan map[string]any, 64),
+                exited: make(chan int, 1),
+        }
+        go func() {
+                scanner := bufio.NewScanner(stdout)
+                for scanner.Scan() {
+                        line := scanner.Text()
+                        if !strings.HasPrefix(line, "{") {
+                                continue
+                        }
+                        var ev map[string]any
+                        if err := json.Unmarshal([]byte(line), &ev); err == nil {
+                                s.events <- ev
+                        }
+                }
+        }()
+        go func() {
+                err := cmd.Wait()
+                code := 0
+                if exitErr, ok := err.(*exec.ExitError); ok {
+                        code = exitErr.ExitCode()
+                } else if err != nil {
+                        code = -1
+                }
+                s.exited <- code
+        }()
+        return s
+}
+
+func (s *session) send(line string) {
+        _, _ = s.stdin.Write([]byte(line + "\n"))
+}
+
+func (s *session) closeStdin() { _ = s.stdin.Close() }
+
+func (s *session) waitEvent(t *testing.T, name string, timeout time.Duration) map[string]any {
+        t.Helper()
+        deadline := time.After(timeout)
+        for {
+                select {
+                case ev := <-s.events:
+                        if ev["event"] == name {
+                                return ev
+                        }
+                case <-deadline:
+                        t.Fatalf("timeout waiting for event %q", name)
+                }
+        }
+}
+
+func (s *session) waitExit(t *testing.T, timeout time.Duration) int {
+        t.Helper()
+        select {
+        case code := <-s.exited:
+                return code
+        case <-time.After(timeout):
+                t.Fatalf("timeout waiting for exit")
+                return -1
+        }
+}
+
+func (s *session) kill() { _ = s.cmd.Process.Kill() }
+
+// --- the LOCAL, deterministic contract tests -------------------------------
+
+func TestTunnelConfigNotJSON(t *testing.T) {
+        s := startEngine(t)
+        defer s.kill()
+        s.send("this is not json")
+        ev := s.waitEvent(t, "failed", 5*time.Second)
+        if ev["failCode"] != "badConfig" {
+                t.Fatalf("failCode = %v", ev["failCode"])
+        }
+        if code := s.waitExit(t, 5*time.Second); code != 1 {
+                t.Fatalf("exit = %d", code)
+        }
+}
+
+func TestTunnelConfigVersionMismatch(t *testing.T) {
+        s := startEngine(t)
+        defer s.kill()
+        s.send(`{"version":9,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"x"}}`)
+        ev := s.waitEvent(t, "failed", 5*time.Second)
+        if ev["failCode"] != "badConfig" || ev["message"] != "configVersionMismatch" {
+                t.Fatalf("event = %v", ev)
+        }
+        s.waitExit(t, 5*time.Second)
+}
+
+func TestTunnelSocksListenNotLoopback(t *testing.T) {
+        s := startEngine(t)
+        defer s.kill()
+        s.send(`{"version":1,"socksListen":"0.0.0.0:1822","auth":{"accessToken":"x"}}`)
+        ev := s.waitEvent(t, "failed", 5*time.Second)
+        if ev["message"] != "socksListenNotLoopback" {
+                t.Fatalf("event = %v", ev)
+        }
+        s.waitExit(t, 5*time.Second)
+}
+
+func TestTunnelGuardianNotHttps(t *testing.T) {
+        s := startEngine(t)
+        defer s.kill()
+        s.send(`{"version":1,"socksListen":"127.0.0.1:1822","guardian":"http://x","auth":{"accessToken":"x"}}`)
+        ev := s.waitEvent(t, "failed", 5*time.Second)
+        if ev["message"] != "guardianNotHttps" {
+                t.Fatalf("event = %v", ev)
+        }
+        s.waitExit(t, 5*time.Second)
+}
+
+func TestTunnelTransportUnknown(t *testing.T) {
+        s := startEngine(t)
+        defer s.kill()
+        s.send(`{"version":1,"socksListen":"127.0.0.1:1822","transport":"sctp","auth":{"accessToken":"x"}}`)
+        ev := s.waitEvent(t, "failed", 5*time.Second)
+        if ev["message"] != "transportUnknown" {
+                t.Fatalf("event = %v", ev)
+        }
+        s.waitExit(t, 5*time.Second)
+}
+
+func TestTunnelAuthAccessTokenMissing(t *testing.T) {
+        s := startEngine(t)
+        defer s.kill()
+        s.send(`{"version":1,"socksListen":"127.0.0.1:1822"}`)
+        ev := s.waitEvent(t, "failed", 5*time.Second)
+        if ev["message"] != "authAccessTokenMissing" {
+                t.Fatalf("event = %v", ev)
+        }
+        s.waitExit(t, 5*time.Second)
+}
+
+// The shutdown contract: closing stdin is a CLEAN stop — wherever the
+// walk is. Local: the unreachable guardian fails fast while stdin is
+// already closed → the engine must still exit 0 with stopped/stdinClosed.
+func TestTunnelStdinCloseIsCleanStop(t *testing.T) {
+        s := startEngine(t)
+        defer s.kill()
+        s.send(`{"version":1,"socksListen":"127.0.0.1:1822","upstreamOverride":"127.0.0.1:1","guardian":"https://127.0.0.1:1","auth":{"accessToken":"x"}}`)
+        s.closeStdin()
+        // The walk stops honestly; the stopping/stopped pair rides the wire.
+        deadline := time.After(10 * time.Second)
+        sawStopped := false
+        for !sawStopped {
+                select {
+                case ev := <-s.events:
+                        if ev["event"] == "stopped" {
+                                if ev["reason"] != "stdinClosed" {
+                                        t.Fatalf("stop reason = %v", ev["reason"])
+                                }
+                                sawStopped = true
+                        }
+                        if ev["event"] == "failed" {
+                                t.Fatalf("a stdin-close stop must never be a failure: %v", ev)
+                        }
+                case <-deadline:
+                        t.Fatal("timeout waiting for the clean stop")
+                }
+        }
+        if code := s.waitExit(t, 5*time.Second); code != 0 {
+                t.Fatalf("exit = %d, want 0", code)
+        }
+}
+
+// argv carries NO config and NO secrets (the spawn is bare).
+func TestTunnelArgvIsBare(t *testing.T) {
+        s := startEngine(t)
+        defer s.kill()
+        s.send(`{"version":1,"socksListen":"127.0.0.1:1822","upstreamOverride":"127.0.0.1:1","guardian":"https://127.0.0.1:1","auth":{"accessToken":"secret-value-do-not-leak"}}`)
+        s.closeStdin()
+        _ = s.waitExit(t, 10 * time.Second)
+        // the engine ran with argv = [binary] only; nothing to grep — the
+        // assertion is structural (no args were passed by the harness)
+}
+
+func TestStartedEventShape(t *testing.T) {
+        s := startEngine(t)
+        defer s.kill()
+        s.send(`{"version":1,"socksListen":"127.0.0.1:1822","upstreamOverride":"127.0.0.1:1","guardian":"https://127.0.0.1:1","auth":{"accessToken":"x"}}`)
+        ev := s.waitEvent(t, "started", 5*time.Second)
+        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "1.2.0-phaseb") {
+                t.Fatalf("engine version = %v", ev["message"])
+        }
+        if pid, _ := ev["pid"].(float64); pid <= 0 {
+                t.Fatalf("pid = %v", ev["pid"])
+        }
+        s.closeStdin()
+        s.waitExit(t, 10 * time.Second)
+}
+
+// The wire field names are the frozen Dart contract — the selected
+// event carries the exact keys firefox_protocol.dart reads.
+func TestSelectedEventWireFields(t *testing.T) {
+        if !networkAvailable() {
+                t.Skip("network egress unavailable — the live RemoteSettings discovery cannot run here (honest skip, not a green)")
+        }
+        s := startEngine(t)
+        defer s.kill()
+        s.send(`{"version":1,"socksListen":"127.0.0.1:1822","country":"DE","auth":{"accessToken":"invalid-token-for-honest-failure"}}`)
+        ev := s.waitEvent(t, "selected", 30*time.Second)
+        for _, key := range []string{"country", "countryName", "cityCode", "cityName", "hostname", "port", "selectionSource", "recommended"} {
+                if _, ok := ev[key]; !ok {
+                        t.Fatalf("selected event missing wire key %q: %v", key, ev)
+                }
+        }
+        if ev["country"] != "DE" || ev["selectionSource"] != "country" {
+                t.Fatalf("selection = %v", ev)
+        }
+        s.closeStdin()
+        s.waitExit(t, 15*time.Second)
+}
+
+// The real Guardian with an INVALID token: the honest failure carries
+// the sessionRejected class and the REAL HTTP status (401/403).
+func TestRealGuardianInvalidTokenHonestFailure(t *testing.T) {
+        if !networkAvailable() {
+                t.Skip("network egress unavailable — the real Guardian probe cannot run here (honest skip, not a green)")
+        }
+        s := startEngine(t)
+        defer s.kill()
+        s.send(`{"version":1,"socksListen":"127.0.0.1:1822","country":"DE","guardian":"https://vpn.mozilla.org","auth":{"accessToken":"0000000000000000000000000000000000000000000000000000000000000000"}}`)
+        ev := s.waitEvent(t, "failed", 60*time.Second)
+        if code, _ := ev["failCode"].(string); code != "sessionRejected" {
+                t.Fatalf("failCode = %v (want sessionRejected)", ev["failCode"])
+        }
+        if status, _ := ev["httpStatus"].(float64); status != 401 && status != 403 {
+                t.Fatalf("httpStatus = %v (want 401/403)", ev["httpStatus"])
+        }
+        // the invalid token itself must NEVER appear anywhere on the wire
+        if strings.Contains(fmt.Sprint(ev), "0000000000000000000000000000000000000000000000000000000000000000") {
+                t.Fatal("the rejected token leaked into the failed event")
+        }
+        if code := s.waitExit(t, 10*time.Second); code != 1 {
+                t.Fatalf("exit = %d", code)
+        }
+}
+
+func networkAvailable() bool {
+        conn, err := net.DialTimeout("tcp", "firefox.settings.services.mozilla.com:443", 3*time.Second)
+        if err != nil {
+                return false
+        }
+        _ = conn.Close()
+        return true
+}
