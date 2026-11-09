@@ -19,7 +19,7 @@ import 'package:aethone/features/settings/settings_screen.dart';
 /// Renders the home screen to PNG files (NOT a golden assertion — a visual
 /// verification harness for the pixel-fidelity fixes). Output goes to
 /// /tmp/ui_shots/. Run: flutter test test/ui_screenshot_test.dart
-class ScriptedEngine implements EngineAdapter {
+class ScriptedEngine extends EngineAdapter {
   final StreamController<EngineEvent> _controller =
       StreamController<EngineEvent>.broadcast();
   void emit(EngineEvent e) => _controller.add(e);
@@ -30,6 +30,8 @@ class ScriptedEngine implements EngineAdapter {
   Future<void> connect() async {}
   @override
   Future<void> disconnect() async {}
+  @override
+  @override
   @override
   void bind(EngineConfigSource config) {} // scripted — config never read
 }

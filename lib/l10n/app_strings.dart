@@ -12,6 +12,7 @@ library;
 import 'package:flutter/widgets.dart';
 
 import '../connection/core_settings.dart';
+import '../connection/firefox/firefox_errors.dart';
 import '../core/app_assets.dart';
 
 class AppStrings {
@@ -324,6 +325,56 @@ class AppStrings {
   String get cdnIpsLabel => _v['cdnIpsLabel']!;
   String get cdnIpsHint => _v['cdnIpsHint']!;
 
+  // firefox page (phase-2)
+  String get settingsFirefox => _v['settingsFirefox']!;
+  String get secFirefoxAccount => _v['secFirefoxAccount']!;
+  String get firefoxSignedIn => _v['firefoxSignedIn']!;
+  String get firefoxSignedOut => _v['firefoxSignedOut']!;
+  String get firefoxSignIn => _v['firefoxSignIn']!;
+  String get firefoxSignOut => _v['firefoxSignOut']!;
+  String get firefoxAccountDesc => _v['firefoxAccountDesc']!;
+  String get firefoxLocationDesc => _v['firefoxLocationDesc']!;
+  String get firefoxLocationsLive => _v['firefoxLocationsLive']!;
+  String get firefoxLocationsCached => _v['firefoxLocationsCached']!;
+  String get secFirefoxTransport => _v['secFirefoxTransport']!;
+  String get firefoxTransportLabel => _v['firefoxTransportLabel']!;
+  String get firefoxTransportH2 => _v['firefoxTransportH2']!;
+  String get firefoxTransportH3 => _v['firefoxTransportH3']!;
+  String get firefoxTransportDesc => _v['firefoxTransportDesc']!;
+  String get firefoxLoginTitle => _v['firefoxLoginTitle']!;
+  String get firefoxLoginSubtitle => _v['firefoxLoginSubtitle']!;
+  String get firefoxLoginWaiting => _v['firefoxLoginWaiting']!;
+  String get firefoxLoginExchanging => _v['firefoxLoginExchanging']!;
+  String get firefoxLoginSuccess => _v['firefoxLoginSuccess']!;
+  String get firefoxLoginFailed => _v['firefoxLoginFailed']!;
+  String get firefoxLoginRejected => _v['firefoxLoginRejected']!;
+  String get firefoxLoginTimeout => _v['firefoxLoginTimeout']!;
+  String get firefoxLoginUnavailable => _v['firefoxLoginUnavailable']!;
+
+  // PHASE B (Part 2) — the login-failure classes (firefox_errors.dart).
+  // Static per-class text; the engine's raw chain is never rendered.
+  String get firefoxErrDns => _v['firefoxErrDns']!;
+  String get firefoxErrNetwork => _v['firefoxErrNetwork']!;
+  String get firefoxErrTls => _v['firefoxErrTls']!;
+  String get firefoxErrTokenExchange => _v['firefoxErrTokenExchange']!;
+  String get firefoxErrInvalidToken => _v['firefoxErrInvalidToken']!;
+  String get firefoxErrServerRejected => _v['firefoxErrServerRejected']!;
+
+  /// The localized text for a CLASSIFIED Firefox transport failure
+  /// ([FirefoxErrors.classify] output). Unknown/unmapped classes fall
+  /// back to the generic [firefoxLoginFailed] — never the raw chain.
+  String firefoxErrorText(String classifiedCode) => switch (classifiedCode) {
+        FirefoxTransportError.dnsError => firefoxErrDns,
+        FirefoxTransportError.networkUnavailable => firefoxErrNetwork,
+        FirefoxTransportError.timeout => firefoxLoginTimeout,
+        FirefoxTransportError.tlsError => firefoxErrTls,
+        FirefoxTransportError.sessionRejected => firefoxLoginRejected,
+        FirefoxTransportError.tokenExchange => firefoxErrTokenExchange,
+        FirefoxTransportError.invalidTokenResponse => firefoxErrInvalidToken,
+        FirefoxTransportError.serverRejection => firefoxErrServerRejected,
+        _ => firefoxLoginFailed,
+      };
+
   // tor page
   String get torLocationDesc => _v['torLocationDesc']!;
   String get secTorBridges => _v['secTorBridges']!;
@@ -476,6 +527,7 @@ class AppStrings {
       ProtocolId.psiphonReverse ||
       ProtocolId.psiphonOnly =>
         'protoPsiphon',
+      ProtocolId.firefoxOnly => 'protoFirefox',
     };
     return _v[key] ?? _v['protoMasque']!;
   }
@@ -512,6 +564,7 @@ class AppStrings {
       'protoMim': 'میم',
       'protoTor': 'تور',
       'protoPsiphon': 'سایفون',
+      'protoFirefox': 'فایرفاکس',
       // ---- settings main page (fa verbatim from the design frame; the
       // v4.15 renames are the owner's own words — settings round #5/#8:
       // «متن تنظیمات تور و تنظیمات سایفون به تور و سایفون تغیر کند»,
@@ -532,6 +585,38 @@ class AppStrings {
       'settingsSecuritySub': 'امنیت و حریم خصوصی',
       'settingsPsiphon': 'سایفون',
       'settingsTor': 'تور',
+      // ---- phase-2 firefox page ----
+      'settingsFirefox': 'فایرفاکس',
+      'secFirefoxAccount': 'حساب فایرفاکس',
+      'firefoxSignedIn': 'حساب فایرفاکس متصل است',
+      'firefoxSignedOut': 'حساب فایرفاکس متصل نیست',
+      'firefoxSignIn': 'ورود با حساب فایرفاکس',
+      'firefoxSignOut': 'خروج از حساب',
+      'firefoxAccountDesc': 'برای استفاده از فایرفاکس ویپیان باید با حساب فایرفاکس وارد شوید. ورود در صفحهٔ خود موزیلا انجام می‌شود و رمز عبور شما هرگز وارد این اپ نمی‌شود.',
+      'firefoxLocationDesc': 'موقعیت خروج از فهرست زندهٔ سرورهای فایرفاکس انتخاب می‌شود؛ «خودکار» یعنی موقعیت پیشنهادی خود موزیلا. کشوری که پس از اتصال نمایش داده می‌شود از پروب واقعی تونل می‌آید، نه از انتخاب شما.',
+      'firefoxLocationsLive': 'فهرست زندهٔ سرورها',
+      'firefoxLocationsCached': 'فهرست ذخیره‌شده (آفلاین)',
+      'secFirefoxTransport': 'انتقال داده',
+      'firefoxTransportLabel': 'حالت انتقال',
+      'firefoxTransportH2': 'H2 (پیش‌فرض)',
+      'firefoxTransportH3': 'H3 (کوئیک)',
+      'firefoxTransportDesc': 'H2 روی TCP+TLS و H3 روی QUIC کار می‌کند. اگر مطمئن نیستید همان H2 بماند.',
+      'firefoxLoginTitle': 'ورود به فایرفاکس',
+      'firefoxLoginSubtitle': 'ورود در صفحهٔ رسمی موزیلا انجام می‌شود',
+      'firefoxLoginWaiting': 'در انتظار ورود شما در صفحهٔ موزیلا…',
+      'firefoxLoginExchanging': 'در حال تکمیل ورود و دریافت نشست…',
+      'firefoxLoginSuccess': 'ورود با موفقیت انجام شد',
+      'firefoxLoginFailed': 'ورود ناموفق بود',
+      'firefoxLoginRejected': 'نشست ورود پذیرفته نشد؛ دوباره وارد شوید',
+      'firefoxLoginTimeout': 'تأیید ورود بیش از حد طول کشید؛ دوباره تلاش کنید',
+      'firefoxLoginUnavailable': 'صفحهٔ ورود روی این دستگاه در دسترس نیست',
+      // PHASE B (Part 2) — the login-failure classes.
+      'firefoxErrDns': 'نام سرور حساب حل نشد (DNS)؛ اتصال دستگاه را بررسی کنید',
+      'firefoxErrNetwork': 'سرور حساب در دسترس نبود؛ اتصال شبکه را بررسی کنید',
+      'firefoxErrTls': 'اتصال امن به سرور حساب برقرار نشد',
+      'firefoxErrTokenExchange': 'تبادل ورود با سرور حساب ناتمام ماند؛ دوباره تلاش کنید',
+      'firefoxErrInvalidToken': 'پاسخ سرور حساب معتبر نبود؛ دوباره تلاش کنید',
+      'firefoxErrServerRejected': 'سرور حساب درخواست را رد کرد',
       'settingsPillSub': 'انتخاب لوکیشن و ...',
       'settingsAdvancedStatus': 'وضعیت پیکربندی',
       'settingsRoutingArea': 'منطقهٔ مسیریابی',
@@ -818,6 +903,7 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'protoFirefox': 'FIREFOX',
       'settingsTitle': 'Settings',
       'settingsRouting': 'Routing',
       'settingsRoutingSub': 'Direct routes',
@@ -833,6 +919,38 @@ class AppStrings {
       'settingsSecuritySub': 'Security & privacy',
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
+      // ---- phase-2 firefox page ----
+      'settingsFirefox': 'Firefox',
+      'secFirefoxAccount': 'Firefox account',
+      'firefoxSignedIn': 'A Firefox account is signed in',
+      'firefoxSignedOut': 'No Firefox account is signed in',
+      'firefoxSignIn': 'Sign in with a Firefox account',
+      'firefoxSignOut': 'Sign out',
+      'firefoxAccountDesc': 'Firefox VPN needs your Firefox account. Sign-in happens on Mozilla\'s own page — your password never enters this app.',
+      'firefoxLocationDesc': 'The exit location is picked from the live Firefox server list; "Automatic" is Mozilla\'s own recommended location. The country shown after connecting comes from the real tunnel probe, never from your pick.',
+      'firefoxLocationsLive': 'Live server list',
+      'firefoxLocationsCached': 'Saved list (offline)',
+      'secFirefoxTransport': 'Data transport',
+      'firefoxTransportLabel': 'Transport mode',
+      'firefoxTransportH2': 'H2 (default)',
+      'firefoxTransportH3': 'H3 (QUIC)',
+      'firefoxTransportDesc': 'H2 runs over TCP+TLS; H3 runs over QUIC. Keep H2 if unsure.',
+      'firefoxLoginTitle': 'Sign in to Firefox',
+      'firefoxLoginSubtitle': 'Sign-in happens on Mozilla\'s official page',
+      'firefoxLoginWaiting': 'Waiting for you to sign in on Mozilla\'s page…',
+      'firefoxLoginExchanging': 'Finishing sign-in and minting the session…',
+      'firefoxLoginSuccess': 'Signed in successfully',
+      'firefoxLoginFailed': 'Sign-in failed',
+      'firefoxLoginRejected': 'The sign-in session was rejected; sign in again',
+      'firefoxLoginTimeout': 'Sign-in confirmation took too long; try again',
+      'firefoxLoginUnavailable': 'The sign-in page is not available on this device',
+      // PHASE B (Part 2) — the login-failure classes.
+      'firefoxErrDns': 'The account server name could not be resolved (DNS); check the connection',
+      'firefoxErrNetwork': 'The account server was unreachable; check the network connection',
+      'firefoxErrTls': 'A secure connection to the account server could not be established',
+      'firefoxErrTokenExchange': 'The sign-in exchange with the account server did not complete; try again',
+      'firefoxErrInvalidToken': 'The account server response was invalid; try again',
+      'firefoxErrServerRejected': 'The account server rejected the request',
       'settingsPillSub': 'Location & more …',
       'settingsAdvancedStatus': 'Configuration status',
       'settingsRoutingArea': 'Routing region',
@@ -1117,6 +1235,7 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'protoFirefox': 'FIREFOX',
       'settingsTitle': 'Настройки',
       'settingsRouting': 'Маршрутизация',
       'settingsRoutingSub': 'Прямые маршруты',
@@ -1132,6 +1251,38 @@ class AppStrings {
       'settingsSecuritySub': 'Безопасность и приватность',
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
+      // ---- phase-2 firefox page ----
+      'settingsFirefox': 'Firefox',
+      'secFirefoxAccount': 'Аккаунт Firefox',
+      'firefoxSignedIn': 'Аккаунт Firefox подключён',
+      'firefoxSignedOut': 'Аккаунт Firefox не подключён',
+      'firefoxSignIn': 'Войти с аккаунтом Firefox',
+      'firefoxSignOut': 'Выйти',
+      'firefoxAccountDesc': 'Для Firefox VPN нужен аккаунт Firefox. Вход происходит на официальной странице Mozilla — пароль никогда не попадает в это приложение.',
+      'firefoxLocationDesc': 'Локация выхода выбирается из живого списка серверов Firefox; «Автоматически» — рекомендуемая локация самой Mozilla. Страна после подключения берётся из реальной проверки туннеля, а не из вашего выбора.',
+      'firefoxLocationsLive': 'Живой список серверов',
+      'firefoxLocationsCached': 'Сохранённый список (офлайн)',
+      'secFirefoxTransport': 'Транспорт данных',
+      'firefoxTransportLabel': 'Режим транспорта',
+      'firefoxTransportH2': 'H2 (по умолчанию)',
+      'firefoxTransportH3': 'H3 (QUIC)',
+      'firefoxTransportDesc': 'H2 работает поверх TCP+TLS; H3 — поверх QUIC. Если сомневаетесь, оставьте H2.',
+      'firefoxLoginTitle': 'Вход в Firefox',
+      'firefoxLoginSubtitle': 'Вход выполняется на официальной странице Mozilla',
+      'firefoxLoginWaiting': 'Ожидание входа на странице Mozilla…',
+      'firefoxLoginExchanging': 'Завершение входа и получение сессии…',
+      'firefoxLoginSuccess': 'Вход выполнен',
+      'firefoxLoginFailed': 'Не удалось войти',
+      'firefoxLoginRejected': 'Сессия входа отклонена; войдите снова',
+      'firefoxLoginTimeout': 'Подтверждение входа заняло слишком много времени; попробуйте снова',
+      'firefoxLoginUnavailable': 'Страница входа недоступна на этом устройстве',
+      // PHASE B (Part 2) — the login-failure classes.
+      'firefoxErrDns': 'Не удалось разрешить имя сервера аккаунтов (DNS); проверьте подключение',
+      'firefoxErrNetwork': 'Сервер аккаунтов недоступен; проверьте сетевое подключение',
+      'firefoxErrTls': 'Не удалось установить защищённое соединение с сервером аккаунтов',
+      'firefoxErrTokenExchange': 'Обмен входа с сервером аккаунтов не завершился; попробуйте снова',
+      'firefoxErrInvalidToken': 'Ответ сервера аккаунтов был недействительным; попробуйте снова',
+      'firefoxErrServerRejected': 'Сервер аккаунтов отклонил запрос',
       'settingsPillSub': 'Локация и другое …',
       'settingsAdvancedStatus': 'Статус конфигурации',
       'settingsRoutingArea': 'Регион маршрутизации',
@@ -1414,6 +1565,7 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'protoFirefox': 'FIREFOX',
       'settingsTitle': '设置',
       'settingsRouting': '路由规则',
       'settingsRoutingSub': '直连路由',
@@ -1429,6 +1581,38 @@ class AppStrings {
       'settingsSecuritySub': '安全与隐私',
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
+      // ---- phase-2 firefox page ----
+      'settingsFirefox': 'Firefox',
+      'secFirefoxAccount': 'Firefox 账户',
+      'firefoxSignedIn': '已连接 Firefox 账户',
+      'firefoxSignedOut': '未连接 Firefox 账户',
+      'firefoxSignIn': '使用 Firefox 账户登录',
+      'firefoxSignOut': '退出登录',
+      'firefoxAccountDesc': 'Firefox VPN 需要您的 Firefox 账户。登录在 Mozilla 官方页面完成——密码绝不会进入本应用。',
+      'firefoxLocationDesc': '出口位置从 Firefox 实时服务器列表中选择；“自动”即 Mozilla 官方推荐位置。连接后显示的国家来自真实隧道探测，绝非来自您的选择。',
+      'firefoxLocationsLive': '实时服务器列表',
+      'firefoxLocationsCached': '已保存列表（离线）',
+      'secFirefoxTransport': '数据传输',
+      'firefoxTransportLabel': '传输模式',
+      'firefoxTransportH2': 'H2（默认）',
+      'firefoxTransportH3': 'H3（QUIC）',
+      'firefoxTransportDesc': 'H2 基于 TCP+TLS；H3 基于 QUIC。不确定时保持 H2。',
+      'firefoxLoginTitle': '登录 Firefox',
+      'firefoxLoginSubtitle': '登录在 Mozilla 官方页面进行',
+      'firefoxLoginWaiting': '等待您在 Mozilla 页面完成登录…',
+      'firefoxLoginExchanging': '正在完成登录并获取会话…',
+      'firefoxLoginSuccess': '登录成功',
+      'firefoxLoginFailed': '登录失败',
+      'firefoxLoginRejected': '登录会话被拒绝；请重新登录',
+      'firefoxLoginTimeout': '登录确认超时；请重试',
+      'firefoxLoginUnavailable': '此设备上无法打开登录页面',
+      // PHASE B (Part 2) — the login-failure classes.
+      'firefoxErrDns': '无法解析账户服务器域名（DNS）；请检查网络连接',
+      'firefoxErrNetwork': '无法连接账户服务器；请检查网络',
+      'firefoxErrTls': '无法与账户服务器建立安全连接',
+      'firefoxErrTokenExchange': '与账户服务器的登录交换未完成；请重试',
+      'firefoxErrInvalidToken': '账户服务器响应无效；请重试',
+      'firefoxErrServerRejected': '账户服务器拒绝了请求',
       'settingsPillSub': '位置等 …',
       'settingsAdvancedStatus': '配置状态',
       'settingsRoutingArea': '路由区域',
@@ -1717,6 +1901,7 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'protoFirefox': 'FIREFOX',
       'settingsTitle': 'Sazlamalar',
       'settingsRouting': 'Marşrutizasiýa',
       'settingsRoutingSub': 'Göni marşrutlar',
@@ -1732,6 +1917,38 @@ class AppStrings {
       'settingsSecuritySub': 'Howpsuzlyk we gizlinlik',
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
+      // ---- phase-2 firefox page ----
+      'settingsFirefox': 'Firefox',
+      'secFirefoxAccount': 'Firefox hasaby',
+      'firefoxSignedIn': 'Firefox hasaby birikdirilen',
+      'firefoxSignedOut': 'Firefox hasaby birikdirilen däl',
+      'firefoxSignIn': 'Firefox hasaby bilen gir',
+      'firefoxSignOut': 'Hasapdan çyk',
+      'firefoxAccountDesc': 'Firefox VPN üçin Firefox hasabyňyz gerek. Giriş Mozillanyň resmi sahyponda geçýär — parolyňyz bu programa hiç wagt girmeýär.',
+      'firefoxLocationDesc': 'Çykyş ýeri Firefox-yň göni ýaýlym serwer sanawyndan saýlanýar; «Awtomatiki» Mozillanyň öz maslahat berýän ýeri. Birikdirilenden soň görkezilýän ýurt hakyky tunnel barlagyndan gelýär, siziniň saýlawyňyzdan däl.',
+      'firefoxLocationsLive': 'Göni ýaýlym serwer sanawy',
+      'firefoxLocationsCached': 'Ýazylan sanaw (oflaýn)',
+      'secFirefoxTransport': 'Maglumat geçirişi',
+      'firefoxTransportLabel': 'Geçiriş tertibi',
+      'firefoxTransportH2': 'H2 (adaty)',
+      'firefoxTransportH3': 'H3 (QUIC)',
+      'firefoxTransportDesc': 'H2 TCP+TLS üstünde, H3 QUIC üstünde işleýär. Ynamyňyz ýok bolsa H2 galsyn.',
+      'firefoxLoginTitle': 'Firefox-a gir',
+      'firefoxLoginSubtitle': 'Giriş Mozillanyň resmi sahyponda geçýär',
+      'firefoxLoginWaiting': 'Mozillanyň sahyponda girişiňizi garaşýarys…',
+      'firefoxLoginExchanging': 'Giriş tamamlanýar we sessiýa alynýar…',
+      'firefoxLoginSuccess': 'Giriş üstünlikli tamamlandy',
+      'firefoxLoginFailed': 'Giriş şowsuz boldy',
+      'firefoxLoginRejected': 'Giriş sessiýasy kabul edilmedi; ýene gir',
+      'firefoxLoginTimeout': 'Girişi tassyklamak wagtynyň üstünden geçdi; ýene synanyş',
+      'firefoxLoginUnavailable': 'Bu enjamda giriş sahypasy elýeterli däl',
+      // PHASE B (Part 2) — the login-failure classes.
+      'firefoxErrDns': 'Hasap serweriniň ady çözülmedi (DNS); birikmegi barlaň',
+      'firefoxErrNetwork': 'Hasap serweri elýeterli däldi; tor birikmesini barlaň',
+      'firefoxErrTls': 'Hasap serweri bilen howpsuz birikme düzülmedi',
+      'firefoxErrTokenExchange': 'Hasap serweri bilen giriş çalşygy tamamlanmady; ýene synanyş',
+      'firefoxErrInvalidToken': 'Hasap serweriniň jogaby nädogrydy; ýene synanyş',
+      'firefoxErrServerRejected': 'Hasap serweri sowaly ret etdi',
       'settingsPillSub': 'Ýerleşýän ýer we başgalar …',
       'settingsAdvancedStatus': 'Konfigurasiýa ýagdaýy',
       'settingsRoutingArea': 'Marşrutizasiýa sebiti',

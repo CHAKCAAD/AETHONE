@@ -34,7 +34,7 @@ const _channelName = 'aethone/engine';
 /// A controllable engine: connect() walks to `connecting` and then PARKS
 /// (like the real adapter waiting for the listener) until the test (or a
 /// cancel) releases it.
-class _ParkedEngine implements EngineAdapter {
+class _ParkedEngine extends EngineAdapter {
   final StreamController<EngineEvent> _controller =
       StreamController<EngineEvent>.broadcast();
   Completer<void>? _walk;
@@ -60,6 +60,7 @@ class _ParkedEngine implements EngineAdapter {
     _controller.add(const EngineStateChanged(VpnState.disconnected));
   }
 
+  @override
   @override
   void bind(EngineConfigSource config) {}
 }
@@ -615,6 +616,11 @@ void main() {
 }
 
 class _Cfg implements EngineConfigSource {
+  // PHASE-2 (firefox-vpn) — the new config surface (defaults).
+  @override
+  String get firefoxLocation => 'auto';
+  @override
+  String get firefoxTransport => 'h2';
   /// v4.41 — the seam's new members (routing profile + per-app pick).
   @override
   String? get routingRegion => null;

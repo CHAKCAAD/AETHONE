@@ -697,3 +697,52 @@ class FlagPickStrip extends StatelessWidget {
     );
   }
 }
+
+/// PHASE-2 (firefox-vpn) — a full-width action button in the sub-page
+/// card language (the sign-in / sign-out rows): the accent-green pill
+/// fill of a SELECTED SettingPill entry, stretched to the card width.
+class SettingActionButton extends StatelessWidget {
+  const SettingActionButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.keyId,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+
+  /// Optional [ValueKey] id prefix for widget tests.
+  final String? keyId;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final recipe = MotionScope.of(context).recipe;
+    return GestureDetector(
+      key: keyId == null ? null : ValueKey('action-$keyId'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: recipe.controlMs),
+        curve: recipe.controlCurve,
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(horizontal: 14 * s, vertical: 12 * s),
+        decoration: BoxDecoration(
+          color: AethColors.accentConnected,
+          borderRadius: BorderRadius.circular(14 * s),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'IRANYekanX',
+            fontWeight: FontWeight.w700,
+            fontSize: 13 * s,
+            color: AethColors.textPrimary,
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -8,7 +8,16 @@ library;
 import '../core/app_assets.dart';
 
 /// What leaves the tunnel (defines which listener Zeptun must use).
-enum ExitKind { warp, torExit, psiphonExit }
+enum ExitKind {
+  warp,
+  torExit,
+  psiphonExit,
+
+  /// PHASE-1 (firefox-vpn): the exit is a Firefox VPN (Fastly MASQUE)
+  /// egress — reported from the REAL tunnel probe, never assumed from
+  /// the selected country (docs/FIREFOX_VPN_SERVER_DISCOVERY.md §6).
+  firefoxExit,
+}
 
 class TransportMode {
   const TransportMode({
@@ -160,6 +169,24 @@ abstract final class TransportModes {
     evidence: 'cli.rs L600 (no tunnel; --bind serves plain psiphon)',
   );
 
+  /// PHASE-1 (firefox-vpn, private branch) — FIREFOX VPN ONLY: the
+  /// dedicated Go engine (libfirefoxvpn.so) serving SOCKS5 CONNECT on
+  /// 127.0.0.1:1822. Port 1822 was vetted against the evidence-locked
+  /// map (1819 aether --bind, 1820 --tor-bind, 1821 --psiphon-bind) and
+  /// the adapter asserts it free at runtime before every connect.
+  /// `cliValue` documents that NO aether CLI exists for this mode — the
+  /// aether core never starts; the child process is driven over its
+  /// stdin/stdout contract (docs/FIREFOX_VPN_ENGINE.md).
+  static final TransportMode firefoxOnly = TransportMode(
+    id: ProtocolId.firefoxOnly,
+    label: 'FIREFOX VPN',
+    cliValue: '(no aether core — dedicated engine child process)',
+    socksEndpoint: Uri(scheme: 'socks5', host: _host, port: 1822),
+    exitKind: ExitKind.firefoxExit,
+    tcpOnly: true,
+    evidence: 'fxv cmd/libfirefoxvpn (engine contract; phase-1 pin)',
+  );
+
   static final List<TransportMode> all = [
     masque,
     wireguard,
@@ -172,6 +199,7 @@ abstract final class TransportModes {
     psiphonChain,
     psiphonReverse,
     psiphonOnly,
+    firefoxOnly,
   ];
 
   static TransportMode byId(ProtocolId id) => all.firstWhere((m) => m.id == id);
@@ -234,6 +262,21 @@ const List<String> torExitCountrySnapshot = <String>[
 /// owner named. The wheel renders it as the placeholder globe flag
 /// (design/flags_png/auto.png — a stand-in until the owner's own artwork
 /// lands) with the label «خودکار».
+/// PHASE-2 (firefox-vpn) — the standing SEED of the Firefox VPN exit
+/// countries, recorded 2026-11-08 from the LIVE Mozilla RemoteSettings
+/// list (the phase-0 live sample: 33 real countries; the engine's
+/// `--discover` role replaces it with the live set at app start —
+/// 6 h TTL disk cache, offline keeps this snapshot or the last cache).
+/// REC (the recommended anycast) is NOT a country here: the wheel offers
+/// it as the AUTO entry, exactly like the other families. CatchAll
+/// Anycast is excluded (docs/FIREFOX_VPN_SERVER_DISCOVERY.md §3).
+const List<String> firefoxCountrySnapshot = <String>[
+  'ar', 'at', 'au', 'be', 'bg', 'br', 'ca', 'cl', 'co', 'de', //
+  'dk', 'es', 'fi', 'fr', 'gb', 'gh', 'ie', 'it', 'jp', 'kr', //
+  'mx', 'my', 'nl', 'no', 'nz', 'pe', 'ph', 'pt', 'se', 'sg', //
+  'th', 'us', 'za',
+];
+
 const String autoWheelCode = 'auto';
 
 /// The per-protocol location-wheel policy (v4.19 #5, revised v4.21).
@@ -246,7 +289,10 @@ abstract final class LocationWheelPolicy {
   /// round 3: «در حالت تور انتخاب لوکیشن باید فعال باشه، چرا پرچم ها
   /// نشون داده نمیشن؟»). Everything else keeps the plain display band
   /// (hidden until connected — the v4.15 #3 rule).
-  static bool selectable(ProtocolId id) => id.isTor || id.isPsiphon;
+  /// PHASE-2: firefoxOnly joins the real selectors — the wheel offers
+  /// AUTO (Mozilla's REC anycast) + the live RemoteSettings countries.
+  static bool selectable(ProtocolId id) =>
+      id.isTor || id.isPsiphon || id.isFirefox;
 
   /// The allowed wheel entries for a family selector, AUTO FIRST; null =
   /// the whole flag manifest (plain modes / the post-connect display).
@@ -264,12 +310,15 @@ abstract final class LocationWheelPolicy {
     ProtocolId id, {
     List<String>? psiphonRegions,
     List<String>? torExits,
+    List<String>? firefoxCountries,
   }) => switch (id) {
         ProtocolId.psiphonOnly || ProtocolId.psiphonChain =>
           [autoCode, ...(psiphonRegions ?? psiphonEgressRegions)],
         ProtocolId.torChain ||
         ProtocolId.torOnly =>
           [autoCode, ...(torExits ?? torExitCountrySnapshot)],
+        ProtocolId.firefoxOnly =>
+          [autoCode, ...(firefoxCountries ?? firefoxCountrySnapshot)],
         ProtocolId.psiphonReverse || ProtocolId.torReverse => null,
         _ => null,
       };

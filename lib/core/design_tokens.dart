@@ -548,10 +548,12 @@ abstract final class AethGeometry {
   static const double protoRightInset = 28;
   static const double protoHeadingTextSize = 16;
 
-  /// Heading row tops on the page: حالت اتصال 96, پروتکل 194, سرعت اسکن 736.
+  /// Heading row tops on the page: حالت اتصال 96, پروتکل 194.
+  /// PHASE-2 REBUILD (2026-11-09): the سرعت اسکن heading is GONE from
+  /// the protocol page (the section lives in Connection Settings now);
+  /// its old top token is retired with the move.
   static const double protoPageHeadingModeTop = 96;
   static const double protoPageHeadingProtocolTop = 194;
-  static const double protoPageHeadingScanTop = 736;
 
   /// Segments (تونل | پروکسی): h35 r14, x28..374, gap 21 — RTL order: تونل
   /// (right, first) then پروکسی; the frame ships پروکسی SELECTED (green
@@ -585,7 +587,23 @@ abstract final class AethGeometry {
   /// 2×20 + 13 inset = 346. Main block: logo center top+43, label top+80.
   static const double protoCardTopPsiphon = 463;
   static const double protoCardTopTor = 594;
+
+  /// PHASE B (Part 1) — the FIREFOX account card: the third full-width
+  /// card, after the Tor card in the same 15-gap rhythm the psiphon→tor
+  /// pair uses (594 + 116 + 15 = 725). Single-member by design — no
+  /// subtiles; the right zone carries the account-state chip instead.
+  static const double protoCardTopFirefox = 725;
   static const double protoCardH = 116;
+
+  /// PHASE-2 REBUILD (2026-11-09) — the protocol page's OWN
+  /// content-column height: the Firefox card ends at 841
+  /// (protoCardTopFirefox 725 + protoCardH 116) + the frame's own 62
+  /// bottom rhythm (the pre-Firefox column's 874 − 812) = 903. The scan
+  /// section is gone (it lives in Connection Settings); [refHeight]
+  /// stays the DEVICE frame (the pattern composition's constant —
+  /// untouched) and the page no longer needs to scroll for its own
+  /// content on 874-logical viewports.
+  static const double protoPageContentH = 903;
   static const double protoCardRadius = 21;
   static const double protoSubtile = 66;
   static const double protoSubtileRadius = 14;
@@ -612,9 +630,11 @@ abstract final class AethGeometry {
   static const double protoTorGlyphBox = 35;
 
   /// Scan pills: h36 r8 gap8, CENTERED (row spans x33..367). Widths increase
-  /// toward the right; the frame ships the widest (rightmost, 87) SELECTED.
-  /// Page top: 40 below its heading top (the sheet's 765→805 rhythm).
-  static const double protoPillTop = 776;
+  /// toward the right; the widest (rightmost, 87) is the fastest depth.
+  /// GEOMETRY ONLY — PHASE-2 REBUILD (2026-11-09): the section MOVED to
+  /// Connection Settings (scan_speed_pills.dart); the old protocol-page
+  /// position token (protoPillTop) is retired with the move, the pill
+  /// geometry rides along unchanged (the shared widget renders it).
   static const double protoPillH = 36;
   static const double protoPillRadius = 8;
   static const double protoPillGap = 8;

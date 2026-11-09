@@ -1,0 +1,4 @@
+a404bbbb67e58d153fe439fee3996ebb24458f0cd7263cc30ea6ce2bde980a2b  ./android/arm64-v8a/libfirefoxvpn.so
+05e94c7480bfe1505095d3f8133826fab1025383fa0fbc9eb739c264dde9a323  ./android/armeabi-v7a/libfirefoxvpn.so
+ec698230a4f551fb71bd7ff13151267221ca3a0423b080a4c9876ee68e639b13  ./android/x86_64/libfirefoxvpn.so
+89ef32fd5e08725513ee4fb006d750fee5f911844a602463acf3c096fc3bf06f  ./host/libfirefoxvpn

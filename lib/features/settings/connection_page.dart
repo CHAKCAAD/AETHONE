@@ -22,6 +22,7 @@ import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 import 'core_page.dart';
+import 'scan_speed_pills.dart';
 import 'settings_controls.dart';
 import 'subpage_frame.dart';
 
@@ -76,6 +77,25 @@ class ConnectionSettingsPage extends StatelessWidget {
               const SubSectionDivider(),
               SettingInfoText(strings.ipVersionDesc),
             ],
+          ),
+        ),
+
+        // ---- PHASE-2 REBUILD (2026-11-09, the owner's decree): the
+        // «سرعت اسکن» (scan speed) section MOVED here from the
+        // ProtocolPage. Same control (the shared ScanSpeedPills), same
+        // persisted value (store.scanSpeed — a user's stored level
+        // applies unchanged), now living with the connection's own
+        // settings where the owner decreed it.
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconScan1,
+          title: strings.sheetHeadingScanSpeed,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: ScanSpeedPills(
+            selected: store.scanSpeed,
+            onSelect: store.setScanSpeed,
           ),
         ),
 

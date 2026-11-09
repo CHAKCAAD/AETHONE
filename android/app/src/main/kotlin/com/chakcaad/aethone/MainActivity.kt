@@ -267,6 +267,31 @@ class MainActivity : FlutterActivity() {
                         "nativeLibraryDir" to applicationInfo.nativeLibraryDir,
                     ),
                 )
+                // PHASE-1 (firefox-vpn): the session-vault crypto. The
+                // OAuth pair is stored ONLY as Android-Keystore AES/GCM
+                // ciphertext (docs/FIREFOX_VPN_SECURITY.md); plaintext
+                // exists in memory and on the engine's private stdin
+                // pipe only.
+                "firefoxEncrypt" -> {
+                    try {
+                        val plaintext =
+                            call.argument<ByteArray>("plaintext") ?: ByteArray(0)
+                        result.success(FirefoxKeystore.encrypt(plaintext))
+                    } catch (t: Throwable) {
+                        result.error("firefoxVault", t.message, null)
+                    }
+                }
+                "firefoxDecrypt" -> {
+                    try {
+                        val ciphertext =
+                            call.argument<ByteArray>("ciphertext") ?: ByteArray(0)
+                        result.success(FirefoxKeystore.decrypt(ciphertext))
+                    } catch (t: Throwable) {
+                        // A Keystore reset makes old vaults undecryptable —
+                        // the Dart store treats this as ABSENT and wipes.
+                        result.error("firefoxVault", t.message, null)
+                    }
+                }
                 "prepareVpn" -> prepareVpn(result)
                 "startVpn" -> {
                     val port = call.argument<Int>("port") ?: 1819

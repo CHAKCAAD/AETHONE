@@ -13,15 +13,15 @@
 ///  * secrets never appear in events or logs.
 library;
 
-import 'app_tunnel.dart';
-
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
 import '../core/app_assets.dart';
+import 'app_tunnel.dart';
 import 'connection_state.dart';
 import 'core_settings.dart';
+import 'firefox/firefox_protocol.dart';
 
 /// Minimal `ProxyEndpoint` model (prompt §7): filled only from the real
 /// listener configuration — never guessed.
@@ -88,6 +88,19 @@ class EngineStatsUpdated extends EngineEvent {
 class EngineEgressRegions extends EngineEvent {
   const EngineEgressRegions(this.regions);
   final List<String> regions;
+}
+
+/// PHASE-2 (firefox-vpn) — the live/cached Firefox VPN location set from
+/// the engine's `--discover` role (the adapter emits it after every
+/// [EngineAdapter.refreshFirefoxLocations]; the store swaps it into the
+/// wheel's firefox list). [live] is the honesty label: false = served
+/// from the disk cache (offline start) — the UI surfaces which one it
+/// got, never presenting a cache as live data.
+class EngineFirefoxLocations extends EngineEvent {
+  const EngineFirefoxLocations(this.countries, this.live, this.fetchedAt);
+  final List<String> countries;
+  final bool live;
+  final DateTime fetchedAt;
 }
 
 /// v4.31 — the REAL exit country of a pseudo-country exit, resolved
@@ -166,6 +179,16 @@ abstract class EngineConfigSource {
   String get psiphonLocation;
   String get torLocation;
 
+  /// PHASE-2 (firefox-vpn) — the firefox family's own pick: 'auto' (the
+  /// engine's AUTO = Mozilla's REC anycast) or an ISO-3166 alpha-2
+  /// lowercase code from the LIVE RemoteSettings list (never the static
+  /// flag manifest). Persisted like the family picks above.
+  String get firefoxLocation;
+
+  /// PHASE-2 — the firefox data-plane transport: 'h2' (default, TCP +
+  /// TLS 1.3) or 'h3' (QUIC). Fed verbatim to the engine config.
+  String get firefoxTransport;
+
   /// «سرعت اسکن» 1..5 (protocol sheet; feeds the core scan profile).
   int get scanSpeed;
 
@@ -214,10 +237,40 @@ abstract class EngineAdapter {
   /// Called once by the store right after construction; default no-op
   /// (preview / not-wired adapters never read user config).
   void bind(EngineConfigSource config) {}
+
+  // ---- PHASE-2 (firefox-vpn) — the firefox engine surface. Defaults
+  // keep the preview/not-wired adapters honest (no engine = no
+  // locations, no session, a failed login) without special-casing them
+  // everywhere.
+
+  /// Asks the adapter to refresh the Firefox location list through the
+  /// engine's `--discover` role; the result arrives as an
+  /// [EngineFirefoxLocations] event. Default: no-op.
+  Future<void> refreshFirefoxLocations() async {}
+
+  /// Runs the WebChannel login exchange (the engine's `--login` role).
+  /// Default: the honest not-wired failure.
+  Future<FirefoxLoginResult> firefoxWebChannelLogin(
+    String sessionToken, {
+    void Function(String line)? onLog,
+  }) async =>
+      FirefoxLoginResult.failed(
+        'engineNotWired',
+        'the Firefox VPN engine is not available on this platform',
+      );
+
+  /// Whether a session pair lives in the Keystore vault. Default: absent.
+  Future<bool> firefoxHasSession() async => false;
+
+  /// The sign-out vault wipe. Default: no-op.
+  Future<void> firefoxClearSession() async {}
+
+  /// Cancels an in-flight login exchange. Default: no-op.
+  Future<void> firefoxLoginCancel() async {}
 }
 
 /// Default adapter until the native service lands (M2): fails honestly.
-class EngineNotWiredAdapter implements EngineAdapter {
+class EngineNotWiredAdapter extends EngineAdapter {
   final StreamController<EngineEvent> _controller =
       StreamController<EngineEvent>.broadcast();
 
@@ -250,7 +303,7 @@ class EngineNotWiredAdapter implements EngineAdapter {
 /// `--dart-define=PREVIEW_MODE=true` AND never active in release builds.
 /// It simulates the legal state walk so every visual state can be exercised;
 /// it must NEVER ship enabled — see `PreviewEngineAdapter.allowed`.
-class PreviewEngineAdapter implements EngineAdapter {
+class PreviewEngineAdapter extends EngineAdapter {
   PreviewEngineAdapter({
     // v4.11 (owner defect #10): the connecting walk must last long enough
     // for the scanning halo behind the central icon to be SEEN and for the

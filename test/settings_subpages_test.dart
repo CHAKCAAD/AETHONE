@@ -19,6 +19,7 @@ import 'package:aethone/connection/platform_engine_adapter.dart';
 import 'package:aethone/connection/settings_persistence.dart';
 import 'package:aethone/connection/transport_modes.dart';
 import 'package:aethone/core/app_assets.dart';
+import 'package:aethone/core/design_tokens.dart';
 import 'package:aethone/core/motion.dart';
 import 'package:aethone/features/settings/appearance_page.dart';
 import 'package:aethone/features/settings/connection_page.dart';
@@ -128,6 +129,75 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('nav-core-entry')));
       await tester.pumpAndSettle();
       expect(find.text('فرگمنت TLS'), findsOneWidget);
+    });
+
+    // -----------------------------------------------------------------
+    // PHASE-2 REBUILD (2026-11-09, the owner's decree): the «سرعت اسکن»
+    // (scan speed) section MOVED here from the ProtocolPage — same five
+    // pills, same store value, same instant binding; the stored level
+    // survives the move untouched.
+    // -----------------------------------------------------------------
+    testWidgets('the scan speed section renders and applies INSTANTLY '
+        '(moved from the protocol page, 2026-11-09)', (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(ConnectionSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      // The section heading is here now (the protocol page lost it).
+      expect(find.text('سرعت اسکن'), findsOneWidget);
+      // The frame default (5) survives the move.
+      expect(store.scanSpeed, 5);
+
+      // All five pills render inside the page's card.
+      for (var level = 1; level <= 5; level++) {
+        await tester.ensureVisible(
+            find.byKey(ValueKey('proto-pill-$level')));
+        expect(find.byKey(ValueKey('proto-pill-$level')), findsOneWidget);
+      }
+
+      // A tap applies instantly (the v4.17 LIVE-binding semantics).
+      await tester.ensureVisible(find.byKey(const ValueKey('proto-pill-2')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('proto-pill-2')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(store.scanSpeed, 2);
+
+      // The tapped pill is the SELECTED (green) one.
+      final pill2 = tester.widget<AnimatedContainer>(
+        find.descendant(
+          of: find.byKey(const ValueKey('proto-pill-2')),
+          matching: find.byType(AnimatedContainer),
+        ).first,
+      );
+      expect(
+        (pill2.decoration as BoxDecoration).color,
+        AethColors.accentConnected,
+      );
+    });
+
+    testWidgets('a previously stored scan level keeps applying (the value '
+        'is untouched by the move)', (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      store.setScanSpeed(3);
+      await tester.pumpWidget(_booth(ConnectionSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('سرعت اسکن'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('proto-pill-3')));
+      final pill3 = tester.widget<AnimatedContainer>(
+        find.descendant(
+          of: find.byKey(const ValueKey('proto-pill-3')),
+          matching: find.byType(AnimatedContainer),
+        ).first,
+      );
+      expect(
+        (pill3.decoration as BoxDecoration).color,
+        AethColors.accentConnected,
+        reason: 'the stored level 3 renders selected on the new surface',
+      );
     });
   });
 

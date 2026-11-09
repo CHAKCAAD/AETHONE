@@ -51,6 +51,9 @@ abstract final class SettingsKeys {
   /// سایفون و تور رو یادش بمونه»): 'auto' or an ISO-3166 alpha-2 code.
   static const psiphonLocation = 'aethone.settings.psiphonLocation';
   static const torLocation = 'aethone.settings.torLocation';
+  // PHASE-2 (firefox-vpn): the firefox family's own picks.
+  static const firefoxLocation = 'aethone.settings.firefoxLocation';
+  static const firefoxTransport = 'aethone.settings.firefoxTransport';
   static const protocolModeSmart = 'aethone.settings.protocolModeSmart';
   static const routingRegion = 'aethone.settings.routingRegion';
 
@@ -160,6 +163,18 @@ class SettingsPersistence {
       final tor = prefs.getString(SettingsKeys.torLocation);
       if (_isLocationPick(tor)) {
         store.torLocation = tor!;
+      }
+      // PHASE-2 — the firefox family's picks (location like the other
+      // families; transport 'h2'/'h3' with the h2 default).
+      final firefox = prefs.getString(SettingsKeys.firefoxLocation);
+      if (_isLocationPick(firefox)) {
+        store.firefoxLocation = firefox!;
+      }
+      final firefoxTransport = prefs.getString(SettingsKeys.firefoxTransport);
+      if (firefoxTransport == 'h3') {
+        store.firefoxTransport = 'h3';
+      } else {
+        store.firefoxTransport = 'h2';
       }
       if (prefs.containsKey(SettingsKeys.protocolModeSmart)) {
         store.protocolModeSmart = prefs.getBool(SettingsKeys.protocolModeSmart)!;
@@ -365,6 +380,8 @@ class SettingsPersistence {
         store.psiphonLocation,
       );
       await prefs.setString(SettingsKeys.torLocation, store.torLocation);
+      await prefs.setString(SettingsKeys.firefoxLocation, store.firefoxLocation);
+      await prefs.setString(SettingsKeys.firefoxTransport, store.firefoxTransport);
       await prefs.setBool(
         SettingsKeys.protocolModeSmart,
         store.protocolModeSmart,

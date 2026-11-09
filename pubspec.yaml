@@ -28,6 +28,12 @@ dependencies:
   # انتخاب های تنظیمات رو یادش نمیمونه»). Storage: Android
   # SharedPreferences via the first-party plugin.
   shared_preferences: 2.5.3
+  # ---- phase-2 (firefox-vpn): the FxA WebChannel login page ----
+  # accounts.firefox.com loaded with context=fx_desktop_v3 inside the app
+  # (the password never transits AETHONE code — the sign-in happens on
+  # Mozilla's own page; only the session token is captured and piped to
+  # the engine). First-party plugin, BSD-3-Clause.
+  webview_flutter: 4.14.1
 
 dev_dependencies:
   flutter_test:
@@ -83,6 +89,10 @@ flutter:
     - design/آیکون پروتکل ها/گول کلاسیک هردو حالت.svg
     - design/آیکون پروتکل ها/تور هر دو حالت.svg
     - design/آیکون پروتکل ها/سایفون هر دو حالت.svg
+    # --- PHASE-2 REBUILD (2026-11-09): the OFFICIAL Firefox mark
+    #     (owner-delivered mozilla-vpn-seeklogo.svg, the single-face
+    #     «هر دو حالت» naming; monochrome — renders through the ink). ---
+    - design/آیکون پروتکل ها/فایرفاکس هر دو حالت.svg
     # --- v4.33 (owner round 9): the combined-mode icons — the owner's own
     #     SVGs (سایفون اور وارپ / وارپ اور سایفون / تور اور وارپ / وارپ اور
     #     تور) replace the composed aether+chevron stacks on the sub-tiles;

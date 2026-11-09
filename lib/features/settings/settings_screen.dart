@@ -53,6 +53,7 @@ import '../home/widgets/pattern_sides.dart';
 import '../shared/theme_toggle_tile.dart';
 import 'appearance_page.dart';
 import 'connection_page.dart';
+import 'firefox_page.dart';
 import 'general_page.dart';
 import 'language_page.dart';
 import 'psiphon_page.dart';
@@ -204,17 +205,30 @@ class SettingsScreen extends StatelessWidget {
                               TorSettingsPage(store: store),
                             ),
                           )),
+                          // PHASE-2 (firefox-vpn) — the Firefox VPN row:
+                          // the same wide-pill language, full width, under
+                          // the psiphon/tor pair. The placeholder shield
+                          // glyph stands until the owner's own Firefox
+                          // artwork lands (the auto-globe precedent).
+                          SizedBox(height: AethGeometry.settingsPillGap * s),
+                          _enter(context, style, 4, _FirefoxPillRow(
+                            textDir: appDir,
+                            onTap: () => _openSubPage(
+                              context,
+                              FirefoxSettingsPage(store: store),
+                            ),
+                          )),
                           SizedBox(
                             height: AethGeometry.settingsHeadingGapFromPills * s,
                           ),
-                          _enter(context, style, 4, _SectionHeading(
+                          _enter(context, style, 5, _SectionHeading(
                             icon: AppAssets.iconMenuFries,
                             title: strings.settingsAdvancedStatus,
                           )),
                           SizedBox(
                             height: AethGeometry.settingsHeadingGapToCards * s,
                           ),
-                          _enter(context, style, 5, _StatusCards(
+                          _enter(context, style, 6, _StatusCards(
                             store: store,
                             onKillSwitch: () => _openSubPage(
                               context,
@@ -232,20 +246,20 @@ class SettingsScreen extends StatelessWidget {
                           SizedBox(
                             height: AethGeometry.settingsHeading2GapToServer * s,
                           ),
-                          _enter(context, style, 6, _SectionHeading(
+                          _enter(context, style, 7, _SectionHeading(
                             icon: AppAssets.iconSituation1,
                             title: strings.settingsMainServer,
                           )),
                           SizedBox(
                             height: AethGeometry.settingsHeadingGapToCards * s,
                           ),
-                          _enter(context, style, 7, const _ServerPills()),
+                          _enter(context, style, 8, const _ServerPills()),
                           SizedBox(height: 22 * s),
                           // v4.21 — the core diagnostics entry (owner:
                           // «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا
                           // بهتر بتونیم دیباگ کنیم») — the full captured
                           // stderr of the engines, tailed live.
-                          _enter(context, style, 8, _CoreLogCard(
+                          _enter(context, style, 9, _CoreLogCard(
                             onTap: () => _openCoreLog(context),
                           )),
                           SizedBox(height: 30 * s),
@@ -608,6 +622,31 @@ class _ProtocolPills extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// PHASE-2 (firefox-vpn) — the full-width Firefox VPN pill (the third
+/// protocol-settings row): the same wide-pill language as the
+/// psiphon/tor pair, stretched across, the placeholder shield glyph
+/// until the owner's own Firefox artwork lands.
+class _FirefoxPillRow extends StatelessWidget {
+  const _FirefoxPillRow({required this.textDir, this.onTap});
+
+  final TextDirection textDir;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    return _WidePill(
+      logo: AppAssets.protocolIcon(ProtocolId.firefoxOnly, light: false),
+      logoBox: AethGeometry.settingsPillLogoTor * s,
+      title: strings.settingsFirefox,
+      subtitle: strings.settingsPillSub,
+      textDir: textDir,
+      onTap: onTap,
     );
   }
 }

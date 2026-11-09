@@ -15,7 +15,7 @@ import 'package:aethone/connection/transport_modes.dart' show LocationWheelPolic
 
 /// A scripted engine for deterministic UI tests — the same seam the preview
 /// adapter uses, but fully controlled by the test.
-class ScriptedEngine implements EngineAdapter {
+class ScriptedEngine extends EngineAdapter {
   final StreamController<EngineEvent> _controller =
       StreamController<EngineEvent>.broadcast();
 
@@ -30,6 +30,8 @@ class ScriptedEngine implements EngineAdapter {
   @override
   Future<void> disconnect() async {}
 
+  @override
+  @override
   @override
   void bind(EngineConfigSource config) {} // scripted — config never read
 }

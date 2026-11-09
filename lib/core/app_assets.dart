@@ -20,6 +20,14 @@ enum ProtocolId {
   psiphonChain,
   psiphonReverse,
   psiphonOnly,
+
+  /// PHASE-1 (firefox-vpn, private branch): the Firefox VPN engine — a
+  /// DEDICATED communication engine (Go child process `libfirefoxvpn.so`,
+  /// local SOCKS5 on 127.0.0.1:1822), NOT an aether overlay: no aether
+  /// core runs for this mode. The protocol tile/UI presentation is
+  /// Phase 2's scope; the engine wiring lives in
+  /// lib/connection/firefox/ + the adapter's firefox branch.
+  firefoxOnly,
 }
 
 extension ProtocolIdX on ProtocolId {
@@ -34,6 +42,9 @@ extension ProtocolIdX on ProtocolId {
       this == ProtocolId.psiphonChain ||
       this == ProtocolId.psiphonReverse ||
       this == ProtocolId.psiphonOnly;
+
+  /// PHASE-1 (firefox-vpn): the dedicated Firefox VPN engine mode.
+  bool get isFirefox => this == ProtocolId.firefoxOnly;
 }
 
 abstract final class AppAssets {
@@ -247,10 +258,23 @@ abstract final class AppAssets {
   static const String _protoTorOverWarp = '$_protocols/تور اور وارپ.svg';
   static const String _protoWarpOverTor = '$_protocols/وارپ اور تور.svg';
 
+  /// PHASE-2 REBUILD (2026-11-09): the OFFICIAL Firefox artwork the
+  /// owner delivered (mozilla-vpn-seeklogo.svg), committed under the
+  /// set's own single-face naming («هر دو حالت»). The mark is
+  /// MONOCHROME (a single untinted path = default black), so it renders
+  /// through the INK color on dark surfaces — the file's geometry is
+  /// exact, only the ink adapts (see ProtocolGlyph's firefoxOnly rule).
+  static const String _protoFirefoxBoth =
+      '$_protocols/فایرفاکس هر دو حالت.svg';
+
   /// Public protocol-logo paths (the settings Psiphon/Tor pills render the
   /// REAL logos — v4.40: the owner's own «هر دو حالت» files, own colors).
   static const String protocolTorLogo = _protoTorBoth;
   static const String protocolPsiphonLogo = _protoPsiphonBoth;
+
+  /// The OFFICIAL Firefox mark (the owner-delivered artwork,
+  /// mozilla-vpn-seeklogo.svg) — the Firefox card/settings glyph.
+  static const String protocolFirefoxLogo = _protoFirefoxBoth;
 
   /// Logo for a transport mode. AUTO/SMART has NO dedicated file in the
   /// owner's round-16 set — pending design decision D-pending (report §6.9
@@ -280,6 +304,10 @@ abstract final class AppAssets {
         ProtocolId.psiphonChain => _protoPsiphonOverWarp,
         ProtocolId.psiphonReverse => _protoWarpOverPsiphon,
         ProtocolId.psiphonOnly => _protoPsiphonBoth,
+        // PHASE-2 REBUILD (2026-11-09): the owner's OFFICIAL Firefox
+        // artwork (open item G2 closed) — the Shield-Tick stopgap is
+        // retired. Monochrome mark: ProtocolGlyph carries the ink rule.
+        ProtocolId.firefoxOnly => _protoFirefoxBoth,
       };
 
   /// Country flag by ISO code (lowercase), e.g. `ir` → ir.png.

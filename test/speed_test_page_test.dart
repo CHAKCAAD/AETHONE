@@ -39,7 +39,7 @@ Future<void> _useReferenceSurface(WidgetTester tester) async {
 
 /// The scripted transport engine (the home test's own seam) — walks the
 /// store's machine legally into the connected pose.
-class _ScriptedEngine implements EngineAdapter {
+class _ScriptedEngine extends EngineAdapter {
   final StreamController<EngineEvent> _controller =
       StreamController<EngineEvent>.broadcast();
 
@@ -54,6 +54,7 @@ class _ScriptedEngine implements EngineAdapter {
   @override
   Future<void> disconnect() async {}
 
+  @override
   @override
   void bind(EngineConfigSource config) {}
 }

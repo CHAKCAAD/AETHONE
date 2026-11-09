@@ -1,0 +1,135 @@
+# fxv — ORIGIN and provenance
+
+The AETHONE Firefox VPN engine layer. Rebuilt 2026-11-09 (the
+2026-11-09 master-prompt session) from the documented contract after
+the original workspace was lost; the engine source now lives IN THIS
+REPOSITORY so it can never again depend on an agent's temporary
+workspace.
+
+## Upstream pin (exact)
+
+```
+repository : https://github.com/UjuiUjuMandan/firefox-vpn-client
+commit     : 55ad91a2ccea1c93e69c82a08a7681e279884db5
+subject    : fix(fxa): present Firefox ClientHello on the control plane
+date       : 2026-11-06
+```
+
+The pristine upstream copy is FETCHED, never committed
+(`phase1/scripts/fetch_upstream.sh` verifies `git rev-parse HEAD` against
+the pin and writes `phase1/firefox-vpn-client.SHA256SUMS`; the directory
+itself is gitignored). `go.mod`'s `replace` directive binds the module to
+that local copy. **Re-fetching with a different commit is forbidden** —
+the pin is the provenance base of every adapted piece below.
+
+## LICENSE STATUS — UNRESOLVED (read this before distributing anything)
+
+The upstream repository at the pinned commit contains **NO license
+file, NO COPYING, NO NOTICE, and NO copyright/license headers in any
+source file** (verified 2026-11-09 by direct inspection of the full
+tree at the pin). Absent a license, no redistribution, modification or
+relicensing rights exist by default ("all rights reserved" is the
+default copyright posture).
+
+Consequences, per the standing decrees (docs/FIREFOX_VPN_SECURITY.md §6,
+the master prompt §7.2):
+
+* **the engine, its binaries and everything derived from the upstream
+  stay in the PRIVATE repository** (`CHAKCAAD/aethonepriv`) — nothing is
+  pushed to `CHAKCAAD/AETHONE`, no public release, no public artifact;
+* the vendored upstream COPY is never committed to git (fetch + hash
+  manifest only) — this repository's committed code is AETHONE's own
+  layer plus the adapted pieces recorded below;
+* **no license text is invented, no proprietary claim is made** — this
+  file records the honest status instead;
+* the owner's options: (a) obtain written permission from the upstream
+  author, (b) choose a licensed alternative implementation, or (c) keep
+  the engine private indefinitely. Until one is chosen the status is
+  BLOCKED for any public distribution.
+
+Credit where due: the upstream author's reverse-engineering of the
+Mozilla VPN control/data planes is the foundation this engine wraps.
+FoxyVPN (MIT) was consulted as an architectural REFERENCE ONLY (the
+WebChannel bridge mapping on the Dart side); no FoxyVPN code is
+included; its GPL sing-box fork was neither consulted nor included.
+The Arman VPN project was not consulted and is not included (standing
+prohibition).
+
+## What is NEW AETHONE code (written for this engine)
+
+| Piece | Files |
+|---|---|
+| The wire contract (Config/Event/LoginConfig, versions, codes) | `internal/engine/` |
+| The classification guard (Phase B Part 2/3) | `internal/fferr/` (from `docs/phaseb-engine-patch/fferr`, applied here verbatim) |
+| The redaction scrubber | `internal/redact/` |
+| The discovery selection policy (REC/CatchAll/quarantine/country) | `internal/discovery/` |
+| The entry point, orchestration, park loop, `--discover`, `--login`, `--dns-probe` roles | `cmd/libfirefoxvpn/` |
+| The build/fetch scripts and this provenance record | `../scripts/`, this file |
+
+## What is ADAPTED from the upstream (per-file provenance)
+
+Adapted from `cmd/proxy-demo/main.go` of the pinned commit:
+
+| Adapted piece | Now lives in | Adaptation notes |
+|---|---|---|
+| `socksServer`, `handshakeSOCKS5`, `readSOCKSAddr`, `writeSOCKSReply`, `mapUpstreamError`, `proxyBidirectional`, `copyConn`, `closeIdleConns` | `internal/socks/server.go` | client-affinity opener REMOVED (single-session decree); logging through the injected redacted sink |
+| `tunnelWriteBuffer`, `tunnelConn`, `tunnelAddr` | `internal/upstream/tunnel.go` | behavior preserved verbatim |
+| `newH2ProxySession`, keepalive, `OpenTunnel`, `roundTripWithOpenTimeout` | `internal/upstream/h2.go` | sessionFailureTracker REMOVED (no pool) |
+| `newH3ProxySession`, `OpenTunnel` | `internal/upstream/h3.go` | same; the 1200-byte InitialPacketSize floor kept |
+| `proxyController` | `internal/upstream/controller.go` | the POOL IS REMOVED — exactly one session, one account, no rotation; renewal loop + quota/renewal-timeout terminals preserved |
+| `verifyExit`, `parseExitProbeResponse`, `openTunnelContext` | `internal/upstream/exitprobe.go` | the probe request now presents the uTLS Firefox ClientHello (the anti-bot edge treats Go's ClientHello as a bot signature) |
+
+Used as LIBRARIES through the pin (unmodified, via the `replace`):
+`vpnclient.FxaOAuthToken` (the audited `fxa-credentials` exchange with
+HAWK + uTLS + the Fastly anti-bot retry), `vpnclient.FxaRefreshToken`,
+`vpnclient.FetchProxyPass` (Guardian; `ErrQuotaExceeded` /
+`ErrTokenInvalid` semantics), `vpnclient.FetchServerList`
+(RemoteSettings), and the control-plane transport
+(`NewControlPlaneTransport` — the uTLS Firefox ClientHello on HTTP/2).
+
+## Deliberately NOT carried over (policy)
+
+From `cmd/proxy-demo`: the interactive login/credential prompt (Phase 2
+account UI + WebChannel own that), the session-token pool (forbidden —
+one account, no pools, no rotation), the multi-upstream session pool
+with client affinity (one session), the CLI flags/`-print-info`/state
+files, `vpnclient.SaveTokens/LoadTokens` plaintext token files (the
+Android-Keystore vault on the Dart side replaces them), the password
+login path (`FxaLogin` — the account password never transits AETHONE
+code; the `--login` role takes the WebChannel-captured session token
+only), and the `-api-proxy` machinery.
+
+## The documented seams (recorded honestly)
+
+1. **The FxA errno seam** — the pinned upstream does not export its
+   `fxaAPIError` type, so the FxA application errno (and the
+   Guardian sentinel's status) ride the error TEXT; `fxaErrno()` /
+   `fxaHTTPStatus()` in `cmd/libfirefoxvpn/login.go` extract them.
+   This is the ONE string-adjacent seam and it is deliberately NOT
+   part of the Phase B transport classification (which is type-based
+   through `errors.As` in `internal/fferr`, per the decree).
+2. **The pair-guard seam** — the upstream's `FxaOAuthToken` returns
+   the PARSED `TokenResponse` (the raw body is not reachable without
+   forking the audited exchange), so the Part 3 guard applies to the
+   parsed fields (`guardParsedPair`); JSON-string typing is guaranteed
+   by the upstream's own unmarshal (a wrong-typed field fails there
+   and arrives as an exchange error → `invalidTokenResponse`).
+
+## The rebuild session's honest deltas vs. the lost Phase-1 tree
+
+The lost tree's exact bytes are unrecoverable (never committed). This
+rebuild follows the DOCUMENTED contract (docs/FIREFOX_VPN_ENGINE.md,
+FIREFOX_VPN_LOGIN.md, FIREFOX_VPN_ANDROID.md, the phase reports and
+the phaseb patch README) field-by-field: the event catalog, the config
+rules, the failure/exit codes, the roles, the module layout, and the
+provenance boundaries above. Additions THIS session, per the master
+prompt and its multi-architecture amendment:
+
+* `--dns-probe` — the per-ABI DNS evidence role (resolver identity +
+  real resolution of the control-plane domains; no secrets);
+* the clean-stop check at every walk stage boundary;
+* `EngineVersion` 1.2.0-phaseb (the classified `failed` event + the
+  pair guard, integrated from `docs/phaseb-engine-patch/`);
+* all-ABI CGO enforcement in the build script (the A1 decree, now
+  applied to arm64-v8a AND verified for armeabi-v7a/x86_64 — see
+  `../scripts/build_engine.sh` and `../docs/BUILD.md`).
