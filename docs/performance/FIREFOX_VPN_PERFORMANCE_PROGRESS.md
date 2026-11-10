@@ -609,3 +609,4 @@ RemoteSettings زنده (vpnclient.FetchServerList با uTLS Firefox ClientHello
 | 5 | `cbc83f5` | fix(engine): record the connected endpoint (remote=IP) in the session-established log (stage 5) |
 | 6 — کد ۱ | `c4ea2d9` | fix(engine): restore the upstream log level discipline in the SOCKS layer (stage 6) |
 | 6 — کد ۲ | `ee82680` | feat(engine): 60s runtime-stats evidence line for on-device CPU/memory diagnosis (stage 6) |
+| 7 — مستندات | `d223ab2` | docs(performance): stage 7 — TLS fragmentation decision (no implementation: post-connection problem, no DPI/handshake-failure evidence, pinned engine has no capability; Arman reference uses ECH not fragment) |
