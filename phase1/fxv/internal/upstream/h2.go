@@ -69,6 +69,28 @@ func (e *proxyConnectHTTPError) Error() string {
 	return fmt.Sprintf("proxy CONNECT failed: %s: %s", e.status, e.body)
 }
 
+// RedactedError renders err for LOGGING with the proxy CONNECT answer
+// body redacted unless verbose (ADAPTED from the demo's logErr — the
+// SOCKS layer's always-on warn line must not carry the proxy's error
+// page into core-log.txt; the body is arbitrary remote content).
+func RedactedError(err error, verbose bool) string {
+	if err == nil {
+		return "<nil>"
+	}
+	if verbose {
+		return err.Error()
+	}
+	var connectErr *proxyConnectHTTPError
+	if errors.As(err, &connectErr) {
+		sanitized := *connectErr
+		if sanitized.body != "" {
+			sanitized.body = "<redacted; use -verbose>"
+		}
+		return sanitized.Error()
+	}
+	return err.Error()
+}
+
 // tunnelOpenTimeoutError marks a CONNECT that exceeded its open budget.
 type tunnelOpenTimeoutError struct{ timeout time.Duration }
 

@@ -318,3 +318,63 @@ func networkAvailable() bool {
         _ = conn.Close()
         return true
 }
+
+// TestStderrLoggerLevelDiscipline (Stage 6): the engine's human-log
+// sink follows the upstream demo's level rules — quiet writes nothing,
+// the normal level writes info/warn but NOT debug, verbose writes all
+// three, and Verbose() reports only the verbose mode (the logTarget /
+// RedactedError un-redaction gate).
+func TestStderrLoggerLevelDiscipline(t *testing.T) {
+        run := func(enabled, verbose bool) string {
+                var buf strings.Builder
+                log := &stderrLogger{
+                        enabled: enabled,
+                        verbose: verbose,
+                        redact:  func(s string) string { return s },
+                        w:       &buf,
+                }
+                log.Debugf("socks: CONNECT requested target=%s", "secret-domain.example:443")
+                log.Infof("socks: conn tracked live=%d", 1)
+                log.Warnf("socks: upstream tunnel open failed target=%s", "<redacted; use -verbose>")
+                return buf.String()
+        }
+
+        // quiet: nothing at all.
+        if out := run(false, false); out != "" {
+                t.Fatalf("quiet wrote %q", out)
+        }
+
+        // normal: info + warn only; the debug line (and its domain) silent.
+        normal := run(true, false)
+        if strings.Contains(normal, "debug:") || strings.Contains(normal, "secret-domain.example") {
+                t.Fatalf("normal level leaked debug output: %q", normal)
+        }
+        if !strings.Contains(normal, "info: socks: conn tracked live=1") {
+                t.Fatalf("normal level must keep the Info live=N channel: %q", normal)
+        }
+        if !strings.Contains(normal, "warn: socks: upstream tunnel open failed") {
+                t.Fatalf("normal level must keep warn lines: %q", normal)
+        }
+
+        // verbose: all three levels, domain visible.
+        verboseOut := run(true, true)
+        for _, want := range []string{
+                "debug: socks: CONNECT requested target=secret-domain.example:443",
+                "info: socks: conn tracked live=1",
+                "warn: socks: upstream tunnel open failed",
+        } {
+                if !strings.Contains(verboseOut, want) {
+                        t.Fatalf("verbose output missing %q (got %q)", want, verboseOut)
+                }
+        }
+
+        // The un-redaction gate mirrors the mode.
+        log := &stderrLogger{enabled: true, verbose: true}
+        if !log.Verbose() {
+                t.Fatal("verbose logger must report Verbose()=true")
+        }
+        log = &stderrLogger{enabled: true}
+        if log.Verbose() {
+                t.Fatal("normal logger must report Verbose()=false")
+        }
+}

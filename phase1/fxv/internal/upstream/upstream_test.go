@@ -6,6 +6,8 @@ package upstream
 import (
         "bytes"
         "context"
+        "errors"
+        "fmt"
         "io"
         "net"
         "strings"
@@ -147,5 +149,48 @@ func TestSessionEstablishedLog(t *testing.T) {
         bare := sessionEstablishedLog("h2", "p.example.net:443", "", time.Second)
         if strings.Contains(bare, "remote=") {
                 t.Fatalf("empty remote must omit the field: %q", bare)
+        }
+}
+
+// TestRedactedError (Stage 6): the SOCKS warn line's error rendering —
+// the proxy CONNECT answer body is redacted unless verbose (upstream
+// logErr parity), other errors pass through, nil renders as <nil>.
+func TestRedactedError(t *testing.T) {
+        if got := RedactedError(nil, false); got != "<nil>" {
+                t.Fatalf("nil = %q", got)
+        }
+
+        plain := &net.OpError{Op: "dial", Err: errors.New("connection refused")}
+        if got, want := RedactedError(plain, false), plain.Error(); got != want {
+                t.Fatalf("plain error non-verbose = %q, want %q", got, want)
+        }
+
+        full := &proxyConnectHTTPError{statusCode: 403, status: "403 Forbidden", body: "<html>secret error page</html>"}
+        if got := RedactedError(full, true); !strings.Contains(got, "secret error page") {
+                t.Fatalf("verbose must keep the body: %q", got)
+        }
+        redacted := RedactedError(full, false)
+        if strings.Contains(redacted, "secret error page") {
+                t.Fatalf("non-verbose leaked the body: %q", redacted)
+        }
+        if !strings.Contains(redacted, "<redacted; use -verbose>") {
+                t.Fatalf("non-verbose must carry the marker: %q", redacted)
+        }
+        if !strings.Contains(redacted, "403 Forbidden") {
+                t.Fatalf("the status line stays (not sensitive): %q", redacted)
+        }
+
+        // A body-less CONNECT failure renders identically at both levels.
+        bare := &proxyConnectHTTPError{statusCode: 502, status: "502 Bad Gateway"}
+        if got, want := RedactedError(bare, false), bare.Error(); got != want {
+                t.Fatalf("body-less non-verbose = %q, want %q", got, want)
+        }
+
+        // Wrapped CONNECT errors are unwrapped to the typed cause.
+        wrapped := fmt.Errorf("open tunnel: %w", full)
+        if got := RedactedError(wrapped, false); strings.Contains(got, "secret error page") {
+                t.Fatalf("wrapped body leaked: %q", got)
+        } else if !strings.Contains(got, "<redacted; use -verbose>") {
+                t.Fatalf("wrapped non-verbose must carry the marker: %q", got)
         }
 }

@@ -6,10 +6,16 @@
 //
 //   - the client-affinity opener variant is REMOVED (no pool, no
 //     per-client slot memory — exactly one upstream session exists);
-//   - logging goes through the injected level-tagged sink (redacted by
-//     the caller), never to the upstream's global logEvent;
+//   - logging goes through the injected level-tagged sink, never to
+//     the upstream's global logEvent; the target/error redaction lives
+//     HERE (logTarget / RedactedError) gated by the sink's Verbose();
 //   - UDP ASSOCIATE is refused (CONNECT only — the upstream semantics
-//     the AETHONE adapter relies on, tcpOnly zeptun TUN).
+//     the AETHONE adapter relies on, tcpOnly zeptun TUN);
+//   - the upstream demo's LOG LEVEL discipline is restored (Stage 6):
+//     per-connection debug lines are no-ops unless the sink is verbose,
+//     targets are redacted even on warn lines, and only the live=N
+//     diagnostics ride Info (always visible — the Stage-2 evidence
+//     channel for the maxConns cap).
 package socks
 
 import (
@@ -20,6 +26,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"aethone/fxv/internal/upstream"
 )
 
 const (
@@ -54,11 +62,15 @@ type TunnelOpener interface {
 	OpenTunnel(authority string) (net.Conn, error)
 }
 
-// LogSink receives the server's level-tagged diagnostics (already
-// routed through the engine's redaction).
+// LogSink receives the server's level-tagged diagnostics. The sink
+// owns the upstream demo's level discipline: Debugf is a no-op unless
+// Verbose() reports true (the -verbose flag parity), Infof/Warnf are
+// always on, and Verbose() is what un-redacts targets and error bodies.
 type LogSink interface {
 	Debugf(format string, args ...any)
+	Infof(format string, args ...any)
 	Warnf(format string, args ...any)
+	Verbose() bool
 }
 
 // Server is the SOCKS5 CONNECT server (loopback-only by contract —
@@ -133,10 +145,11 @@ func (s *Server) track(conn net.Conn) {
 	s.conns[conn] = struct{}{}
 	n := len(s.conns)
 	s.mu.Unlock()
-	// Stage-2 diagnostic: the live count rides the existing debug
-	// line so the owner's core-log.txt shows the stream-accumulation
-	// trajectory of the single upstream session over time.
-	s.log.Debugf("socks: conn tracked live=%d", n)
+	// Stage-2 diagnostic on the Info level (Stage 6): the live count
+	// is the on-device evidence channel for the maxConns cap, so it
+	// must stay visible at the engine's normal level while the
+	// per-connection debug lines go quiet (upstream parity).
+	s.log.Infof("socks: conn tracked live=%d", n)
 }
 
 func (s *Server) untrack(conn net.Conn) {
@@ -144,7 +157,7 @@ func (s *Server) untrack(conn net.Conn) {
 	delete(s.conns, conn)
 	n := len(s.conns)
 	s.mu.Unlock()
-	s.log.Debugf("socks: conn untracked live=%d", n)
+	s.log.Infof("socks: conn untracked live=%d", n)
 }
 
 // Close stops accepting and closes every live client connection.
@@ -218,13 +231,13 @@ func (s *Server) handleConn(conn net.Conn) {
 	if s.handshakeTimeout > 0 {
 		_ = conn.SetDeadline(time.Time{})
 	}
-	s.log.Debugf("socks: CONNECT requested client=%s target=%s", clientAddr, logTarget(target))
+	s.log.Debugf("socks: CONNECT requested client=%s target=%s", clientAddr, s.logTarget(target))
 
 	upstreamConn, err := s.upstream.OpenTunnel(target)
 	if err != nil {
 		reply := MapUpstreamError(err)
-		s.log.Warnf("socks: upstream tunnel open failed client=%s target=%s reply=%d err=%v",
-			clientAddr, logTarget(target), reply, err)
+		s.log.Warnf("socks: upstream tunnel open failed client=%s target=%s reply=%d err=%s",
+			clientAddr, s.logTarget(target), reply, upstream.RedactedError(err, s.log.Verbose()))
 		if writeErr := WriteReply(conn, reply, nil); writeErr != nil {
 			s.log.Debugf("socks: upstream failure reply failed client=%s err=%v", clientAddr, writeErr)
 		}
@@ -233,12 +246,12 @@ func (s *Server) handleConn(conn net.Conn) {
 	defer upstreamConn.Close()
 
 	if err := WriteReply(conn, socksReplySuccess, conn.LocalAddr()); err != nil {
-		s.log.Debugf("socks: success reply failed client=%s target=%s err=%v", clientAddr, logTarget(target), err)
+		s.log.Debugf("socks: success reply failed client=%s target=%s err=%v", clientAddr, s.logTarget(target), err)
 		return
 	}
-	s.log.Debugf("socks: upstream tunnel open succeeded client=%s target=%s", clientAddr, logTarget(target))
+	s.log.Debugf("socks: upstream tunnel open succeeded client=%s target=%s", clientAddr, s.logTarget(target))
 	ProxyBidirectional(conn, upstreamConn, s.idleTimeout)
-	s.log.Debugf("socks: client disconnected client=%s target=%s", clientAddr, logTarget(target))
+	s.log.Debugf("socks: client disconnected client=%s target=%s", clientAddr, s.logTarget(target))
 }
 
 // Handshake performs the SOCKS5 greeting + CONNECT request read
@@ -499,16 +512,15 @@ func closeWrite(conn net.Conn) {
 	}
 }
 
-func logTarget(target string) string {
-	host, port, err := net.SplitHostPort(target)
-	if err != nil {
+// logTarget renders a SOCKS target for logging (upstream logTarget
+// parity): the full authority only under verbose; otherwise the demo's
+// redaction marker — on EVERY line it appears in, warn included, so
+// browsing domains never reach core-log.txt at the normal level.
+func (s *Server) logTarget(target string) string {
+	if s.log.Verbose() {
 		return target
 	}
-	// Only the target HOST is logged at debug level; the port rides
-	// along (no secrets exist in a SOCKS target).
-	_ = host
-	_ = port
-	return target
+	return "<redacted; use -verbose>"
 }
 
 func logAddr(addr net.Addr) string {
@@ -522,4 +534,6 @@ func logAddr(addr net.Addr) string {
 type discardSink struct{}
 
 func (discardSink) Debugf(string, ...any) {}
+func (discardSink) Infof(string, ...any)  {}
 func (discardSink) Warnf(string, ...any)  {}
+func (discardSink) Verbose() bool          { return false }

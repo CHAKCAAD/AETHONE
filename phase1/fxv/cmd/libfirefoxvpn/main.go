@@ -22,6 +22,7 @@ import (
         "context"
         "errors"
         "fmt"
+        "io"
         "net/url"
         "os"
         "strings"
@@ -105,6 +106,7 @@ func runTunnel() int {
 
         quiet := cfg.LogLevel == "quiet"
         log.enabled = !quiet
+        log.verbose = cfg.LogLevel == "verbose" // the -verbose flag parity (stdin JSON, not env)
 
         _ = emit.Emit(engine.Event{
                 Name: engine.EvStarted,
@@ -458,26 +460,40 @@ func portOf(hostPort string) int {
         return 443
 }
 
-// stderrLogger writes the engine's human logs (redacted upstream).
+// stderrLogger writes the engine's human logs (redacted upstream) —
+// the level discipline of the upstream demo's logDebug/logInfo/logWarn
+// (Stage 6): quiet silences everything, debug needs verbose, info/warn
+// are always on when not quiet.
 type stderrLogger struct {
         enabled bool
+        verbose bool
         redact  func(string) string
+        w       io.Writer // nil = os.Stderr (tests inject a buffer)
+}
+
+func (l *stderrLogger) sink() io.Writer {
+        if l.w != nil {
+                return l.w
+        }
+        return os.Stderr
 }
 
 func (l *stderrLogger) Debugf(format string, args ...any) {
-        if l.enabled {
-                fmt.Fprintf(os.Stderr, "%s", "debug: "+l.redact(fmt.Sprintf(format, args...))+"\n")
+        if l.enabled && l.verbose {
+                fmt.Fprintf(l.sink(), "%s", "debug: "+l.redact(fmt.Sprintf(format, args...))+"\n")
         }
 }
 
 func (l *stderrLogger) Warnf(format string, args ...any) {
         if l.enabled {
-                fmt.Fprintf(os.Stderr, "%s", "warn: "+l.redact(fmt.Sprintf(format, args...))+"\n")
+                fmt.Fprintf(l.sink(), "%s", "warn: "+l.redact(fmt.Sprintf(format, args...))+"\n")
         }
 }
 
 func (l *stderrLogger) Infof(format string, args ...any) {
         if l.enabled {
-                fmt.Fprintf(os.Stderr, "%s", "info: "+l.redact(fmt.Sprintf(format, args...))+"\n")
+                fmt.Fprintf(l.sink(), "%s", "info: "+l.redact(fmt.Sprintf(format, args...))+"\n")
         }
 }
+
+func (l *stderrLogger) Verbose() bool { return l.verbose }

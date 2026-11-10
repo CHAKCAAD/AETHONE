@@ -216,18 +216,65 @@ func (errTimeout) Error() string   { return "i/o timeout" }
 func (errTimeout) Timeout() bool   { return true }
 func (errTimeout) Temporary() bool { return true }
 
-// captureSink records debug lines (tests assert the Stage-2 diagnostics).
+// captureSink records every line with its level tag, implementing the
+// SAME discipline as the production stderrLogger (the LogSink contract:
+// Debugf is a no-op unless verbose) so tests assert the observable
+// end-to-end behavior of a non-verbose / verbose sink.
 type captureSink struct {
-        mu    sync.Mutex
-        lines []string
+        mu      sync.Mutex
+        verbose bool
+        lines   []string // "LEVEL message"
 }
 
 func (c *captureSink) Debugf(format string, args ...any) {
+        if !c.verbose {
+                return
+        }
+        c.record("DEBUG", format, args...)
+}
+func (c *captureSink) Infof(format string, args ...any)  { c.record("INFO", format, args...) }
+func (c *captureSink) Warnf(format string, args ...any)  { c.record("WARN", format, args...) }
+func (c *captureSink) Verbose() bool                     { return c.verbose }
+
+func (c *captureSink) record(level, format string, args ...any) {
         c.mu.Lock()
-        c.lines = append(c.lines, fmt.Sprintf(format, args...))
+        c.lines = append(c.lines, level+" "+fmt.Sprintf(format, args...))
         c.mu.Unlock()
 }
-func (c *captureSink) Warnf(format string, args ...any) {}
+
+// count returns how many recorded lines carry the level and prefix.
+func (c *captureSink) count(level, prefix string) int {
+        c.mu.Lock()
+        defer c.mu.Unlock()
+        n := 0
+        for _, l := range c.lines {
+                if strings.HasPrefix(l, level+" "+prefix) {
+                        n++
+                }
+        }
+        return n
+}
+
+// contains reports whether any recorded line contains substr.
+func (c *captureSink) contains(substr string) bool {
+        c.mu.Lock()
+        defer c.mu.Unlock()
+        for _, l := range c.lines {
+                if strings.Contains(l, substr) {
+                        return true
+                }
+        }
+        return false
+}
+
+// snapshot copies the recorded lines (failure messages only).
+func (c *captureSink) snapshot() []string {
+        c.mu.Lock()
+        defer c.mu.Unlock()
+        out := make([]string, len(c.lines))
+        copy(out, c.lines)
+        return out
+}
 
 // TestConnectionLimitRejectsBeyondCap: with maxConns=N, the (N+1)-th
 // concurrent connection is rejected FAST (closed before the SOCKS
@@ -443,19 +490,138 @@ func TestSequentialTunnelsNoConnOrGoroutineLeak(t *testing.T) {
 
         _ = srv.Close()
 
-        // The Stage-2 diagnostics must have counted every cycle.
-        sink.mu.Lock()
-        tracked, untracked := 0, 0
-        for _, l := range sink.lines {
-                if strings.HasPrefix(l, "socks: conn tracked live=") {
-                        tracked++
+        // The Stage-2 diagnostics (Stage 6: Info level now) must have
+        // counted every cycle.
+        if tracked, untracked := sink.count("INFO", "socks: conn tracked live="),
+                sink.count("INFO", "socks: conn untracked live=");
+                tracked < 100 || untracked < 100 {
+                t.Fatalf("diagnostics: tracked=%d untracked=%d, want >=100 each", tracked, untracked)
+        }
+        // The per-connection debug lines must be SILENT at the normal
+        // level (upstream logDebug parity).
+        if got := sink.count("DEBUG", "socks: "); got != 0 {
+                t.Fatalf("non-verbose sink saw %d debug lines, want 0", got)
+        }
+}
+
+// TestLogTargetRedactsUnlessVerbose — the target redaction contract
+// (upstream logTarget parity): the marker at the normal level, the full
+// authority under verbose.
+func TestLogTargetRedactsUnlessVerbose(t *testing.T) {
+        const target = "secret-domain.example:443"
+        srv := NewServer(&fakeOpener{}, 0, 0, 0, &captureSink{})
+        if got := srv.logTarget(target); got != "<redacted; use -verbose>" {
+                t.Fatalf("non-verbose logTarget = %q", got)
+        }
+        srv = NewServer(&fakeOpener{}, 0, 0, 0, &captureSink{verbose: true})
+        if got := srv.logTarget(target); got != target {
+                t.Fatalf("verbose logTarget = %q", got)
+        }
+}
+
+// TestPerConnectionLinesGatedByVerbose — a full tunnel cycle at the
+// normal level logs NO debug lines and NO target domain (the live=N
+// Info pair only); the same cycle under verbose logs the upstream
+// demo's per-connection diagnostics WITH the domain.
+func TestPerConnectionLinesGatedByVerbose(t *testing.T) {
+        const target = "secret-domain.example:443"
+        for _, verbose := range []bool{false, true} {
+                sink := &captureSink{verbose: verbose}
+                srv := NewServer(&fakeOpener{}, 2*time.Second, 0, 8, sink)
+                addr, err := srv.Listen("127.0.0.1:0")
+                if err != nil {
+                        t.Fatalf("listen: %v", err)
                 }
-                if strings.HasPrefix(l, "socks: conn untracked live=") {
-                        untracked++
+
+                conn, reply := dialAndConnect(t, addr.String(), target)
+                if reply != 0x00 {
+                        _ = conn.Close()
+                        t.Fatalf("verbose=%v: CONNECT reply = %#x", verbose, reply)
+                }
+                _ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+                if _, werr := conn.Write([]byte("hi")); werr != nil {
+                        _ = conn.Close()
+                        t.Fatalf("write: %v", werr)
+                }
+                echo := make([]byte, 2)
+                if _, rerr := io.ReadFull(conn, echo); rerr != nil {
+                        _ = conn.Close()
+                        t.Fatalf("read echo: %v", rerr)
+                }
+                _ = conn.Close()
+
+                // tracked/untracked must ride Info in BOTH modes.
+                deadline := time.Now().Add(3 * time.Second)
+                for {
+                        if sink.count("INFO", "socks: conn untracked live=") > 0 {
+                                break
+                        }
+                        if time.Now().After(deadline) {
+                                t.Fatalf("verbose=%v: the untracked Info line never arrived", verbose)
+                        }
+                        time.Sleep(10 * time.Millisecond)
+                }
+                _ = srv.Close()
+
+                if !verbose {
+                        if got := sink.count("DEBUG", "socks: "); got != 0 {
+                                t.Fatalf("normal level: %d debug lines, want 0", got)
+                        }
+                        if sink.contains("secret-domain.example") {
+                        t.Fatal("normal level: the target domain leaked into a log line")
+                        }
+                } else {
+                        for _, want := range []string{
+                                "socks: client connected ",
+                                "socks: CONNECT requested ",
+                                "socks: upstream tunnel open succeeded ",
+                                "socks: client disconnected ",
+                        } {
+                                if sink.count("DEBUG", want) == 0 {
+                                        t.Fatalf("verbose: missing debug line %q (recorded: %v)", want, sink.snapshot())
+                                }
+                        }
+                        if !sink.contains("secret-domain.example:443") {
+                                t.Fatal("verbose: the target domain must be visible for debugging")
+                        }
                 }
         }
-        sink.mu.Unlock()
-        if tracked < 100 || untracked < 100 {
-                t.Fatalf("diagnostics: tracked=%d untracked=%d, want >=100 each", tracked, untracked)
+}
+
+// TestWarnLineRedactsTargetAndErrorBody — an upstream open failure at
+// the normal level: the warn line IS written (always-on) but carries
+// the redaction marker instead of the target, and the error rendering
+// goes through upstream.RedactedError.
+func TestWarnLineRedactsTargetAndErrorBody(t *testing.T) {
+        const target = "secret-domain.example:443"
+        sink := &captureSink{}
+        srv := NewServer(&fakeOpener{fail: &net.OpError{Op: "dial", Err: errRefused{}}}, 2*time.Second, 0, 8, sink)
+        addr, err := srv.Listen("127.0.0.1:0")
+        if err != nil {
+                t.Fatalf("listen: %v", err)
+        }
+        defer srv.Close()
+
+        conn, reply := dialAndConnect(t, addr.String(), target)
+        defer conn.Close()
+        if reply == 0x00 {
+                t.Fatal("an upstream failure must not succeed")
+        }
+
+        deadline := time.Now().Add(3 * time.Second)
+        for {
+                if sink.count("WARN", "socks: upstream tunnel open failed ") > 0 {
+                        break
+                }
+                if time.Now().After(deadline) {
+                        t.Fatal("the upstream-failure warn line never arrived")
+                }
+                time.Sleep(10 * time.Millisecond)
+        }
+        if !sink.contains("<redacted; use -verbose>") {
+                t.Fatal("the warn line must carry the redaction marker")
+        }
+        if sink.contains("secret-domain.example") {
+                t.Fatal("the warn line leaked the target domain")
         }
 }
