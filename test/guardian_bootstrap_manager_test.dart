@@ -445,6 +445,72 @@ void main() {
     });
   });
 
+  group('manager — fastPathEligible (the Stage-5 read-only consult)', () {
+    test('false on a fresh memory (direct stays the first choice)', () async {
+      final manager = managerOf(
+        direct: _FakeDirect(
+            [const GuardianDirectResult(outcome: GuardianDirectOutcome.success)]),
+        verifier: _FakeVerifier(ok: true),
+      );
+      expect(await manager.fastPathEligible(), isFalse);
+      await manager.dispose();
+    });
+
+    test('true after a real 451 + a fully verified route (the walk consults '
+        'this BEFORE its own direct spawn)', () async {
+      final memoryPath = '${tempDir.path}/route-memory.json';
+      final manager = managerOf(
+        direct: _FakeDirect(
+            [const GuardianDirectResult(outcome: GuardianDirectOutcome.regionUnavailable)]),
+        verifier: _FakeVerifier(ok: true),
+        harness: _Harness(),
+        memoryPath: memoryPath,
+      );
+      await manager.ensureAuthorized(); // cold walk: 451 → route success
+      expect(await manager.fastPathEligible(), isTrue);
+      await manager.dispose();
+
+      // Across a restart (the file memory carries it).
+      final manager2 = managerOf(
+        direct: _FakeDirect(
+            [const GuardianDirectResult(outcome: GuardianDirectOutcome.regionUnavailable)]),
+        verifier: _FakeVerifier(ok: true),
+        harness: _Harness(),
+        memoryPath: memoryPath,
+      );
+      expect(await manager2.fastPathEligible(), isTrue);
+      await manager2.dispose();
+    });
+
+    test('false once the route TTL expires (back to discovery)', () async {
+      final manager = managerOf(
+        direct: _FakeDirect(
+            [const GuardianDirectResult(outcome: GuardianDirectOutcome.regionUnavailable)]),
+        verifier: _FakeVerifier(ok: true),
+        harness: _Harness(),
+        ttl: const Duration(milliseconds: 800),
+      );
+      await manager.ensureAuthorized(); // cold walk: 451 → route success
+      expect(await manager.fastPathEligible(), isTrue,
+          reason: 'fresh success is eligible immediately');
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      expect(await manager.fastPathEligible(), isFalse,
+          reason: 'the saved route expired — direct first again');
+      await manager.dispose();
+    });
+
+    test('false after a direct success (no bootstrap route to prefer)', () async {
+      final manager = managerOf(
+        direct: _FakeDirect(
+            [const GuardianDirectResult(outcome: GuardianDirectOutcome.success)]),
+        verifier: _FakeVerifier(ok: true),
+      );
+      await manager.ensureAuthorized(); // direct — no bootstrap at all
+      expect(await manager.fastPathEligible(), isFalse);
+      await manager.dispose();
+    });
+  });
+
   group('manager — fast path (mission scenario G, level-two memory)', () {
     test('second connection in the same context skips the doomed direct '
         'attempt AND still verifies everything', () async {

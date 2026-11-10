@@ -374,6 +374,26 @@ class GuardianBootstrapManager {
     return future;
   }
 
+  /// Whether the NEXT [ensureAuthorized] would SKIP the direct attempt
+  /// (Fast Path: a valid saved BOOTSTRAP route + recent real-451
+  /// evidence in the current network context — the exact eligibility
+  /// `_runOperation` applies). READ-ONLY consult for callers that must
+  /// decide BEFORE making a direct attempt of their own (the firefox
+  /// walk's engine spawn, Stage 5): when this is true, calling
+  /// [ensureAuthorized] first avoids the doomed direct spawn. It never
+  /// changes readiness — the bootstrap's probe and the authorization
+  /// still re-verify everything (mission §4-2).
+  Future<bool> fastPathEligible() async {
+    if (_disposed) return false;
+    final contextId = await _networkContext.currentContextId();
+    final routeMemory = await memory;
+    final savedRoute = routeMemory.validFastPathRoute(contextId);
+    if (savedRoute == null || savedRoute == GuardianBootstrapRouteKind.direct) {
+      return false;
+    }
+    return routeMemory.shouldSkipDirect(contextId);
+  }
+
   // ---- main entry ----------------------------------------------------------
 
   /// Ensures a Guardian authorization exists, building one if needed.
@@ -441,6 +461,7 @@ class GuardianBootstrapManager {
         savedRoute != GuardianBootstrapRouteKind.direct &&
         routeMemory.shouldSkipDirect(contextId);
 
+    var directMillis = 0;
     if (!skipDirect) {
       final directRun = await _runDirect(contextId, routeMemory);
       final directSession = directRun.session;
@@ -448,6 +469,10 @@ class GuardianBootstrapManager {
         return directSession;
       }
       // A REAL 451 — recorded by _runDirect; continue to bootstrap.
+      // The direct attempt's cost rides along (mission §7.1: the
+      // cold/warm comparison needs it — a 451 region pays it on EVERY
+      // discovery walk).
+      directMillis = directRun.elapsedMillis;
     } else if (_userWalkActive()) {
       // Skipping direct means starting a bootstrap right away — under
       // an active user walk that is forbidden (walk exclusion).
@@ -469,8 +494,13 @@ class GuardianBootstrapManager {
           'a user aether connect walk is active; bootstrap may not start',
         ));
       }
-      final attempt =
-          await _tryRoute(kind, contextId, routeMemory, perRoute);
+      final attempt = await _tryRoute(
+        kind,
+        contextId,
+        routeMemory,
+        perRoute,
+        directMillis: directMillis,
+      );
       if (attempt != null) {
         return attempt;
       }
@@ -540,8 +570,9 @@ class GuardianBootstrapManager {
     GuardianBootstrapRouteKind kind,
     String contextId,
     GuardianBootstrapRouteMemory routeMemory,
-    List<String> perRoute,
-  ) async {
+    List<String> perRoute, {
+    int directMillis = 0,
+  }) async {
     final verifier = _verifierSeam;
     if (verifier == null) {
       throw _fail(const GuardianBootstrapException(
@@ -612,6 +643,7 @@ class GuardianBootstrapManager {
         contextId: contextId,
         establishedAt: DateTime.now(),
         timings: GuardianBootstrapTimings(
+          directMillis: directMillis == 0 ? null : directMillis,
           bootstrapReadyMillis: readyStopwatch.elapsedMilliseconds,
           authorizationMillis: authStopwatch.elapsedMilliseconds,
         ),

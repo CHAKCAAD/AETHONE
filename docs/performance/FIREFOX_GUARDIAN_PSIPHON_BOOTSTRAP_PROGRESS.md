@@ -13,8 +13,8 @@
 | Branch کاری | `feature/firefox-guardian-psiphon-bootstrap` |
 | Base Commit | `ce852ea` (= tip شاخه `performance/firefox-vpn-optimization`؛ شامل تمام اصلاحات Performance مراحل ۰–۸) |
 | آخرین Commit | (انتهای فایل — «گیت مراحل») |
-| مرحله فعلی | **Stage 5 — Routing RoundTripper و اتصال انتخابی Guardian** |
-| مرحله تکمیل‌شده آخر | **Stage 4 — PASS (Bootstrap Strategy Manager؛ کد + مستندات همین ردیفها؛ جزئیات بخش Stage 4)** |
+| مرحله فعلی | **Stage 6 — Renewal و Lifecycle کامل** |
+| مرحله تکمیل‌شده آخر | **Stage 5 — PASS (Routing RoundTripper + اتصال انتخابی Guardian؛ جزئیات بخش Stage 5)** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### وضعیت Git در شروع مأموریت (تأییدشده)
@@ -378,25 +378,70 @@
 | spawn/notice های psiphon | pin `CluvexStudio/Aether` @ `d58f9d56` → `aether/src/psiphon.rs` |
 | مدیر Bootstrap Psiphon — مستقل + زنجیره (Stage 2+3) | `lib/connection/firefox/psiphon_bootstrap.dart` (PsiphonBootstrapProxy با دو mode + SocksTlsReadyProbe + buildArgs/buildChainArgs/warpProtocolArgs/pickTwoDistinctLoopbackPorts) + `test/psiphon_bootstrap_test.dart` |
 | Bootstrap Strategy Manager + حافظه مسیر (Stage 4) | `lib/connection/firefox/guardian_bootstrap_manager.dart` (GuardianBootstrapManager + پنج Seam: DirectAttempt/AuthorizationVerifier/NetworkContext/UserWalkGuard/proxyFactory + ماشین وضعیت) + `lib/connection/firefox/bootstrap_route_memory.dart` + `test/guardian_bootstrap_manager_test.dart` |
+| RoutingRoundTripper + allowlist + نقش probe (Stage 5 — Go) | `phase1/fxv/internal/cptransport/routing.go` (RoutingRoundTripper/GuardianAllowlist/NewProxyRoundTripper) + `cmd/libfirefoxvpn/guardianprobe.go` (--guardian-probe + installGuardianRouting) + فیلد `apiProxy` در `internal/engine/config.go` |
+| Seamهای واقعی + ادغام walk (Stage 5 — Dart) | `lib/connection/firefox/guardian_engine_seams.dart` (EngineGuardianProbe + DirectAttempt/Verifier + EvidenceForwarding + Integration.build) + `apiProxy`/`args` در firefox_protocol/firefox_engine + walk بازسازی‌شده در `platform_engine_adapter.dart` (_connectFirefox: Fast Path + escalation یک‌بار در 451) + `fastPathEligible` در مدیر |
 | طبقه‌بندی 451 Guardian (Go) | `phase1/fxv/internal/fferr/classify.go` (ClassifyGuardian) + `cmd/libfirefoxvpn/main.go` (classifyGuardian) + `internal/upstream/controller.go` (renewalFailCode) |
 | مدل خطای Dart + متنها | `lib/connection/firefox/firefox_errors.dart` + `lib/connection/firefox/firefox_protocol.dart` + `lib/l10n/app_strings.dart` (firefoxErrGuardianRegion) |
 
 ---
 
-## دستور دقیق ادامه کار (جلسه بعدی — Stage 5)
+## یافته‌ها و تغییرات Stage 5 (اجرای 2026-11-10)
 
-1. همین فایل را بخوان؛ HEAD باید commit مستندات Stage 4 باشد و working tree پاک (شاخه شامل کد Stage 2+3+4 و مستندات).
-2. **فقط Stage 5 را اجرا کن** — Routing RoundTripper و اتصال انتخابی Guardian:
-   - مشکل Transport مشترک: `vpnclient.SetControlPlaneTransport(http.RoundTripper)` روی Client مشترک FxA+Guardian+Remote Settings اثر می‌گذارد — کل این Client به Psiphon وصل نشود.
-   - ساختار: RoutingRoundTripper با Default = همان Transport مستقیم uTLS موجود (بدون جایگزینی بی‌دلیل) + Allowlist Guardian.
-   - Allowlist دقیق: بر اساس Base URL واقعی `FirefoxEngineConfig.guardian` + Host واقعی + Method + Path (نه فقط Host). در نسخه فعلی فقط `GET /api/v1/fpn/token` در مسیر اجرایی واقعی است (FetchProxyPass اولیه+Renewal)؛ `/status` و `/activate` فقط با تأیید مسیر واقعی در سورس اضافه شوند. FxA و Remote Settings همیشه Direct.
-   - رفتار درخواست (§۵-۴): ابتدا Direct؛ موفق → هیچ Bootstrap؛ 451 واقعی (طبق `guardianRegionUnavailable` Stage 1) → فعال‌سازی Manager (Stage 4)؛ پس از آماده‌شدن Proxy همان درخواست با Retry محدود دوباره؛ نتیجه واقعی HTTP؛ خطای درست به Dart. Redirect دوباره با Allowlist بررسی شود.
-   - وصل‌کردن Seamهای Stage 4: `GuardianDirectAttempt` و `GuardianAuthorizationVerifier` با درخواست واقعی Guardian (از طریق transport جدید)؛ UserWalkGuard به وضعیت walk کاربر؛ NetworkContext در صورت وجود منبع مجاز.
-   - نقطه ادغام Go (یافته Stage 0): فیلد stdin-JSON جدید (مثل `apiProxy`) در FirefoxEngineConfig → `main.go` → ساخت transport مطابق `configureAPIProxy` در proxy-demo (مرجع pin؛ http/https/socks5/socks5h) → `SetControlPlaneTransport`.
-   - امنیت (§۵-۵): TLS سرتاسری + Certificate/Hostname Verification بدون تضعیف؛ بدون MITM؛ توکن‌ها هرگز در URL پروکسی/Log/Error؛ DNS از مسیر پروکسی بدون افشای ناخواسته.
-   - تستهای صریح (§۵-۶): FxA OAuth → Direct؛ Remote Settings → Direct؛ Guardian Token → Bootstrap پس از 451؛ Guardian Renewal → Bootstrap در صورت نیاز؛ + Allowlist (Host/Method/Path)، Redirect، DNS، TLS.
-   - قواعد ثابت: تغییر حدسی نکن؛ pinها دست‌نخورده؛ هیچ تست قبلی حذف/ضعیف نشود؛ commit مستقل؛ push به همین شاخه؛ به‌روزرسانی همین فایل؛ گزارش ۹-بندی؛ توقف.
-3. قانون توقف: بعد از Stage 5 متوقف شو؛ مرحله ۶ (Renewal و Lifecycle کامل) در اجرای بعدی.
+### ۱. معماری پیاده‌سازی‌شده — Routing RoundTripper و اتصال انتخابی Guardian
+
+- **Go — بسته جدید `internal/cptransport`**: `RoutingRoundTripper` دقیقاً با ساختار مأموریت §۵-۲ (Default = همان `vpnclient.NewControlPlaneTransport()` مستقیم uTLS؛ پایه bootstrap فقط برای allowlist). نصب فقط وقتی `apiProxy` غیرخالی باشد (با apiProxy خالی هیچ `SetControlPlaneTransport`ای صدا نمی‌شود — رفتار pre-Stage-5 بایت‌به‌بایت).
+- **Allowlist دقیق (§۵-۳)**: `GuardianAllowlist` از Base URL واقعی `cfg.Guardian` + مدخلهای Method+Path ساخته می‌شود؛ مدخل اولیه فقط `GET /api/v1/fpn/token` (تنها endpoint در مسیر اجرایی — جدول Stage 1). `/status` و `/activate` خارج ماندند. تطبیق: Host (case-insensitive) + Port + Method + Path دقیق؛ پذیرش تحمل doubled-leading-slash (یادداشت Armanِ Stage 1 — مسیر `//api/v1/fpn/token` هم allowlist می‌شود تا ترفند آینده نشکند؛ خودش تغییری ایجاد نمی‌کند).
+- **Redirect (§۵-۵)**: http.Client هر hop را دوباره از RoundTrip عبور می‌دهد → هر hop مستقل بازبینی Allowlist می‌شود؛ hop خارج از allowlist خودکار Direct می‌رود (تست‌دار).
+- **`NewProxyRoundTripper`** (الگوی `configureAPIProxy` در proxy-demoِ pin، بدون تغییر pin): http/https → `Proxy`+`DialContext`؛ socks5/socks5h → `proxy.SOCKS5` dialer (نام مقصد به پراکسی می‌رود → DNS Guardian از مسیر پراکسی، بدون لو رفتن local DNS)؛ HTTP/1.1 pin؛ `TLSClientConfig=nil` (Certificate+Hostname Verification پیش‌فرض روشن؛ هیچ InsecureSkipVerify در هیچ‌جای این بسته نیست — تست‌دار).
+- **Validation موتور**: فیلد `apiProxy` در `engine.Config` (stdin JSON؛ فقط وقتی غیرخالی serialize می‌شود)؛ قواعد: scheme ∈ {http,https,socks5,socks5h}، host فقط loopback (یا localhost)، **userinfo ممنوع** (`apiProxyCredentialsForbidden` — نشت از راه log؛ پراکسی محلی bootstrap بدون auth است). کدهای جزئیات: `apiProxyInvalid`/`apiProxySchemeUnsupported`/`apiProxyNotLoopback`/`apiProxyCredentialsForbidden`.
+- **نقش جدید موتور `--guardian-probe`**: walk واقعی `AcquireInitialPass` (همان controller تونل: FetchProxyPass + بازیابی same-account FxA) بدون discovery/session/listener؛ نصب همان routing قبل از اولین درخواست control-plane؛ رویدادها `started`→`passAcquired`+exit پاک یا `quotaExhausted`/`failed` با طبقه‌بندی Stage 1 (451 واقعی = `guardianRegionUnavailable`). خروجی ساختار یافته؛ parse لاگ وجود ندارد. `authRefreshed` (رویداد راز) مستقیم به callback والت می‌رود.
+- **Dart — `guardian_engine_seams.dart`**: `EngineGuardianProbe` (spawn واقعی `--guardian-probe` با/بدون apiProxy + طبقه‌بندی: passAcquired/regionUnavailable/otherFailure/timeout + stop بدون process یتیم + timeout)؛ `EngineGuardianDirectAttempt` و `EngineGuardianAuthorizationVerifier` (seamهای Stage 4 با درخواست واقعی از طریق همان موتور)؛ `EvidenceForwardingGuardianDirectAttempt` (حامل یک‌بارمصرف شواهد direct خود walk — مانع probe تکراری می‌شود؛ fallback به probe واقعی برای فراخوانی‌های بدون شواهد مثل renewal مرحله 6)؛ `GuardianBootstrapEngineIntegration.build` (مونتاژ مدیر + seamهای واقعی + walk guard).
+- **`FirefoxVpnEngine.start`**: پارامتر `args` (فقط role flagهای ثابت مثل `--guardian-probe`؛ قرارداد امنیتی argv بدون راز دست‌نخورده)؛ `FirefoxEngineConfig.apiProxy` (additive؛ empty → فیلد در JSON نمی‌آید).
+
+### ۲. ادغام walk (رفتار درخواست §۵-۴ در `_connectFirefox`)
+
+- **Direct اول**: spawn موتور بدون apiProxy — خود walk، درخواست مستقیم Guardian است (بدون probe اضافی/هزینه دوبرابر).
+- **Fast Path پیش از spawn** (`fastPathEligible` — متد جدید فقط-خواندنی مدیر، همان منطق داخلی `_runOperation`): مسیر معتبر ذخیره‌شده + شاهد 451 اخیر → `ensureAuthorized()` قبل از spawn (مدیر مستقیم را skip می‌کند) → spawn با apiProxy از ابتدا. شکست Fast Path (allRoutesFailed بعد از discovery داخلی) → یک spawn مستقیم صادقانه باقی می‌ماند (شاید محدودیت برداشته شده).
+- **Escalation در 451**: فقط در تلاش مستقیم و فقط یک‌بار در هر walk — شواهد 451 خود walk به `directEvidence.forward` داده می‌شود (درخواست مستقیم واقعیِ اتفاق‌افتاده؛ manager بدون probe مجدد) → `ensureAuthorized()` (bootstrap مسیرها به‌ترتیب + verify از طریق proxy) → **respawn همان walk با apiProxy** («همان درخواست با Retry محدود» §۵-۴). شکست respawn → خطای صادقانه `firefoxTransport:guardianRegionUnavailable` (بدون حلقه). سهمیه/خطاهای غیر-451 → مسیرهای pre-Stage-5 دست‌نخورده.
+- **Lifecycle**: `_hardCleanup` → `manager.stop()` (پراکسی bootstrap با سشن teardown می‌شود — بدون یتیم؛ **نمونه manager می‌ماند** — singleflight؛ حافظه فایلی می‌ماند)؛ موفقیت متصل → bootstrap زنده می‌ماند برای renewal (§۵-۶؛ سیاست release مال Stage 6). `UserWalkGuard` = `_userAetherWalkActive` (walk/sشن aether خانواده فعال: `_jobId != null || (_connecting && aetherFamily)`).
+
+### ۳. فایلهای تغییرکرده (Stage 5)
+
+- **Go — جدید**: `internal/cptransport/routing.go` (+`routing_test.go` — ۹ تست)، `cmd/libfirefoxvpn/guardianprobe.go` (+`guardianprobe_test.go` — ۴ تست).
+- **Go — تغییر**: `internal/engine/config.go` (+۴۷؛ فیلد+validation)، `internal/engine/contract.go` (+۷؛ کدهای جزئیات)، `internal/engine/config_test.go` (+۵۷؛ ۳ تست validation)، `cmd/libfirefoxvpn/main.go` (+۳۳؛ نقش probe در run()، نصب routing در runTunnel، `watchStdinCloseReader` با reader تزریق‌شده — رفع data-race جهانی os.Stdin در تستها با لبه settle).
+- **Dart — جدید**: `lib/connection/firefox/guardian_engine_seams.dart`، `test/guardian_engine_seams_test.dart` (۱۳ تست با spawn واقعی پروسه و binary جانشین bash).
+- **Dart — تغییر**: `firefox_protocol.dart` (+۱۴؛ apiProxy)، `firefox_engine.dart` (+۱۶؛ args)، `guardian_bootstrap_manager.dart` (+۴۰؛ `fastPathEligible` + حمل directMillis به سشن bootstrap — کمال §۷.۱)، `platform_engine_adapter.dart` (ادغام walk)، `test/guardian_bootstrap_manager_test.dart` (+۶۶؛ ۴ تست fastPathEligible).
+- **مستندات**: `docs/FIREFOX_VPN_ENGINE.md` (سطر apiProxy در جدول config + بخش نقش `--guardian-probe`).
+- دست‌نخورده: pinها (`firefox-vpn-client`، Aether `d58f9d56`، psiphon fork)، CGO/A1، workflowها، Data Plane، مدیر/پراکسی مراحل ۲+۳ (فقط مصرف شدند).
+
+### ۴. تستها و نتایج واقعی (Stage 5)
+
+- **Go**: `go vet ./...` → صفر. `go test ./...` → هر ۸ پکیج ok. `go test -race` روی cptransport+engine+cmd → ok (رفع data race واقعی در تست probe: خواننده os.Stdin جهانی). تست‌های کلیدی:
+  - cptransport: ۱۵+ زیرکیس allowlist (ورودی واقعی proxied؛ POST/status/activate/پیشوند/FxA/RemoteSettings/پورت متفاوت/substring-host/http-schema → همه Direct؛ پروکسی nil → Direct؛ doubled-slash → proxied)؛ ساخت پراکسی برای ۴ scheme + رد bad؛ **TLS verification روشن** (بدون InsecureSkipVerify + HTTP/1.1 pin)؛ **e2e با پراکسی CONNECT واقعی محلی**: GET token از طریق پراکسی + مسیرهای غیرمجاز و host دیگر Direct + redirect فقط hop اول از پراکسی؛ **TLS تأییدشده از طریق پراکسی** (CA تستی با SSL_CERT_FILE؛ برگشت‌نامه wrong-CA با خطای certificate رد می‌شود — اثبات اجرایی verification).
+  - probe: 451 واقعی → `guardianRegionUnavailable`+httpStatus 451؛ موفقیت → passAcquired+exit پاک؛ سهمیه → quotaExhausted (هرگز 451)؛ **مسیریابی از طریق apiProxy با TLS تأییدشده** (پراکسی CONNECT واقعی، شاهد ptravers).
+  - engine config: apiProxy خالی معتبر؛ ۶ شکل loopback مجاز؛ ۱۰ رد (non-loopback/credential/scheme/invalid).
+- **Dart**: `flutter analyze` → صفر یافته. `flutter test` کل: **۳۸۵ پاس / ۸ skip قبلی / ۰ شکست** (۳۶۸→۳۸۵). تست‌های کلیدی seams (با spawn واقعی پروسه + binary جانشین که رفتارش به فیلد apiProxy روی سیم کلید خورده): 451→regionUnavailable؛ ok→passAcquired؛ **apiProxy واقعاً روی سیم** (بدون آن 451، با آن موفق)؛ garbage→otherFailure؛ hang→timeout بدون یتیم؛ authRefreshed→callback والت؛ EvidenceForwarding یک‌بارمصرف؛ **جریان کامل §۵-۴**: direct probe (451) → bootstrap → verify از طریق proxy → سشن با endpoint+زمانها + ترتیب کامل ماشین وضعیت + `fastPathEligible=true` پس از آن.
+- Go/Dart با هم: هیچ تست قبلی حذف/ضعیف نشد (suite قبلی ۳۶۸ سبز ماند).
+
+### ۵. NOT TESTED (Stage 5)
+
+- 451 واقعی Guardian از شبکه ایران و مسیر کامل روی دستگاه (Stage 8/9 — سناریوهای B/C/F).
+- رفتار walk ادغام‌شده در adapter روی UI واقعی (تست widget/engine سطح adapter موجود نیست؛ پوشش با تست‌های manager/seams/probe + ادغام Stage 7 سناریوهای A–F).
+- ترفند doubled-leading-slash پیاده نشد (فقط تحمل مسیر در allowlist؛ طبق دستور Stage 5 فقط مستندسازی Stage 1).
+- منبع واقعی Network Context هنوز باکت واحد است (محدودیت مستند Stage 4).
+
+---
+
+## دستور دقیق ادامه کار (جلسه بعدی — Stage 6)
+
+1. همین فایل را بخوان؛ HEAD باید commit مستقل Stage 5 باشد و working tree پاک (شاخه شامل کد Stage 2+3+4+5 و مستندات).
+2. **فقط Stage 6 را اجرا کن** — Renewal و Lifecycle کامل:
+   - بررسی از سورس pin: عمر واقعی Proxy Pass (از claims پاسخ — `pass.ExpiresAt()`)، زمان‌بندی renewal در `runRenewalLoop`/`renew` (کنترلر)، رفتار `OnRenewalFail` (+failCode از Stage 1) و `retryInMs`.
+   - سیاست Psiphon (§۶ مأموریت): بعد از Authorization موفق — آیا Renewal به Guardian نیاز خواهد داشت (بله: همان `GET /api/v1/fpn/token`؛ renewal از همان transport می‌گذرد → با apiProxy از مسیر bootstrap می‌رود — این حالا کار می‌کند)؛ **زمان توقف امن bootstrap** (مبنای تصمیم: اعتبار باقی‌مانده مجوز از پاسخ واقعی؛ هیچ زمان hardcode نشود)؛ توانایی فعال‌سازی مجدد Manager وقتی Renewal بعداً proxy بخواهد (manager پس از stop دوباره کار می‌کند — تست‌دار)؛ خاموشی Psiphon نباید renewal بعدی را بی‌دلیل بشکند.
+   - Lifecycle: Start/Stop/Dispose/Restart/Network change (`notifyNetworkContextChanged` موجود)/Cancellation/Timeout/Process crash/Renewal/Rotation/Resource cleanup — از سورس واقعی سناریوها را بساز و تست بنویس؛ `release()` مدیر مال این مرحله است.
+   - یکپارچه‌سازی با walk: رفتار پس از قطع (disconnect → _hardCleanup → manager.stop — الان پیاده است) و نگه‌داشتن تا انقضای مجوز؛ نقش `session.endpoint` در respawnها.
+   - قواعد ثابت: تغییر حدسی نکن؛ pinها دست‌نخورده؛ هیچ تست قبلی حذف/ضعیف نشود؛ commit مستقل؛ push به همین شاخه؛ به‌روزرسانی همین فایل؛ گزارش ۱۰-بندی؛ توقف.
+3. قانون توقف: بعد از Stage 6 متوقف شو؛ مرحله ۷ (تست جامع و تفکیک Data Plane) در اجرای بعدی.
 
 ---
 
@@ -414,5 +459,6 @@
 | 3 — مستندات | (همان `cebb710`؛ کد و مستندات در یک commit مستقل این مرحله) | شامل بخش Stage 3 + به‌روزرسانی وضعیت/نقشه/دستور Stage 4 |
 | 4 — کد | (tip شاخه پس از همین commit) | feat(guardian): bootstrap strategy manager — fast path, discovery, route memory (stage 4) |
 | 4 — مستندات | (همان tip؛ کد و مستندات در یک commit مستقل این مرحله) | شامل همین بخش Stage 4 + به‌روزرسانی وضعیت/نقشه/دستور Stage 5 |
+| 5 — کد+مستندات | (tip شاخه پس از همین commit) | feat(guardian): routing roundtripper — guardian-only selective control plane (stage 5) — شامل بخش Stage 5 این فایل + به‌روزرسانی وضعیت/نقشه/دستور Stage 6 |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*

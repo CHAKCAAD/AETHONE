@@ -39,6 +39,17 @@ type Config struct {
 	LogLevel           string     `json:"logLevel"`
 	Auth               AuthConfig `json:"auth"`
 
+	// ApiProxy routes the GUARDIAN control-plane leg through a local
+	// proxy (guardian-bootstrap Stage 5). Empty = the engine's default
+	// direct uTLS transport, byte-identical to the pre-Stage-5
+	// behavior. When set, only the allowlisted Guardian requests
+	// (host of Guardian + method + path — see internal/cptransport)
+	// traverse it; FxA and Remote Settings stay DIRECT. Loopback
+	// proxies only, no credentials in the URL (the local bootstrap
+	// proxy carries no auth and credentials must never ride a URL
+	// that could reach a log).
+	ApiProxy string `json:"apiProxy"`
+
 	// cfgLine is the raw buffer reference, dropped (nil-ed) after the
 	// parse so the tokens do not linger in a second copy.
 	cfgLine []byte `json:"-"`
@@ -121,6 +132,11 @@ func (c Config) Validate() (Config, error) {
 	if strings.TrimSpace(c.Auth.AccessToken) == "" {
 		return c, &ConfigError{Detail: detailAuthAccessTokenMiss}
 	}
+	if c.ApiProxy != "" {
+		if err := validateAPIProxy(c.ApiProxy); err != nil {
+			return c, err
+		}
+	}
 	if c.UpstreamTimeoutMs == 0 {
 		c.UpstreamTimeoutMs = DefaultUpstreamMs
 	}
@@ -157,4 +173,35 @@ func isLoopbackListen(addr string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+// validateAPIProxy applies the Stage-5 rules to the optional Guardian
+// api proxy: a URL with a SUPPORTED scheme (http/https/socks5/socks5h —
+// the pinned proxy-demo's configureAPIProxy set), a host, a LOOPBACK
+// address only, and NO credentials (the local bootstrap proxy carries
+// no auth; userinfo on a URL is a log-leak vector — fail closed).
+func validateAPIProxy(raw string) error {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return &ConfigError{Detail: detailAPIProxyInvalid}
+	}
+	switch parsed.Scheme {
+	case "http", "https", "socks5", "socks5h":
+	default:
+		return &ConfigError{Detail: detailAPIProxyBadScheme}
+	}
+	if parsed.Host == "" {
+		return &ConfigError{Detail: detailAPIProxyInvalid}
+	}
+	if parsed.User != nil {
+		return &ConfigError{Detail: detailAPIProxyCredentials}
+	}
+	host := parsed.Hostname()
+	if host != "localhost" {
+		ip := net.ParseIP(host)
+		if ip == nil || !ip.IsLoopback() {
+			return &ConfigError{Detail: detailAPIProxyNotLoopback}
+		}
+	}
+	return nil
 }

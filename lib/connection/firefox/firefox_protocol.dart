@@ -50,6 +50,7 @@ class FirefoxEngineConfig {
     this.transport = 'h2',
     this.upstreamOverride = '',
     this.logLevel = 'normal',
+    this.apiProxy = '',
   });
 
   /// Loopback listener ONLY (the engine refuses anything else).
@@ -73,6 +74,17 @@ class FirefoxEngineConfig {
 
   final String logLevel;
 
+  /// GUARDIAN-BOOTSTRAP STAGE 5 — the local bootstrap proxy for the
+  /// GUARDIAN control-plane leg only (`socks5://127.0.0.1:<ephemeral>`
+  /// or an http/https loopback proxy). Empty (the default) = the
+  /// engine's direct uTLS transport, exactly the pre-Stage-5 behavior.
+  /// The engine's RoutingRoundTripper routes ONLY the allowlisted
+  /// Guardian request (GET /api/v1/fpn/token on the configured
+  /// guardian host) through it — FxA and Remote Settings stay DIRECT.
+  /// The engine validates: loopback host only, supported scheme, no
+  /// credentials in the URL.
+  final String apiProxy;
+
   Map<String, dynamic> toJson() => {
         'version': 1,
         'socksListen': socksListen,
@@ -81,6 +93,8 @@ class FirefoxEngineConfig {
         'transport': transport,
         if (upstreamOverride.isNotEmpty) 'upstreamOverride': upstreamOverride,
         'logLevel': logLevel,
+        // Omitted when empty — legacy engines never see the field.
+        if (apiProxy.isNotEmpty) 'apiProxy': apiProxy,
         'auth': {
           'accessToken': auth.accessToken,
           'refreshToken': auth.refreshToken,

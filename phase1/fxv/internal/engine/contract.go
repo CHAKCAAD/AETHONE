@@ -99,6 +99,13 @@ const (
         detailConfigNotJSON         = "configNotJSON"
         detailUpstreamOverrideBad   = "upstreamOverrideInvalid"
         detailMaxConnsNegative      = "maxConnsNegative"
+
+        // guardian-bootstrap Stage 5 — the optional apiProxy leg's
+        // validation details (badConfig rides the failCode as usual).
+        detailAPIProxyInvalid     = "apiProxyInvalid"
+        detailAPIProxyBadScheme   = "apiProxySchemeUnsupported"
+        detailAPIProxyNotLoopback = "apiProxyNotLoopback"
+        detailAPIProxyCredentials = "apiProxyCredentialsForbidden"
 )
 
 // Event is one stdout JSON line. Only authRefreshed and loginCompleted

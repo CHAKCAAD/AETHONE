@@ -13,6 +13,11 @@
 //      libfirefoxvpn --dns-probe     resolve the control-plane domains
 //                                    through THIS process (the multi-arch
 //                                    DNS evidence role — no secrets)
+//      libfirefoxvpn --guardian-probe  the Guardian-only authorization
+//                                    walk (guardian-bootstrap Stage 5:
+//                                    AcquireInitialPass — no discovery,
+//                                    no session, no listener; honors the
+//                                    apiProxy routing decision)
 //
 // Spawn discipline (the Dart host): bare argv, EMPTY environment —
 // every secret travels on the stdin pipe only.
@@ -55,11 +60,13 @@ func run() int {
                         return runLogin()
                 case "--dns-probe":
                         return runDNSProbe()
+                case "--guardian-probe":
+                        return runGuardianProbe()
                 case "--help", "-h":
-                        fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe]\n")
+                        fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe|--guardian-probe]\n")
                         return 0
                 default:
-                        fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--dns-probe])\n", arg)
+                        fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--dns-probe|--guardian-probe])\n", arg)
                         return engine.ExitStartup
                 }
         }
@@ -114,6 +121,19 @@ func runTunnel() int {
                 Message: engine.EngineVersion,
                 PID:    os.Getpid(),
         })
+
+        // guardian-bootstrap Stage 5: the selective control-plane routing.
+        // MUST precede the FIRST control-plane request (discovery below is
+        // Remote Settings — it stays DIRECT either way; only the allowlisted
+        // Guardian requests would ride the bootstrap leg). Empty apiProxy =
+        // no change at all (the pinned default direct uTLS transport).
+        if err := installGuardianRouting(cfg, log); err != nil {
+                _ = emit.Emit(engine.Event{
+                        Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
+                        Message: "apiProxyTransport", Code: engine.ExitStartup,
+                })
+                return engine.ExitStartup
+        }
 
         // 2. discovery + selection (unless overridden). stdin close is
         // checked at EVERY stage boundary — the shutdown request is honored
@@ -403,6 +423,13 @@ func formatRuntimeStats(prev, cur *runtime.MemStats, dt time.Duration) string {
 // watchStdinClose resolves when the host closes the child's stdin (the
 // shutdown request). A goroutine blocks on a zero-byte read.
 func watchStdinClose(ctx context.Context, onClosed func()) <-chan struct{} {
+        return watchStdinCloseReader(ctx, os.Stdin, onClosed)
+}
+
+// watchStdinCloseReader is the reader-injected core (the probe role
+// passes its config reader so tests never race the os.Stdin global;
+// the production callers hand it os.Stdin via watchStdinClose).
+func watchStdinCloseReader(ctx context.Context, r io.Reader, onClosed func()) <-chan struct{} {
         done := make(chan struct{})
         var once sync.Once
         trigger := func() {
@@ -414,7 +441,7 @@ func watchStdinClose(ctx context.Context, onClosed func()) <-chan struct{} {
         go func() {
                 buf := make([]byte, 1)
                 for {
-                        n, err := os.Stdin.Read(buf)
+                        n, err := r.Read(buf)
                         if n > 0 && err == nil {
                                 // The contract is ONE line then silence; extra bytes are
                                 // drained (never interpreted as a second config).

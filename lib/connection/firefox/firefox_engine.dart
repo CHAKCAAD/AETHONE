@@ -123,6 +123,12 @@ class FirefoxVpnEngine {
   /// Starts the engine: spawns the binary, writes the config line on the
   /// PRIVATE stdin pipe, and begins consuming stdout events.
   ///
+  /// [args] carries FIXED ROLE FLAGS only (e.g. `--guardian-probe` — the
+  /// engine's own argv modes). The security contract is unchanged: argv
+  /// never carries secrets; every secret still travels on the stdin
+  /// pipe. The default (empty argv) is the bare tunnel-role spawn of
+  /// every previous version.
+  ///
   /// [onAuthRefreshed] receives the refreshed same-account OAuth pair
   /// (private channel — the caller persists it in the Keystore store).
   ///
@@ -132,18 +138,20 @@ class FirefoxVpnEngine {
     FirefoxEngineConfig config, {
     void Function(FirefoxSessionAuth refreshed)? onAuthRefreshed,
     Map<String, String> environment = const {},
+    List<String> args = const [],
   }) async {
     if (isAlive || _state == FirefoxEngineState.starting) {
       throw StateError('firefox engine already running (state: $_state)');
     }
     _setState(FirefoxEngineState.starting);
 
-    // Spawn BARE: argv = [binary] only. The Go engine reads its whole
-    // configuration from the stdin line — nothing secret can leak into
-    // /proc/<pid>/cmdline or the process environment.
+    // Spawn with FIXED ROLE FLAGS ONLY: argv = [binary, --role...]. The
+    // Go engine reads its whole configuration from the stdin line —
+    // nothing secret can leak into /proc/<pid>/cmdline or the process
+    // environment.
     final process = await Process.start(
       binaryPath,
-      const [],
+      args,
       environment: environment,
       includeParentEnvironment: false,
     );
