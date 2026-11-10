@@ -13,8 +13,8 @@
 | Branch کاری | `performance/firefox-vpn-optimization` |
 | Commit پایه شاخه | `ff9bc38` (= tip شاخه `integration/firefox-vpn-debug`) |
 | Commit آخرین مرحله تکمیل‌شده | (در انتهای همین فایل — بخش «گیت مرحله آخر») |
-| مرحله تکمیل‌شده آخر | **Stage 5 — IPv4/IPv6 و Endpoint: PASS** (تحلیل کامل DNS/خانواده/Happy-Eyeballs/Endpoint + اصلاح واقعی: فیلد remote=IP در لاگ session-established برای هر دو transport — بخش «نتیجه Stage 5») |
-| مرحله فعلی برای اجرای بعدی | **Stage 6 — CPU، حافظه و Go Child Process** |
+| مرحله تکمیل‌شده آخر | **Stage 6 — CPU/حافظه/Go Child Process: PASS** (بازگرداندن نظم سطح لاگ upstream در لایه SOCKS + خط شواهد آماری ۶۰ ثانیه‌ای — بخش «نتیجه Stage 6») |
+| مرحله فعلی برای اجرای بعدی | **Stage 7 — TLS Fragmentation (تصمیم فنی: پیاده‌سازی فقط با شواهد DPI/handshake-failure)** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### جدول مراحل
@@ -27,7 +27,7 @@
 | 3 — Transport و نسخه HTTP | **PASS** (حسابرسی کامل + اصلاح واقعی: بازگرداندن لاگ session-established برای رؤیت transport واقعی on-device + تست جدید — بخش «نتیجه Stage 3») |
 | 4 — MTU | **PASS** (حسابرسی کامل با شواهد کد؛ بدون تغییر کد — بخش «نتیجه Stage 4») |
 | 5 — IPv4/IPv6 و Endpoint | **PASS** (تحلیل کامل + اصلاح واقعی: لاگ endpoint واقعی remote=IP هر دو transport — بخش «نتیجه Stage 5») |
-| 6 — CPU/حافظه/Go Child Process | PENDING |
+| 6 — CPU/حافظه/Go Child Process | **PASS** (اصلاح واقعی: نظم سطح لاگ upstream — حذف ۶ خط debug هر اتصال + ریدکشن دامنه‌ها و body خطاها در سطح normal؛ کانال شواهد live=N به Info ارتقا؛ خط آماری ۶۰ ثانیه‌ای — بخش «نتیجه Stage 6») |
 | 7 — TLS Fragmentation | PENDING |
 | 8 — مقایسه نهایی و Build | PENDING |
 
@@ -475,17 +475,88 @@ RemoteSettings زنده (vpnclient.FetchServerList با uTLS Firefox ClientHello
 
 ---
 
+## نتیجه Stage 6 (اجرای 2026-11-10) — CPU، حافظه و Go Child Process
+
+### ۱. حسابرسی مسیر داده Go برای الگوهای هزینه (سطح کد — بدون profiling دستگاه)
+
+- `copyConn` (socks/server.go): بافر 64KB از `sync.Pool` — بدون allocation جدید در هر تونل؛ سالم، بدون تغییر.
+- write buffer هر h2 tunnel: 1 MiB (`defaultTunnelWriteBufSize = 1<<20`) — **دقیقاً برابر pinned upstream**؛ بدون شواهد روی دستگاه، تغییر آن ممنوع (قانون «بدون دلیل تغییر هسته»).
+- قفل‌های controller: فقط نگهداری اشاره‌گر session در بازه‌های کوتاه؛ lock contention اثبات‌نشده.
+- تنظیمات GC: طبق قانون مأموریت، صرفاً برای کاهش مصرف حافظه تغییر ممنوع؛ profiling واقعی روی دستگاه هنوز ممکن نیست (env پردازه عمداً خالی است).
+
+### ۲. مشکل اثبات‌شده ۱ — نقض نظم سطح لاگ upstream در لایه SOCKS (هزینه CPU/IO + افشای دامنه‌های بازدید)
+
+شواهد (همه از سورس، pin `55ad91a2`):
+
+- میزبان Dart هرگز `logLevel` نمی‌فرستد: `lib/connection/firefox/firefox_protocol.dart:51` (پیش‌فرض `'normal'`) و `platform_engine_adapter.dart:2440` (ساخت `FirefoxEngineConfig` بدون logLevel) → موتور همیشه «normal» را می‌بیند.
+- مرجع upstream (`cmd/proxy-demo/main.go`): `logDebug` بدون فلگ `-verbose` عملاً no-op است؛ `logTarget` در حالت غیر-verbose همیشه `"<redacted; use -verbose>"` برمی‌گرداند — **حتی در خطوط WARN**؛ `logErr` متن پاسخ CONNECT پراکسی را ریدکت می‌کند.
+- نسخه انطباق‌یافته AETHONE: `stderrLogger` همه سطوح را می‌نوشت (`main.go:106-107` فقط quiet را می‌شناخت) و `internal/socks` به‌ازای **هر اتصال** ۶ خط لاگ تولید می‌کرد (`client connected` / `CONNECT requested` / `tunnel open succeeded` / `client disconnected` / `conn tracked` / `conn untracked`) و `logTarget` انطباق‌یافته **هیچ ریدکشنی انجام نمی‌داد** (بدنه تابع عملاً passthrough بود) → core-log.txt روی دستگاه دامنه کامل بازدید کاربر را در هر connect/disconnect ثبت می‌کرد و هزینه IO/CPU لاگ هر-اتصالی روی مسیر دیتا تحمیل می‌شد. در خط WARN (`upstream tunnel open failed`) علاوه بر دامنه، متن پاسخ خطای پراکسی (`proxyConnectHTTPError.Error()` با body خام) هم از طریق `err=%v` می‌توانست بیفتد.
+
+علت ریشه‌ای (قطعی، سطح کد): انطباق Phase-1 رابط `LogSink` را فقط دو-سطحی (Debug/Warn) ساخت و disciplina سطح لاگ upstream را که در `logDebug/logTarget/logErr` پیاده شده بود جا انداخته بود.
+
+### ۳. اصلاح اعمال‌شده (commit `c4ea2d9`)
+
+کوچک‌ترین اصلاح upstream-faithful — بدون تغییر قرارداد stdin/stdout و بدون تغییر رفتار میزبان Dart:
+
+- `internal/socks/server.go`: `LogSink` دو عضو جدید گرفت (`Infof`، `Verbose()`)؛ `logTarget` به متد Server تبدیل شد (در غیر-verbose روی **همه** خطوط، شامل WARN، مارکر `<redacted; use -verbose>`)؛ خطوط live=N (شواهد cap از Stage 2) از Debug به **Info** ارتقا یافتند تا در سطح normal قابل‌رؤیت بمانند؛ ۴ خط دامنه‌دار هر-اتصالی در سطح Debug ماندند که اکنون در حالت normal نوشته نمی‌شوند.
+- `internal/upstream/h2.go`: تابع صادرشده `RedactedError(err, verbose)` (منطبق `logErr` upstream) کنار همان type اضافه شد؛ خط WARN لایه SOCKS از آن استفاده می‌کند (`err=%s` قبلاً `err=%v`).
+- `cmd/libfirefoxvpn/main.go`: `stderrLogger` نظم upstream را پیاده کرد — quiet: هیچ؛ normal: فقط info/warn؛ verbose (مقدار جدید `logLevel:"verbose"` در stdin JSON، بدون تغییر Dart): همه سطوح + رفع ریدکشن. `Verbose()` همان گیت un-redact است.
+- نتیجه روی دستگاه (سطح normal): **صفر** خط لاگ هر-اتصالی از لایه SOCKS (قبلاً ۶ خط در هر connect/disconnect) + دامنه‌ها و body خطاها دیگر در core-log.txt نمی‌افتند + کانال `live=N` و خط آماری (بند ۵) زنده‌اند.
+
+### ۴. مشکل اثبات‌شده ۲ — نبود هرگونه کانال شواهد CPU/حافظه روی دستگاه
+
+- env پردازه عمداً خالی است (`includeParentEnvironment=false`، argv خالی) → تزریق GODEBUG/pprof ممکن نیست؛ تنها کانال خروجی، core-log.txt است. برای تشخیص «پینگ ۲۰۰→۸۰۰۰ms» به شمارش goroutine/heap/GC/allocation-rate واقعی نیاز است.
+- اصلاح (commit `ee82680`): حلقه `runtimeStatsLoop` بعد از socks-ready شروع می‌شود و هر ۶۰ ثانیه یک خط Info می‌نویسد: `runtime stats goroutines=N heap_mb=.. sys_mb=.. num_gc=.. total_alloc_mb=.. alloc_kbps=..` (شمارنده‌ها تجمعی‌اند؛ روند از تفاضل خطوط متوالی). knob جدیدی به config اضافه نشد.
+
+### ۵. تست‌های Stage 6 (Go 1.25.0 — همان نسخه CI)
+
+| تست | نتیجه |
+|---|---|
+| `TestLogTargetRedactsUnlessVerbose` (socks) | PASS — مارکر در normal، دامنه کامل در verbose |
+| `TestPerConnectionLinesGatedByVerbose` (socks) | PASS — normal: صفر خط debug + صفر افشای دامنه؛ verbose: هر ۴ خط دامنه‌دار |
+| `TestWarnLineRedactsTargetAndErrorBody` (socks) | PASS — خط WARN نوشته می‌شود اما با مارکر ریدکشن |
+| `TestRedactedError` (upstream) | PASS — nil / خطای معمولی / body کامل در verbose / ریدکشن در normal / خطای wrap شده |
+| `TestStderrLoggerLevelDiscipline` (cmd) | PASS — quiet هیچ؛ normal فقط info/warn؛ verbose همه + گیت `Verbose()` |
+| `TestFormatRuntimeStats` (cmd) | PASS — رندر شمارنده‌ها + حساب نرخ ۶۰MiB/۶۰s=۱۰۲۴KBps + ایمنی پنجره صفر |
+| `TestRuntimeStatsLoopEmitsAndStops` (cmd) | PASS — انتشار دوره‌ای با بافر sync شده + توقف سریع با cancel |
+| رگرسیون Stage 2 (`TestSequentialTunnels…`) — به‌روزشده برای سطح Info | PASS |
+| `go test ./...` (هر ۷ پکیج) | **PASS** — برای اولین بار در کل مأموریت، پکیج upstream (quic-go/utls) هم لوکال اجرا شد (قبلاً به دلیل کمبود دیسک ممکن نبود؛ اکنون ~۸.۷GB آزاد) |
+| `go test ./internal/socks/ ./internal/upstream/ ./internal/engine/ -race` | PASS (1.102s / 1.158s / 1.018s) |
+| `go test ./cmd/libfirefoxvpn/ -race` | PASS (2.230s) |
+| `go vet ./...` | بدون خطا |
+
+### ۶. موارد NOT TESTED
+
+- اثر این اصلاح روی CPU/IO واقعی گوشی (POCO X3) — به اندازه‌گیری روی دستگاه نیاز دارد؛ روش: مقایسه core-log.txt و رفتار پینگ با نسخه قبل؛ **عدد تخمینی تولید نشد**.
+- خطوط `runtime stats` روی دستگاه — کد و تست آن سبز است اما خود خط باید از core-log.txt گوشی جمع شود (هر ۶۰ ثانیه یکی).
+- کیفیت `logLevel:"verbose"` روی دستگاه — مسیر از stdin JSON ممکن است (میزبان فعلاً نمی‌فرستد؛ برای دیباگ آینده مستند شد).
+
+### ۷. وضعیت گیت Stage 6
+
+- commit کد ۱: `c4ea2d9` (fix(engine): restore the upstream log level discipline…) — push شد.
+- commit کد ۲: `ee82680` (feat(engine): 60s runtime-stats evidence line…) — push شد.
+- commit مستندات: همین فایل + `phase1/fxv/ORIGIN.md` (رکورد انطباق logTarget/logErr و کد جدید runtimeStatsLoop).
+- working tree در پایان: پاک (به‌جز دایرکتوری upstream clone شده که gitignored است).
+
+### ۸. نکات عملی جلسه (برای جلسات بعد)
+
+- **بازیابی sandbox از صفر انجام شد**: کل محیط (repo clone، Go، upstream pin، فایل token) با restart از بین رفته بود؛ روش بازیابی: clone شاخه کاری → clone upstream در `phase1/firefox-vpn-client` @ `55ad91a2` → نصب Go 1.25.0 از go.dev → token از متن مأموریت مالک (فایل ۶۰۰، خارج از repo).
+- **حادثه tab→space دوباره تکرار شد**: ویرایشگر متن، server.go و h2.go را یک‌باره tab→space بازنویسی کرد (diff ۸۴۰/۴۵۸ خطی). با `git restore --staged --worktree` + اسکریپت python با حفظ tab (`scripts/stage6_reapply_tabs.py` الگوی موجود) اصلاح شد؛ diff نهایی: ۶۲ خط server.go، ۲۲ خط h2.go. **قانون Stage 5 تأیید مجدد شد: برای فایل‌های tab-indent (server.go، h2.go، controller.go، tunnel.go) هرگز ویرایش مستقیم متنی نکن؛ فقط python با الگوی دقیق؛ بعد از هر ویرایش `git diff --stat` چک شود.**
+- دیسک sandbox اکنون ~۸.۷GB آزاد دارد — کامپایل کامل upstream و `go test ./...` لوکال ممکن است؛ معیار CI همچنان مبناست.
+
+---
+
 ## دستور دقیق ادامه کار (جلسه بعدی)
 
-1. همین فایل را بخوان؛ `git -C <repo> log --oneline -3` و `git status` را بررسی کن.
-2. **فقط Stage 6 را اجرا کن**: CPU، حافظه و عملکرد Go Child Process (دستگاه هدف مالک: POCO X3 / ARM64 / HyperOS) —
-   - تحلیل کد مسیر داده Go برای الگوهای هزینه: allocationهای تکراری در هر تونل (`copyConn` با بافر pooled 64KB — socks/server.go)، عملیات copy غیرضروری، lockهای طولانی (mutex های controller/socks)، overhead لاگ (هر لاگ = نوشتن در stderr → core-log.txt)، نشت goroutine/conn (تست‌های Stage 2 سبزند ولی فقط مسیرهای تست‌شده را می‌پوشانند).
-   - نکته مهم: profiling واقعی نیاز به گوشی دارد؛ env پردازه عمداً خالی است (`includeParentEnvironment=false`, argv خالی) → GODEBUG/GODEBUG-pprof قابل تزریق نیست — هر knob آماری باید از stdin JSON بیاید یا اصلا اضافه نشود. اگر برای جمع‌آوری شواهد on-device (مثلاً رویداد دوره‌ای آمار goroutine/heap در لاگ) تغییر کوچکی لازم شد: فقط با کوچک‌ترین اصلاح + تست + commit مستقل و مطابق الگوی Stage 2/3/5.
-   - شواهد موجود قابل استفاده: خط `socks: conn tracked/untracked live=N` (Stage 2)، خط `upstream session established … remote=IP` (Stage 5)، شمارنده‌های zeptun (rx/tx) از MethodChannel.
-   - تنظیم GC/حافظه صرفاً برای کاهش مصرف ممنوع؛ اول profiling (قانون مأموریت). تغییر هم‌زمان چند متغیر ممنوع.
-   - مقایسه با Arman فقط مرجع؛ بدون دلیل فنی کپی نشود.
-3. قوانین: فقط مخزن `CHAKCAAD/AETHONE`؛ push فقط به `performance/firefox-vpn-optimization`؛ بدون Force Push/Release/تغییر pin upstream؛ CGO اندروید دست‌نخورده؛ محدودیت دیسک sandbox (کامپایل کامل upstream ممکن نیست — الگوی standalone-verification بخش ۱۰ Stage 5).
-4. پایان مرحله: commit مستقل + به‌روزرسانی همین فایل + push + گزارش با قالب ۱۰ بندی مأموریت + توقف.
+1. همین فایل را بخوان؛ `git -C <repo> log --oneline -3` و `git status` را بررسی کن (باید HEAD = commit مستندات Stage 6 باشد و working tree پاک).
+2. **فقط Stage 7 را اجرا کن**: TLS Fragmentation — **مرحله تصمیم فنی، نه پیاده‌سازی پیش‌فرض** —
+   - طبق مأموریت: این قابلیت عمدتاً برای عبور از محدودیت DPI در TLS handshake است و مستقیماً سرعت دانلود/آپلود بعد از برقراری تونل را افزایش نمی‌دهد؛ مشکل گزارش‌شده مالک «بعد از اتصال» است (پینگ ۲۰۰→۸۰۰۰ms، اختلاف سرعت در انتقال داده).
+   - بررسی‌ها (فقط با شواهد): چگونه handshake انجام می‌شود (h2: `internal/upstream/h2.go` NewH2ProxySession با TLS 1.2+/ALPN؛ h3: QUIC — fragmentation اصلاً موضوعیت ندارد)، آیا شکست handshake یا retry در لاگهای موجود ثبت شده (خطوط `upstream session established` و `socks: upstream tunnel open failed` — اکنون با ریدکشن)، آیا موتور فعلی (upstream pin) اصلاً قابلیت fragmentation دارد (در pin `55ad91a2` جستجو شود).
+   - اگر شواهد DPI/شکست handshake موجود نباشد: **پیاده‌سازی نکن** و تصمیم + دلیل را در همین فایل ثبت کن (خروجی مرحله = گزارش تصمیم + مستندات؛ مانند الگوی Stage 4).
+   - اگر شواهد موجود بود: امکان پیاده‌سازی اختیاری بررسی شود (روشن/خاموش، بدون آسیب به transportهای دیگر، بدون پیاده‌سازی موازی در صورت وجود قابلیت در موتور).
+3. قوانین: فقط مخزن `CHAKCAAD/AETHONE`؛ push فقط به `performance/firefox-vpn-optimization`؛ بدون Force Push/Release/تغییر pin upstream؛ CGO اندروید دست‌نخورده؛ برای فایل‌های tab-indent فقط اسکریپت python (قانون بخش ۸ Stage 6).
+4. پایان مرحله: commit مستقل (در صورت تغییر کد) + به‌روزرسانی همین فایل + push + گزارش با قالب ۱۰ بندی مأموریت + توقف.
+5. بعد از Stage 7: مرحله بعد Stage 8 (مقایسه نهایی + Debug APK با نام جدید + SHA256 + حفظ CGO/A1) است.
 
 *(Token دسترسی در دستور مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
 
@@ -501,3 +572,5 @@ RemoteSettings زنده (vpnclient.FetchServerList با uTLS Firefox ClientHello
 | 3 | `6e78ed3` | fix(engine): restore the upstream session-established transport logging (stage 3) |
 | 4 | `2869f7c` | docs(performance): stage 4 — MTU audit (L4 termination: no wire fragmentation, download already jumbo, Arman Android also 1500; no default change) |
 | 5 | `cbc83f5` | fix(engine): record the connected endpoint (remote=IP) in the session-established log (stage 5) |
+| 6 — کد ۱ | `c4ea2d9` | fix(engine): restore the upstream log level discipline in the SOCKS layer (stage 6) |
+| 6 — کد ۲ | `ee82680` | feat(engine): 60s runtime-stats evidence line for on-device CPU/memory diagnosis (stage 6) |

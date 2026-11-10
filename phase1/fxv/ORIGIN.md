@@ -64,6 +64,7 @@ prohibition).
 | The redaction scrubber | `internal/redact/` |
 | The discovery selection policy (REC/CatchAll/quarantine/country) | `internal/discovery/` |
 | The entry point, orchestration, park loop, `--discover`, `--login`, `--dns-probe` roles | `cmd/libfirefoxvpn/` |
+| The 60s runtime-stats evidence line (Stage 6; not upstream — the demo has no such loop) | `cmd/libfirefoxvpn/main.go` (`runtimeStatsLoop`, `formatRuntimeStats`) |
 | The build/fetch scripts and this provenance record | `../scripts/`, this file |
 
 ## What is ADAPTED from the upstream (per-file provenance)
@@ -72,9 +73,9 @@ Adapted from `cmd/proxy-demo/main.go` of the pinned commit:
 
 | Adapted piece | Now lives in | Adaptation notes |
 |---|---|---|
-| `socksServer`, `handshakeSOCKS5`, `readSOCKSAddr`, `writeSOCKSReply`, `mapUpstreamError`, `proxyBidirectional`, `copyConn`, `closeIdleConns` | `internal/socks/server.go` | client-affinity opener REMOVED (single-session decree); logging through the injected redacted sink |
+| `socksServer`, `handshakeSOCKS5`, `readSOCKSAddr`, `writeSOCKSReply`, `mapUpstreamError`, `proxyBidirectional`, `copyConn`, `closeIdleConns` | `internal/socks/server.go` | client-affinity opener REMOVED (single-session decree); logging through the injected level-tagged sink. Stage 6 restored the demo's level discipline: `logDebug`→sink-gated `Debugf` (verbose only), `logTarget`→`Server.logTarget` (`<redacted; use -verbose>` unless verbose, warn lines included), `logErr`→`upstream.RedactedError`; the Stage-2 live=N diagnostics ride Info |
 | `tunnelWriteBuffer`, `tunnelConn`, `tunnelAddr` | `internal/upstream/tunnel.go` | behavior preserved verbatim |
-| `newH2ProxySession`, keepalive, `OpenTunnel`, `roundTripWithOpenTimeout` | `internal/upstream/h2.go` | sessionFailureTracker REMOVED (no pool) |
+| `newH2ProxySession`, keepalive, `OpenTunnel`, `roundTripWithOpenTimeout` | `internal/upstream/h2.go` | sessionFailureTracker REMOVED (no pool); Stage 6 added `RedactedError` (the demo's `logErr`, relocated next to its type) |
 | `newH3ProxySession`, `OpenTunnel` | `internal/upstream/h3.go` | same; the 1200-byte InitialPacketSize floor kept |
 | `proxyController` | `internal/upstream/controller.go` | the POOL IS REMOVED — exactly one session, one account, no rotation; renewal loop + quota/renewal-timeout terminals preserved |
 | `verifyExit`, `parseExitProbeResponse`, `openTunnelContext` | `internal/upstream/exitprobe.go` | the probe request now presents the uTLS Firefox ClientHello (the anti-bot edge treats Go's ClientHello as a bot signature) |
