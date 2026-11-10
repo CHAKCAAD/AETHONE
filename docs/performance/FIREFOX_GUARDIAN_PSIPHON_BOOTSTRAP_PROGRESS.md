@@ -13,8 +13,8 @@
 | Branch کاری | `feature/firefox-guardian-psiphon-bootstrap` |
 | Base Commit | `ce852ea` (= tip شاخه `performance/firefox-vpn-optimization`؛ شامل تمام اصلاحات Performance مراحل ۰–۸) |
 | آخرین Commit | (انتهای فایل — «گیت مراحل») |
-| مرحله فعلی | **Stage 7 — تست جامع و تفکیک Data Plane** |
-| مرحله تکمیل‌شده آخر | **Stage 6 — PASS (Renewal و Lifecycle کامل؛ جزئیات بخش Stage 6)** |
+| مرحله فعلی | **Stage 8 — Build آزمایشی (APK دیباگ با Actions موجود)** |
+| مرحله تکمیل‌شده آخر | **Stage 7 — PASS (تست جامع + تفکیک Data Plane؛ جدول پوشش §Stage 7)** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### وضعیت Git در شروع مأموریت (تأییدشده)
@@ -382,7 +382,9 @@
 | Seamهای واقعی + ادغام walk (Stage 5 — Dart) | `lib/connection/firefox/guardian_engine_seams.dart` (EngineGuardianProbe + DirectAttempt/Verifier + EvidenceForwarding + Integration.build) + `apiProxy`/`args` در firefox_protocol/firefox_engine + walk بازسازی‌شده در `platform_engine_adapter.dart` (_connectFirefox: Fast Path + escalation یک‌بار در 451) + `fastPathEligible` در مدیر |
 | سیاست Renewal/Lifecycle + نگاشت outcome (Stage 6) | `lib/connection/firefox/guardian_renewal_policy.dart` (GuardianRenewalSupervisor + kGuardianRenewalGrace + Facts) + `retryInMs` در firefox_protocol + caseهای quotaExhausted در firefox_engine/firefox_errors + wiring در `platform_engine_adapter.dart` (_ensureGuardianBootstrap/_connectFirefox/_hardCleanup) + تست‌های حلقه renewal در `phase1/fxv/internal/upstream/renewal_loop_test.go` |
 | طبقه‌بندی 451 Guardian (Go) | `phase1/fxv/internal/fferr/classify.go` (ClassifyGuardian) + `cmd/libfirefoxvpn/main.go` (classifyGuardian) + `internal/upstream/controller.go` (renewalFailCode) |
-| مدل خطای Dart + متنها | `lib/connection/firefox/firefox_errors.dart` + `lib/connection/firefox/firefox_protocol.dart` + `lib/l10n/app_strings.dart` (firefoxErrGuardianRegion) |
+| مدل خطای Dart + متنها | `lib/connection/firefox/firefox_errors.dart` + `lib/connection/firefox/firefox_protocol.dart` + `lib/l10n/app_strings.dart` (firefoxErrGuardianRegion + firefoxErrQuotaExhausted + firefoxErrRenewalTimeout) |
+| اثبات تفکیک Data Plane (Stage 7 — Go) | `phase1/fxv/internal/socks/dataplane_separation_test.go` (داده فقط تونل؛ کنترل-پلن صفر؛ پراکسی bootstrap صفر) |
+| تست سطح UI/l10n (Stage 7 — Flutter) | `test/guardian_ui_test.dart` (سطح شکست 451/quota + sheet + عدم موفقیت کاذب + نگاشت ۱۱ کلاس در ۵ زبان) |
 
 ---
 
@@ -488,15 +490,113 @@
 
 ---
 
-## دستور دقیق ادامه کار (جلسه بعدی — Stage 7)
+## یافته‌ها و تغییرات Stage 7 (اجرای 2026-11-10)
 
-1. همین فایل را بخوان؛ HEAD باید commit مستقل Stage 6 باشد و working tree پاک (شاخه شامل کد Stage 2+3+4+5+6 و مستندات).
-2. **فقط Stage 7 را اجرا کن** — تست جامع و تفکیک Data Plane (طبق «مرحله هفتم» مأموریت):
-   - Go Tests: Guardian 451 / FxA 451 / Remote Settings 451 / 401·403·429·5xx / Direct Transport / Psiphon Local Proxy / AETHER→PSIPHON / Allowlist / Redirect / DNS / TLS / Timeout / Retry / Renewal / Cancellation / Route Loop / جلوگیری از Token Leak — از موجود پوشش را رسمی کن (جدول پوشش test→مورد)، شکاف‌ها را با تست جدید ببند؛ هیچ تست قبلی حذف/ضعیف نشود.
-   - Dart/Flutter Tests: State Machine / Bootstrap Manager / Singleflight / Failure Mapping / Lifecycle / Network Change / Strategy Persistence / Fast Path از مسیر ذخیره معتبر / Discovery fallback پس از شکست Fast Path / TTL و cooldown / جداسازی مسیر per-Network-Context / ماندگاری حافظه پس از restart اپ / fallback خرابی حافظه بدون crash / زمان‌بندی Cold-Discovery در برابر Warm-FastPath / Renewal / Proxy Endpoint Management / نمایش وضعیت Bootstrap و Psiphon و Combination Mode و خطای Guardian و Psiphon (Flutter).
-   - **تفکیک Data Plane**: بررسی و مستندسازی صریح اینکه ترافیک داده کاربر فقط از تونل Firefox می‌گذرد و bootstrap فقط کنترل-پلن است (RoutingRoundTripper allowlist) — شواهد از تست‌های موجود + هر شکاف.
+### ۰. وضعیت آغاز اجرا (شفافیت کامل)
+
+- این اجرا با یک clone محلی قدیمی شروع شد (تا Stage 2 راستی‌آزمایی `27d0319`)؛ `ls-remote` نشان داد ریموت شاخه **۵ commit جلوتر** است (مراحل ۳/۴/۵/۶ قبلاً اجرا و push شده بودند). کار محلی نیمه‌کاره Stage 3 که بر پایه clone قدیمی تولید شده بود، **بدون commit** به‌صورت patch آرشیو شد و شاخه محلی با fast-forward (بدون force، بدون بازنویسی) به tip ریموت `d36cf1e` رسید. سپس وضعیت ریموت بازتولید شد: `flutter analyze` صفر، `flutter test` ۴۰۱+۸~۰، `go vet` صفر، `go test` ۸/۸ ok — اعداد ثبت‌شده Stage 6 دقیقاً تأیید شدند. **Stage 7 فقط روی این پایه اجرا شد.**
+
+### ۱. جدول پوشش رسمی (تست → مورد مأموریت)
+
+Go (همه سبز؛ `go vet` صفر، ۸/۸ پکیج ok، `-race` روی socks/cptransport/cmd سبز):
+
+| مورد مأموریت | شاهد تست |
+|---|---|
+| تشخیص دقیق 451 | `fferr` `TestClassifyGuardianStatus` (۴۵۱ ساختاریافته/کد-variant/بدنه-خالی/HTML-CDN/بدون-کد → کلاس region؛ بدنه هرگز به پیام نمی‌ریزد) + `guardianprobe` `TestGuardianProbeClassifiesReal451` (سرور واقعی) |
+| عدم تریگر در 401/403/429/5xx | `TestClassifyGuardianStatus` (401/403 session، 429 generic، 500/502/503 retryable) + `TestHTTPStatuses` + Dart مدیر («a NON-451 direct failure fails honestly — no bootstrap loop») + probe quota (429 هرگز 451 نیست) |
+| مسیر مستقیم | `cptransport` `TestBootstrapUnavailableMeansEverythingDirect` + probe `TestGuardianProbeSucceedsDirect` |
+| Psiphon Standalone / AETHER→PSIPHON | Dart: `psiphon_bootstrap_test` (فقط/زنجیر — args، پورت‌ها، probe، lifecycle، LIVE شبیه‌سازی زنجیر)؛ Go: e2e از طریق apiProxy (`TestEndToEndGuardianThroughProxyEverythingElseDirect`، `TestGuardianProbeRoutesThroughTheLocalProxyWithVerifiedTLS`) |
+| سایر ترکیب‌ها | ارزیابی Stage 3: `PSIPHON→AETHER` برای wg/gool-classic در هسته pin fail-closed است (UDP روی psiphon ناممکن) — تصمیم مستند، ترکیب رد شده |
+| پورت/آمادگی Proxy | Dart `pickFreeLoopbackPort(Pair)` + «an open port that never speaks SOCKS5 is NOT ready» + probe چندشاهدی + LIVE |
+| Timeout/Retry/Cooldown | Dart (notReady، بودجه probe، توقف probe آویزان در seams)؛ Go renewal (`TestRenewalLoopFailureCarriesClassAndRetryDelay` = retryInMs 30s)؛ Dart memory (Cooldown/TTL دهها تست) |
+| Cancellation | Dart مدیر/پراکسی (stop حین start، checkpointها، dispose) + seams (hang→timeout بدون process یتیم) |
+| Network Change | Dart (`notifyNetworkContextChanged`، ایزوله‌سازی Context، بازارزیابی هر walk) |
+| Renewal | Go `renewal_loop_test` (چرخش از transport نصب‌شده + UpdateToken روی سشن زنده؛ ترمینال‌ها) + Dart supervisor (۱۳ تست) |
+| جلوگیری از Cycle | Dart زنجیر (سه آدرس متمایز، بدون upstream تزریقی، آرگ‌های قفل‌شده) + allowlist Go |
+| Singleflight | Dart مدیر (۳ فراخوانی هم‌زمان = ۱ job) + پراکسی (share one future) |
+| جلوگیری از نشت Process | Dart (توقف/تخریب بدون یتیم؛ kill_on_drop هسته pin) + seams (hang→stop) |
+| جلوگیری از افشای Token | `fferr` `TestTokenGuard`/`TestNoLeak` + `cptransport` رندر Redacted + engine apiProxy userinfo ممنوع + schema حافظه بدون فیلد راز (Dart) |
+| FxA/RemoteSettings 451 | طراحی: فقط Guardian در allowlist است؛ FxA/RS حتی با bootstrap فعال Direct می‌مانند — `TestAllowlistRoutesOnlyTheExactGuardianEntry` (۱۵+ زیرکیس شامل FxA/RS/پورت/substring/POST) |
+
+Dart/Flutter (همه سبز؛ `flutter analyze` صفر، ۴۰۴+۸~۰):
+
+| مورد مأموریت | شاهد تست |
+|---|---|
+| ماشین وضعیت / انتقال وضعیت Bootstrap | `guardian_bootstrap_manager_test` (توالی کامل وضعیت‌ها + زمان‌بندی‌ها) |
+| Singleflight / هم‌زمانی | همان فایل (۳ فراخوانی = ۱ پراکسی) |
+| خطاهای Psiphon / Combination | همان فایل (شکست start جدا از authorization؛ allRoutesFailed با تفکیک هر مسیر) |
+| خطاها → UI | `guardian_ui_test` (جدید، این مرحله): کلاس 451 و quota با کد+تشخیص خودشان زیر pill و در sheet رندر می‌شوند؛ هرگز pill متصل |
+| Restart/Cancellation | مدیر + پراکسی + renewal (teardown قطعی، dispose بدون timer یتیم) |
+| تغییر Network | مدیر (notify…، ایزوله‌سازی، بازارزیابی) |
+| ماندگاری Strategy پس از restart | مدیر («fast path پس از restart: Direct صفر بار، verify مجدد») + memory (پس از release زنده) |
+| Fast Path از حافظه معتبر | مدیر (true فقط با مسیر معتبر + شاهد 451؛Direct-skip تست‌دار) |
+| Discovery بعد از شکست Fast Path | مدیر («fast-path failure → cooldown + discovery») |
+| TTL و Cooldown | memory (انقضا→Discovery؛ موفقیت→پاک شدن Cooldown) |
+| جداسازی per-Network-Context | memory/مدیر (Context دیگر هرگز مسیر/سشن این Context را نمی‌بیند) |
+| خرابی حافظه بدون crash | memory («corrupt file degrades to empty») |
+| Cold-Discovery در برابر Warm-FastPath | ساختار اندازه‌گیری (directMillis/bootstrapReadyMillis/authorizationMillis) + تست توالی؛ اعداد واقعی = Stage 9 |
+| Renewal / Proxy Endpoint | supervisor ۱۳ تست + seams (endpoint روی سیم) + manager (release/reactivation) |
+| نمایش وضعیت (Flutter) | `guardian_ui_test` (جدید): سطح شکست صادقانه + عدم موفقیت کاذب + l10n پنج زبان برای همه کلاس‌ها. **زیرحالت‌های ریز bootstrap (Checking/Starting Psiphon/Trying Combined/Authorizing) عمداً به UI وصل نشده‌اند** — طراحی مراحل ۵/۶: bootstrap فاز داخلی walk است؛ قرارداد UI = وضعیت‌های walk + کلاس شکست. اتصال chip های ریز = کار UI جدید با تأیید مالک، نه تغییر مرحله تست |
+| حفظ رفتار سایر پروتکل‌ها | کل suite سبز (home/protocol/onboarding/settings…) + `firefox_errors_test` («region class ONLY by the Guardian walk») |
+
+Integration (۱۰ سناریوی مأموریت با double/سرور محلی — همه با spawn واقعی یا سوکت واقعی):
+
+| سناریو | شاهد |
+|---|---|
+| 1. مستقیم 200 → بدون Psiphon | مدیر («direct success authorizes with NO bootstrap») |
+| 2. 451 → Bootstrap آغاز | مدیر («451 → standalone first, full state sequence») |
+| 3. Psiphon موفق → Guardian از Proxy | seams («451 direct → bootstrap → through-the-proxy authorization» با spawn واقعی) + Go probe e2e |
+| 4. شکست Standalone → Chain | مدیر («standalone fails → the EXISTING chain is tried and wins») |
+| 5. شکست مسیر → مسیر بعد | مدیر (fast-path failure → discovery از مسیرهای باقی) |
+| 6. شکست همه → خطای دقیق+توقف امن | مدیر («allRoutesFailed با طبقه‌بندی per-route») |
+| 7. درخواست‌های هم‌زمان → یک Bootstrap | مدیر singleflight |
+| 8. انقضای مجوز → فعال‌سازی مجدد | supervisor backstop + مدیر reactivation |
+| 9. تغییر شبکه → بازارزیابی | مدیر notify… + ایزوله‌سازی Context |
+| 10. Psiphon آماده ولی Guardian شکست → خطای Guardian | مدیر («authorization failure is classified separately») + probe Go (خطا هرگز موفقیت کاذب نیست) |
+
+### ۲. تفکیک Data Plane — اثبات صریح
+
+- **تست جدید Go** `internal/socks/dataplane_separation_test.go` — `TestUserDataPlaneStaysOnTheTunnelWithABootstrapControlPlane`: اتصال REAL کاربر (greeting + DOMAIN CONNECT + echo) از سرور production SOCKS، همزمان با نصب **شکل production کنترل-پلن** روی seam یکتای pin (`SetControlPlaneTransport` با RoutingRoundTripper + allowlist واقعی Guardian + پایه proxied به یک stand-in ثبت‌کننده). سه شاهد: (۱) داده فقط از seam تونل عبور کرد (authority ثبت‌شده)؛ (۲) پایه Direct کنترل-پلن **صفر** درخواست دید؛ (۳) پراکسی bootstrap **صفر** اتصال پذیرفت.
+- جهت معکوس (Guardian از پراکسی، غیرمجاز Direct): `cptransport` e2e + probe — ماتریس کامل تفکیک بسته شد: **داده کاربر فقط تونل؛ کنترل-پلن فقط allowlist؛ هیچ مسیر غیرمجاز به پراکسی کمکی نمی‌رود.**
+
+### ۳. شکاف واقعی پیدا و بسته شد (اصلاح در همین مرحله طبق قانون توقف)
+
+- **l10n ناقص**: کلاس‌های Stage 6 (`quotaExhausted`/`renewalTimeout`) تشخیص انگلیسی داشتند اما متن بومی نه — به `firefoxLoginFailed` عمومی می‌افتادند. کلیدهای `firefoxErrQuotaExhausted`/`firefoxErrRenewalTimeout` در **هر پنج زبان** (fa/en/ru/zh/tk) + mapping در `firefoxErrorText` اضافه شد (تست‌دار: نگاشت هر ۱۱ کلاس در ۵ زبان به متن اختصاصی غیرخالی).
+
+### ۴. فایلهای تغییرکرده (Stage 7)
+
+- **Go — جدید**: `phase1/fxv/internal/socks/dataplane_separation_test.go` (۱ تست، سه شاهد تفکیک).
+- **Dart — جدید**: `test/guardian_ui_test.dart` (۳ تست: سطح شکست 451 با sheet؛ کلاس quota متمایز؛ l10n پنج‌زبانه همه کلاس‌ها).
+- **Dart — تغییر**: `lib/l10n/app_strings.dart` (+۲ کلید × ۵ زبان + getter + mapping).
+- **مستندات**: همین فایل (بخش Stage 7 + وضعیت + دستور Stage 8).
+- دست‌نخورده: pinها، کد production Go (فقط تست)، CGO/A1، workflowها، کد مراحل ۲–۶ (فقط مصرف شدند)، Data Plane.
+
+### ۵. تستها و نتایج واقعی (Stage 7)
+
+- `flutter analyze` → **صفر یافته**.
+- `flutter test` کل: **۴۰۴ پاس / ۸ skip قبلی / ۰ شکست** (۴۰۱→۴۰۴؛ +۳ تست جدید، هیچ تست قبلی حذف/ضعیف نشد).
+- `go vet ./...` → صفر. `go test ./...` → **۸/۸ پکیج ok** (socks با تست تفکیک جدید). `go test -race` روی socks/cptransport/cmd → ok.
+- بازتولید وضعیت Stage 6 پیش از تغییرات (شفافیت §۰): ۴۰۱+۸~۰ و ۸/۸ ok — مطابق ثبت قبلی.
+
+### ۶. NOT TESTED (Stage 7)
+
+- اجرای واقعی روی گوشی/شبکه ایران (Stage 8 build + Stage 9 سناریوها).
+- زیرحالت‌های ریز bootstrap در UI (طراحی: وصل نشده؛ تصمیم با مالک — §۱).
+- منبع واقعی Network Context (باکت واحد؛ محدودیت مستند Stage 4).
+- اعداد واقعی Cold/Warm (ساختار هست؛ اندازه‌گیری = Stage 9).
+
+---
+
+## دستور دقیق ادامه کار (جلسه بعدی — Stage 8)
+
+1. همین فایل را بخوان؛ HEAD باید commit مستقل Stage 7 باشد و working tree پاک (شاخه شامل کد Stage 2–7 + مستندات).
+2. **فقط Stage 8 را اجرا کن** — Build آزمایشی (طبق «مرحله هشتم» مأموریت):
+   - Build دیباگ اندروید با **Workflow موجود** (`android-debug.yml`)؛ تغییر غیرضروری workflow ممنوع؛ اصلاح A1 و CGO در ARM64 باید حفظ شود (workflow موجود رعایت می‌کند — فقط راستی‌آزمایی).
+   - APK قبلی overwrite نشود؛ نام جدید و واضح؛ SHA256 ثبت شود؛ package ID نسخه آزمایشی بررسی شود؛ باینری‌های psiphon/firefox موجود در APK بررسی شوند؛ اعتبار APK بررسی شود.
+   - گزارش CI (run URL، artifact، sha256) به همین فایل اضافه شود؛ artifact باید از GitHub Actions در `CHAKCAAD/AETHONE` قابل دریافت باشد. **هیچ Release عمومی نساخته.**
+   - دستور نصب روی گوشی POCO X3 (مالک) نیز ارائه شود.
    - قواعد ثابت: pinها دست‌نخورده؛ تغییر حدسی نکن؛ commit مستقل؛ push به همین شاخه؛ به‌روزرسانی همین فایل؛ گزارش ۱۰-بندی؛ توقف.
-3. قانون توقف: بعد از Stage 7 متوقف شو؛ مرحله ۸ (آزمون‌های سناریویی روی دستگاه/شبکه واقعی طبق مأموریت) در اجرای بعدی.
+3. قانون توقف: بعد از Stage 8 متوقف شو؛ مرحله ۹ (تست واقعی روی گوشی مالک) در اجرای بعدی.
 
 ---
 
@@ -516,5 +616,7 @@
 | 4 — مستندات | (همان tip؛ کد و مستندات در یک commit مستقل این مرحله) | شامل همین بخش Stage 4 + به‌روزرسانی وضعیت/نقشه/دستور Stage 5 |
 | 5 — کد+مستندات | `c8e62b6` | feat(guardian): routing roundtripper — guardian-only selective control plane (stage 5) — شامل بخش Stage 5 این فایل + به‌روزرسانی وضعیت/نقشه/دستور Stage 6 |
 | 6 — کد+مستندات | `2c31cba` | feat(guardian): renewal lifecycle — expiry-based bootstrap release policy, renewal event plumbing, quota outcome mapping (stage 6) — شامل بخش Stage 6 این فایل + به‌روزرسانی وضعیت/نقشه/دستور Stage 7 |
+| 6 — پین هش | `d36cf1e` | docs(guardian-bootstrap): pin the stage-6 commit hash in the progress table |
+| 7 — کد+مستندات | (tip شاخه پس از همین commit) | test(guardian): comprehensive coverage + data-plane separation proof (stage 7) — تست تفکیک Data Plane در Go، تستهای UI/l10n در Flutter، تکمیل l10n کلاسهای Stage 6، جدول پوشش رسمی این فایل |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
