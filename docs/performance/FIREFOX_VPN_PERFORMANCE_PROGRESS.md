@@ -13,8 +13,8 @@
 | Branch کاری | `performance/firefox-vpn-optimization` |
 | Commit پایه شاخه | `ff9bc38` (= tip شاخه `integration/firefox-vpn-debug`) |
 | Commit آخرین مرحله تکمیل‌شده | (در انتهای همین فایل — بخش «گیت مرحله آخر») |
-| مرحله تکمیل‌شده آخر | **Stage 7 — TLS Fragmentation: PASS (تصمیم فنی: عدم پیاده‌سازی؛ بدون تغییر کد — بخش «نتیجه Stage 7»)** |
-| مرحله فعلی برای اجرای بعدی | **Stage 8 — مقایسه نهایی، بررسی سازگاری و Build Debug APK (نام جدید + SHA256 + حفظ CGO/A1)** |
+| مرحله تکمیل‌شده آخر | **Stage 8 — مقایسه نهایی و Build: PASS (بررسی نهایی کامل + Debug APK با موفقیت در GitHub Actions ساخته و مستقل تأیید شد — مأموریت ۸-مرحله‌ای کامل شد)** |
+| مرحله فعلی برای اجرای بعدی | **مأموریت کامل شد — فاز تصمیم مالک: پذیرش on-device + تصمیم ادغام** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### جدول مراحل
@@ -29,7 +29,7 @@
 | 5 — IPv4/IPv6 و Endpoint | **PASS** (تحلیل کامل + اصلاح واقعی: لاگ endpoint واقعی remote=IP هر دو transport — بخش «نتیجه Stage 5») |
 | 6 — CPU/حافظه/Go Child Process | **PASS** (اصلاح واقعی: نظم سطح لاگ upstream — حذف ۶ خط debug هر اتصال + ریدکشن دامنه‌ها و body خطاها در سطح normal؛ کانال شواهد live=N به Info ارتقا؛ خط آماری ۶۰ ثانیه‌ای — بخش «نتیجه Stage 6») |
 | 7 — TLS Fragmentation | **PASS** (تصمیم مستند: **عدم پیاده‌سازی** — مشکل post-connection است؛ هیچ شواهد DPI/شکست handshake؛ موتور قابلیت ندارد — بخش «نتیجه Stage 7») |
-| 8 — مقایسه نهایی و Build | PENDING |
+| 8 — مقایسه نهایی و Build | **PASS** (بررسی نهایی ۸-بندی کامل؛ جدول مقایسه = NOT TESTED بدون دستگاه + روش اندازه‌گیری مستند؛ Debug APK از کد نهایی شاخه ساخته شد — بخش «نتیجه Stage 8») |
 
 ---
 
@@ -583,15 +583,73 @@ RemoteSettings زنده (vpnclient.FetchServerList با uTLS Firefox ClientHello
 
 ---
 
-## دستور دقیق ادامه کار (جلسه بعدی)
+## نتیجه Stage 8 (اجرای 2026-11-10) — مقایسه نهایی و Build: مأموریت کامل شد
 
-1. همین فایل را بخوان؛ `git -C <repo> log --oneline -3` و `git status` را بررسی کن (باید HEAD = commit مستندات Stage 7 باشد و working tree پاک).
-2. **فقط Stage 8 را اجرا کن** — مقایسه نهایی و تثبیت عملکرد (آخرین مرحله):
-   - **بررسی نهایی**: تمام commitهای مراحل ۰-۷ (جدول «گیت مرحله آخر»)، تست‌های جدید (پکیج‌های socks/upstream/cmd)، سازگاری معماری (Child Process/stdin-stdout JSON دست‌نخورده)، حفظ اصلاح A1 (CGO_ENABLED=1 + aarch64-linux-android34-clang در اسکریپت build)، رفتار پروتکل‌های دیگر (هسته Rust و UI fragment آن‌ها دست نخورده)، امنیت اطلاعات (ریدکشن Stage 6).
-   - **مقایسه عملکرد**: دستگاه در دسترس نیست → جدول ۹-ستونه مأموریت (Idle/Loaded/Max Ping، Packet Loss، Down/Up، CPU، RAM، Stability) با `NOT TESTED` پر شود؛ عدد تخمینی ممنوع. روش اندازه‌گیری برای مالک مستند شود (استفاده از خطوط جدید `runtime stats` و `live=N` و `upstream session established` در core-log.txt برای جمع‌آوری شواهد on-device).
-   - **Build نهایی**: APK Debug آزمایشی با نام جدید (بدون overwrite)؛ حفظ CGO/A1 برای ARM64؛ ثبت SHA256؛ تطبیق باینری داخل APK (libfirefoxvpn.so و lib/arm64-v8a) با خروجی مورد انتظار؛ بررسی package ID نسخه آزمایشی؛ اعتبار APK. اگر build در sandbox ممکن نشد (NDK/flutter دسترسی)، صریحاً NOT TESTED ثبت و روش build مستند شود.
-3. قوانین: فقط مخزن `CHAKCAAD/AETHONE`؛ push فقط به `performance/firefox-vpn-optimization`؛ بدون Force Push/Release/تغییر pin upstream؛ CGO اندروید دست‌نخورده؛ برای فایل‌های tab-indent فقط اسکریپت python (قانون بخش ۸ Stage 6).
-4. پایان مرحله: commit مستقل + به‌روزرسانی همین فایل + push + گزارش با قالب ۱۰ بندی مأموریت + توقف.
+### ۱. بررسی نهایی (بندهای مأموریت — همه PASS)
+
+1. **تمام Commitهای قبلی**: ۱۸ commit از پایه `ff9bc38` (جدول «گیت مرحله آخر») — هر مرحله commit مستقل + push به شاخه کاری؛ بدون Force Push/بازنویسی تاریخچه/Release.
+2. **تست‌های جدید**: ۶۸۲ خط کد تست در ۴ فایل (`socks/server_test.go` +۴۲۷، `cmd/libfirefoxvpn/main_test.go` +۱۳۸، `upstream/upstream_test.go` +۸۸، `engine/config_test.go` +۳۰)؛ مجموع ماژول engine: **۹۸ تست PASS**.
+3. **تست‌های موجود**: هیچ تست قبلی حذف/غیرفعال نشد؛ `go vet ./...` بدون خطا؛ `go test ./...` هر ۷ پکیج PASS؛ `-race` روی socks/upstream/engine/cmd PASS (اجرای نهایی این جلسه روی HEAD).
+4. **سازگاری معماری**: `git diff ff9bc38..HEAD --stat` = فقط ۱۳ فایل در `phase1/fxv` + docs؛ **صفر تغییر** در `lib/` (Dart)، `android/`، `.github/workflows/`، `phase1/scripts/` → معماری Child Process، stdin/stdout JSON، Keystore، WebChannel دست‌نخورده.
+5. **سازگاری Android**: باینری برای هر ۳ ABI با همان روش قبلی ساخته شد (بند ۳ این بخش).
+6. **رفتار پروتکل‌های دیگر**: هسته Rust (aether/lyrebird/psiphon/zeptun) و UI آن‌ها (از جمله fragment settings) — دست‌نخورده (بند ۴).
+7. **حفظ اصلاح A1**: `build_engine.sh` — `CGO_ENABLED=1` + `aarch64-linux-android34-clang` برای همه ABIها + گارد صریح ردِ `CGO_ENABLED=0`؛ **در خود artifact هم تأیید شد** (build-report: سه خط build با CGO+clang صحیح).
+8. **امنیت اطلاعات**: ریدکشن Stage 6 (دامنه‌ها + body خطاها در سطح normal)؛ توکن‌ها فقط از pipe stdin (دست‌نخورده)؛ هیچ Token/Session در log/تست/گزارش/این فایل ثبت نشد.
+9. **upstream pin**: `fetch_upstream.sh` همچنان `55ad91a2ccea1c93e69c82a08a7681e279884db5` — بدون تغییر.
+10. **وضعیت Build**: موفق — بند ۳ این بخش.
+
+### ۲. مقایسه عملکرد — جدول مأموریت (دستگاه در دسترس نبود)
+
+| معیار | AETHONE قبل از اصلاح | AETHONE بعد از اصلاح | Arman VPN |
+|---|---|---|---|
+| Idle Ping | NOT TESTED | NOT TESTED | NOT TESTED |
+| Loaded Ping | NOT TESTED | NOT TESTED | NOT TESTED |
+| Maximum Ping | مشکل گزارش‌شده مالک: ~۲۰۰ → ~۸۰۰۰ms (پس از مدتی اتصال) | NOT TESTED | NOT TESTED |
+| Packet Loss | NOT TESTED | NOT TESTED | NOT TESTED |
+| Download Mbps | ضعیف‌تر از Arman (گزارش مالک؛ عدد ثبت‌نشده) | NOT TESTED | NOT TESTED |
+| Upload Mbps | NOT TESTED | NOT TESTED | NOT TESTED |
+| CPU Usage | NOT TESTED | NOT TESTED | NOT TESTED |
+| RAM Usage | NOT TESTED | NOT TESTED | NOT TESTED |
+| Connection Stability | ناپایدار (پینگ فزاینده؛ گزارش مالک) | NOT TESTED | پایدار (گزارش مالک) |
+
+**عدد تخمینی تولید نشد.** روش اندازه‌گیری برای مالک (پذیرش on-device):
+
+1. نصب APK جدید کنار برنامه اصلی (package id متفاوت: `com.chakcaad.aethone.da`).
+2. شرایط مقایسه یکسان با مأموریت: یک گوشی (POCO X3)، یک شبکه، زمان نزدیک، سرور/کشور یکسان، روش اندازه‌گیری یکسان (همان ابزار برای AETHONE و Arman).
+3. ثبت از core-log.txt (هر ۶۰ ثانیه): خطوط `runtime stats goroutines=N heap_mb=.. sys_mb=.. num_gc=.. total_alloc_mb=.. alloc_kbps=..` — روند goroutine/heap/GC در پنجره پینگِ فزاینده = شواهد CPU/حافظه.
+4. خطوط `socks: conn tracked/untracked live=N` — تعداد اتصال زنده (کانال شواهد سقف ۲۵۶ و نشت).
+5. خط `upstream session established transport=h2|h3 proxy=… remote=IP establish_latency=…` — transport و endpoint واقعی.
+6. اگر پینگ فزاینده بازهم رخ داد: جمع‌آوری خطوط فوق از ابتدای اتصال تا لحظه کشف + خطوط WARN (ریداکشن‌شده) → تشخیص اینکه ریشه در موتور است یا بیرون آن (TUN/زیرساخت).
+
+### ۳. Build نهایی — PASS (ساخت در GitHub Actions طبق قاعده مالک)
+
+- **مسیر build**: طبق قاعده ثبت‌شده در خود workflow (`android-debug.yml` header): Debug APK «BY GITHUB ACTIONS ONLY — never in the agent's constrained sandbox». push-trigger آن فقط به `integration/firefox-vpn-debug` است؛ بنابراین از طریق `workflow_dispatch` API روی ref شاخه کاری اجرا شد (HTTP 204).
+- **Run**: `42771904063` — branch `performance/firefox-vpn-optimization`، commit `fb67bf5` (= کد نهایی شاخه؛ Stage 8 فقط docs تغییر داد)، ساخته 2026-11-10T07:12:28Z، **conclusion: success** (زمان ~۱۶ دقیقه).
+- **جاب‌ها**: Firefox engine (go_vet=PASS، go_test=PASS، build هر ۳ ABI با CGO + NDK r28c) / Native cores هر ۳ ABI success / DA debug APK (flutter_analyze=PASS، flutter_test=PASS شامل real-engine --login suite با host binary از همین کد).
+- **APK**: `AETHONE-DA-Firefox-Debug.apk` — ۱۸۶,۹۸۰,۸۰۲ بایت؛ universal (arm64-v8a + armeabi-v7a + x86_64)؛ package_id=`com.chakcaad.aethone.da` (کنار برنامه اصلی نصب می‌شود — اشتباه‌گیری ممکن نیست)؛ label «AETHONE DA»؛ debug-keystore signed (فقط نصب آزمایشی، نه Release).
+- **SHA256 APK**: `089c3bbfae9f80634345b2d15c8608987e322a82ffd7ae2e0984d0647075fcca` — هم توسط CI ثبت شد و هم مستقل در sandbox بازمحاسبه و تطبیق یافت.
+- **تطبیق باینری‌ها (مستقل، سه‌طرفه)**: `lib/arm64-v8a/libfirefoxvpn.so` داخل APK = باینری ساخته‌شده در artifact `firefox-engine` = مانیفست `SHA256SUMS.txt` — هر سه: `25a2aee5f4f60367fd68de2f16411b6f332bb9a3d10bb01d673797ba5db8bbc8` (ELF 64-bit ARM aarch64)؛ CI نیز به‌صورت fail-closed byte-identity هر ۳ ABI را verify کرد (archive check + package id + label + ۳ ABI × ۵ lib + engine hash).
+- **بدون overwrite**: artifact جدید در Actions (retention ۱۴ روز، انقضا 2026-11-24 — Release عمومی نیست)؛ APK قبلی روی گوشی مالک (از `ff9bc38`) دست‌نخورده ماند.
+- **نسخه محلی برای مالک**: کپی APK + build-report.txt + SHA256SUMS.txt در پوشه download/stage8 ایجنت برای تحویل.
+
+### ۴. NOT TESTED (نهایی)
+
+- هر ۹ معیار جدول مقایسه (بند ۲) — دستگاه در دسترس نبود.
+- رفتار واقعی پینگ/CPU/حافظه روی POCO X3 با کد اصلاح‌شده — نیازمند نصب APK جدید توسط مالک و جمع‌آوری core-log طبق روش بند ۲.
+
+### ۵. جمع‌بندی مأموریت
+
+- ۸/۸ مرحله PASS؛ ۶ اصلاح واقعی کد (Stage 2: سقف ۲۵۶ + رفع slot-steal؛ Stage 3: لاگ transport واقعی؛ Stage 5: لاگ endpoint واقعی؛ Stage 6: نظم لاگ + ریدکشن + خط آماری ۶۰s)؛ ۲ تصمیم مستند عدم-تغییر (Stage 4: MTU؛ Stage 7: TLS fragmentation)؛ ۱ حسابرسی روش (Stage 1: ping).
+- ریشه‌های اثبات‌شده‌ای از مشکل پینگ فزاینده/ناپایداری که با شواهد قابل رفع بودند، همگی در همین مأموریت اصلاح و تست شدند؛ ادعای بهبود عددی on-device صریحاً NOT TESTED ماند.
+
+---
+
+## وضعیت پس از تکمیل مأموریت
+
+**مأموریت ۸-مرحله‌ای کامل شد.** اجرای بعدی فقط در صورت دستور جدید مالک:
+1. اگر پذیرش on-device مشکلی نشان داد: همین فایل + core-log جمع‌آوری‌شده (روش بند ۲ Stage 8) مبنا تشخیص است.
+2. تصمیم ادغام شاخه `performance/firefox-vpn-optimization` در شاخه اصلی با مالک است (طبق مأموریت بخش ۲).
+3. APK آزمایشی: از Actions run `42771904063` (artifact `AETHONE-DA-Firefox-Debug`، منقضی 2026-11-24) یا کپی محلی sandbox.
 
 *(Token دسترسی در دستور مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
 
