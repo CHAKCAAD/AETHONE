@@ -689,6 +689,6 @@ adb uninstall com.chakcaad.aethone.da
 | 6 — پین هش | `d36cf1e` | docs(guardian-bootstrap): pin the stage-6 commit hash in the progress table |
 | 7 — کد+مستندات | `efe707a` | test(guardian): comprehensive coverage + data-plane separation proof (stage 7) — تست تفکیک Data Plane در Go، تستهای UI/l10n در Flutter، تکمیل l10n کلاسهای Stage 6، جدول پوشش رسمی این فایل |
 | 7 — پین هش | `332ff03` | docs(guardian-bootstrap): pin the stage-7 commit hash in the progress table |
-| 8 — مستندات | (tip شاخه پس از همین commit) | docs(guardian-bootstrap): stage 8 — trial build report via Actions run 42869865882 (sha256 verified, package id .da, engines 12/12, install commands) |
+| 8 — مستندات | `278b1a1` | docs(guardian-bootstrap): stage 8 — trial build report via Actions run 42869865882 (sha256 verified, package id .da, engines 12/12, install commands) |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
