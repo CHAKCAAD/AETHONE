@@ -220,10 +220,11 @@ func runTunnel() int {
                                 ObtainedAt:    time.Now().UTC().Format(time.RFC3339),
                         })
                 },
-                OnRenewalFail: func(redacted string, retryInMs int64) {
+                OnRenewalFail: func(redacted string, failCode string, retryInMs int64) {
                         _ = emit.Emit(engine.Event{
                                 Name:      engine.EvRenewalFailed,
                                 Message:   redact.Line(redacted),
+                                FailCode:  failCode,
                                 RetryInMs: retryInMs,
                         })
                 },
@@ -460,8 +461,12 @@ func failedFrom(failCode string, class fferr.Classified, exit int) engine.Event 
 // classifyGuardian maps Guardian failures. The typed sentinels first
 // (the upstream's own ErrTokenInvalid fires ONLY on 401/403 →
 // sessionRejected; ErrQuotaExceeded is handled before this point), then
-// the typed GuardianHTTPError through fferr.ClassifyHTTP with the REAL
-// status, then type-based transport classification. The status for the
+// the typed GuardianHTTPError through fferr.ClassifyGuardian with the
+// REAL status and body — the Guardian-only 451 becomes the dedicated
+// guardianRegionUnavailable class (guardian-bootstrap Stage 1; the
+// error type itself is the endpoint proof: the pin constructs
+// GuardianHTTPError only in the /api/v1/fpn/* walks) — then
+// type-based transport classification. The status for the
 // token-invalid sentinel rides the error text (the same documented
 // seam as the FxA errno — the upstream pin exports no typed status
 // there) and is extracted, never guessed.
@@ -479,7 +484,7 @@ func classifyGuardian(err error, cfg engine.Config) fferr.Classified {
         }
         var httpErr *vpnclient.GuardianHTTPError
         if errors.As(err, &httpErr) {
-                return fferr.ClassifyHTTP(httpErr.StatusCode, nil).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken)
+                return fferr.ClassifyGuardian(httpErr.StatusCode, httpErr.Body).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken)
         }
         class := fferr.ClassifyTransport(err)
         if class.Code == fferr.CodeUnknown {

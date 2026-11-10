@@ -344,3 +344,82 @@ func TestUnknownAndFallback(t *testing.T) {
 	}
 	resp.Body.Close()
 }
+
+// ---------------------------------------------------------------------------
+// TestClassifyGuardianStatus — the guardian-bootstrap Stage 1 matrix: the
+// GUARDIAN-only classifier. 451 becomes the dedicated region class when
+// the response indicates a regional restriction; every other status keeps
+// the generic classes; the body is parsed as structured JSON, never
+// substring-hunted, and never echoed into the user-facing surface.
+// ---------------------------------------------------------------------------
+func TestClassifyGuardianStatus(t *testing.T) {
+	cases := []struct {
+		name       string
+		status     int
+		body       string
+		wantCode   Code
+		wantRetry  bool
+	}{
+		{"451 structured region code", 451, `{"error":"unavailable_in_region"}`, CodeGuardianRegionUnavailable, false},
+		{"451 code field variant", 451, `{"code":"unavailable_in_region"}`, CodeGuardianRegionUnavailable, false},
+		{"451 empty body (edge refused silently)", 451, "", CodeGuardianRegionUnavailable, false},
+		{"451 CDN edge HTML page", 451, "<html><body>Unavailable For Legal Reasons</body></html>", CodeGuardianRegionUnavailable, false},
+		{"451 JSON without a code field", 451, `{"message":"no structured code"}`, CodeGuardianRegionUnavailable, false},
+		{"451 DIFFERENT structured reason", 451, `{"error":"account_suspended"}`, CodeServerRejection, false},
+		{"401 stays session-rejected", 401, `{"error":"invalid_token"}`, CodeSessionRejected, false},
+		{"403 stays session-rejected", 403, "", CodeSessionRejected, false},
+		{"429 stays generic 4xx (quota is the upstream sentinel)", 429, "", CodeServerRejection, false},
+		{"500 stays retryable server rejection", 500, "", CodeServerRejection, true},
+		{"502 stays retryable server rejection", 502, "", CodeServerRejection, true},
+		{"503 stays retryable server rejection", 503, "", CodeServerRejection, true},
+	}
+	for _, tc := range cases {
+		got := ClassifyGuardian(tc.status, tc.body)
+		if got.Code != tc.wantCode || got.Retryable != tc.wantRetry {
+			t.Fatalf("%s: got code=%s retryable=%v, want code=%s retryable=%v",
+				tc.name, got.Code, got.Retryable, tc.wantCode, tc.wantRetry)
+		}
+		if got.HTTPStatus != tc.status {
+			t.Fatalf("%s: httpStatus = %d, want %d", tc.name, got.HTTPStatus, tc.status)
+		}
+		if got.Message == "" {
+			t.Fatalf("%s: the static message must be non-empty", tc.name)
+		}
+		// the structured body must NEVER reach the user-facing surface
+		// (Message) — it may live only in the classified Internal chain.
+		if tc.body != "" && containsAll(got.Message, "unavailable_in_region", "account_suspended") {
+			t.Fatalf("%s: the raw body leaked into the classified message", tc.name)
+		}
+		t.Logf("%s: %d -> %s (retryable=%v)", tc.name, tc.status, got.Code, got.Retryable)
+	}
+}
+
+// containsAll reports whether s contains every given needle.
+func containsAll(s string, needles ...string) bool {
+	for _, n := range needles {
+		if strings.Contains(s, n) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestClassifyHTTP451StaysGeneric — the ENDPOINT ISOLATION guard: FxA,
+// Remote Settings and every non-Guardian control-plane walk classify
+// through ClassifyHTTP, where 451 stays the generic serverRejection.
+// The region class may only ever come out of ClassifyGuardian.
+func TestClassifyHTTP451StaysGeneric(t *testing.T) {
+	got := ClassifyHTTP(451, nil)
+	if got.Code != CodeServerRejection {
+		t.Fatalf("generic 451: got %s, want serverRejection", got.Code)
+	}
+	if got.Retryable {
+		t.Fatal("generic 4xx must not be retryable")
+	}
+	if got.HTTPStatus != 451 {
+		t.Fatalf("generic 451: httpStatus = %d", got.HTTPStatus)
+	}
+	if got.Code == CodeGuardianRegionUnavailable {
+		t.Fatal("the region class leaked into the GENERIC classifier")
+	}
+}

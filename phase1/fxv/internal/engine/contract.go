@@ -108,7 +108,9 @@ type Event struct {
         Name    string `json:"event"`
         Message string `json:"message,omitempty"`
 
-        // failed
+        // failed (the engine/legacy codes or the fferr classes) and
+        // renewalFailed (the failed attempt's fferr class — the 451
+        // region class included; empty when it classifies as unknown)
         FailCode   string `json:"failCode,omitempty"`
         Code       int    `json:"code,omitempty"` // the exit code the engine will use
         HTTPStatus int    `json:"httpStatus,omitempty"`

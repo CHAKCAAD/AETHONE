@@ -22,7 +22,8 @@
 ///    working forever; a rebuilt engine emits the granular Phase B
 ///    transport classes (dnsError | networkUnavailable | timeout |
 ///    tlsError | sessionRejected | tokenExchange | invalidTokenResponse |
-///    serverRejection | unknown — fferr.Code on the Go side);
+///    serverRejection | guardianRegionUnavailable | unknown —
+///    fferr.Code on the Go side);
 ///  * `httpStatus` — OPTIONAL int, the REAL status code on HTTP-level
 ///    failures (absent/0 on transport-level ones);
 ///  * `retryable` — OPTIONAL bool, the engine's retry policy hint;
@@ -288,6 +289,10 @@ abstract final class FirefoxEngineFailure {
   static const tokenExchange = FirefoxTransportError.tokenExchange;
   static const invalidTokenResponse = FirefoxTransportError.invalidTokenResponse;
   static const serverRejection = FirefoxTransportError.serverRejection;
+
+  /// guardian-bootstrap Stage 1 — the Guardian-only 451 class.
+  static const guardianRegionUnavailable =
+      FirefoxTransportError.guardianRegionUnavailable;
   static const unknown = FirefoxTransportError.unknown;
 }
 

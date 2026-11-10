@@ -359,6 +359,7 @@ class AppStrings {
   String get firefoxErrTokenExchange => _v['firefoxErrTokenExchange']!;
   String get firefoxErrInvalidToken => _v['firefoxErrInvalidToken']!;
   String get firefoxErrServerRejected => _v['firefoxErrServerRejected']!;
+  String get firefoxErrGuardianRegion => _v['firefoxErrGuardianRegion']!;
 
   /// The localized text for a CLASSIFIED Firefox transport failure
   /// ([FirefoxErrors.classify] output). Unknown/unmapped classes fall
@@ -372,6 +373,8 @@ class AppStrings {
         FirefoxTransportError.tokenExchange => firefoxErrTokenExchange,
         FirefoxTransportError.invalidTokenResponse => firefoxErrInvalidToken,
         FirefoxTransportError.serverRejection => firefoxErrServerRejected,
+        FirefoxTransportError.guardianRegionUnavailable =>
+            firefoxErrGuardianRegion,
         _ => firefoxLoginFailed,
       };
 
@@ -617,6 +620,7 @@ class AppStrings {
       'firefoxErrTokenExchange': 'تبادل ورود با سرور حساب ناتمام ماند؛ دوباره تلاش کنید',
       'firefoxErrInvalidToken': 'پاسخ سرور حساب معتبر نبود؛ دوباره تلاش کنید',
       'firefoxErrServerRejected': 'سرور حساب درخواست را رد کرد',
+      'firefoxErrGuardianRegion': 'سرویس مجوز فایرفاکس در این منطقه در دسترس نیست',
       'settingsPillSub': 'انتخاب لوکیشن و ...',
       'settingsAdvancedStatus': 'وضعیت پیکربندی',
       'settingsRoutingArea': 'منطقهٔ مسیریابی',
@@ -951,6 +955,7 @@ class AppStrings {
       'firefoxErrTokenExchange': 'The sign-in exchange with the account server did not complete; try again',
       'firefoxErrInvalidToken': 'The account server response was invalid; try again',
       'firefoxErrServerRejected': 'The account server rejected the request',
+      'firefoxErrGuardianRegion': 'The Firefox VPN authorization service is not available in this region',
       'settingsPillSub': 'Location & more …',
       'settingsAdvancedStatus': 'Configuration status',
       'settingsRoutingArea': 'Routing region',
@@ -1283,6 +1288,7 @@ class AppStrings {
       'firefoxErrTokenExchange': 'Обмен входа с сервером аккаунтов не завершился; попробуйте снова',
       'firefoxErrInvalidToken': 'Ответ сервера аккаунтов был недействительным; попробуйте снова',
       'firefoxErrServerRejected': 'Сервер аккаунтов отклонил запрос',
+      'firefoxErrGuardianRegion': 'Сервис авторизации Firefox недоступен в этом регионе',
       'settingsPillSub': 'Локация и другое …',
       'settingsAdvancedStatus': 'Статус конфигурации',
       'settingsRoutingArea': 'Регион маршрутизации',
@@ -1613,6 +1619,7 @@ class AppStrings {
       'firefoxErrTokenExchange': '与账户服务器的登录交换未完成；请重试',
       'firefoxErrInvalidToken': '账户服务器响应无效；请重试',
       'firefoxErrServerRejected': '账户服务器拒绝了请求',
+      'firefoxErrGuardianRegion': 'Firefox VPN 授权服务在此地区不可用',
       'settingsPillSub': '位置等 …',
       'settingsAdvancedStatus': '配置状态',
       'settingsRoutingArea': '路由区域',
@@ -1949,6 +1956,7 @@ class AppStrings {
       'firefoxErrTokenExchange': 'Hasap serweri bilen giriş çalşygy tamamlanmady; ýene synanyş',
       'firefoxErrInvalidToken': 'Hasap serweriniň jogaby nädogrydy; ýene synanyş',
       'firefoxErrServerRejected': 'Hasap serweri sowaly ret etdi',
+      'firefoxErrGuardianRegion': 'Firefox VPN ygtyýar hyzmaty bu sebitde elýeterli däl',
       'settingsPillSub': 'Ýerleşýän ýer we başgalar …',
       'settingsAdvancedStatus': 'Konfigurasiýa ýagdaýy',
       'settingsRoutingArea': 'Marşrutizasiýa sebiti',

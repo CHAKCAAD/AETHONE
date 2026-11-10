@@ -14,7 +14,8 @@
 ///    to the diagnostics log through [redactLine] only;
 ///  * the granular classes distinguish DNS / network unavailable /
 ///    timeout / TLS / session rejected / token exchange / invalid token
-///    response / server rejection / unknown;
+///    response / server rejection / Guardian region-unavailable (the
+///    Guardian-only 451 class — guardian-bootstrap Stage 1) / unknown;
 ///  * HTTP-level failures carry the REAL status code ([FirefoxFailure.httpStatus]);
 ///  * [FirefoxFailure.retryable] is the UI policy (a "try again" hint);
 ///  * LEGACY engines (EngineVersion 1.1.0-phase2, the 2026-11-08 field
@@ -38,6 +39,14 @@ abstract final class FirefoxTransportError {
   static const tokenExchange = 'tokenExchange';
   static const invalidTokenResponse = 'invalidTokenResponse';
   static const serverRejection = 'serverRejection';
+
+  /// guardian-bootstrap Stage 1 — the GUARDIAN-only 451 class: the
+  /// VPN authorization service refused the request for the
+  /// requester's region. Only the Guardian control-plane walk emits
+  /// it (the engine-side ClassifyGuardian); FxA / Remote Settings /
+  /// any other endpoint keep the generic classes for every status,
+  /// 451 included.
+  static const guardianRegionUnavailable = 'guardianRegionUnavailable';
   static const unknown = 'unknown';
 }
 
@@ -137,6 +146,12 @@ abstract final class FirefoxErrors {
           httpStatus: httpStatus,
           retryable: retryable ?? (httpStatus >= 500),
         );
+      case FirefoxTransportError.guardianRegionUnavailable:
+        return FirefoxFailure(
+          code: failCode,
+          httpStatus: httpStatus,
+          retryable: retryable ?? false,
+        );
       default:
         // Unknown / empty / future codes: the generic class. The code
         // itself is not surfaced to the UI.
@@ -176,6 +191,10 @@ abstract final class FirefoxErrors {
       case FirefoxTransportError.serverRejection:
         return 'the account server rejected the request'
             '${f.httpStatus > 0 ? ' (HTTP ${f.httpStatus})' : ''}';
+      case FirefoxTransportError.guardianRegionUnavailable:
+        return 'the Firefox VPN authorization service is not available '
+            'in this region'
+            '${f.httpStatus > 0 ? ' (Guardian HTTP ${f.httpStatus})' : ''}';
       default:
         return 'the sign-in exchange failed for an unknown reason';
     }

@@ -26,6 +26,8 @@ import (
         "time"
 
         vpnclient "firefox-vpn-client"
+
+        "aethone/fxv/internal/fferr"
 )
 
 const (
@@ -66,7 +68,11 @@ type ControllerConfig struct {
         OpenTimeout   time.Duration
         OnPassRenewed func(pass *vpnclient.ProxyPassInfo)
         OnAuthRefresh func(pair vpnclient.TokenResponse)
-        OnRenewalFail func(redactedErr string, retryInMs int64)
+        // OnRenewalFail reports one failed renewal attempt: the
+        // value-free error text, the fferr class code of the SAME
+        // failure (renewalFailCode — the Guardian 451 region class
+        // included), and the retry delay.
+        OnRenewalFail func(redactedErr string, failCode string, retryInMs int64)
         Logf          func(format string, args ...any)
 }
 
@@ -282,9 +288,29 @@ func (c *Controller) runRenewalLoop(ctx context.Context) {
                                 c.markTerminal(TerminalRenewalTimeout)
                                 return
                         }
-                        c.cfg.OnRenewalFail(redactMessage(err), proxyPassRetryDelay.Milliseconds())
+                        c.cfg.OnRenewalFail(redactMessage(err), renewalFailCode(err), proxyPassRetryDelay.Milliseconds())
                 }
         }
+}
+
+// renewalFailCode maps one renewal failure to the fferr class the
+// initial-pass walk uses (classifyGuardian in cmd/libfirefoxvpn):
+// the typed GuardianHTTPError — the 451 region rule included — then
+// the token sentinel, then the transport classes. Empty when nothing
+// classifies (the host surfaces only the redacted text then).
+func renewalFailCode(err error) string {
+        var httpErr *vpnclient.GuardianHTTPError
+        if errors.As(err, &httpErr) {
+                return string(fferr.ClassifyGuardian(httpErr.StatusCode, httpErr.Body).Code)
+        }
+        if errors.Is(err, vpnclient.ErrTokenInvalid) {
+                return string(fferr.CodeSessionRejected)
+        }
+        class := fferr.ClassifyTransport(err)
+        if class.Code == fferr.CodeUnknown {
+                return ""
+        }
+        return string(class.Code)
 }
 
 // nextRenewalDelay sleeps until renewLead before pass expiry (or the
