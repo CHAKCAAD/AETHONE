@@ -13,8 +13,8 @@
 | Branch کاری | `feature/firefox-guardian-psiphon-bootstrap` |
 | Base Commit | `ce852ea` (= tip شاخه `performance/firefox-vpn-optimization`؛ شامل تمام اصلاحات Performance مراحل ۰–۸) |
 | آخرین Commit | (انتهای فایل — «گیت مراحل») |
-| مرحله فعلی | **Stage 6 — Renewal و Lifecycle کامل** |
-| مرحله تکمیل‌شده آخر | **Stage 5 — PASS (Routing RoundTripper + اتصال انتخابی Guardian؛ جزئیات بخش Stage 5)** |
+| مرحله فعلی | **Stage 7 — تست جامع و تفکیک Data Plane** |
+| مرحله تکمیل‌شده آخر | **Stage 6 — PASS (Renewal و Lifecycle کامل؛ جزئیات بخش Stage 6)** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### وضعیت Git در شروع مأموریت (تأییدشده)
@@ -380,6 +380,7 @@
 | Bootstrap Strategy Manager + حافظه مسیر (Stage 4) | `lib/connection/firefox/guardian_bootstrap_manager.dart` (GuardianBootstrapManager + پنج Seam: DirectAttempt/AuthorizationVerifier/NetworkContext/UserWalkGuard/proxyFactory + ماشین وضعیت) + `lib/connection/firefox/bootstrap_route_memory.dart` + `test/guardian_bootstrap_manager_test.dart` |
 | RoutingRoundTripper + allowlist + نقش probe (Stage 5 — Go) | `phase1/fxv/internal/cptransport/routing.go` (RoutingRoundTripper/GuardianAllowlist/NewProxyRoundTripper) + `cmd/libfirefoxvpn/guardianprobe.go` (--guardian-probe + installGuardianRouting) + فیلد `apiProxy` در `internal/engine/config.go` |
 | Seamهای واقعی + ادغام walk (Stage 5 — Dart) | `lib/connection/firefox/guardian_engine_seams.dart` (EngineGuardianProbe + DirectAttempt/Verifier + EvidenceForwarding + Integration.build) + `apiProxy`/`args` در firefox_protocol/firefox_engine + walk بازسازی‌شده در `platform_engine_adapter.dart` (_connectFirefox: Fast Path + escalation یک‌بار در 451) + `fastPathEligible` در مدیر |
+| سیاست Renewal/Lifecycle + نگاشت outcome (Stage 6) | `lib/connection/firefox/guardian_renewal_policy.dart` (GuardianRenewalSupervisor + kGuardianRenewalGrace + Facts) + `retryInMs` در firefox_protocol + caseهای quotaExhausted در firefox_engine/firefox_errors + wiring در `platform_engine_adapter.dart` (_ensureGuardianBootstrap/_connectFirefox/_hardCleanup) + تست‌های حلقه renewal در `phase1/fxv/internal/upstream/renewal_loop_test.go` |
 | طبقه‌بندی 451 Guardian (Go) | `phase1/fxv/internal/fferr/classify.go` (ClassifyGuardian) + `cmd/libfirefoxvpn/main.go` (classifyGuardian) + `internal/upstream/controller.go` (renewalFailCode) |
 | مدل خطای Dart + متنها | `lib/connection/firefox/firefox_errors.dart` + `lib/connection/firefox/firefox_protocol.dart` + `lib/l10n/app_strings.dart` (firefoxErrGuardianRegion) |
 
@@ -432,16 +433,70 @@
 
 ---
 
-## دستور دقیق ادامه کار (جلسه بعدی — Stage 6)
+## یافته‌ها و تغییرات Stage 6 (اجرای 2026-11-10)
 
-1. همین فایل را بخوان؛ HEAD باید commit مستقل Stage 5 باشد و working tree پاک (شاخه شامل کد Stage 2+3+4+5 و مستندات).
-2. **فقط Stage 6 را اجرا کن** — Renewal و Lifecycle کامل:
-   - بررسی از سورس pin: عمر واقعی Proxy Pass (از claims پاسخ — `pass.ExpiresAt()`)، زمان‌بندی renewal در `runRenewalLoop`/`renew` (کنترلر)، رفتار `OnRenewalFail` (+failCode از Stage 1) و `retryInMs`.
-   - سیاست Psiphon (§۶ مأموریت): بعد از Authorization موفق — آیا Renewal به Guardian نیاز خواهد داشت (بله: همان `GET /api/v1/fpn/token`؛ renewal از همان transport می‌گذرد → با apiProxy از مسیر bootstrap می‌رود — این حالا کار می‌کند)؛ **زمان توقف امن bootstrap** (مبنای تصمیم: اعتبار باقی‌مانده مجوز از پاسخ واقعی؛ هیچ زمان hardcode نشود)؛ توانایی فعال‌سازی مجدد Manager وقتی Renewal بعداً proxy بخواهد (manager پس از stop دوباره کار می‌کند — تست‌دار)؛ خاموشی Psiphon نباید renewal بعدی را بی‌دلیل بشکند.
-   - Lifecycle: Start/Stop/Dispose/Restart/Network change (`notifyNetworkContextChanged` موجود)/Cancellation/Timeout/Process crash/Renewal/Rotation/Resource cleanup — از سورس واقعی سناریوها را بساز و تست بنویس؛ `release()` مدیر مال این مرحله است.
-   - یکپارچه‌سازی با walk: رفتار پس از قطع (disconnect → _hardCleanup → manager.stop — الان پیاده است) و نگه‌داشتن تا انقضای مجوز؛ نقش `session.endpoint` در respawnها.
-   - قواعد ثابت: تغییر حدسی نکن؛ pinها دست‌نخورده؛ هیچ تست قبلی حذف/ضعیف نشود؛ commit مستقل؛ push به همین شاخه؛ به‌روزرسانی همین فایل؛ گزارش ۱۰-بندی؛ توقف.
-3. قانون توقف: بعد از Stage 6 متوقف شو؛ مرحله ۷ (تست جامع و تفکیک Data Plane) در اجرای بعدی.
+### ۱. قرارداد Renewal از سورس pin (شواهد قفل‌شده)
+
+- **عمر واقعی Proxy Pass**: claims پاسخ — `ProxyPassInfo.ExpiresAt()` = JWT `exp` (Unix) + تصحیح ساعت claim (`claimTimeOffset`؛ tolerance یک دقیقه، سقف آینده ۲ ساعت) — `firefox-vpn-client/guardian.go` L40-45. هیچ طول عمر hardcode وجود ندارد؛ موتور آن را در رویدادهای `passAcquired`/`renewed` به‌صورت `passExpiresAt` (RFC3339 UTC) ساطع می‌کند (`cmd/libfirefoxvpn/main.go`).
+- **زمان‌بندی renewal**: `runRenewalLoop` تا `expiresAt − proxyPassRenewLead(2min)` می‌خوابد، بعد `renew()` → همان `GET /api/v1/fpn/token` از طریق همان transport کنترل-پلن نصب‌شده (صندلی RoutingRoundTripper مرحله ۵) → یعنی **renewal موتوری که با apiProxy spawn شده، از مسیر bootstrap می‌گذرد** (اثبات اجرایی در §۵).
+- **Rotation**: تمدید موفق، توکن خام تازه را با `Session.UpdateToken` روی سشن زنده swap می‌کند (host توکن را نمی‌بیند) + `OnPassRenewed` → رویداد `renewed` با انقضای جدید.
+- **شکست renewal**: `OnRenewalFail(پیام redact‌شده، failCode طبقه‌بندی Stage-1 — 451 واقعی = `guardianRegionUnavailable`، retryInMs = `proxyPassRetryDelay` = ۳۰ثانیه) → رویداد `renewalFailed`؛ حلقه retry می‌کند و هرگز روی شکست retryable پارک نمی‌شود.
+- **Terminalها**: 429 → `quotaExhausted` + خروج ۲؛ انقضای عقب‌مانده بیش از `proxyPassRenewTimeout(2min)` → `failed`(`renewalTimeout`) + خروج ۳ (host باید reconnect کند). خطای OAuth در renew → همان-حساب `FxaRefreshToken` + retry (رویداد راز `authRefreshed` فقط به callback می‌رود).
+
+### ۲. شکاف‌های واقعی کشف‌شده و رفع‌شده
+
+- **`retryInMs` در Dart parse نمی‌شد** (فقط `loginRetry` آن را می‌شناخت) → به `FirefoxEngineEvent` اضافه شد (tolerant؛ ۰ وقتی نبود).
+- **رویداد `quotaExhausted` outcome را کامل نمی‌کرد**: موتور آن را به‌عنوان رویداد مستقل + خروج ۲ ساطع می‌کند (نه `failed` با failCode) → outcome از مسیر exit-code با `engineExited:2` resolve می‌شد و شاخه quota در walk (`o.failCode == quotaExhausted` — پیام «موتور دیگری انتخاب کن» مالک) **هرگز اجرا نمی‌شد**. حالا case اختصاصی در `firefox_engine.dart` outcome را با کلاس خودش کامل می‌کند (تست‌دار با spawn واقعی).
+- **کدهای `quotaExhausted`/`renewalTimeout` در classify به `unknown` می‌افتادند** → caseهای اختصاصی + diagnostic (quota: غیرقابل retry؛ renewalTimeout: retryable — walk تازه کل تصمیم را بازاجرا می‌کند).
+- **باگ واقعی escalation**: `late final outcome` در `_connectFirefox` در respawn مرحله ۵ (تلاش دوم همان walk) دوباره assign می‌شد → `LateInitializationError` و مرگ walk در میانه escalation. **اثبات‌شده با repro مستقل Dart**؛ fix: `late` غیر-final (همان semantics تنبل، بدون crash). هیچ تستی این مسیر adapter را نمی‌پوشاند (NOT TESTED ثبت‌شده Stage 5) — باگ تا Stage 6 بی‌سر‌وزن ماند.
+
+### ۳. سیاست Psiphon (§۶ مأموریت) — تصمیم‌ها و مبنای هر تصمیم
+
+- **آیا Renewal به Guardian نیاز دارد؟** بله — همان `GET /api/v1/fpn/token`؛ از همان transport می‌گذرد → با apiProxy از مسیر bootstrap (حالا کار می‌کند؛ Go-تست §۵ اثبات می‌کند درخواست renewal از transport نصب‌شده عبور می‌کند).
+- **زمان توقف امن bootstrap**: مبنای تصمیم = **اعتبار باقی‌مانده مجوز از پاسخ واقعی** (`passExpiresAt`). سیاست: سشنِ روی مسیر bootstrap → پیش‌فرض **نگه‌داشتن** (مسیر، مسیر renewal همین موتور است؛ release زودتر = شکست renewal جاری — «خاموشی Psiphon نباید renewal بعدی را بی‌دلیل بشکند»)؛ هر `renewed` پنجره را با انقضای جدید re-arm می‌کند (rotation حالت عادی است)؛ **release قطعی** = teardown سشن (`_hardCleanup` → `manager.stop()` — Stage 5) و **backstop انقضا** = `passExpiresAt + kGuardianRenewalGrace(2min)` (آینه‌ی `proxyPassRenewTimeout` موتور pin — ثابتِ قراردادی از سورس، نه زمان فرضی) که حتی با از دست رفتن teardown، bootstrap را بی‌دلیل زنده نگه نمی‌دارد («Psiphon بدون دلیل دائماً فعال باقی نماند»).
+- **فعال‌سازی مجدد**: بعد از release/stop، نمونه manager + singleflight + حافظه فایل می‌ماند → `ensureAuthorized()` بعدی مسیر را بازمی‌سازد (تست جدید: reactivation پس از release با rebuild واقعی proxy، نه reuse ساختگی). EvidenceForwarding برای فراخوانی‌های بدون شواهد (مثل reauthorization زمان renewal) به probe واقعی fallback می‌کند (تست جدید). **بدون کار پس‌زمینه خودخواسته** (§7.1): reconnect walk خودِ درخواست است.
+- **خاموشی Psiphon و renewal بعدی**: موتور مستقیم (بدون apiProxy) که renewal آن 451 می‌گیرد، retry می‌کند (۳۰ث) و خودش پارک می‌شود (خروج ۳) → walk بعدی کل تصمیم را بازاجرا می‌کند (fast path/escalation با apiProxy تازه). apiProxy در spawn ثابت است — سوئیچ درجا در موتور pin ممکن نیست و ساخت آن ممنوع؛ این محدودیت صادقانه مستند شد.
+- **Network Change**: `notifyNetworkContextChanged` مدیر موجود است و تست دارد؛ اما با SingleBucketContextProvider (محدودیت مستند Stage 4) ساختاراً no-op است و هیچ منبع connectivity مجازی در اپ وجود ندارد (§7.1 مجوز جدید ممنوع) → **caller واقعی وصل نشد** (کد مرده ممنوع)؛ رفتار واقعی تغییر شبکه = بازارزیابی هر walk (direct→451→fast path از نو).
+
+### ۴. معماری پیاده‌سازی‌شده — GuardianRenewalSupervisor (Dart)
+
+- **فایل جدید `lib/connection/firefox/guardian_renewal_policy.dart`**: سیاست renewal/lifecycle به‌صورت شیء صریح و تست‌پذیر؛ ورودی = رویدادهای واقعی موتور (`onEngineEvent` با فیلتر passAcquired/renewed/renewalFailed/quotaExhausted)، `attachSession(viaBootstrapProxy)`، `onEngineGone` (backstop مسلح می‌ماند — سقف teardown-from-hand-risen)، `onSessionTeardown` (قطعی — لغو timer)، `dispose` (بدون timer یتیم). خروجی = `onBootstrapExpired` (آداپتور: فقط manager آرام/authorized را release می‌کند — عمل in-flight مالک proxy است) + `GuardianRenewalFacts` (انقضا/quota/شمار شکست/آخرین failCode+retryInMs — بدون هیچ راز).
+- **قواعد**: timestamp غیرقابل‌parse (موتور legacy/خصوصه) → هیچ deadline فرضی مسلح نمی‌شود (تست‌دار)؛ انقضای گذشته (clock skew) → بلافاصله؛ سشن مستقیم → هرگز release نمی‌کند؛ quota → فقط ثبت (توقف با خود engine؛ teardown مال release است).
+- **Wiring آداپتور**: `_ensureGuardianBootstrap` ناظر را روی همان manager می‌سازد؛ `_connectFirefox` در حلقه spawn به‌ازای هر spawn: اشتراک رویدادها (جایگزین per-spawn؛ لغو در `_hardCleanup` — بدون listener یتیم) + attach + دنبال‌کردن outcome برای engine-gone؛ `_hardCleanup`: ابتدا لغو اشتراک + teardown ناظر، بعد `manager.stop()`.
+- **Lifecycle پوشش‌داده‌شده**: Start (attach)/Stop و Dispose (teardown + dispose)/Restart (walk جدید = teardown + attach تازه؛ + رفع باگ late final)/Network Change (بازارزیابی هر walk + API تست‌دار مدیر)/Cancellation (stop مدیر؛ Stage 4/5)/Timeout (probe/authorization budgets + backstop انقضا)/Process Crash (outcome → death watch → health fail → store reconnect → teardown؛ backstop سقف)/Renewal (کل قرارداد §۱)/Rotation (re-arm با انقضای جدید؛ Go-تست swap توکن روی سشن زنده)/Resource Cleanup (بدون process/listener/timer یتیم — تست‌دار).
+
+### ۵. فایلهای تغییرکرده (Stage 6)
+
+- **Go — جدید**: `internal/upstream/renewal_loop_test.go` (۴ تست: rotation از transport نصب‌شده + UpdateToken روی سشن زنده؛ failCode کلاس 451 + retryInMs=30000؛ quota terminal؛ renewalTimeout terminal — با double تراپی HTTP محلی + transport ضبط‌کننده + بازگرداندن uTLS pin در teardown تست).
+- **Dart — جدید**: `lib/connection/firefox/guardian_renewal_policy.dart`، `test/guardian_renewal_policy_test.dart` (۱۳ تست: backstop از انقضای خود pass؛ عدم release قبل از deadline؛ rotation re-arm؛ سشن مستقیم هرگز؛ engine-gone نگه‌می‌دارد؛ quota سقف می‌ماند؛ teardown قطعی لغو می‌کند؛ dispose بدون timer یتیم؛ ثبت failCode/retryInMs؛ timestamp خراب بدون crash/بدون arm فرضی؛ انقضای گذشته فوری؛ + ۳ تست spawn واقعی: نگاشت outcome quotaExhausted (exit 2)، failCode renewalTimeout (exit 3)، توالی کامل renewal از طریق spawn واقعی که ناظر را end-to-end تغذیه می‌کند).
+- **Dart — تغییر**: `firefox_protocol.dart` (+parse `retryInMs`)، `firefox_engine.dart` (+case outcome `quotaExhausted`)، `firefox_errors.dart` (+کلاس‌های `quotaExhausted`/`renewalTimeout` + diagnostics)، `platform_engine_adapter.dart` (+فیلدها/ساخت ناظر/wiring هر spawn/teardown؛ +رفع باگ `late final outcome`)، `test/guardian_bootstrap_manager_test.dart` (+۱: reactivation پس از release)، `test/guardian_engine_seams_test.dart` (+۱: fallback به probe واقعی برای renewal-time)، `test/firefox_errors_test.dart` (+۱: نگاشت کلاس‌های lifecycle).
+- **مستندات**: `docs/FIREFOX_VPN_ENGINE.md` (بخش «Renewal & lifecycle policy (Stage 6)» + به‌روزرسانی تست‌ها).
+- دست‌نخورده: pinها (firefox-vpn-client، Aether `d58f9d56`، psiphon fork)، هیچ کد production در Go تغییر نکرد (فقط تست؛ binary نیازی به rebuild ندارد)، CGO/A1، workflowها، Data Plane، مدیر/پراکسی/seamهای مراحل ۲-۵ (فقط مصرف شدند).
+
+### ۶. تستها و نتایج واقعی (Stage 6)
+
+- **Go**: `go vet ./...` → صفر. `go test ./...` → هر ۸ پکیج ok (بالای ۴ تست جدید upstream). `go test -race` روی upstream + cmd → ok. تست‌های کلیدی renewal: درخواست اولیه + renewal هر دو از transport نصب‌شده کنترل-پلن عبور کردند (ضبط ≥۲ hit؛ مسیر `GET /api/v1/fpn/token`)؛ توکن تازه روی سشن زنده swap شد (۱ UpdateToken)؛ شکست 451 → `guardianRegionUnavailable` + `retryInMs=30000` و حلقه زنده ماند؛ 429 → TerminalQuota بدون OnRenewalFail؛ انقضای ۵-دقیقه‌ای عقب‌مانده → TerminalRenewalTimeout بدون OnRenewalFail.
+- **Dart**: `flutter analyze` → صفر یافته. `flutter test` کل: **۴۰۱ پاس / ۸ skip قبلی / ۰ شکست** (۳۸۵→۴۰۱؛ +۱۶ تست جدید، هیچ تست قبلی حذف/ضعیف نشد). تست‌های کلیدی: نگاشت outcome quota از رویداد واقعی (exit 2 + کلاس خودش)؛ renewalTimeout از failed event (exit 3)؛ توالی کامل passAcquired→renewalFailed(retryInMs روی سیم)→renewed از یک spawn واقعی bash که ناظر را تغذیه کرد (facts + backstop مسلح با انقضای rotation؛ teardown لغو کرد)؛ سیاست‌های supervisor با تایمرهای واقعی.
+- **Dart standalone repro باگ late final**: `LateInitializationError: Local 'x' has already been initialized` — قبل از fix اثبات شد.
+
+### ۷. NOT TESTED (Stage 6)
+
+- چرخه واقعی renewal روی دستگاه از شبکه ایران (سناریو E مرحله ۸/۹) — عمر واقعی pass از Guardian واقعی و رفتار درجا.
+- Wiring سطح adapter در UI واقعی (تست widget/engine سطح adapter موجود نیست — همان NOT TESTED ثبت‌شده Stage 5؛ پوشش با تست‌های supervisor/engine-outcome/manager/seams).
+- رفتار پس‌زمینه Android (Background/Foreground): پوشش طراحی (stdin-به-بسته‌شدن = خاموشی engine؛ FFI درون-فرایندی = مرگ با پروسه اپ) اما سناریوی واقعی چرخه حیات Android تست نشد.
+- notifyNetworkContextChanged بدون منبع واقعی connectivity (تست واحد موجود؛ اتصال caller واقعی به Stage آینده/مالک واگذار شد).
+
+---
+
+## دستور دقیق ادامه کار (جلسه بعدی — Stage 7)
+
+1. همین فایل را بخوان؛ HEAD باید commit مستقل Stage 6 باشد و working tree پاک (شاخه شامل کد Stage 2+3+4+5+6 و مستندات).
+2. **فقط Stage 7 را اجرا کن** — تست جامع و تفکیک Data Plane (طبق «مرحله هفتم» مأموریت):
+   - Go Tests: Guardian 451 / FxA 451 / Remote Settings 451 / 401·403·429·5xx / Direct Transport / Psiphon Local Proxy / AETHER→PSIPHON / Allowlist / Redirect / DNS / TLS / Timeout / Retry / Renewal / Cancellation / Route Loop / جلوگیری از Token Leak — از موجود پوشش را رسمی کن (جدول پوشش test→مورد)، شکاف‌ها را با تست جدید ببند؛ هیچ تست قبلی حذف/ضعیف نشود.
+   - Dart/Flutter Tests: State Machine / Bootstrap Manager / Singleflight / Failure Mapping / Lifecycle / Network Change / Strategy Persistence / Fast Path از مسیر ذخیره معتبر / Discovery fallback پس از شکست Fast Path / TTL و cooldown / جداسازی مسیر per-Network-Context / ماندگاری حافظه پس از restart اپ / fallback خرابی حافظه بدون crash / زمان‌بندی Cold-Discovery در برابر Warm-FastPath / Renewal / Proxy Endpoint Management / نمایش وضعیت Bootstrap و Psiphon و Combination Mode و خطای Guardian و Psiphon (Flutter).
+   - **تفکیک Data Plane**: بررسی و مستندسازی صریح اینکه ترافیک داده کاربر فقط از تونل Firefox می‌گذرد و bootstrap فقط کنترل-پلن است (RoutingRoundTripper allowlist) — شواهد از تست‌های موجود + هر شکاف.
+   - قواعد ثابت: pinها دست‌نخورده؛ تغییر حدسی نکن؛ commit مستقل؛ push به همین شاخه؛ به‌روزرسانی همین فایل؛ گزارش ۱۰-بندی؛ توقف.
+3. قانون توقف: بعد از Stage 7 متوقف شو؛ مرحله ۸ (آزمون‌های سناریویی روی دستگاه/شبکه واقعی طبق مأموریت) در اجرای بعدی.
 
 ---
 
@@ -460,5 +515,6 @@
 | 4 — کد | (tip شاخه پس از همین commit) | feat(guardian): bootstrap strategy manager — fast path, discovery, route memory (stage 4) |
 | 4 — مستندات | (همان tip؛ کد و مستندات در یک commit مستقل این مرحله) | شامل همین بخش Stage 4 + به‌روزرسانی وضعیت/نقشه/دستور Stage 5 |
 | 5 — کد+مستندات | (tip شاخه پس از همین commit) | feat(guardian): routing roundtripper — guardian-only selective control plane (stage 5) — شامل بخش Stage 5 این فایل + به‌روزرسانی وضعیت/نقشه/دستور Stage 6 |
+| 6 — کد+مستندات | (tip شاخه پس از همین commit) | feat(guardian): renewal lifecycle — expiry-based bootstrap release policy, renewal event plumbing, quota outcome mapping (stage 6) — شامل بخش Stage 6 این فایل + به‌روزرسانی وضعیت/نقشه/دستور Stage 7 |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*

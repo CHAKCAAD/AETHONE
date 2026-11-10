@@ -112,6 +112,23 @@ void main() {
       expect(FirefoxErrors.classify('serverRejection').retryable, isFalse);
     });
 
+    test('GUARDIAN-BOOTSTRAP STAGE 6 — the renewal lifecycle codes map to ' 
+        'their own classes, never the unknown bucket', () {
+      // Quota (the renewal loop's 429 terminal): NOT retryable — the
+      // recovery is picking another engine, not a retry.
+      final quota = FirefoxErrors.classify(FirefoxTransportError.quotaExhausted);
+      expect(quota.code, FirefoxTransportError.quotaExhausted);
+      expect(quota.retryable, isFalse);
+      expect(FirefoxErrors.diagnostic(quota), contains('quota'));
+      // Renewal timeout (the engine parked, exit 3): retryable — a fresh
+      // walk re-runs the whole direct/bootstrap decision.
+      final renewal =
+          FirefoxErrors.classify(FirefoxTransportError.renewalTimeout);
+      expect(renewal.code, FirefoxTransportError.renewalTimeout);
+      expect(renewal.retryable, isTrue);
+      expect(FirefoxErrors.diagnostic(renewal), contains('renewed'));
+    });
+
     test('httpStatus passes through untouched (the REAL status code)', () {
       final f = FirefoxErrors.classify('sessionRejected', httpStatus: 401);
       expect(f.httpStatus, 401);

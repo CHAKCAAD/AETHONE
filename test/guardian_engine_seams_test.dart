@@ -247,6 +247,24 @@ void main() {
       expect(result.outcome, GuardianDirectOutcome.otherFailure);
       expect(result.errorCode, 'directUnavailable');
     });
+
+    test('GUARDIAN-BOOTSTRAP STAGE 6 — the renewal-time reauthorization '
+        'falls through to the REAL inner probe (a spawn with no prior '
+        'evidence)', () async {
+      // The renewal-time ensureAuthorized has no forwarded evidence (the
+      // walk's own 451 was consumed long ago) — the seam must run the
+      // REAL engine probe, and a healthy direct answer means NO
+      // bootstrap is started (mission §4-2: only a REAL 451 triggers).
+      final probe = await probeOf('ok');
+      final forwarding = EvidenceForwardingGuardianDirectAttempt(
+        inner: EngineGuardianDirectAttempt(probe: probe),
+      );
+      final result =
+          await forwarding.attempt(timeout: const Duration(seconds: 10));
+      expect(result.outcome, GuardianDirectOutcome.success,
+          reason: 'the real probe ran and Guardian answered');
+      expect(result.errorCode, isNull);
+    });
   });
 
   group('the full §5-4 flow with REAL spawns on both sides', () {

@@ -156,6 +156,49 @@ engine-side classifier (`docs/phaseb-engine-patch/`; type-based
 1.1.0 field names and codes remain valid forever; the raw Go chain
 stays in the engine's stderr log (redacted), never in the UI.
 
+### Renewal & lifecycle policy (guardian-bootstrap Stage 6)
+
+The pinned renewal contract, evidenced from the source
+(`internal/upstream/controller.go`, `firefox-vpn-client/guardian.go`):
+
+* **Pass lifetime**: the pass's own JWT `exp` claim, claim-time
+corrected (`ProxyPassInfo.ExpiresAt()`) — the host NEVER assumes a
+lifetime. `passAcquired` / `renewed` carry it as `passExpiresAt`
+(RFC3339 UTC).
+* **Renewal timing**: the loop sleeps until `exp − 2 min`
+(`proxyPassRenewLead`) and renews `GET /api/v1/fpn/token` through the
+SAME installed control-plane transport — with `apiProxy` set (Stage 5)
+the renewal traverses the bootstrap route; without it, direct.
+* **Rotation**: a successful renewal swaps the fresh raw token onto the
+LIVE session in-engine (`Session.UpdateToken`) — the host never sees
+the token — and adopts the new expiry (`renewed` + `passExpiresAt`).
+* **Failure**: one failed renewal emits `renewalFailed` (redacted
+message, the Stage-1 `failCode` class — a 451 surfaces as
+`guardianRegionUnavailable` — and `retryInMs` = the pinned 30 s
+`proxyPassRetryDelay`) and the loop retries; it never parks on a
+retryable failure.
+* **Terminals**: HTTP 429 → `quotaExhausted` + exit 2 (the account is
+done for the month); an expiry over-stayed by more than the 2-min
+`proxyPassRenewTimeout` budget → `failed` (`renewalTimeout`) + exit 3
+(the host must reconnect). Both surface with their OWN classes on the
+Dart side (Stage 6): the `quotaExhausted` EVENT completes the engine
+outcome with its class (a bare exit-code `engineExited:2` used to hide
+it), and both codes classify to their own failure classes instead of
+`unknown`.
+
+The host-side policy (`lib/connection/firefox/guardian_renewal_policy.dart`,
+`GuardianRenewalSupervisor`): while a session lives on a bootstrap
+route, the route IS the renewal path — the default is KEEP (releasing
+early would break the current renewal); every `renewed` re-arms the
+keep window from the new expiry; the definitive release is the session
+teardown (`_hardCleanup` → `manager.stop()`), with an expiry-derived
+backstop (`passExpiresAt` + the mirrored 2-min engine budget) bounding
+a missed teardown so the bootstrap can never outlive its reason. The
+supervisor never auto-rebuilds in the background (mission §7.1): the
+reconnect walk is the ask, and `ensureAuthorized()` reactivates the
+manager after any release/stop (the instance, the singleflight and the
+route memory survive).
+
 ## 4. Data plane (upstream session)
 
 One session at a time (`upstream.Controller`, single-session policy):
@@ -183,6 +226,9 @@ the sole gate to `Connected`.
 ## 5. How it is tested
 
 `fxv/cmd/libfirefoxvpn/main_test.go` (and `upstream_test.go`,
+`renewal_loop_test.go` — the Stage-6 renewal-loop contract: rotation
+through the installed transport, the 451 class + retry delay on
+`OnRenewalFail`, the quota and renewal-timeout terminals —,
 `socks_test.go`, `discovery_test.go`, `engine/config_test.go`) — the
 lifecycle tests spawn the REAL engine binary and speak the REAL wire
 contract. Honesty rules baked into the tests: RemoteSettings discovery

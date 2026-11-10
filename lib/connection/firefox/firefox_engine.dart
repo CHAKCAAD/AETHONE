@@ -205,6 +205,25 @@ class FirefoxVpnEngine {
               httpStatus: event.httpStatus,
               retryable: event.retryable,
             ));
+          case FirefoxEngineEvents.quotaExhausted:
+            // GUARDIAN-BOOTSTRAP STAGE 6 (renewal & lifecycle): the
+            // engine reports quota exhaustion as its OWN terminal event
+            // (initial-pass walk AND the renewal loop's park path —
+            // ExitQuota), never as a `failed` event. Without this case
+            // the outcome fell through to the bare exit-code mapping
+            // (`engineExited:2`) and the walk's quota branch never
+            // fired; now the owner's «pick another engine» surface is
+            // reachable from BOTH death points.
+            _finish(FirefoxEngineOutcome(
+              state: FirefoxEngineState.failed,
+              exitCode: event.exitCode != 0
+                  ? event.exitCode
+                  : FirefoxEngineExitCode.quota,
+              failCode: FirefoxEngineFailure.quotaExhausted,
+              message: event.message.isNotEmpty
+                  ? event.message
+                  : 'the account\'s monthly proxy quota is exhausted',
+            ));
           default:
             break;
         }

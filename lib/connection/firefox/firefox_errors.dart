@@ -47,6 +47,16 @@ abstract final class FirefoxTransportError {
   /// any other endpoint keep the generic classes for every status,
   /// 451 included.
   static const guardianRegionUnavailable = 'guardianRegionUnavailable';
+
+  /// guardian-bootstrap Stage 6 — the renewal loop's two terminal
+  /// outcomes (mirrors engine.ErrRenewalTimeout and the quota event's
+  /// own class; the engine's exit codes 3 / 2). They are engine
+  /// LIFECYCLE codes, not transport classes: quota means "this
+  /// account is done for the month" (never retryable), renewal
+  /// timeout means "the pass died unrenewed — reconnect" (the walk
+  /// re-runs the whole decision, bootstrap included).
+  static const quotaExhausted = 'quotaExhausted';
+  static const renewalTimeout = 'renewalTimeout';
   static const unknown = 'unknown';
 }
 
@@ -152,6 +162,22 @@ abstract final class FirefoxErrors {
           httpStatus: httpStatus,
           retryable: retryable ?? false,
         );
+      case FirefoxTransportError.quotaExhausted:
+        // Stage 6: the renewal loop's quota terminal — picking another
+        // engine is the recovery, not a retry.
+        return FirefoxFailure(
+          code: failCode,
+          httpStatus: httpStatus,
+          retryable: retryable ?? false,
+        );
+      case FirefoxTransportError.renewalTimeout:
+        // Stage 6: the pass expired unrenewed — the honest recovery is a
+        // fresh walk (which re-runs the direct/bootstrap decision).
+        return FirefoxFailure(
+          code: failCode,
+          httpStatus: httpStatus,
+          retryable: retryable ?? true,
+        );
       default:
         // Unknown / empty / future codes: the generic class. The code
         // itself is not surfaced to the UI.
@@ -195,6 +221,12 @@ abstract final class FirefoxErrors {
         return 'the Firefox VPN authorization service is not available '
             'in this region'
             '${f.httpStatus > 0 ? ' (Guardian HTTP ${f.httpStatus})' : ''}';
+      case FirefoxTransportError.quotaExhausted:
+        return 'the account\'s monthly proxy quota is exhausted — pick '
+            'another communication engine';
+      case FirefoxTransportError.renewalTimeout:
+        return 'the connection\'s authorization could not be renewed in '
+            'time — reconnecting re-runs the whole decision';
       default:
         return 'the sign-in exchange failed for an unknown reason';
     }

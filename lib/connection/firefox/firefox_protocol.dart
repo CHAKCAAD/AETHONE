@@ -164,6 +164,11 @@ class FirefoxEngineEvent {
         line = raw['line'] as String? ?? '',
         loginMode = raw['loginMode'] as String? ?? '',
         attempt = (raw['attempt'] as num?)?.toInt() ?? 0,
+        // GUARDIAN-BOOTSTRAP STAGE 6: the renewal-failed event's retry
+        // delay (the pinned engine's proxyPassRetryDelay, 30 s) — the
+        // host's renewal policy reads it; 0 when absent (legacy engines
+        // or non-renewal events).
+        retryInMs = _tolerantInt(raw['retryInMs']),
         expiresIn = (raw['expiresIn'] as num?)?.toInt() ?? 0,
         obtainedAt = DateTime.tryParse(raw['obtainedAt'] as String? ?? ''),
         // PHASE B (Part 2): the optional failed-event extras — tolerant
@@ -207,6 +212,10 @@ class FirefoxEngineEvent {
   final String line;
   final String loginMode;
   final int attempt;
+
+  /// renewalFailed: the engine's own retry cadence in milliseconds
+  /// (0 when the engine did not send one).
+  final int retryInMs;
 
   /// loginCompleted / authRefreshed: the pair's lifetime facts (never
   /// secret; the tokens themselves live only in the private fields).

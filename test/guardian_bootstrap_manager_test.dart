@@ -737,6 +737,46 @@ void main() {
       await manager.dispose();
     });
 
+    test('GUARDIAN-BOOTSTRAP STAGE 6 — reactivation after release(): a '
+        'renewal-time ensureAuthorized() rebuilds the route (the '
+        'mission §6 reactivation capability)', () async {
+      final harness = _Harness();
+      // 451 evidence for the FIRST walk, then 451 again for the
+      // renewal-time reauthorization (a released bootstrap means the
+      // next direct attempt re-evaluates from scratch).
+      final direct = _FakeDirect([
+        const GuardianDirectResult(
+            outcome: GuardianDirectOutcome.regionUnavailable),
+        const GuardianDirectResult(
+            outcome: GuardianDirectOutcome.regionUnavailable),
+      ]);
+      final manager = managerOf(
+        direct: direct,
+        verifier: _FakeVerifier(ok: true),
+        harness: harness,
+      );
+      final first = await manager.ensureAuthorized();
+      expect(first.routeKind, GuardianBootstrapRouteKind.psiphonOnly);
+      final firstProxyCount = harness.factoryCalls;
+      // The Stage-6 release (the expiry backstop's callback).
+      await manager.release();
+      expect(manager.state, GuardianBootstrapManagerState.stopped);
+
+      // The reactivation: a LATER ensureAuthorized (the reconnect walk
+      // after the engine parked, or a renewal that needs the route
+      // again) must work against the SAME instance — a fresh proxy is
+      // built, re-probed and re-verified (never a fake reuse).
+      final second = await manager.ensureAuthorized();
+      expect(second.routeKind, GuardianBootstrapRouteKind.psiphonOnly);
+      expect(manager.state, GuardianBootstrapManagerState.authorized);
+      expect(harness.factoryCalls, greaterThan(firstProxyCount),
+          reason: 'the route was REBUILT, not blindly reused');
+      expect(harness.cancelledIds.length, lessThan(harness.factoryCalls),
+          reason: 'the new proxy is live, not immediately torn down');
+      expect(second.endpoint, isNotNull);
+      await manager.dispose();
+    });
+
     test('an active user aether walk blocks bootstrap starts (walkActive)',
         () async {
       final harness = _Harness();

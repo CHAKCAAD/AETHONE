@@ -78,6 +78,7 @@ import 'firefox/firefox_protocol.dart';
 import 'firefox/firefox_session_store.dart';
 import 'firefox/guardian_bootstrap_manager.dart';
 import 'firefox/guardian_engine_seams.dart';
+import 'firefox/guardian_renewal_policy.dart';
 import 'smart_scorecard.dart';
 import 'tunnel_probe.dart';
 import 'transport_modes.dart';
@@ -2174,6 +2175,18 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// listener/process); the file-backed route memory survives both.
   GuardianBootstrapEngineIntegration? _guardianBootstrap;
 
+  /// GUARDIAN-BOOTSTRAP STAGE 6 — the renewal & lifecycle supervisor
+  /// (guardian_renewal_policy.dart): tracks the pass's REAL expiry from
+  /// the engine's own events, keeps the bootstrap while a proxied
+  /// session's renewal needs it, and releases it at the
+  /// expiry-derived backstop (the missed-teardown bound). Built with
+  /// the integration; the timer never outlives the teardown.
+  GuardianRenewalSupervisor? _guardianRenewal;
+
+  /// The winning spawn's renewal-event subscription (replaced per
+  /// spawn, cancelled in _hardCleanup — no orphan listener).
+  StreamSubscription<FirefoxEngineEvent>? _firefoxRenewalSub;
+
   /// True while a USER aether-family walk or session is active (the
   /// in-process core's process environment and WARP identity file are
   /// shared with the bootstrap's chain mode — stages 2/3's documented
@@ -2196,7 +2209,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     var integration = _guardianBootstrap;
     if (integration != null) return integration;
     final vault = await _firefoxVault();
-    integration = GuardianBootstrapEngineIntegration.build(
+    final built = GuardianBootstrapEngineIntegration.build(
       filesDir: paths.filesDir,
       nativeLibraryDir: paths.nativeLibraryDir,
       authProvider: () async {
@@ -2210,7 +2223,22 @@ class PlatformEngineAdapter implements EngineAdapter {
       onAuthRefreshed: (refreshed) => unawaited(vault.save(refreshed)),
       onLog: _debugLog,
     );
+    integration = built;
     _guardianBootstrap = integration;
+    // GUARDIAN-BOOTSTRAP STAGE 6: the renewal supervisor over the SAME
+    // manager. The backstop releases only a QUIESCENT authorized
+    // bootstrap — an in-flight operation (a reconnect walk rebuilding
+    // the route) owns the proxy, and its own walk re-arms the backstop
+    // from its own real events.
+    _guardianRenewal = GuardianRenewalSupervisor(
+      onBootstrapExpired: () async {
+        final manager = built.manager;
+        if (manager.state == GuardianBootstrapManagerState.authorized) {
+          await manager.release();
+        }
+      },
+      onLog: _debugLog,
+    );
     return integration;
   }
 
@@ -2515,7 +2543,11 @@ class PlatformEngineAdapter implements EngineAdapter {
     FirefoxVpnEngine engine;
     // The WINNING spawn's outcome future (the post-walk probe and the
     // connected-state death watch below keep following it).
-    late final Future<FirefoxEngineOutcome> outcome;
+    // GUARDIAN-BOOTSTRAP STAGE 6 fix: NOT `late final` — the §5-4
+    // escalation respawn ASSIGNS IT A SECOND TIME (attempt 1), which
+    // threw LateInitializationError and killed the walk mid-escalation;
+    // a re-assignable late local keeps the same lazy semantics.
+    late Future<FirefoxEngineOutcome> outcome;
     for (var attempt = 0;; attempt++) {
       final currentEngine = FirefoxVpnEngine(
         binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
@@ -2550,6 +2582,21 @@ class PlatformEngineAdapter implements EngineAdapter {
           _debugLog('firefox engine died during start: ${o.failCode}');
         }
       }));
+
+      // GUARDIAN-BOOTSTRAP STAGE 6 — renewal & lifecycle supervision:
+      // attach per spawn (the escalation respawn re-attaches on the
+      // route), forward the engine's REAL renewal events (passAcquired /
+      // renewed / renewalFailed / quotaExhausted — the pass's own expiry
+      // drives the release policy), and follow the outcome so engine-gone
+      // is observed. The subscription is replaced per spawn and cancelled
+      // in _hardCleanup — no orphan listener, no orphan timer.
+      await _firefoxRenewalSub?.cancel();
+      _firefoxRenewalSub = currentEngine.events.listen(
+        (event) => _guardianRenewal?.onEngineEvent(event),
+      );
+      _guardianRenewal?.attachSession(
+          viaBootstrapProxy: apiProxy.isNotEmpty);
+      unawaited(outcome.then((_) => _guardianRenewal?.onEngineGone()));
 
       // Wait for the engine's own socksReady event (the listener is
       // REALLY bound — process spawn alone proves nothing).
@@ -2745,7 +2792,17 @@ class PlatformEngineAdapter implements EngineAdapter {
     // manager INSTANCE survives — singleflight — and the file-backed
     // route memory with it; a later walk rebuilds what it needs. While
     // CONNECTED the bootstrap is intentionally left alive (renewal may
-    // need the route — mission §5-6; the release policy is Stage 6's).
+    // need the route — mission §5-6; the Stage-6 release policy keeps it
+    // until the pass's own expiry, backstopped by the supervisor).
+    //
+    // GUARDIAN-BOOTSTRAP STAGE 6: the renewal supervisor is torn down
+    // FIRST (its expiry backstop must never fire against a bootstrap
+    // this very teardown is stopping), and the spawn's event
+    // subscription is cancelled with the engine it followed — no
+    // orphan listener, no orphan timer.
+    await _firefoxRenewalSub?.cancel();
+    _firefoxRenewalSub = null;
+    _guardianRenewal?.onSessionTeardown();
     final guardianBootstrap = _guardianBootstrap;
     if (guardianBootstrap != null) {
       try {
