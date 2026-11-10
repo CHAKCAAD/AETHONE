@@ -1,9 +1,10 @@
-/// STAGE 2 of the Guardian bootstrap mission
+/// STAGES 2+3 of the Guardian bootstrap mission
 /// (docs/performance/FIREFOX_GUARDIAN_PSIPHON_BOOTSTRAP_PROGRESS.md):
-/// a STANDALONE Psiphon local proxy for the Firefox Guardian control
-/// plane — started through the SAME in-process Aether core FFI
-/// (`aether_core_start`) the connect walk uses, in its `--psiphon-only`
-/// mode, with NO VpnService, NO TUN and NO route changes.
+/// a STANDALONE Psiphon local proxy (stage 2) and the EXISTING
+/// AETHER → PSIPHON combination launched for bootstrap (stage 3) — both
+/// for the Firefox Guardian control plane, started through the SAME
+/// in-process Aether core FFI (`aether_core_start`) the connect walk
+/// uses, with NO VpnService, NO TUN and NO route changes.
 ///
 /// What this stage deliberately does NOT do (locked scope):
 ///  * it never sends a Guardian request (Stage 5);
@@ -15,7 +16,9 @@
 ///    `package:flutter/services.dart` nor any channel: there is no
 ///    MethodChannel, no `startVpn`, no `startCoreHold` in it (asserted by
 ///    the source-contract test in test/psiphon_bootstrap_test.dart);
-///  * it never builds the AETHER→PSIPHON combination (Stage 3).
+///  * the AETHER→PSIPHON combination is NOT reimplemented here: the
+///    chain is the pinned core's own `--psiphon` mode (see the STAGE 3
+///    section below) — this file only launches and manages it.
 ///
 /// How the proxy port is chosen (the mission's «no log parsing» rule):
 ///  * the pinned core DOES accept `--bind 127.0.0.1:0` (psiphon.rs
@@ -58,7 +61,56 @@
 /// not spawn multiple Psiphons»), stop/cancel/free mirror the connect
 /// walk's own core-teardown sequence, and the psiphon child cannot be
 /// orphaned — the pinned core spawns it `kill_on_drop(true)` and the
-/// FFI job cancel drops the `run_only` future, dropping the child.
+/// FFI job cancel drops the `run_only`/`run_chain` future, dropping
+/// the child.
+///
+/// STAGE 3 — the AETHER → PSIPHON chain mode
+/// ([PsiphonBootstrapMode.aetherPsiphonChain]). The mission is explicit
+/// («حالت‌های ترکیبی از قبل وجود دارن»): the combination ALREADY EXISTS
+/// in the project — nothing about the chain itself is reimplemented
+/// here. What this stage adds is a SECOND launch recipe for the SAME
+/// in-process FFI core that starts the project's own `--psiphon` chain
+/// mode on DEDICATED EPHEMERAL ports, plus its readiness/lifecycle
+/// wiring:
+///
+///  * the pinned core's chain (psiphon.rs `run_chain`, L940-968): it
+///    holds the `--psiphon-bind` listener from its start, waits for the
+///    WARP tunnel to answer on the `--bind` listener
+///    (`wait_for_proxy(through)`), then spawns psiphon with
+///    `UpstreamProxyURL = socks5://<--bind>` and relays the egress
+///    listener to psiphon's system-picked internal port. AETHONE dials
+///    ONLY the egress; the probe, health ticker and endpoint all target
+///    it — the WARP `--bind` port is never dialed by AETHONE.
+///  * ports: TWO Dart-pre-bound ephemeral loopback ports (the stage-2
+///    no-log-parsing rule applies twice — the FFI exposes no local-addr
+///    query), always DISTINCT from each other and never 1819/1820/1821/
+///    1822. Distinctness is loop-prevention leg one: the egress and the
+///    WARP upstream can never be the same socket.
+///  * loop prevention, the rest: the chain never passes `--upstream`
+///    (only the reverse modes use one); the full `AETHER_*` wipe before
+///    every start kills any leftover `AETHER_UPSTREAM` /
+///    `AETHER_PSIPHON_BIND` a previous session could have left to bend
+///    the chain back on itself; and the pinned core hardcodes psiphon's
+///    upstream to exactly the `--bind` address — three distinct
+///    addresses (bind, psiphon-internal, psiphon-bind), no cycle.
+///    `AETHER → PSIPHON → AETHER` is impossible by construction.
+///  * readiness: the SAME multi-witness probe, dialed at the egress. A
+///    completed SOCKS5 greeting + domain CONNECT + verified TLS round
+///    trip through the egress relay transitively proves the whole chain
+///    is up: the core only starts relaying after `wait_for_proxy`
+///    answered (WARP up) AND psiphon reported `ListeningSocksProxyPort`
+///    with `Tunnels > 0` through that WARP tunnel.
+///  * WARP identity: `--config` defaults to the connect walk's own
+///    `$filesDir/aether/warp.toml` (identity reuse — the core never
+///    re-registers an identity file that is already there), and the
+///    psiphon data dir stays the DEDICATED bootstrap dir of stage 2.
+///    Stage-4 input, unchanged from stage 2: a bootstrap and a USER
+///    connect walk must not run simultaneously (shared process env +
+///    shared identity file) — the strategy manager owns that exclusion.
+///  * budget: the chain default is 330 s — the walk's own two
+///    sequential phase budgets summed (WARP listener 120 s + psiphon
+///    family 210 s). The core stays the authority: its own errors
+///    surface through `coreExited` long before a Dart-side `notReady`.
 library;
 
 import 'dart:async';
@@ -66,6 +118,7 @@ import 'dart:io';
 
 import '../aether_ffi.dart';
 import '../tunnel_probe.dart';
+import '../../core/app_assets.dart';
 // Environment hygiene: the in-process core reads the PROCESS env, so a
 // previous aether session's leftovers (AETHER_UPSTREAM, AETHER_PSIPHON_
 // BIND, …) must be wiped before every bootstrap start — the same
@@ -79,6 +132,22 @@ import '../aether_env.dart' as aether_env;
 /// Linux/Android, so the guard below is a belt-and-braces contract, not
 /// the actual defense.
 const Set<int> kPinnedAethonePorts = <int>{1819, 1820, 1821, 1822};
+
+/// Which of the mission's bootstrap routes this manager launches. Both
+/// are the SAME in-process FFI core (`aether_core_start`); the modes are
+/// the pinned core's own — `--psiphon-only` (stage 2) and the existing
+/// `--psiphon` chain over the WARP `--bind` leg (stage 3). The mode is
+/// fixed at construction: stage 4's strategy manager constructs one
+/// manager per route decision and owns the ordering between them.
+enum PsiphonBootstrapMode {
+  /// Stage 2 — `--psiphon-only`: psiphon alone, no tunnel underneath.
+  psiphonOnly,
+
+  /// Stage 3 — the project's EXISTING `AETHER → PSIPHON` combination
+  /// (`--psiphon`): the WARP tunnel comes up on `--bind` first, psiphon
+  /// is dialed through it, and the usable egress is `--psiphon-bind`.
+  aetherPsiphonChain,
+}
 
 /// Lifecycle states of the standalone bootstrap proxy. Stage 4's
 /// Guardian Bootstrap Manager maps these onto its own state machine;
@@ -281,7 +350,8 @@ class SocksTlsReadyProbe implements PsiphonReadyProbe {
   }
 }
 
-/// The standalone Psiphon local proxy manager (Stage 2 deliverable).
+/// The standalone-or-chain Psiphon bootstrap proxy manager (stage 2+3
+/// deliverable).
 ///
 /// One instance owns at most ONE Aether core job. Construction is cheap;
 /// [start] is single-flight (concurrent callers share one future), and
@@ -291,10 +361,14 @@ class PsiphonBootstrapProxy {
   PsiphonBootstrapProxy({
     required this.filesDir,
     required this.nativeLibraryDir,
+    this.mode = PsiphonBootstrapMode.psiphonOnly,
+    this.warpConfigPath,
+    this.warpProtocol = ProtocolId.wireguard,
+    this.scanProfile = 'turbo',
     this._psiphonBinPath,
     this._coreFactory,
     PsiphonReadyProbe? probe,
-    this.readyBudget = const Duration(seconds: 210),
+    this.readyBudget,
     this.probeTimeout = const Duration(seconds: 15),
     this.probeRetryInterval = const Duration(seconds: 2),
     this.healthInterval = const Duration(seconds: 15),
@@ -312,6 +386,32 @@ class PsiphonBootstrapProxy {
   /// packaged `libpsiphon.so` and `libaether.so` live.
   final String nativeLibraryDir;
 
+  /// Which existing core mode this manager launches (stage 2 standalone
+  /// or stage 3 chain). Fixed at construction; see the enum.
+  final PsiphonBootstrapMode mode;
+
+  /// Chain mode only — the WARP identity/config file the core reads
+  /// (`--config`). Default: the connect walk's own
+  /// `$filesDir/aether/warp.toml` (identity reuse; the core never
+  /// re-registers an identity that is already there). Ignored in
+  /// [PsiphonBootstrapMode.psiphonOnly] (only mode does no WARP work).
+  final String? warpConfigPath;
+
+  /// Chain mode only — the WARP leg protocol tile
+  /// ([ProtocolId.wireguard] is the app's cold default, per the v4.19
+  /// decree). Mapped exactly like the connect walk's leg for a
+  /// `psiphonChain` overlay (equivalence-tested against
+  /// `AetherArguments.protocolArgs`). Ignored in standalone mode.
+  final ProtocolId warpProtocol;
+
+  /// Chain mode only — the endpoint-scan profile handed to `--scan`
+  /// (one of the five pinned profiles; `turbo` is the app's own
+  /// default, the fastest first hit — the right shape for a bootstrap,
+  /// and `--quick-reconnect` reuses the cached verified gateway when
+  /// one exists, which is the mission's warm-path spirit at the core's
+  /// own level). Validated at build time.
+  final String scanProfile;
+
   /// Explicit psiphon binary path override (tests / exotic layouts).
   /// Default: `$nativeLibraryDir/libpsiphon.so` (the jniLibs name the
   /// installer extracts with the exec bit — psiphon.rs BINARY_NAMES).
@@ -324,13 +424,23 @@ class PsiphonBootstrapProxy {
   /// The readiness probe (production: [SocksTlsReadyProbe]).
   final PsiphonReadyProbe _probe;
 
-  /// Whole-of-start budget (core job spawn → full probe). Mirrors the
-  /// connect walk's psiphon family budget (readyBudget(psiphonOnly) =
-  /// 210 s) and deliberately exceeds the pinned core's OWN psiphon
-  /// ready timeout (AETHER_PSIPHON_READY_SECS, default 180 s) so the
-  /// core's own «psiphon did not come up in time» error surfaces first
-  /// — the core is the authority, exactly as in the connect walk.
-  final Duration readyBudget;
+  /// Whole-of-start budget override (core job spawn → full probe);
+  /// null = the mode's own default. The standalone default mirrors the
+  /// connect walk's psiphon family budget (210 s, deliberately above
+  /// the pinned core's OWN `AETHER_PSIPHON_READY_SECS` default of 180 s
+  /// so the core's «psiphon did not come up in time» surfaces first).
+  /// The chain default is 330 s — the walk's two sequential phase
+  /// budgets summed (WARP listener 120 s + psiphon family 210 s). The
+  /// core stays the authority in both modes: its own errors surface
+  /// through `coreExited` long before a Dart-side `notReady`.
+  final Duration? readyBudget;
+
+  /// The mode-aware effective start budget (see [readyBudget]).
+  Duration get effectiveReadyBudget =>
+      readyBudget ??
+      (mode == PsiphonBootstrapMode.aetherPsiphonChain
+          ? const Duration(seconds: 330)
+          : const Duration(seconds: 210));
 
   /// Per-attempt probe timeout. A bound-but-not-yet-relaying listener
   /// (the core holds `--bind` from its start; the relay to the psiphon
@@ -369,6 +479,11 @@ class PsiphonBootstrapProxy {
   AetherCoreApi? _core;
   int? _jobId;
   int? _port;
+
+  /// Chain mode only: the WARP-leg `--bind` port of the running job
+  /// (never dialed by AETHONE; tracked only so stop() can wait for the
+  /// listener to come free for the NEXT start). Null in standalone.
+  int? _warpPort;
   Timer? _healthTicker;
   Future<PsiphonProxyEndpoint>? _starting;
   bool _stopRequested = false;
@@ -438,6 +553,105 @@ class PsiphonBootstrapProxy {
         '--psiphon-dir', '$filesDir/aether/psiphon-bootstrap',
       ];
 
+  /// Builds the pinned core's CLI for the EXISTING `AETHER → PSIPHON`
+  /// combination (stage 3) — the same flag family the connect walk's
+  /// `psiphonChain` mode passes (AetherArguments.build + cli.rs), on
+  /// DEDICATED ephemeral ports instead of the walk's fixed 1819/1821:
+  ///  * `--bind 127.0.0.1:<bindPort>` — the WARP-leg socks listener the
+  ///    core serves once the tunnel is up; in the chain it is ONLY the
+  ///    upstream psiphon dials through (run_chain's `through`), never
+  ///    dialed by AETHONE itself;
+  ///  * `--psiphon-bind 127.0.0.1:<psiphonBindPort>` — the chain egress
+  ///    listener, held from the core's start and relayed to psiphon's
+  ///    internal listener once the whole chain is up. THE usable proxy
+  ///    surface (the endpoint this manager exposes);
+  ///  * `--config <warp.toml>` — the WARP identity/config, defaulting to
+  ///    the walk's own file (identity reuse; the core never re-registers
+  ///    an identity that is already there);
+  ///  * `--scan <profile>` + `--quick-reconnect` — the walk's own two
+  ///    determinism pins for the WARP leg: the scan profile is fixed
+  ///    (never the interactive «Choose [1-5]»), and a cached VERIFIED
+  ///    gateway is reused without rescanning (non-TTY stdin already
+  ///    defaults to yes — this pins it explicitly);
+  ///  * `--protocol <leg>` — the WARP leg, mapped exactly like the walk's
+  ///    (see [warpProtocolArgs]);
+  ///  * `--psiphon` — THE chain flag itself (cli.rs: plain `--psiphon` =
+  ///    carry psiphon inside the tunnel; AETHER_PSIPHON=chain in the
+  ///    core's own mode() test spellings «1/on/chain/yes»);
+  ///  * `--psiphon-bin` / `--psiphon-dir` — the packaged binary and the
+  ///    SAME dedicated stable bootstrap data dir as stage 2.
+  ///
+  /// Deliberately absent (each pin-locked):
+  ///  * `--upstream` — only the reverse modes use one; run_chain sets
+  ///    psiphon's upstream itself, to exactly the `--bind` address.
+  ///    Passing one could only bend the chain back on itself;
+  ///  * `--psiphon-http` — one SOCKS5 egress is the whole bootstrap
+  ///    surface;
+  ///  * `--psiphon-region` / `--psiphon-mode` — adaptive egress, no
+  ///    manual pin (the mission's rule);
+  ///  * `--exit-loc` — the WARP leg's exit country is not pinned either;
+  ///  * `-4`/`-6`/`--dual` — no IP-version pin; the core picks.
+  static List<String> buildChainArgs({
+    required int bindPort,
+    required int psiphonBindPort,
+    required String filesDir,
+    required String nativeLibraryDir,
+    String? psiphonBinPath,
+    String? warpConfigPath,
+    ProtocolId warpProtocol = ProtocolId.wireguard,
+    String scanProfile = 'turbo',
+  }) {
+    const pinnedProfiles = {
+      'turbo',
+      'balanced',
+      'thorough',
+      'verified',
+      'ironclad',
+    };
+    if (!pinnedProfiles.contains(scanProfile)) {
+      throw ArgumentError.value(
+        scanProfile,
+        'scanProfile',
+        'must be one of the five pinned profiles (CLI_REFERENCE #28-33)',
+      );
+    }
+    return [
+      '--bind', '127.0.0.1:$bindPort',
+      '--config', warpConfigPath ?? '$filesDir/aether/warp.toml',
+      '--log-level', 'info',
+      '--scan', scanProfile,
+      '--quick-reconnect',
+      ...warpProtocolArgs(warpProtocol),
+      '--psiphon',
+      '--psiphon-bind', '127.0.0.1:$psiphonBindPort',
+      '--psiphon-bin',
+      psiphonBinPath ?? '$nativeLibraryDir/libpsiphon.so',
+      '--psiphon-dir', '$filesDir/aether/psiphon-bootstrap',
+    ];
+  }
+
+  /// The WARP-leg `--protocol` pair(s) for the chain, mirroring the
+  /// connect walk's own mapping for a `psiphonChain` overlay
+  /// (`AetherArguments.protocolArgs(leg, ProtocolId.psiphonChain)` —
+  /// CHAIN modes take the leg VERBATIM; auto and the family members
+  /// fall to the core default masque). Kept as a separate copy so the
+  /// bootstrap does not import the whole platform adapter; the
+  /// equivalence is LOCKED by a test that loops over every [ProtocolId]
+  /// and compares the two mappings.
+  static List<String> warpProtocolArgs(ProtocolId leg) => switch (leg) {
+        ProtocolId.wireguard => const ['--protocol', 'wg'],
+        ProtocolId.gool => const ['--protocol', 'gool'],
+        // GOOL classic is not a protocol value: the parser sets
+        // AETHER_PROTOCOL=gool AND AETHER_GOOL_MODE=classic (cli.rs).
+        ProtocolId.goolClassic => const [
+            '--protocol',
+            'gool',
+            '--gool-classic',
+          ],
+        ProtocolId.mim => const ['--protocol', 'mim'],
+        _ => const ['--protocol', 'masque'],
+      };
+
   /// Picks a free loopback port by asking the OS (bind :0, read the
   /// port, release). The pinned listener map {1819..1822} is skipped
   /// defensively — the OS ephemeral range already excludes it on every
@@ -461,13 +675,31 @@ class PsiphonBootstrapProxy {
     );
   }
 
+  /// Chain mode's TWO ports: the WARP-leg `--bind` and the chain egress
+  /// `--psiphon-bind`, pre-bound on loopback and ALWAYS DISTINCT from
+  /// each other (loop-prevention leg one: the egress and the WARP
+  /// upstream can never be the same socket, so the chain can never fold
+  /// back onto itself) and from the pinned user-mode map.
+  static Future<(int, int)> pickTwoDistinctLoopbackPorts() async {
+    for (var attempt = 0; attempt < 16; attempt++) {
+      final first = await pickFreeLoopbackPort();
+      final second = await pickFreeLoopbackPort();
+      if (second != first) return (first, second);
+    }
+    throw const PsiphonBootstrapException(
+      'portConflict',
+      'the OS would not name two distinct ports — refusing to guess',
+    );
+  }
+
   // ---- lifecycle -----------------------------------------------------------
 
-  /// Starts the standalone proxy and resolves with its endpoint once
-  /// the FULL readiness probe passed. Single-flight: concurrent callers
-  /// share one core job and one future (the mission's one-bootstrap
-  /// rule). After a failure the next [start] may be called again
-  /// (Stage 4 owns the retry policy and cooldowns).
+  /// Starts the bootstrap proxy (standalone or chain, per [mode]) and
+  /// resolves with its endpoint once the FULL readiness probe passed.
+  /// Single-flight: concurrent callers share one core job and one
+  /// future (the mission's one-bootstrap rule). After a failure the
+  /// next [start] may be called again (Stage 4 owns the retry policy
+  /// and cooldowns).
   Future<PsiphonProxyEndpoint> start() {
     if (_disposed) {
       throw const PsiphonBootstrapException('disposed');
@@ -541,17 +773,41 @@ class PsiphonBootstrapProxy {
       if (_stopRequested) {
         throw const PsiphonBootstrapException('cancelled');
       }
-      final port = await pickFreeLoopbackPort();
-      final int jobId;
-      try {
-        jobId = core.coreStart(
-          buildArgs(
+      // Mode-specific launch recipe: the argument list, the port the
+      // readiness probe dials (the ENDPOINT), and — in chain mode —
+      // the WARP-leg bind port that must come free again on stop.
+      final List<String> args;
+      final int endpointPort;
+      final int? warpPort;
+      switch (mode) {
+        case PsiphonBootstrapMode.psiphonOnly:
+          final port = await pickFreeLoopbackPort();
+          args = buildArgs(
             port: port,
             filesDir: filesDir,
             nativeLibraryDir: nativeLibraryDir,
             psiphonBinPath: _psiphonBinPath,
-          ),
-        );
+          );
+          endpointPort = port;
+          warpPort = null;
+        case PsiphonBootstrapMode.aetherPsiphonChain:
+          final (bind, egress) = await pickTwoDistinctLoopbackPorts();
+          args = buildChainArgs(
+            bindPort: bind,
+            psiphonBindPort: egress,
+            filesDir: filesDir,
+            nativeLibraryDir: nativeLibraryDir,
+            psiphonBinPath: _psiphonBinPath,
+            warpConfigPath: warpConfigPath,
+            warpProtocol: warpProtocol,
+            scanProfile: scanProfile,
+          );
+          endpointPort = egress;
+          warpPort = bind;
+      }
+      final int jobId;
+      try {
+        jobId = core.coreStart(args);
       } on AetherFfiException catch (error) {
         _log('core start rejected: ${error.code}');
         throw PsiphonBootstrapException(
@@ -561,19 +817,26 @@ class PsiphonBootstrapProxy {
       }
       _core = core;
       _jobId = jobId;
-      _port = port;
-      _log('core job $jobId started on 127.0.0.1:$port (psiphon-only)');
+      _port = endpointPort;
+      _warpPort = warpPort;
+      _log(
+        mode == PsiphonBootstrapMode.aetherPsiphonChain
+            ? 'core job $jobId started (aether→psiphon chain: warp '
+                '127.0.0.1:$warpPort, egress 127.0.0.1:$endpointPort)'
+            : 'core job $jobId started on 127.0.0.1:$endpointPort '
+                '(psiphon-only)',
+      );
 
-      final outcome = await _waitUntilReady(port);
+      final outcome = await _waitUntilReady(endpointPort);
       if (outcome.ready) {
-        return PsiphonProxyEndpoint(host: '127.0.0.1', port: port);
+        return PsiphonProxyEndpoint(host: '127.0.0.1', port: endpointPort);
       }
       // The outcome carries why this attempt died; a bind conflict is
-      // the retriable one (another process took the port in the
-      // release→bind window).
+      // the retriable one (another process took a port in the
+      // release→bind window — either of the chain's two).
       await _teardownJob();
       if (outcome.portConflict && attempt < maxPortRetries) {
-        _log('port $port was taken during hand-off; re-picking');
+        _log('a port was taken during hand-off; re-picking');
         continue;
       }
       throw PsiphonBootstrapException(outcome.code, outcome.message);
@@ -590,7 +853,8 @@ class PsiphonBootstrapProxy {
   /// the CORE's words) while retrying the full readiness probe until the
   /// budget runs out. A stop() request aborts at the next checkpoint.
   Future<_WaitOutcome> _waitUntilReady(int port) async {
-    final deadline = DateTime.now().add(readyBudget);
+    final budget = effectiveReadyBudget;
+    final deadline = DateTime.now().add(budget);
     while (true) {
       if (_stopRequested) {
         return const _WaitOutcome(
@@ -604,7 +868,7 @@ class PsiphonBootstrapProxy {
           ready: false,
           code: 'notReady',
           message: 'the proxy did not pass the readiness probe within '
-              '$readyBudget (the core job was still running)',
+              '$budget (the core job was still running)',
         );
       }
       // Core liveness first — the core owns the truth about its own
@@ -675,16 +939,19 @@ class PsiphonBootstrapProxy {
   }
 
   /// Cancels the core job, waits (bounded) for it to reach `done`, frees
-  /// the registry entry, then waits (bounded) for the listener port to
-  /// refuse connections — the connect walk's own stop sequence. The
-  /// psiphon child is killed by the core itself (kill_on_drop on the
-  /// dropped run_only future), so no orphan process can survive this.
+  /// the registry entry, then waits (bounded) for the listener ports to
+  /// refuse connections — the connect walk's own stop sequence, applied
+  /// to BOTH chain ports (the egress AND the WARP-leg bind) when the
+  /// chain mode is running. The psiphon child is killed by the core
+  /// itself (kill_on_drop on the dropped run_only/run_chain future), so
+  /// no orphan process can survive this.
   Future<void> _teardownJob() async {
     _healthTicker?.cancel();
     _healthTicker = null;
     final core = _core;
     final jobId = _jobId;
     final port = _port;
+    final warpPort = _warpPort;
     _core = null;
     _jobId = null;
     if (core != null && jobId != null) {
@@ -701,16 +968,25 @@ class PsiphonBootstrapProxy {
         // the job was already gone from the registry
       }
     }
-    if (port != null) {
-      final deadline = DateTime.now().add(portFreeBudget);
-      while (DateTime.now().isBefore(deadline)) {
-        try {
-          if (!await TunnelProbe.isListenerReady(port)) break;
-        } catch (_) {
-          break; // refused — already free
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 200));
+    // The egress first (standalone's only port; the chain's user-facing
+    // one), then the chain's WARP-leg bind — bind-race hygiene for the
+    // NEXT start, exactly like the walk's _portFreeBudget.
+    await _awaitPortFree(port);
+    await _awaitPortFree(warpPort);
+  }
+
+  /// Waits (bounded by [portFreeBudget]) for [port] to stop accepting
+  /// connections; a null or already-refused port returns at once.
+  Future<void> _awaitPortFree(int? port) async {
+    if (port == null) return;
+    final deadline = DateTime.now().add(portFreeBudget);
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        if (!await TunnelProbe.isListenerReady(port)) break;
+      } catch (_) {
+        break; // refused — already free
       }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
     }
   }
 
@@ -736,6 +1012,7 @@ class PsiphonBootstrapProxy {
     }
     await _teardownJob();
     _port = null;
+    _warpPort = null;
     if (_state == PsiphonBootstrapState.idle) {
       _stopRequested = false;
       return;
@@ -825,6 +1102,7 @@ class PsiphonBootstrapProxy {
     _lastFailureCode = code;
     unawaited(_teardownJob().then((_) {
       _port = null;
+      _warpPort = null;
       _setState(
         PsiphonBootstrapState.failed,
         errorCode: code,

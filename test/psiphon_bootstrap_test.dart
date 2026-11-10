@@ -1,15 +1,20 @@
-// STAGE 2 (Guardian bootstrap mission) tests: the standalone Psiphon
-// local proxy manager (lib/connection/firefox/psiphon_bootstrap.dart).
+// STAGE 2+3 (Guardian bootstrap mission) tests: the standalone Psiphon
+// local proxy manager AND the existing AETHER → PSIPHON combination
+// launched for bootstrap (lib/connection/firefox/psiphon_bootstrap.dart).
 //
 // What is real here:
 //  * the argument build is asserted against the PINNED core's semantics
-//    (psiphon-only mode; no chain/upstream/region/protocol pinning);
+//    (psiphon-only mode; chain mode = the walk's own --psiphon flags on
+//    dedicated ephemeral ports; no upstream/region/shape pinning);
 //  * the port allocation, the SOCKS5+TLS readiness probe and the
 //    «an open port is NOT ready» rule run against REAL dart:io sockets;
-//  * the LIVE probe test drives the full real handshake (SOCKS5 →
-//    domain CONNECT → verified TLS → HTTP trace) through a local
-//    direct-forwarding SOCKS5 relay to the real trace host — skipped
+//  * the LIVE probe tests drive the full real handshake (SOCKS5 →
+//    domain CONNECT → verified TLS → HTTP trace) through local relay
+//    stand-ins to the real trace host — the stage-3 one traverses the
+//    WHOLE simulated chain (egress → psiphon-sim → warp-sim) — skipped
 //    honestly when this machine is offline;
+//  * the chain's leg mapping is EQUIVALENCE-LOCKED against the connect
+//    walk's own AetherArguments.protocolArgs for a psiphonChain overlay;
 //  * the manager lifecycle (singleflight, port-conflict retry, crash,
 //    cancellation, timeout, dispose) runs against a fake core +
 //    injectable probe seam — the same convention as the connect walk's
@@ -21,6 +26,8 @@ import 'dart:typed_data';
 
 import 'package:aethone/connection/aether_ffi.dart';
 import 'package:aethone/connection/firefox/psiphon_bootstrap.dart';
+import 'package:aethone/connection/platform_engine_adapter.dart';
+import 'package:aethone/core/app_assets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Future<void> main() async {
@@ -486,6 +493,313 @@ Future<void> main() async {
       await sub.cancel();
     });
   });
+
+  group('chain argument build (stage 3 — evidence-locked to the pin)', () {
+    test('the EXISTING combination, launched on dedicated ephemeral ports',
+        () {
+      final args = PsiphonBootstrapProxy.buildChainArgs(
+        bindPort: 45678,
+        psiphonBindPort: 45679,
+        filesDir: '/data/app/files',
+        nativeLibraryDir: '/data/app/lib/arm64',
+      );
+      // The WARP-leg listener (psiphon's upstream — never dialed by
+      // AETHONE) and the CHAIN EGRESS (the usable endpoint).
+      expect(args, containsAllInOrder(['--bind', '127.0.0.1:45678']));
+      expect(
+          args, containsAllInOrder(['--psiphon-bind', '127.0.0.1:45679']));
+      // THE chain flag — the project's existing combination, launched
+      // verbatim (cli.rs: plain --psiphon; the core's own mode() test
+      // spellings «1/on/chain/yes» all map to Chain).
+      expect(args, contains('--psiphon'));
+      expect(args, isNot(contains('--psiphon-only')));
+      expect(args, isNot(contains('--psiphon-reverse')));
+      // The WARP identity defaults to the walk's own file (reuse — the
+      // core never re-registers an identity that is already there).
+      expect(
+        args,
+        containsAllInOrder(['--config', '/data/app/files/aether/warp.toml']),
+      );
+      // The walk's own determinism pins for the WARP leg.
+      expect(args, containsAllInOrder(['--scan', 'turbo']));
+      expect(args, contains('--quick-reconnect'));
+      expect(args, containsAllInOrder(['--protocol', 'wg']));
+      expect(
+        args,
+        containsAllInOrder(
+            ['--psiphon-bin', '/data/app/lib/arm64/libpsiphon.so']),
+      );
+      // The DEDICATED bootstrap data dir (NOT the user modes' one).
+      expect(
+        args,
+        containsAllInOrder(
+            ['--psiphon-dir', '/data/app/files/aether/psiphon-bootstrap']),
+      );
+      expect(args, containsAllInOrder(['--log-level', 'info']));
+    });
+
+    test('custom WARP identity, scan profile and leg are honored', () {
+      final args = PsiphonBootstrapProxy.buildChainArgs(
+        bindPort: 45678,
+        psiphonBindPort: 45679,
+        filesDir: '/f',
+        nativeLibraryDir: '/l',
+        warpConfigPath: '/f/aether/warp-alt.toml',
+        scanProfile: 'verified',
+        warpProtocol: ProtocolId.mim,
+      );
+      expect(
+          args, containsAllInOrder(['--config', '/f/aether/warp-alt.toml']));
+      expect(args, containsAllInOrder(['--scan', 'verified']));
+      expect(args, containsAllInOrder(['--protocol', 'mim']));
+    });
+
+    test('a scan profile outside the pinned five is rejected', () {
+      expect(
+        () => PsiphonBootstrapProxy.buildChainArgs(
+          bindPort: 1,
+          psiphonBindPort: 2,
+          filesDir: '/f',
+          nativeLibraryDir: '/l',
+          scanProfile: 'ultra',
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('no upstream, no loop-bending flags, no shape/region pin', () {
+      final args = PsiphonBootstrapProxy.buildChainArgs(
+        bindPort: 45678,
+        psiphonBindPort: 45679,
+        filesDir: '/f',
+        nativeLibraryDir: '/l',
+      );
+      // Loop prevention: never an --upstream (run_chain sets psiphon's
+      // upstream itself, to exactly --bind; an upstream could only bend
+      // the chain back on itself).
+      expect(args, isNot(contains('--upstream')));
+      expect(args, isNot(contains('--psiphon-http')));
+      expect(args, isNot(contains('--psiphon-region')));
+      expect(args, isNot(contains('--psiphon-mode')));
+      expect(args, isNot(contains('--exit-loc')));
+      expect(args, isNot(contains('-4')));
+      expect(args, isNot(contains('-6')));
+      expect(args, isNot(contains('--dual')));
+    });
+
+    test("the leg mapping IS the walk's own (equivalence-locked)", () {
+      // For EVERY protocol tile, the bootstrap chain's --protocol args
+      // must equal what the connect walk itself passes for a
+      // psiphonChain overlay — the chain is the walk's mode, launched.
+      for (final leg in ProtocolId.values) {
+        expect(
+          PsiphonBootstrapProxy.warpProtocolArgs(leg),
+          AetherArguments.protocolArgs(leg, ProtocolId.psiphonChain),
+          reason: 'leg $leg must map exactly like the walk does',
+        );
+      }
+    });
+
+    test('two distinct loopback ports, never the pinned map', () async {
+      for (var i = 0; i < 4; i++) {
+        final (bind, egress) =
+            await PsiphonBootstrapProxy.pickTwoDistinctLoopbackPorts();
+        expect(bind, isNot(egress),
+            reason: 'the egress and the WARP upstream must never share '
+                'a socket');
+        expect(kPinnedAethonePorts.contains(bind), isFalse);
+        expect(kPinnedAethonePorts.contains(egress), isFalse);
+      }
+    });
+
+    test('chain default budget = the walk\'s two phases summed (330 s); '
+        'an explicit override wins; standalone stays 210 s', () {
+      PsiphonBootstrapProxy neverStarted({
+        PsiphonBootstrapMode? mode,
+        Duration? budget,
+      }) =>
+          PsiphonBootstrapProxy(
+            filesDir: '/f',
+            nativeLibraryDir: '/l',
+            mode: mode ?? PsiphonBootstrapMode.psiphonOnly,
+            coreFactory: () => throw StateError('never started'),
+            readyBudget: budget,
+          );
+
+      expect(
+          neverStarted(mode: PsiphonBootstrapMode.aetherPsiphonChain)
+              .effectiveReadyBudget,
+          const Duration(seconds: 330));
+      expect(
+          neverStarted(
+            mode: PsiphonBootstrapMode.aetherPsiphonChain,
+            budget: const Duration(seconds: 90),
+          ).effectiveReadyBudget,
+          const Duration(seconds: 90));
+      expect(neverStarted().effectiveReadyBudget,
+          const Duration(seconds: 210));
+    });
+  });
+
+  group('chain manager lifecycle (fake core + probe seam)', () {
+    test('chain start hands the core BOTH concrete ports and probes the '
+        'EGRESS only', () async {
+      final core = _FakeCore();
+      final probe = _FakeProbe(failFirst: 1);
+      final manager = _chainManager(core, probe);
+      final endpoint = await manager.start().timeout(const Duration(seconds: 5));
+      final args = core.startedArgs.single;
+      final bindPort =
+          int.parse(args[args.indexOf('--bind') + 1].split(':').last);
+      final egressPort =
+          int.parse(args[args.indexOf('--psiphon-bind') + 1].split(':').last);
+      expect(bindPort, isNot(egressPort));
+      // The probe dialed ONLY the egress — the WARP-leg bind port is
+      // the chain's internal upstream, never AETHONE's proxy target.
+      expect(probe.portsSeen, isNotEmpty);
+      expect(probe.portsSeen, everyElement(egressPort));
+      expect(endpoint.port, egressPort);
+      expect(endpoint.socksUrl, 'socks5://127.0.0.1:$egressPort');
+      expect(manager.state, PsiphonBootstrapState.ready);
+      await manager.stop();
+    });
+
+    test('chain singleflight: concurrent starts share ONE core job',
+        () async {
+      final core = _FakeCore();
+      final manager = _chainManager(core, _FakeProbe());
+      final results = await Future.wait([
+        manager.start(),
+        manager.start(),
+        manager.start(),
+      ]).timeout(const Duration(seconds: 5));
+      expect(core.jobs.length, 1);
+      expect({for (final e in results) e.port}.length, 1);
+      await manager.stop();
+    });
+
+    test('chain restart: fresh distinct ports, same dedicated data dir',
+        () async {
+      final core = _FakeCore();
+      final manager = _chainManager(core, _FakeProbe());
+      final first = await manager.start().timeout(const Duration(seconds: 5));
+      await manager.stop();
+      final second = await manager.restart().timeout(const Duration(seconds: 5));
+      expect(core.startedArgs.length, 2);
+      int bindOf(List<String> a) =>
+          int.parse(a[a.indexOf('--bind') + 1].split(':').last);
+      int egressOf(List<String> a) =>
+          int.parse(a[a.indexOf('--psiphon-bind') + 1].split(':').last);
+      final a1 = core.startedArgs[0];
+      final a2 = core.startedArgs[1];
+      expect(bindOf(a1), isNot(egressOf(a1)));
+      expect(bindOf(a2), isNot(egressOf(a2)));
+      expect(first.port, isNot(second.port));
+      // The psiphon data dir (its learned servers/tactics) persists
+      // across restarts — never wiped, never the user modes' one.
+      final dir1 = a1[a1.indexOf('--psiphon-dir') + 1];
+      final dir2 = a2[a2.indexOf('--psiphon-dir') + 1];
+      expect(dir1, dir2);
+      expect(dir2, '/data/test/files/aether/psiphon-bootstrap');
+      await manager.stop();
+    });
+
+    test('chain bind conflict during the hand-off retried on fresh ports',
+        () async {
+      var job = 0;
+      final core = _FakeCore(onStart: (j) {
+        job++;
+        if (job == 1) {
+          // The pinned core's frozen bind_listener wording (socks.rs):
+          // either of the chain's two listeners can lose the race.
+          j.error = 'the psiphon socks5 listener cannot use '
+              '127.0.0.1:44444: another program already listens there';
+        }
+      });
+      final manager = _chainManager(core, _FakeProbe());
+      final endpoint = await manager.start().timeout(const Duration(seconds: 5));
+      expect(core.startedArgs.length, 2);
+      expect(manager.state, PsiphonBootstrapState.ready);
+      expect(endpoint.port, greaterThan(0));
+      await manager.stop();
+    });
+
+    test('chain core failure is coreExited, verbatim', () async {
+      final core = _FakeCore(
+          onStart: (j) => j.error = 'warp registration failed: api unreachable');
+      final manager = _chainManager(core, _FakeProbe());
+      await expectLater(
+        manager.start(),
+        throwsA(isA<PsiphonBootstrapException>()
+            .having((e) => e.code, 'code', 'coreExited')
+            .having((e) => e.message, 'message',
+                contains('warp registration failed'))),
+      );
+      expect(manager.state, PsiphonBootstrapState.failed);
+      expect(manager.lastFailureCode, 'coreExited');
+      expect(core.cancelled, isNotEmpty);
+    });
+
+    test('stop during chain start cancels cleanly and is NOT a failure',
+        () async {
+      final core = _FakeCore();
+      final manager = _chainManager(core, _FakeProbe.alwaysFailing());
+      final starting = manager.start();
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await manager.stop();
+      await expectLater(
+        starting,
+        throwsA(isA<PsiphonBootstrapException>()
+            .having((e) => e.code, 'code', 'cancelled')),
+      );
+      expect(manager.state, PsiphonBootstrapState.idle);
+      expect(core.cancelled, isNotEmpty);
+      expect(core.freed, isNotEmpty);
+    });
+  });
+
+  group('chain path proof (real sockets — the Dart-side half of 3-6)', () {
+    // The pinned core's half is SOURCE-LOCKED: run_chain (psiphon.rs
+    // L940-968) hardcodes psiphon's UpstreamProxyURL to exactly the
+    // --bind listener and relays --psiphon-bind to psiphon's internal
+    // port. What this test proves is the DART-side half: traffic that
+    // enters at the egress traverses EVERY intermediate hop and reaches
+    // the real internet — no bypass, no loop. The full on-device proof
+    // is stage 9's scenario C.
+    test('LIVE: probe through the full simulated chain '
+        '(egress → psiphon-sim → warp-sim → real TLS)', () async {
+      // warp-sim: the WARP leg — "exits to the open internet" (direct).
+      final warpSim = await _DirectSocksRelay.start();
+      // psiphon-sim: dials its targets THROUGH the warp leg, exactly
+      // like the real psiphon does under UpstreamProxyURL=socks5://<bind>.
+      final psiphonSim =
+          await _DirectSocksRelay.start(upstreamSocksPort: warpSim.port);
+      // egress: the core's byte-for-byte relay (socks::forward stand-in)
+      // from --psiphon-bind to psiphon's internal listener.
+      final egress = await _RawForwarder.start(toPort: psiphonSim.port);
+      try {
+        await const SocksTlsReadyProbe().verify(
+          port: egress.port,
+          timeout: const Duration(seconds: 25),
+        );
+        // Reaching here means: SOCKS5 greeting OK, DOMAIN CONNECT OK,
+        // TLS verified against the real trust store, and an HTTP 2xx/3xx
+        // status came back — THROUGH the whole simulated chain.
+        // The DOMAIN CONNECT survived both hops (remote-DNS semantics
+        // end-to-end) and every hop SAW the traffic (no bypass):
+        expect(warpSim.lastConnectedHost, 'www.cloudflare.com');
+        expect(warpSim.lastConnectWasDomain, isTrue);
+        expect(psiphonSim.lastConnectedHost, 'www.cloudflare.com');
+        expect(psiphonSim.connections, greaterThanOrEqualTo(1));
+        expect(warpSim.connections, greaterThanOrEqualTo(1));
+        expect(egress.connections, greaterThanOrEqualTo(1));
+      } finally {
+        await egress.dispose();
+        await psiphonSim.dispose();
+        await warpSim.dispose();
+      }
+    }, skip: liveNet ? false : 'no direct network access from this machine');
+  });
 }
 
 // ---- test doubles -----------------------------------------------------------
@@ -505,6 +819,26 @@ PsiphonBootstrapProxy _manager(
       probeTimeout: const Duration(milliseconds: 40),
       probeRetryInterval: const Duration(milliseconds: 10),
       healthInterval: healthInterval ?? const Duration(seconds: 15),
+      cancelGrace: const Duration(milliseconds: 300),
+      portFreeBudget: const Duration(milliseconds: 300),
+    );
+
+/// The stage-3 flavor of [_manager]: same seams, CHAIN mode.
+PsiphonBootstrapProxy _chainManager(
+  _FakeCore core,
+  PsiphonReadyProbe probe, {
+  Duration? readyBudget,
+}) =>
+    PsiphonBootstrapProxy(
+      filesDir: '/data/test/files',
+      nativeLibraryDir: '/data/test/lib/arm64',
+      mode: PsiphonBootstrapMode.aetherPsiphonChain,
+      coreFactory: () => core,
+      probe: probe,
+      readyBudget: readyBudget ?? const Duration(seconds: 5),
+      probeTimeout: const Duration(milliseconds: 40),
+      probeRetryInterval: const Duration(milliseconds: 10),
+      healthInterval: const Duration(seconds: 15),
       cancelGrace: const Duration(milliseconds: 300),
       portFreeBudget: const Duration(milliseconds: 300),
     );
@@ -623,22 +957,33 @@ Future<bool> _canReachTraceHost() async {
 /// The client-side reader is NEVER re-subscribed (dart:io socket streams
 /// are single-subscription): the same StreamIterator reads the handshake
 /// and then pumps client→upstream for the tunnel's lifetime.
+///
+/// Stage 3: [upstreamSocksPort] turns it into the CHAIN's "psiphon" —
+/// every target is then dialed THROUGH the SOCKS5 upstream at that port
+/// (exactly what the real psiphon does under run_chain's
+/// UpstreamProxyURL=socks5://<--bind>), with the SAME single-reader
+/// discipline on the upstream socket.
 class _DirectSocksRelay {
-  _DirectSocksRelay._(this._server);
+  _DirectSocksRelay._(this._server, {this.upstreamSocksPort});
 
   final ServerSocket _server;
   final List<Socket> _clients = [];
   final List<Socket> _upstreams = [];
   final List<StreamSubscription<Socket>> _accepts = [];
 
+  /// When set: dial every CONNECT through this SOCKS5 port instead of
+  /// directly (the chain's psiphon leg).
+  final int? upstreamSocksPort;
+
   String? lastConnectedHost;
   bool lastConnectWasDomain = false;
+  int connections = 0;
 
   int get port => _server.port;
 
-  static Future<_DirectSocksRelay> start() async {
+  static Future<_DirectSocksRelay> start({int? upstreamSocksPort}) async {
     final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-    final relay = _DirectSocksRelay._(server);
+    final relay = _DirectSocksRelay._(server, upstreamSocksPort: upstreamSocksPort);
     relay._accepts.add(server.listen(
       (socket) => relay._handle(socket),
       onError: (Object _) {},
@@ -661,6 +1006,7 @@ class _DirectSocksRelay {
 
   Future<void> _handle(Socket client) async {
     _clients.add(client);
+    connections++;
     final reader = StreamIterator<Uint8List>(client);
     final buffer = <int>[];
     var handedOff = false;
@@ -688,6 +1034,57 @@ class _DirectSocksRelay {
       final (host, port, wasDomain) = connect;
       lastConnectedHost = host;
       lastConnectWasDomain = wasDomain;
+
+      final warpPort = upstreamSocksPort;
+      if (warpPort != null) {
+        // The chain's psiphon leg: dial the target THROUGH the SOCKS5
+        // upstream at 127.0.0.1:warpPort (run_chain:
+        // UpstreamProxyURL=socks5://<--bind>), then relay both ways.
+        final upstream = await Socket.connect('127.0.0.1', warpPort,
+            timeout: const Duration(seconds: 10));
+        _upstreams.add(upstream);
+        final upReader = StreamIterator<Uint8List>(upstream);
+        final pending = BytesBuilder();
+        try {
+          // --- greeting [VER NMETHODS METHODS...] → [VER METHOD=00] ---
+          upstream.add(const <int>[0x05, 0x01, 0x00]);
+          final greet = await _readExact(upReader, pending, 2);
+          if (greet[0] != 0x05 || greet[1] != 0x00) {
+            throw const SocketException('upstream socks5 greeting refused');
+          }
+          final name = ascii.encode(host);
+          upstream.add(<int>[
+            0x05, 0x01, 0x00, 0x03, name.length, ...name, port >> 8,
+            port & 0xff,
+          ]);
+          final head = await _readExact(upReader, pending, 4);
+          if (head[0] != 0x05 || head[1] != 0x00) {
+            throw const SocketException('upstream socks5 CONNECT failed');
+          }
+          final skip = switch (head[3]) {
+            0x01 => 4,
+            0x03 => (await _readExact(upReader, pending, 1))[0],
+            0x04 => 16,
+            _ => 4,
+          };
+          if (skip > 0) await _readExact(upReader, pending, skip);
+          await _readExact(upReader, pending, 2);
+        } catch (_) {
+          upstream.destroy();
+          return;
+        }
+        client.add(
+            const <int>[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]);
+        await client.flush();
+        handedOff = true;
+        if (buffer.isNotEmpty) {
+          upstream.add(buffer);
+          await upstream.flush();
+        }
+        unawaited(_pumpReader(reader, upstream));
+        unawaited(_pumpIterator(upReader, client));
+        return;
+      }
 
       final upstream = await Socket.connect(host, port,
           timeout: const Duration(seconds: 10));
@@ -746,6 +1143,43 @@ class _DirectSocksRelay {
     }
   }
 
+  /// Upstream → client through the SOCKS-dial path's own iterator (the
+  /// single subscription on that socket — same discipline as
+  /// [_pumpReader], mirrored for the upstream side).
+  Future<void> _pumpIterator(StreamIterator<Uint8List> from, Socket to) async {
+    try {
+      while (await from.moveNext()) {
+        to.add(from.current);
+        await to.flush();
+      }
+    } catch (_) {
+      // a probe that destroyed its side lands here — fine
+    } finally {
+      to.destroy();
+    }
+  }
+
+  /// Chunk-safe exact read for the SOCKS-dial handshake: buffers into
+  /// [pending] so a short chunk never splits a field.
+  static Future<List<int>> _readExact(
+    StreamIterator<Uint8List> iterator,
+    BytesBuilder pending,
+    int count,
+  ) async {
+    while (pending.length < count) {
+      if (!await iterator.moveNext()) {
+        throw const SocketException('upstream closed mid-handshake');
+      }
+      pending.add(iterator.current);
+    }
+    final all = pending.takeBytes();
+    final rest = all.length - count;
+    if (rest > 0) {
+      pending.add(all.sublist(count));
+    }
+    return all.sublist(0, count);
+  }
+
   /// Parses + REMOVES one complete CONNECT request from [buffer]; null
   /// while incomplete. Returns (host, port, wasDomain).
   (String, int, bool)? _takeConnect(List<int> buffer) {
@@ -776,5 +1210,72 @@ class _DirectSocksRelay {
     final port = (buffer[need - 2] << 8) | buffer[need - 1];
     buffer.removeRange(0, need);
     return (host, port, wasDomain);
+  }
+}
+
+/// The pinned core's socks::forward stand-in (the chain's egress relay):
+/// binds loopback and passes every accepted socket BYTE-FOR-BYTE to
+/// 127.0.0.1:toPort — no protocol of its own, exactly like the core's
+/// relay from --psiphon-bind to psiphon's internal listener.
+class _RawForwarder {
+  _RawForwarder._(this._server, this.toPort);
+
+  final ServerSocket _server;
+  final int toPort;
+  final List<Socket> _clients = [];
+  final List<Socket> _upstreams = [];
+  final List<StreamSubscription<Socket>> _accepts = [];
+  int connections = 0;
+
+  int get port => _server.port;
+
+  static Future<_RawForwarder> start({required int toPort}) async {
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final forwarder = _RawForwarder._(server, toPort);
+    forwarder._accepts.add(server.listen(
+      (socket) => forwarder._handle(socket),
+      onError: (Object _) {},
+    ));
+    return forwarder;
+  }
+
+  Future<void> dispose() async {
+    await _server.close();
+    for (final s in _accepts) {
+      await s.cancel();
+    }
+    for (final s in _clients) {
+      s.destroy();
+    }
+    for (final s in _upstreams) {
+      s.destroy();
+    }
+  }
+
+  Future<void> _handle(Socket client) async {
+    connections++;
+    _clients.add(client);
+    try {
+      final upstream = await Socket.connect('127.0.0.1', toPort,
+          timeout: const Duration(seconds: 10));
+      _upstreams.add(upstream);
+      unawaited(_pump(client, upstream));
+      unawaited(_pump(upstream, client));
+    } catch (_) {
+      client.destroy();
+    }
+  }
+
+  Future<void> _pump(Socket from, Socket to) async {
+    try {
+      await for (final chunk in from) {
+        to.add(chunk);
+        await to.flush();
+      }
+    } catch (_) {
+      // a probe that destroyed its side lands here — fine
+    } finally {
+      to.destroy();
+    }
   }
 }

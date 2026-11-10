@@ -13,8 +13,8 @@
 | Branch کاری | `feature/firefox-guardian-psiphon-bootstrap` |
 | Base Commit | `ce852ea` (= tip شاخه `performance/firefox-vpn-optimization`؛ شامل تمام اصلاحات Performance مراحل ۰–۸) |
 | آخرین Commit | (انتهای فایل — «گیت مراحل») |
-| مرحله فعلی | **Stage 3 — ترکیب واقعی AETHER → PSIPHON (بدون TUN/VpnService)** |
-| مرحله تکمیل‌شده آخر | **Stage 2 — PASS + راستی‌آزمایی مستقل (کد `b88b423` + مستندات `e28e93b` + verification؛ جزئیات §۸ همین فایل)** |
+| مرحله فعلی | **Stage 4 — Bootstrap Strategy Manager (Firefox Guardian Bootstrap Manager)** |
+| مرحله تکمیل‌شده آخر | **Stage 3 — PASS (ترکیب موجود AETHER → PSIPHON برای Bootstrap؛ کد + مستندات همین ردیفها؛ جزئیات بخش Stage 3)** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### وضعیت Git در شروع مأموریت (تأییدشده)
@@ -238,7 +238,69 @@
 - `flutter analyze` در همان toolchain pin شده CI (sandbox Flutter 3.47.9 / Dart 3.13.7): **صفر یافته** — بازتولید شد.
 - `flutter test` کل مخزن: **۳۳۱ پاس / ۸ skip قبلی / ۰ شکست** — عدد ثبت‌شده در §۶ دقیقاً بازتولید شد. فایل Stage 2: **۲۱/۲۱ سبز**، از جمله تست **LIVE** (SOCKS5 → CONNECT دامنه‌ای → TLS با verify کامل → trace واقعی از طریق relay) که در همین sandbox شبکه‌دار واقعاً اجرا و پاس شد (skip نشد).
 - تست قرارداد سورس بازبینی مستقیم شد: کدِ بدون کامنتِ مدیر را روی نبود `MethodChannel`/`invokeMethod`/`startVpn`/`startCoreHold`/`VpnService`/`prepareVpn`/`NetworkInterface` قفل می‌کند — معتبر.
-- جمع‌بندی: **Stage 2 = PASS (verified)** — هیچ نقصی در محدوده Stage 2 یافت نشد که نیاز به اصلاح داشته باشد؛ تنها خروجی این اجرا همین ثبت راستی‌آزمایی است.
+- جمع‌بندی: **Stage 2 = PASS (verified)** — هیچ نقصی در محدوده Stage 2 یافت نشد که نیاز به اصلاح داشته باشد؛ تنها خروجی آن اجرا همین ثبت راستی‌آزمایی بود.
+
+## یافته‌ها و تغییرات Stage 3 (اجرای 2026-11-10)
+
+### ۱. تصمیم معماری — ترکیب موجود، بازراه‌اندازی شده (نه بازسازی)
+
+- تأکید مالک در دستور اجرا: «حالت‌های ترکیبی با سایفون از قبل وجود دارن ولازم نیست دوباره ایجادشون کنی». اجرا دقیقاً همین بود: **زنجیره AETHER → PSIPHON هیچ بخشی در Dart بازسازی نشد**؛ مدیر مرحله ۲ با یک حالت دوم (`PsiphonBootstrapMode.aetherPsiphonChain`) گسترش شد که همان حالت `--psiphon` هسته پین‌شده را با پرت‌های اختصاصی موقت راه‌اندازی می‌کند. API سطح Stage 2 حفظ شد (پیش‌فرض سازنده همان `psiphonOnly` است؛ امضای آماده قبلاًگذره تست‌ها بدون تغییر سبز ماند).
+- شواهد سورس (مستقیم از `native/aether/aether/src` در pin):
+  - `psiphon.rs run_chain` (L940-968): هسته listener `--psiphon-bind` را از ابتدا نگه می‌دارد، `wait_for_proxy(through)` صبر می‌کند تا SOCKS مربوط به `--bind` (تونل WARP) جواب بدهد، بعد psiphon را با `UpstreamProxyURL=socks5://<through>` روی آن اجرا می‌کند و خروجی را به listener داخلی psiphon (ephemeral انتخاب سیستم، `BEHIND_HELD=127.0.0.1:0`) relay می‌کند.
+  - `psiphon.rs mode()`: هر مقدار غیرخالی/غیررزرو (از جمله «1/on/chain/yes») → `Mode::Chain`؛ فلگ CLI همان `--psiphon` ساده است.
+  - `lib.rs` L222-227: dispatch حالت Chain با `through = held` (آدرس listener `--bind`)؛ `DEFAULT_BIND` زنجیره 1821 است — مدیر Bootstrap هرگز از آن استفاده نمی‌کند.
+  - `socks.rs bind_listener`: هر دو listener با متن منجمد «the {kind} listener cannot use …» خطا می‌دهند (kind = «socks5» برای --bind و «psiphon socks5» برای --psiphon-bind) → تشخیص portConflict مرحله ۲ («listener cannot use») هر دو پرت را می‌پوشاند.
+  - `socks.rs until_answered`: بدون ديدلاین — مرجع شکست، خود job هسته است (خطای WARP/psiphon قبل از هر timeout دات به‌صورت coreExited verbatim بالا می‌آید).
+
+### ۲. دستور راه‌اندازی زنجیره (buildChainArgs — هم‌خانواده walk کاربر)
+
+- مبنای مقایسه: `AetherArguments.build` در walk کاربر برای `psiphonChain`: `--bind 127.0.0.1:1819` ثابت + `--config warp.toml` + `--scan` + `--quick-reconnect` + `--protocol <leg>` + `--psiphon` + `--psiphon-bin` + `--psiphon-dir`. Bootstrap همین خانواده را با دو تفاوت هدفمند پاس می‌کند:
+  1. **دو پرت ephemeral متمایز** (`pickTwoDistinctLoopbackPorts` — الگوی pre-bind مرحله ۲ دوبار؛ هرگز 1819/1820/1821/1822)؛
+  2. `--psiphon-dir` = همان مسیر اختصاصی پایدار bootstrap (`$filesDir/aether/psiphon-bootstrap`) — نه مسیر حالتهای کاربر.
+- `--config` پیش‌فرض همان `warp.toml` خود walk است (بازیافت identity؛ هسته identity موجود را دوباره register نمی‌کند) — با پارامتر قابل override برای Stage 4.
+- نگاشت leg (`warpProtocolArgs`) کپی آگاهانه از `AetherArguments.protocolArgs(leg, psiphonChain)` است و **تست معادلهای آن را برای همه ۱۳ مقدار ProtocolId قفل کرده** — نگاشت Bootstrap هرگز از walk جدا نمی‌شود.
+- غایب‌های عمدی (با دلیل pin): `--upstream` (فقط حالتهای reverse؛ run_chain خودش upstream را دقیقاً به --bind ست می‌کند — گذاشتنش فقط می‌توانست زنجیره را به خودش برگرداند)، `--psiphon-http`، `--psiphon-region`/`--psiphon-mode`/`--exit-loc` (egress تطبیقی)، `-4/-6/--dual`.
+
+### ۳. آمادگی و جلوگیری از Route Loop
+
+- **Probe فقط EGRESS را می‌شمارد**: مدیر فقط پرت `--psiphon-bind` را probe می‌کند و endpoint همان است؛ پرت WARP `--bind` هرگز از سمت AETHONE شماره نمی‌خورد (تست‌دار: portsSeen فقط egress). پایان موفق probe (SOCKS5 greeting + CONNECT دامنه‌ای + TLS verify شده + trace واقعی) اثبات عبیری کل زنجیره است: هسته فقط بعد از جواب `wait_for_proxy` (WARP بالا) و گزارش `ListeningSocksProxyPort` + `Tunnels>0` از سوی psiphonِ روی همان تونل، relay را سرویس می‌کند.
+- **چهار پایه ضد-loop**: (۱) دو پرت متمایز by construction؛ (۲) هرگز `--upstream`؛ (۳) پاک‌سازی کامل `AETHER_*` قبل از هر start (باقیمانده `AETHER_UPSTREAM`/`AETHER_PSIPHON_BIND` جلسه قبل همان ریزش v4.21 بود)؛ (۴) سورس pin: upstream پی‌سی‌فون دقیقاً آدرس `--bind` است و relay خروجی به پرت داخلی psiphon وصل است — سه آدرس متمایز، چرخه ناممکن. `AETHER→PSIPHON→AETHER` رخ نمی‌دهد.
+- بودجه: پیش‌فرض زنجیره ۳۳۰s = جمع دو فاز خود walk (listener WARP ۱۲۰s + خانواده psiphon ۲۱۰s)؛ override صریح مقدم؛ مستقل ۲۱۰s بدون تغییر.
+
+### ۴. ارزیابی سایر Combinationها (۳-۷) — PSIPHON → AETHER
+
+- از سورس: حالت Reverse (`start_reverse` + lib.rs L229-244) تونل WARP را از داخل psiphon می‌شمارد و خودش `AETHER_UPSTREAM` + `AETHER_MASQUE_HTTP2=1` را در env فرایند ست می‌کند؛ خروجی قابل استفاده همان listener `--bind` است. جهت مسیر با نیاز Guardian «قابل جمع» است اما: (الف) فقط روی پایه‌های TCP/masque-h2 کار می‌کند (پایه‌های UDP صریحاً رد می‌شوند)؛ (ب) متغیرهای env فرایند مشترک را دست‌کاری می‌کند (خطر هم‌زمانی با walk کاربر، شدیدتر از Chain)؛ (ج) در فهرست مسیرهای تأییدشده مأموریت نیست و اثبات «دسترسی Psiphon واقعاً نقش لازم را دارد» نیازمند آزمون روی دستگاه است. **تصمیم: در این مرحله وارد Bootstrap نشد** — فقط مستند شد. هیچ Combination فرضی ساخته نشد.
+
+### ۵. آزمون اثبات مسیر (۳-۶) — دو نیمه صادقانه
+
+- **نیمه سورس (هسته)**: run_chain upstream را دقیقاً به `--bind` هاردکد می‌کند و relay خروجی به پرت داخلی psiphon وصل است — بالا مستند شد.
+- **نیمه Dart (تست LIVE واقعی)**: شبیه‌سازی کامل زنجیره با سوکت‌های واقعی: egress (relay خام byte-for-byte به جای `socks::forward` هسته) → psiphon-sim (SOCKS5 که هدف را از طریق SOCKS5 دیگری شماره می‌خورد — دقیقاً رفتار upstream در run_chain) → warp-sim (خروج مستقیم به اینترنت واقعی). تست LIVE پروب تولیدی را از egress اجرا کرد و سبز شد: CONNECT دامنه‌ای تا warp-sim رسید (remote-DNS سرتاسری)، هر سه hop ترافیک را دیدند (شمارنده connections)، TLS واقعی با verify کامل و `HTTP 200` از www.cloudflare.com از مسیر کل زنجیره برگشت — **بدون bypass و بدون loop در سطح Dart**. اجرای واقعی هسته روی گوشی: NOT TESTED (Stage 9 سناریو C).
+
+### ۶. فایلهای تغییرکرده (Stage 3)
+
+- `lib/connection/firefox/psiphon_bootstrap.dart` — گسترش مدیر: enum `PsiphonBootstrapMode`، پارامترهای `warpConfigPath`/`warpProtocol`/`scanProfile`، `buildChainArgs` + `warpProtocolArgs` + `pickTwoDistinctLoopbackPorts`، شاخه mode در `_startInner`، teardown/آزادسازی هر دو پرت (`_awaitPortFree`)، بودجه مؤثر مود-آگاه. **هیچ رفتار Stage 2 تغییر نکرد** (۲۱ تست قبلی بدون تغییر سبز).
+- `test/psiphon_bootstrap_test.dart` — ۱۴ تست جدید: قرارداد args زنجیره (پرت‌های متمایز loopback، فلگ `--psiphon`، config/scan/quick-reconnect، dir اختصاصی)؛ override پارامترها؛ رد scan profile خارج از پنج مورد pin؛ ممنوعه‌ها (بدون upstream/http/region/mode/exit-loc/±4/--dual)؛ **معادلهای نگاشت leg با walk برای همه ProtocolId**؛ دو پرت متمایز؛ بودجه ۳۳۰/۲۱۰/override؛ lifecycle زنجیره (probe فقط egress، singleflight، restart با پرت تازه و dir ثابت، retry تعارض bind، coreExited verbatim، cancel تمیز حین start)؛ **LIVE مسیر کامل زنجیره** (بالا).
+- دست‌نخورده: بقیه مخزن (گواهی: `git status` فقط همین دو فایل). pinها، Go، CGO/A1، workflowها، Data Plane — بدون تغییر. ابزار: Flutter 3.47.9/Dart 3.13.7 همان pin CI (sandbox پس از بازیافت، SDK دوباره از همان tag نصب شد).
+
+### ۷. قرارداد سطح Stage 3 (ورودی Stage 4)
+
+- `PsiphonBootstrapProxy(mode: psiphonOnly | aetherPsiphonChain, …)`: mode در ساخت ثابت است؛ Stage 4 برای هر تصمیم مسیر یک مدیر می‌سازد و ترتیب/انحصار مال اوست (همان قید مستند: bootstrap و walk کاربر هم‌زمان نشوند — env فرایند + فایل identity مشترک).
+- endpoint زنجیره = `socks5://127.0.0.1:<psiphon-bind ephemeral>` — همان چیزی که RoutingRoundTripper مرحله ۵ خواهد شمرد؛ برای هر دو mode یک شکل.
+- کدهای خطا و رخدادها مشترک با Stage 2 (`libraryMissing`/`coreStartFailed`/`portConflict`/`coreExited`/`notReady`/`cancelled`/`disposed`/`coreDied`/`listenerDead`).
+
+### ۸. تستها و نتایج واقعی (Stage 3)
+
+- `flutter analyze` → **صفر یافته**.
+- فایل Bootstrap: **۳۵/۳۵ سبز** (۲۱ مرحله ۲ + ۱۴ مرحله ۳) شامل هر دو تست **LIVE** (مستقل و زنجیره) که واقعاً اجرا شدند (skip نشدند).
+- `flutter test` کل مخزن: **۳۴۵ پاس / ۸ skip قبلی / ۰ شکست**. یادداشت صادقانه: در اولین اجرای full-suite پس از تغییرها، تست UI اسکرین‌شات `zz_appearance_shot_test` یک‌بار شکست خورد (flaky تحت بار/ترتیب — در اجرای ایزوله و در تکرار full-suite سبز؛ فایلهای Stage 3 هیچ سطح UI ندارند). هیچ تست قبلی حذف یا ضعیف نشد.
+- Go: بدون تغییر (اثبات با git status) — CI (`native-ci`) تأیید نهایی.
+
+### ۹. NOT TESTED (Stage 3)
+
+- اجرای واقعی زنجیره روی گوشی با `libaether.so`/`libpsiphon.so` واقعی، WARP واقعی و شبکه ایران (Stage 9 سناریو C) — در sandbox باینری Android نیست؛ آزمون LIVE فوق فقط نیمه Dart مسیر را با اینترنت واقعی ثابت کرد.
+- رفتار ثبت/بازیافت identity واقعی WARP (`warp.toml`) در اولین bootstrap زنجیره وقتی کاربر هرگز aether اجرا نکرده (ثبت identity نیاز به دسترسی API دارد).
+- متن خطای تعارض bind از هسته واقعی روی دستگاه (منجمد فرض شد؛ evidence-locked).
+- انحصار هم‌زمانی bootstrap ↔ walk کاربر (تحویل به Stage 4).
 
 ---
 ## نقشه فایل‌های کلیدی (برای مراحل بعد)
@@ -257,24 +319,25 @@
 | TUN/VpnService | `android/.../AethoneVpnService.kt` + MainActivity.startVpn |
 | ترکیب‌ها/پورت‌ها | `lib/connection/transport_modes.dart` + `docs/CLI_REFERENCE.md` + `docs/FEATURE_MATRIX.md` §4 |
 | spawn/notice های psiphon | pin `CluvexStudio/Aether` @ `d58f9d56` → `aether/src/psiphon.rs` |
-| مدیر Bootstrap مستقل Psiphon (Stage 2) | `lib/connection/firefox/psiphon_bootstrap.dart` (PsiphonBootstrapProxy + SocksTlsReadyProbe + buildArgs) + `test/psiphon_bootstrap_test.dart` |
+| مدیر Bootstrap Psiphon — مستقل + زنجیره (Stage 2+3) | `lib/connection/firefox/psiphon_bootstrap.dart` (PsiphonBootstrapProxy با دو mode + SocksTlsReadyProbe + buildArgs/buildChainArgs/warpProtocolArgs/pickTwoDistinctLoopbackPorts) + `test/psiphon_bootstrap_test.dart` |
 | طبقه‌بندی 451 Guardian (Go) | `phase1/fxv/internal/fferr/classify.go` (ClassifyGuardian) + `cmd/libfirefoxvpn/main.go` (classifyGuardian) + `internal/upstream/controller.go` (renewalFailCode) |
 | مدل خطای Dart + متنها | `lib/connection/firefox/firefox_errors.dart` + `lib/connection/firefox/firefox_protocol.dart` + `lib/l10n/app_strings.dart` (firefoxErrGuardianRegion) |
 
 ---
 
-## دستور دقیق ادامه کار (جلسه بعدی — Stage 3)
+## دستور دقیق ادامه کار (جلسه بعدی — Stage 4)
 
-1. همین فایل را بخوان؛ HEAD باید commit راستی‌آزمایی Stage 2 (§۸) باشد و working tree پاک (شاخه شامل کد Stage 2 `b88b423` + مستندات `e28e93b` + راستی‌آزمایی).
-2. **فقط Stage 3 را اجرا کن** — ترکیب واقعی AETHER → PSIPHON برای Bootstrap:
-   - مبنای سورس: `run_chain` (psiphon.rs L940-968): هسته ابتدا listener `--psiphon-bind` را از ابتدا bind می‌کند، `wait_for_proxy(through)` صبر می‌کند تونل WARP (listener `--bind`) جواب بدهد، بعد psiphon را با `UpstreamProxyURL=socks5://<through>` روی آن اجرا می‌کند و خروجی relay روی `--psiphon-bind` است.
-   - برای Bootstrap: پورتهای موقت/ephemeral برای هر دو listener (همان الگوی pre-bind مرحله ۲؛ بدون تداخل با 1819/1820/1821/1822)؛ Data Directory همان مسیر اختصاصی bootstrap؛ پروتکل پایه WARP طبق پیش‌فرض/انتخاب کاربر بدون تغییر walk اصلی.
-   - **بدون** TUN و **بدون** VpnService دوم (تأیید شده در Stage 0/2: FFI درون‌فرایندی).
-   - اثبات مسیر (۳-۶): با upstream/Listenr قابل کنترل ثابت کن psiphon واقعاً از SOCKS هسته dial می‌زند (نه مستقیم)، relay خروجی صحیح است، هیچ loop وجود ندارد (`AETHER→PSIPHON→AETHER` ممنوع — سه آدرس متمایزند).
-   - گسترش `PsiphonBootstrapProxy` (حالت ترکیبی جدید در همان مدیر — `psiphonOnly` → `aetherPsiphonChain`) یا کلاس خواهر؛ API سطح Stage 2 نباید بشکند.
-   - تست: Dart lifecycle + اثبات مسیر با fake؛ اجرای واقعی روی شبکه در صورت دسترسی، وگرنه NOT TESTED صریح.
-   - قواعد ثابت: تغییر حدسی نکن؛ pinها دست‌نخورده؛ commit مستقل؛ push به همین شاخه؛ به‌روزرسانی همین فایل؛ گزارش ۹-بندی؛ توقف.
-3. قانون توقف: بعد از Stage 3 متوقف شو؛ مرحله ۴ (Bootstrap Strategy Manager) در اجرای بعدی.
+1. همین فایل را بخوان؛ HEAD باید commit مستندات Stage 3 باشد و working tree پاک (شاخه شامل کد Stage 2+3 و مستندات و راستی‌آزمایی Stage 2).
+2. **فقط Stage 4 را اجرا کن** — Bootstrap Strategy Manager (`Firefox Guardian Bootstrap Manager`):
+   - فقط مسیرهای تأییدشده مراحل ۲ و ۳ وارد سیستم شوند: `PsiphonBootstrapMode.psiphonOnly` و `aetherPsiphonChain` (PSIPHON → AETHER در Stage 3 ارزیابی و رد شد — بخش ۴؛ مجدد وارد نشود مگر با تأیید مالک).
+   - ترتیب Discovery برای Network Context جدید: Direct Guardian → Psiphon Standalone → AETHER → PSIPHON؛ تلاشها ترتیبی با Timeout محدود، هرگز همزمان همه موتورها.
+   - Fast Path (بخش ۷.۱ مأموریت): حافظه مسیر در سطح AETHONE با Network Context غیرشناسایی‌کننده (بدون raw SSID/BSSID/IP؛ بدون مجوز حساس جدید)، TTL/Cooldown، ذخیره اتمی مقاوم به خرابی، ماندگاری پس از Restart؛ شکست Fast Path → Discovery؛ خطاهای 401/403/عمومی هرگز 451 تلقی نشوند و حلقه Bootstrap نسازند.
+   - ذخیره مسیر موفق فقط پس از Bootstrap readiness + Probe + Guardian Authorization موفق — توجه: Authorization واقعی هنوز وجود ندارد (Stage 5)؛ در Stage 4 این «تأیید نهایی» را به‌صورت seam/اینترفیس طراحی کن (تست با fake Authorization verifier) تا Stage 5 بدون بازنویسی وصل شود.
+   - انحصار: فقط یک Bootstrap فعال در کل برنامه؛ چند درخواست Guardian یک Psiphon جدید نسازند (singleflight در سطح Strategy Manager، نه فقط هر PsiphonBootstrapProxy)؛ **bootstrap هنگام walk کاربر aether شروع نشود** (env فرایند + identity مشترک — قید مستند Sections 2/3 همین فایل).
+   - State Machine مأموریت (IDLE/DIRECT_REQUEST/GUARDIAN_451/BOOTSTRAP_SELECTING/PSIPHON_DIRECT_STARTING/…/STOPPED) هماهنگ با مدل وضعیت موجود پروژه (connection_state.dart)؛ نامها قابل تغییر، رفتارها قابل تفکیک.
+   - اندازه‌گیری جداگانه: زمان شروع تا آماده‌شدن Bootstrap و زمان شروع درخواست تا Authorization (ساختار آماده برای مقایسه Cold/Warm در Stage 7/9؛ بدون اعلام عدد بدون اندازه‌گیری).
+   - قواعد ثابت: تغییر حدسی نکن؛ pinها دست‌نخورده؛ هیچ تست قبلی حذف/ضعیف نشود؛ commit مستقل؛ push به همین شاخه؛ به‌روزرسانی همین فایل؛ گزارش ۹-بندی؛ توقف.
+3. قانون توقف: بعد از Stage 4 متوقف شو؛ مرحله ۵ (Routing RoundTripper و اتصال انتخابی Guardian) در اجرای بعدی.
 
 ---
 
@@ -287,6 +350,8 @@
 | 1 — مستندات | `caac298` | docs(guardian-bootstrap): stage 1 — 451 classification report, transport scope, port map (pins `2c04f5a`) |
 | 2 — کد | `b88b423` | feat(psiphon): standalone guardian-bootstrap local proxy (stage 2) |
 | 2 — مستندات | `e28e93b` | docs(guardian-bootstrap): stage 2 — standalone proxy report (pins `b88b423`) |
-| 2 — راستی‌آزمایی | (tip شاخه پس از همین commit) | docs(guardian-bootstrap): stage 2 — independent verification (git/remote sync، analyze 0، 331+8~0، 21/21 + LIVE سبز؛ بدون بازنویسی کد) |
+| 2 — راستی‌آزمایی | `27d0319` | docs(guardian-bootstrap): stage 2 — independent verification (git/remote sync، analyze 0، 331+8~0، 21/21 + LIVE سبز؛ بدون بازنویسی کد) |
+| 3 — کد | (tip شاخه پس از همین commit) | feat(psiphon): launch the EXISTING aether→psiphon chain for guardian bootstrap (stage 3) |
+| 3 — مستندات | (همان tip؛ docs و کد در یک commit مستقل این مرحله) | شامل همین بخش Stage 3 + به‌روزرسانی وضعیت/نقشه/دستور Stage 4 |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
