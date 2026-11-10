@@ -14,7 +14,7 @@
 | Base Commit | `ce852ea` (= tip شاخه `performance/firefox-vpn-optimization`؛ شامل تمام اصلاحات Performance مراحل ۰–۸) |
 | آخرین Commit | (انتهای فایل — «گیت مراحل») |
 | مرحله فعلی | **Stage 3 — ترکیب واقعی AETHER → PSIPHON (بدون TUN/VpnService)** |
-| مرحله تکمیل‌شده آخر | **Stage 2 — PASS (پراکسی محلی مستقل Psiphon؛ کد `b88b423` + مستندات همین commit)** |
+| مرحله تکمیل‌شده آخر | **Stage 2 — PASS + راستی‌آزمایی مستقل (کد `b88b423` + مستندات `e28e93b` + verification؛ جزئیات §۸ همین فایل)** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### وضعیت Git در شروع مأموریت (تأییدشده)
@@ -229,6 +229,17 @@
 - انحصار هم‌زمانی bootstrap ↔ walk کاربر (تحویل به Stage 4).
 - رفتار `AETHER_PSIPHON_READY_SECS` روی دستگاه (پیش‌فرض 180s هسته ملاک است؛ بودجه Dart 210s).
 
+### ۸. راستی‌آزمایی مستقل Stage 2 (اجرای verification — 2026-11-10)
+
+- دستور جاریِ این اجرا صریح بود: «اگر مرحله دوم قبلاً کامل شده است، آن را از ابتدا اجرا یا بازنویسی نکن؛ شواهد و تست‌های موجود را بررسی و نتیجه واقعی را ثبت کن.» — دقیقاً همین انجام شد: **هیچ کد Stage 2 بازنویسی یا دوباره تولید نشد؛ فقط راستی‌آزمایی و ثبت نتیجه.**
+- وضعیت Git در شروع این اجرا: HEAD = `e28e93b` (= commit مستندات Stage 2)، working tree پاک، و `ls-remote` تأیید کرد tip ریموتِ `feature/firefox-guardian-psiphon-bootstrap` دقیقاً همان `e28e93b` است — یعنی کد و مستندات Stage 2 از قبل کاملاً push شده بودند.
+- شواهد Stage 0/1 بازتأیید شد: commitهای `8a54a1b` / `0e0126e` / `2c04f5a` / `caac298` در تاریخچه همین شاخه حاضرند و `guardianRegionUnavailable` هنوز زنده است (`phase1/fxv/internal/fferr/classify.go`، `cmd/libfirefoxvpn/main.go`، `internal/upstream/controller.go` + سه فایل Dart/l10n و تستهای مربوط).
+- `git show --stat b88b423`: دقیقاً دو فایل **جدید** (`lib/connection/firefox/psiphon_bootstrap.dart` و `test/psiphon_bootstrap_test.dart`)؛ هیچ فایل موجودی تغییر نکرد — قید «pinها/Go/CGO-A1/workflowها/Data Plane دست‌نخورده» برقرار است.
+- `flutter analyze` در همان toolchain pin شده CI (sandbox Flutter 3.47.9 / Dart 3.13.7): **صفر یافته** — بازتولید شد.
+- `flutter test` کل مخزن: **۳۳۱ پاس / ۸ skip قبلی / ۰ شکست** — عدد ثبت‌شده در §۶ دقیقاً بازتولید شد. فایل Stage 2: **۲۱/۲۱ سبز**، از جمله تست **LIVE** (SOCKS5 → CONNECT دامنه‌ای → TLS با verify کامل → trace واقعی از طریق relay) که در همین sandbox شبکه‌دار واقعاً اجرا و پاس شد (skip نشد).
+- تست قرارداد سورس بازبینی مستقیم شد: کدِ بدون کامنتِ مدیر را روی نبود `MethodChannel`/`invokeMethod`/`startVpn`/`startCoreHold`/`VpnService`/`prepareVpn`/`NetworkInterface` قفل می‌کند — معتبر.
+- جمع‌بندی: **Stage 2 = PASS (verified)** — هیچ نقصی در محدوده Stage 2 یافت نشد که نیاز به اصلاح داشته باشد؛ تنها خروجی این اجرا همین ثبت راستی‌آزمایی است.
+
 ---
 ## نقشه فایل‌های کلیدی (برای مراحل بعد)
 
@@ -254,7 +265,7 @@
 
 ## دستور دقیق ادامه کار (جلسه بعدی — Stage 3)
 
-1. همین فایل را بخوان؛ HEAD باید commit مستندات Stage 2 باشد و working tree پاک (شاخه `feature/firefox-guardian-psiphon-bootstrap` شامل کد Stage 2).
+1. همین فایل را بخوان؛ HEAD باید commit راستی‌آزمایی Stage 2 (§۸) باشد و working tree پاک (شاخه شامل کد Stage 2 `b88b423` + مستندات `e28e93b` + راستی‌آزمایی).
 2. **فقط Stage 3 را اجرا کن** — ترکیب واقعی AETHER → PSIPHON برای Bootstrap:
    - مبنای سورس: `run_chain` (psiphon.rs L940-968): هسته ابتدا listener `--psiphon-bind` را از ابتدا bind می‌کند، `wait_for_proxy(through)` صبر می‌کند تونل WARP (listener `--bind`) جواب بدهد، بعد psiphon را با `UpstreamProxyURL=socks5://<through>` روی آن اجرا می‌کند و خروجی relay روی `--psiphon-bind` است.
    - برای Bootstrap: پورتهای موقت/ephemeral برای هر دو listener (همان الگوی pre-bind مرحله ۲؛ بدون تداخل با 1819/1820/1821/1822)؛ Data Directory همان مسیر اختصاصی bootstrap؛ پروتکل پایه WARP طبق پیش‌فرض/انتخاب کاربر بدون تغییر walk اصلی.
@@ -275,6 +286,7 @@
 | 1 — کد | `2c04f5a` | feat(firefox): classify guardian HTTP 451 as region-unavailable |
 | 1 — مستندات | `caac298` | docs(guardian-bootstrap): stage 1 — 451 classification report, transport scope, port map (pins `2c04f5a`) |
 | 2 — کد | `b88b423` | feat(psiphon): standalone guardian-bootstrap local proxy (stage 2) |
-| 2 — مستندات | (tip شاخه پس از همین فایل) | docs(guardian-bootstrap): stage 2 — standalone proxy report (pins `b88b423`) |
+| 2 — مستندات | `e28e93b` | docs(guardian-bootstrap): stage 2 — standalone proxy report (pins `b88b423`) |
+| 2 — راستی‌آزمایی | (tip شاخه پس از همین commit) | docs(guardian-bootstrap): stage 2 — independent verification (git/remote sync، analyze 0، 331+8~0، 21/21 + LIVE سبز؛ بدون بازنویسی کد) |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
