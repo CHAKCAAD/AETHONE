@@ -668,3 +668,4 @@ RemoteSettings زنده (vpnclient.FetchServerList با uTLS Firefox ClientHello
 | 6 — کد ۱ | `c4ea2d9` | fix(engine): restore the upstream log level discipline in the SOCKS layer (stage 6) |
 | 6 — کد ۲ | `ee82680` | feat(engine): 60s runtime-stats evidence line for on-device CPU/memory diagnosis (stage 6) |
 | 7 — مستندات | `d223ab2` | docs(performance): stage 7 — TLS fragmentation decision (no implementation: post-connection problem, no DPI/handshake-failure evidence, pinned engine has no capability; Arman reference uses ECH not fragment) |
+| 8 — مستندات | `e7b5e96` | docs(performance): stage 8 — final review, NOT TESTED table + measurement method, debug APK via Actions run 42771904063; mission complete |
