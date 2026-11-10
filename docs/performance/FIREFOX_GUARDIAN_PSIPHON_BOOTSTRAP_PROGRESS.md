@@ -514,7 +514,7 @@
 | 3 — مستندات | (همان `cebb710`؛ کد و مستندات در یک commit مستقل این مرحله) | شامل بخش Stage 3 + به‌روزرسانی وضعیت/نقشه/دستور Stage 4 |
 | 4 — کد | (tip شاخه پس از همین commit) | feat(guardian): bootstrap strategy manager — fast path, discovery, route memory (stage 4) |
 | 4 — مستندات | (همان tip؛ کد و مستندات در یک commit مستقل این مرحله) | شامل همین بخش Stage 4 + به‌روزرسانی وضعیت/نقشه/دستور Stage 5 |
-| 5 — کد+مستندات | (tip شاخه پس از همین commit) | feat(guardian): routing roundtripper — guardian-only selective control plane (stage 5) — شامل بخش Stage 5 این فایل + به‌روزرسانی وضعیت/نقشه/دستور Stage 6 |
-| 6 — کد+مستندات | (tip شاخه پس از همین commit) | feat(guardian): renewal lifecycle — expiry-based bootstrap release policy, renewal event plumbing, quota outcome mapping (stage 6) — شامل بخش Stage 6 این فایل + به‌روزرسانی وضعیت/نقشه/دستور Stage 7 |
+| 5 — کد+مستندات | `c8e62b6` | feat(guardian): routing roundtripper — guardian-only selective control plane (stage 5) — شامل بخش Stage 5 این فایل + به‌روزرسانی وضعیت/نقشه/دستور Stage 6 |
+| 6 — کد+مستندات | `2c31cba` | feat(guardian): renewal lifecycle — expiry-based bootstrap release policy, renewal event plumbing, quota outcome mapping (stage 6) — شامل بخش Stage 6 این فایل + به‌روزرسانی وضعیت/نقشه/دستور Stage 7 |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
