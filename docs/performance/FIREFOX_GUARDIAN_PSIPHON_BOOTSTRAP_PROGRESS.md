@@ -13,8 +13,8 @@
 | Branch کاری | `feature/firefox-guardian-psiphon-bootstrap` |
 | Base Commit | `ce852ea` (= tip شاخه `performance/firefox-vpn-optimization`؛ شامل تمام اصلاحات Performance مراحل ۰–۸) |
 | آخرین Commit | (انتهای فایل — «گیت مراحل») |
-| مرحله فعلی | **Stage 2 — اتصال مستقل Psiphon در حالت Local Proxy (بدون VpnService/TUN)** |
-| مرحله تکمیل‌شده آخر | **Stage 1 — PASS (طبقه‌بندی اختصاصی 451 Guardian؛ کد `2c04f5a` + مستندات همین commit)** |
+| مرحله فعلی | **Stage 3 — ترکیب واقعی AETHER → PSIPHON (بدون TUN/VpnService)** |
+| مرحله تکمیل‌شده آخر | **Stage 2 — PASS (پراکسی محلی مستقل Psiphon؛ کد `b88b423` + مستندات همین commit)** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### وضعیت Git در شروع مأموریت (تأییدشده)
@@ -47,6 +47,7 @@
 ### ۲. معماری فعلی Psiphon
 
 - **موتور**: باینری خارجی `libpsiphon.so` (= psiphon-tunnel-core بازنام‌گذاری‌شده؛ pin CI: `CluvexStudio/psiphon-tunnel-core` @ `2956a96b56fe09b99e72a8eb4bed3e79d29e3543`) به‌عنوان **child process** توسط هسته Rust درون‌فرایندی Aether (`libaether.so`؛ pin CI: `CluvexStudio/Aether` @ `d58f9d568083129ce2c767c85054021eb3ee6a38` v2.4.0) spawn و supervise می‌شود (`aether/src/psiphon.rs` در pin، ۱۵۱۷ خط — تأیید مستقیم سورس).
+| مدیر Bootstrap مستقل Psiphon (Stage 2) | `lib/connection/firefox/psiphon_bootstrap.dart` (PsiphonBootstrapProxy + SocksTlsReadyProbe + buildArgs) + `test/psiphon_bootstrap_test.dart` |
 - **سازوکار راه‌اندازی** (psiphon.rs `start`): هسته config JSON می‌سازد (`aether-psiphon.json`، مجوز 0600) با کلیدهای: `LocalSocksProxyPort`، `LocalHttpProxyPort`+`DisableLocalHTTPProxy=false` (فقط با `--psiphon-http`)، `UpstreamProxyURL` (زنجیر/`--upstream`)، `EgressRegion` (`--psiphon-region`)؛ باینری با `client_arguments` اجرا می‌شود؛ stdin=null، **notices از stderr** خط‌به‌خط JSON.
 - **آمادگی (دقیقاً مطابق الزام Stage 2 مأموریت)**: notice `ListeningSocksProxyPort` (و `ListeningHttpProxyPort` اگر http) + notice `Tunnels` با `count>0` → آماده = «تونل برقرار + پورت شنیده»؛ سپس listenerهای core (نگه‌داشته از ابتدا) به پورت‌های واقعی psiphon relay می‌شوند (`relay_to`). مهلت: `AETHER_PSIPHON_READY_SECS` (پیش‌فرض 180).
 - **Notices دیگر**: `ConnectedServer` (ipAddress)، `AvailableEgressRegions`، `ConnectingServer/ActiveTunnel/Homepage` (debug)، `Warning/Alert/Error/InternalError` (با فیلتر expected_without_inproxy). از دست رفتن تونل: `Tunnels.count=0` بعد از برقراری → warn «lost its tunnel; reconnecting».
@@ -169,6 +170,66 @@
 ---
 
 
+
+## یافته‌ها و تغییرات Stage 2 (اجرای 2026-11-10)
+
+### ۱. تصمیم معماری پورت — اصل «بدون Parse کردن Log» برقرار شد
+
+- **بررسی مستقیم ffi.rs در pin** (کل فایل خوانده شد): سطح FFI فقط `aether_core_start/job_poll/job_cancel/job_free` (+ identity/team) دارد؛ `job_poll` فقط `running`/`done` برمی‌گرداند. **هیچ API رویدادی یا پرس‌وجوی local_addr وجود ندارد.**
+- `--bind 127.0.0.1:0` در هسته **پشتیبانی می‌شود** (psiphon.rs `run_only` L921-922: `listener.local_addr()`) اما پورت مؤثر فقط در لاگ هسته اعلام می‌شود؛ خواندن آن از لاگ توسط مأموریت ممنوع است.
+- **راه‌حل پیاده‌سازی‌شده (Dart pre-bind)**: `PsiphonBootstrapProxy.pickFreeLoopbackPort()` — bind روی `127.0.0.1:0` در Dart، خواندن پورت انتخابی OS، آزادسازی سوکت، و پاس‌دادن آدرس **مشخص** `--bind 127.0.0.1:<port>` به هسته. پورت «با ساخت» شناخته می‌شود (هرگز از لاگ parse نمی‌شود)، هر بار تصادفی است، و هیچ‌وقت در بازه 1819/1820/1821/1822 نیست (بازه ephemeral لینوکس/اندروید از 32768 شروع می‌شود + گارد `kPinnedAethonePorts` در کد).
+- **Fail-closed**: اگر پورت در پنجره release→bind توسط فرایند دیگری گرفته شود، `socks::bind_listener` هسته با متن منجمد «the socks5 listener cannot use …» خارج می‌شود، job می‌میرد و Manager تا ۳ بار با پورت تازه retry می‌کند (تست‌دار).
+
+### ۲. آمادگی چندشاهدی (الزام ۲-۶ مأموریت)
+
+زنجیره علّی از سورس pin شده: هسته listener مربوط به `--bind` را از همان ابتدا نگه می‌دارد اما **فقط بعد از** دیدن noticeهای `ListeningSocksProxyPort` و `Tunnels.count>0` (درون psiphon.rs `start()`) آن را با `relay_to` به SOCKS داخلی psiphon وصل می‌کند. بنابراین از دید Dart:
+
+1. **job زنده** (poll مثل walk اتصال) — `_pollCoreOnce`.
+2. **SOCKS5 greeting کامل + CONNECT با ATYP=domain** از طریق همان listener — عبور موفق فقط بعد از بالاآمدن relay ممکن است؛ یعنی اثبات عبری: تونل psiphon برقرار است (`Tunnels>0`) و listener داخلی psiphon زنده است.
+3. **DNS از مسیر Proxy** — نام دامنه در CONNECT توسط psiphon resolve می‌شود (SOCKS5h عملاً)؛ هیچ DNS محلی در کار نیست.
+4. **TLS از مسیر Proxy** — `SecureSocket.secure` با verification کامل (بدون `onBadCertificate`) + HTTP trace با status 2xx/3xx.
+
+پروب تولیدی: `SocksTlsReadyProbe` (SOCKS5 → CONNECT → TLS → trace؛ همان `TunnelProbe.socksConnect` مشترک با walk اتصال + ارتقای TLS). باز شدن پورت به‌تنهایی هرگز Ready نیست — تست «an open port that never speaks SOCKS5 is NOT ready» این را قفل کرده است.
+
+### ۳. یافته جانبی مهم — باگ latent در مسیر Onionoo (egress_locations)
+
+- `SocksTunnel.detach()` (tunnel_probe.dart) subscription فعال StreamIterator را **cancel** می‌کند؛ در dart:io این کار **سمت خواندن سوکت را می‌بندد** (نوشتن زنده می‌ماند — با آزمون‌های تجربی جداگانه اثبات شد: cancel→write OK، اما `SecureSocket.secure` بعد از detach بلافاصله EOF می‌گیرد و با «Connection terminated during handshake» می‌میرد؛ ClientHello هرگز ارسال نمی‌شود).
+- راه درست (در این مرحله اعمال شد): `SecureSocket.secure(tunnel.socket, …)` **بدون cancel** — subscription در حالت paused به لایه TLS سپرده می‌شود (`_detachRaw` خودش آن را adopt می‌کند). با این تغییر، پروب کامل LIVE (SOCKS5 → CONNECT → TLS واقعی → `HTTP/1.1 200 OK` از www.cloudflare.com از طریق relay آزمایشی) سبز شد.
+- **اثر در کد موجود**: `_resolveViaOnionoo` در egress_locations.dart همین الگوی معیوب detach→secure را دارد → خطای آن silent catch می‌شود و همیشه به fallback یعنی ip-api (HTTP ساده) می‌رسد. **در این مرحله عمداً دست نخورد** (انضباط محدوده Stage 2)؛ برای مالک ثبت شد — اصلاح آن یک commit مستقل خارج از این مأموریت/در مرحله بعدی با تأیید مالک باشد.
+
+### ۴. فایلهای تغییرکرده (Stage 2)
+
+- **جدید**: `lib/connection/firefox/psiphon_bootstrap.dart` — مدیر `PsiphonBootstrapProxy` (تک‌نمونه‌ای/singleflight؛ start/stop/restart/healthCheck/dispose؛ جریان رخدادهای typed؛ `endpoint.socksUrl`) + پروب تولیدی `SocksTlsReadyProbe` + ساخت arg مخصوص bootstrap (`buildArgs` — فقط `--psiphon-only/--bind/--psiphon-bin/--psiphon-dir/--log-level`) + بهداشت محیط `AETHER_*` قبل از هر start (همان نظم walk اتصال).
+- **جدید**: `test/psiphon_bootstrap_test.dart` — ۲۱ تست.
+- **دست‌نخورده**: بقیه مخزن (گواهی: `git status` فقط همین دو فایل جدید). pinها، Go، CGO/A1، workflowها، Data Plane — بدون تغییر.
+
+### ۵. قرارداد سطح Stage 2 (ورودی Stage 4/5)
+
+- `PsiphonProxyEndpoint.socksUrl` = `socks5://127.0.0.1:<ephemeral>` — همان چیزی که RoutingRoundTripper مرحله ۵ dial خواهد کرد.
+- کدهای خطا (پایدار): `libraryMissing`, `coreStartFailed`, `portConflict`, `coreExited`, `notReady`, `cancelled`, `disposed`؛ رخداد مرگ حین ready: `coreDied`/`listenerDead` (با متن خطای خود هسته).
+- **قید مستند برای Stage 4**: محیطِ process بین bootstrap و walk اتصال کاربر مشترک است (بهرست `AETHER_*` هر دو را پاک می‌کند) — انحصار «bootstrap هنگام walk کاربر شروع نشود» مال Stage 4 است. جریان Guardian (موتور Firefox = فرایند child) اصلاً job هسته aether ندارد.
+- Data Directory پایدار و اختصاصی: `$filesDir/aether/psiphon-bootstrap` (جدا از `…/aether/psiphon` حالتهای کاربر — دو child psiphon روی یک DataRootDirectory ناامن است) — بین restartها حفظ می‌شود.
+
+### ۶. تستها و نتایج واقعی (Stage 2)
+
+- `flutter analyze` → **صفر یافته** (sandbox با همان Flutter pin شده CI: 3.47.9 / Dart 3.13.7).
+- `flutter test` کل مخزن → **331 پاس، 8 skip قبلی (بدون تغییر)، 0 شکست**؛ فایل جدید: ۲۱ تست شامل:
+  - قرارداد سورس (نبود MethodChannel/VpnService/TUN در مدیر — با تست قراردادی روی سورس).
+  - args منطبق pin (فقط psiphon-only؛ بدون upstream/chain-listener/region/protocol-pin/config/scan).
+  - تخصیص پورت ephemeral (خارج نقشه pin؛ واقعاً آزاد).
+  - «پورت باز ≠ Ready» با listener واقعی خاموش.
+  - **LIVE**: handshake کامل واقعی (SOCKS5 → CONNECT دامنه‌ای → TLS verify شده → `HTTP/1.1 200 OK`) از طریق relay آزمایشی به www.cloudflare.com — در همین اجرا واقعاً اجرا شد و سبز شد (skip صادقانه فقط در محیط آفلاین).
+  - lifecycle: singleflight (یک job برای چند start همزمان)، retry تعارض پورت، خطای verbatim هسته (coreExited)، exit تمیز، timeout + پاکسازی cancel/free، stop حین start (cancelled، بدون failed)، stop idempotent، restart (پورت تازه + DataDir ثابت)، مرگ هسته حین ready (health ticker → failed)، healthCheck صادق، dispose (بستن stream + inert بودن callbackها).
+- Go: هیچ فایل Go تغییر نکرد (اثبات با git status) — CI (`native-ci`) تأیید نهایی را انجام می‌دهد.
+
+### ۷. NOT TESTED (Stage 2)
+
+- اجرای واقعی روی گوشی با `libaether.so`/`libpsiphon.so` واقعی و شبکه ایران (Stage 9 سناریو B) — در sandbox باینری Android هست.
+- متن خطای تعارض bind از هسته واقعی روی دستگاه (مطابق سورس pin منجمد فرض شد؛ evidence-locked string match مثل harvest قبلی).
+- انحصار هم‌زمانی bootstrap ↔ walk کاربر (تحویل به Stage 4).
+- رفتار `AETHER_PSIPHON_READY_SECS` روی دستگاه (پیش‌فرض 180s هسته ملاک است؛ بودجه Dart 210s).
+
+---
 ## نقشه فایل‌های کلیدی (برای مراحل بعد)
 
 | موضوع | مسیر |
@@ -185,24 +246,24 @@
 | TUN/VpnService | `android/.../AethoneVpnService.kt` + MainActivity.startVpn |
 | ترکیب‌ها/پورت‌ها | `lib/connection/transport_modes.dart` + `docs/CLI_REFERENCE.md` + `docs/FEATURE_MATRIX.md` §4 |
 | spawn/notice های psiphon | pin `CluvexStudio/Aether` @ `d58f9d56` → `aether/src/psiphon.rs` |
+| مدیر Bootstrap مستقل Psiphon (Stage 2) | `lib/connection/firefox/psiphon_bootstrap.dart` (PsiphonBootstrapProxy + SocksTlsReadyProbe + buildArgs) + `test/psiphon_bootstrap_test.dart` |
 | طبقه‌بندی 451 Guardian (Go) | `phase1/fxv/internal/fferr/classify.go` (ClassifyGuardian) + `cmd/libfirefoxvpn/main.go` (classifyGuardian) + `internal/upstream/controller.go` (renewalFailCode) |
 | مدل خطای Dart + متنها | `lib/connection/firefox/firefox_errors.dart` + `lib/connection/firefox/firefox_protocol.dart` + `lib/l10n/app_strings.dart` (firefoxErrGuardianRegion) |
 
 ---
 
-## دستور دقیق ادامه کار (جلسه بعدی — Stage 2)
+## دستور دقیق ادامه کار (جلسه بعدی — Stage 3)
 
-1. همین فایل را بخوان؛ `git -C <repo> log --oneline -3` و `git status` (باید HEAD = commit مستندات Stage 1 و working tree پاک باشد؛ شاخه `feature/firefox-guardian-psiphon-bootstrap` شامل `2c04f5a`).
-2. **فقط Stage 2 را اجرا کن** — اتصال مستقل Psiphon در حالت Local Proxy:
-   - هدف: اجرای هسته aether درون‌فرایندی در حالت `--psiphon-only` (بدون VpnService و بدون TUN) از Dart از طریق FFI موجود (`aether_core_start` + poll/cancel)، فقط برای ارائه پراکسی محلی به Bootstrap.
-   - پورت: `--bind 127.0.0.1:0` (ephemeral — یافته بخش ۵ Stage 1) + خواندن پورت مؤثر از status (الگوی `status['port']` موجود)؛ `--psiphon-http` برای HTTP CONNECT بررسی و در صورت نیاز فعال شود (پیش‌فرض خاموش است).
-   - Data Directory: مسیر پایدار اختصاصی bootstrap (جدا از مسیر هسته حالتهای متصل کاربر) تا یادگیری Psiphon بین اجراها حفظ شود.
-   - آمادگی (طبق الزام مأموریت — باز شدن پورت کافی نیست): notice `Tunnels` با count>0 + `ListeningSocksProxyPort` + یک probe واقعی TLS/DNS از همان پراکسی + مهلت آماده‌سازی مشخص.
-   - Adaptive Connection موتور دست نخورد (بدون محدودسازی پروتکل؛ `--psiphon-mode auto` پیش‌فرض).
-   - مسیر سبک مستقل از walk اتصال موجود؛ بدون تداخل با 1819/1820/1821/1822؛ Singleflight (فقط یک نمونه)؛ Stop/Crash/Restart پاک (kill_on_drop + cancel job هسته؛ بدون پردازه یتیم).
-   - تست: Dart (lifecycle + probe + port-readback + singleflight)؛ در صورت امکان در CI اجرا و ثبت شود.
-   - قواعد: تغییر حدسی نکن؛ commit مستقل منطبق (مثل `feat(psiphon): add local port-forward bootstrap mode`)؛ push به همین شاخه؛ به‌روزرسانی همین فایل؛ گزارش ۹-بندی؛ توقف.
-3. قوانین ثابت: فقط مخزن `CHAKCAAD/AETHONE`؛ بدون Force Push/Release/تغییر pinها؛ CGO/A1 دست‌نخورده؛ معماری Child Process/stdin-JSON موتور Firefox حفظ؛ برای فایلهای Go (indent فضایی ۸تایی) و فایلهای حاوی متن فارسی فقط اسکریپت python با لنگر ASCII.
+1. همین فایل را بخوان؛ HEAD باید commit مستندات Stage 2 باشد و working tree پاک (شاخه `feature/firefox-guardian-psiphon-bootstrap` شامل کد Stage 2).
+2. **فقط Stage 3 را اجرا کن** — ترکیب واقعی AETHER → PSIPHON برای Bootstrap:
+   - مبنای سورس: `run_chain` (psiphon.rs L940-968): هسته ابتدا listener `--psiphon-bind` را از ابتدا bind می‌کند، `wait_for_proxy(through)` صبر می‌کند تونل WARP (listener `--bind`) جواب بدهد، بعد psiphon را با `UpstreamProxyURL=socks5://<through>` روی آن اجرا می‌کند و خروجی relay روی `--psiphon-bind` است.
+   - برای Bootstrap: پورتهای موقت/ephemeral برای هر دو listener (همان الگوی pre-bind مرحله ۲؛ بدون تداخل با 1819/1820/1821/1822)؛ Data Directory همان مسیر اختصاصی bootstrap؛ پروتکل پایه WARP طبق پیش‌فرض/انتخاب کاربر بدون تغییر walk اصلی.
+   - **بدون** TUN و **بدون** VpnService دوم (تأیید شده در Stage 0/2: FFI درون‌فرایندی).
+   - اثبات مسیر (۳-۶): با upstream/Listenr قابل کنترل ثابت کن psiphon واقعاً از SOCKS هسته dial می‌زند (نه مستقیم)، relay خروجی صحیح است، هیچ loop وجود ندارد (`AETHER→PSIPHON→AETHER` ممنوع — سه آدرس متمایزند).
+   - گسترش `PsiphonBootstrapProxy` (حالت ترکیبی جدید در همان مدیر — `psiphonOnly` → `aetherPsiphonChain`) یا کلاس خواهر؛ API سطح Stage 2 نباید بشکند.
+   - تست: Dart lifecycle + اثبات مسیر با fake؛ اجرای واقعی روی شبکه در صورت دسترسی، وگرنه NOT TESTED صریح.
+   - قواعد ثابت: تغییر حدسی نکن؛ pinها دست‌نخورده؛ commit مستقل؛ push به همین شاخه؛ به‌روزرسانی همین فایل؛ گزارش ۹-بندی؛ توقف.
+3. قانون توقف: بعد از Stage 3 متوقف شو؛ مرحله ۴ (Bootstrap Strategy Manager) در اجرای بعدی.
 
 ---
 
@@ -212,6 +273,8 @@
 |---|---|---|
 | 0 — مستندات | `8a54a1b` | docs(guardian-bootstrap): stage 0 — architecture audit (guardian control-plane seam, psiphon local-proxy/chain mechanics, combination map, no-mask finding) |
 | 1 — کد | `2c04f5a` | feat(firefox): classify guardian HTTP 451 as region-unavailable |
-| 1 — مستندات | (tip شاخه پس از همین فایل) | docs(guardian-bootstrap): stage 1 — 451 classification report, transport scope, port map (pins `2c04f5a`) |
+| 1 — مستندات | `caac298` | docs(guardian-bootstrap): stage 1 — 451 classification report, transport scope, port map (pins `2c04f5a`) |
+| 2 — کد | `b88b423` | feat(psiphon): standalone guardian-bootstrap local proxy (stage 2) |
+| 2 — مستندات | (tip شاخه پس از همین فایل) | docs(guardian-bootstrap): stage 2 — standalone proxy report (pins `b88b423`) |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
