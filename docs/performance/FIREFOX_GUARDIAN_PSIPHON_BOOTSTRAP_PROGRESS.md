@@ -617,6 +617,6 @@ Integration (۱۰ سناریوی مأموریت با double/سرور محلی �
 | 5 — کد+مستندات | `c8e62b6` | feat(guardian): routing roundtripper — guardian-only selective control plane (stage 5) — شامل بخش Stage 5 این فایل + به‌روزرسانی وضعیت/نقشه/دستور Stage 6 |
 | 6 — کد+مستندات | `2c31cba` | feat(guardian): renewal lifecycle — expiry-based bootstrap release policy, renewal event plumbing, quota outcome mapping (stage 6) — شامل بخش Stage 6 این فایل + به‌روزرسانی وضعیت/نقشه/دستور Stage 7 |
 | 6 — پین هش | `d36cf1e` | docs(guardian-bootstrap): pin the stage-6 commit hash in the progress table |
-| 7 — کد+مستندات | (tip شاخه پس از همین commit) | test(guardian): comprehensive coverage + data-plane separation proof (stage 7) — تست تفکیک Data Plane در Go، تستهای UI/l10n در Flutter، تکمیل l10n کلاسهای Stage 6، جدول پوشش رسمی این فایل |
+| 7 — کد+مستندات | `efe707a` | test(guardian): comprehensive coverage + data-plane separation proof (stage 7) — تست تفکیک Data Plane در Go، تستهای UI/l10n در Flutter، تکمیل l10n کلاسهای Stage 6، جدول پوشش رسمی این فایل |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
