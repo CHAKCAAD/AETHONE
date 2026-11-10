@@ -8,13 +8,13 @@
 
 | فیلد | مقدار |
 |---|---|
-| تاریخ آخرین اجرا | 2026-11-10 |
+| تاریخ آخرین اجرا | 2026-11-11 |
 | Repository | `CHAKCAAD/AETHONE` (تنها مخزن مجاز) |
 | Branch کاری | `feature/firefox-guardian-psiphon-bootstrap` |
 | Base Commit | `ce852ea` (= tip شاخه `performance/firefox-vpn-optimization`؛ شامل تمام اصلاحات Performance مراحل ۰–۸) |
 | آخرین Commit | (انتهای فایل — «گیت مراحل») |
-| مرحله فعلی | **Stage 8 — Build آزمایشی (APK دیباگ با Actions موجود)** |
-| مرحله تکمیل‌شده آخر | **Stage 7 — PASS (تست جامع + تفکیک Data Plane؛ جدول پوشش §Stage 7)** |
+| مرحله فعلی | **Stage 9 — تست واقعی روی گوشی مالک (سناریوهای A–F؛ نیازمند دسترسی مالک)** |
+| مرحله تکمیل‌شده آخر | **Stage 8 — PASS (Build آزمایشی APK دیباگ از Actions run `42869865882`؛ SHA256 مستقل تأیید؛ جزئیات بخش Stage 8)** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### وضعیت Git در شروع مأموریت (تأییدشده)
@@ -587,16 +587,86 @@ Integration (۱۰ سناریوی مأموریت با double/سرور محلی �
 
 ---
 
-## دستور دقیق ادامه کار (جلسه بعدی — Stage 8)
+## یافته‌ها و تغییرات Stage 8 (اجرای 2026-11-11)
 
-1. همین فایل را بخوان؛ HEAD باید commit مستقل Stage 7 باشد و working tree پاک (شاخه شامل کد Stage 2–7 + مستندات).
-2. **فقط Stage 8 را اجرا کن** — Build آزمایشی (طبق «مرحله هشتم» مأموریت):
-   - Build دیباگ اندروید با **Workflow موجود** (`android-debug.yml`)؛ تغییر غیرضروری workflow ممنوع؛ اصلاح A1 و CGO در ARM64 باید حفظ شود (workflow موجود رعایت می‌کند — فقط راستی‌آزمایی).
-   - APK قبلی overwrite نشود؛ نام جدید و واضح؛ SHA256 ثبت شود؛ package ID نسخه آزمایشی بررسی شود؛ باینری‌های psiphon/firefox موجود در APK بررسی شوند؛ اعتبار APK بررسی شود.
-   - گزارش CI (run URL، artifact، sha256) به همین فایل اضافه شود؛ artifact باید از GitHub Actions در `CHAKCAAD/AETHONE` قابل دریافت باشد. **هیچ Release عمومی نساخته.**
-   - دستور نصب روی گوشی POCO X3 (مالک) نیز ارائه شود.
-   - قواعد ثابت: pinها دست‌نخورده؛ تغییر حدسی نکن؛ commit مستقل؛ push به همین شاخه؛ به‌روزرسانی همین فایل؛ گزارش ۱۰-بندی؛ توقف.
-3. قانون توقف: بعد از Stage 8 متوقف شو؛ مرحله ۹ (تست واقعی روی گوشی مالک) در اجرای بعدی.
+### ۰. وضعیت آغاز اجرا و یک رویداد مهم (شفافیت کامل)
+
+- در شروع این اجرا، HEAD لوکال `27d0319` (= راستی‌آزمایی Stage 2) بود؛ فایل پیشرفت لوکال نیز تا Stage 2 را نشان می‌داد. پس از پیاده‌سازی کامل یک Stage 3 موازی، **push با رد مواجه شد**: ریموت شاخه در همان بازه توسط اجرای دیگری تا Stage 7 (`332ff03`) پیش رفته بود (Stage 3–7 کامل، ۴۰۴ تست سبز). تاریخچه ریموت محترم شمرده شد (بدون Force Push — قاعده مأموریت)؛ کار موازی محلی (هرگز push نشده) کنار گذاشته و شاخه لوکال به `332ff03` fast-forward شد. پیام کلیدی برای اجراهای بعدی: **همیشه قبل از شروع، `git ls-remote`/`git fetch` ریموت را بررسی کن، نه فقط HEAD لوکال را.**
+- دستور مالک برای این اجرا: «برو مرحله بعد؛ بیلد را باید با Actions گیت‌هاب بگیری نه خودت» — دقیقاً منطبق با Stage 8.
+
+### ۱. مسیر Build (طبق دستور: فقط Actions، هیچ Build محلی)
+
+- Workflow موجود `android-debug.yml` بدون هیچ تغییری استفاده شد (`git status` در طول مرحله فقط فایل پیشرفت را نشان می‌دهد؛ workflow دست‌نخورده).
+- push-trigger این workflow فقط به `integration/firefox-vpn-debug` است؛ مطابق رویه ثبت‌شده Performance Stage 8، اجرا از طریق **workflow_dispatch API روی ref شاخه کاری** انجام شد → **HTTP 204**.
+- **Run**: `42869865882` — branch `feature/firefox-guardian-psiphon-bootstrap`، commit `332ff03` (= tip شاخه، شامل کد کامل Stage 2–7)؛ شروع 2026-11-10T17:55:23Z، پایان 18:13 UTC (~۱۸ دقیقه).
+- **conclusion: success — هر ۵ job سبز**: Firefox engine (Go 1.25.0 — go vet + go test + ساخت سه ABI) | Native cores ×3 (arm64-v8a / armeabi-v7a / x86_64 — دستور فروزن native-ci) | DA debug APK (شامل flutter analyze + flutter test).
+
+### ۲. تأیید CI (خود workflow به‌عنوان شاهد)
+
+- `flutter analyze` → **«No issues found»** (لاگ job).
+- `flutter test` → **«412 tests passed»** — شامل تمام تستهای Guardian Stage 1–7 (گواه مستقیم در لاگ job: تست UI «GUARDIAN-BOOTSTRAP STAGE 7 — the 451 region failure renders the honest failed surface…» و ۱۵۵ خط مرتبط guardian/bootstrap/psiphon).
+- `go vet` + `go test` (فاز موتور، phase1/fxv) → PASS (job «Firefox engine»).
+
+### ۳. اصلاح A1/CGO — حفظ شده (راستی‌آزمایی، نه تغییر)
+
+- سه خط Build موتور از build-report خود CI:
+  - `android/arm64-v8a: CGO_ENABLED=1 CC=aarch64-linux-android34-clang` (NDK r28c = 28.2.13676358)
+  - `android/armeabi-v7a: CGO_ENABLED=1 CC=armv7a-linux-androideabi34-clang`
+  - `android/x86_64: CGO_ENABLED=1 CC=x86_64-linux-android34-clang`
+- gateهای بسته‌بندی خود workflow سبز: `zipalign -c -P 16` + `apksigner verify` + `aapt dump badging` + presence پنج کتابخانه در هر سه ABI + **byte-identity شش‌گانه libfirefoxvpn.so با خروجی Build در هر ABI** (sha256 داخل CI مقایسه شد).
+
+### ۴. Artifact و راستی‌آزمایی مستقل (دانلود و بازبینی، نه Build)
+
+| قلم | مقدار تأییدشده |
+|---|---|
+| Artifact | `AETHONE-DA-Firefox-Debug` (id `13790711461`) — از run `42869865882` در `CHAKCAAD/AETHONE` قابل دریافت؛ انقضا 2026-11-24T18:13:02Z (پنجره ۱۴روزه Actions) |
+| APK | `AETHONE-DA-Firefox-Debug.apk` — 187,234,418 بایت (≈۱۷۸.۵ MB) |
+| SHA256 (CI) | `7914908e916c74f489aff62f82950db84410301a811d7abbf4d700bb51ced93e` |
+| SHA256 (بازمحاسبه مستقل در sandbox) | **یکسان** ✓ |
+| اعتبار آرشیو | `unzip -t` → «No errors detected» ✓ |
+| package ID | `com.chakcaad.aethone.da` (سافیکس `.da` در build.gradle — **کنار** نسخه اصلی `com.chakcaad.aethone` نصب می‌شود، جایگزین آن نمی‌شود) |
+| ABIها | arm64-v8a + armeabi-v7a + x86_64 (universal — POCO X3 = arm64-v8a) |
+| کتابخانههای Bootstrap در APK | `libaether.so` + `libpsiphon.so` + `libfirefoxvpn.so` + `liblyrebird.so` در هر سه ABI (۱۲/۱۲ موجود ✓) |
+| امضا | debug-keystore (فقط نصب آزمایشی — release نیست) |
+| Release عمومی | **ساخته نشد** (artifact صرفاً Actions با انقضا؛ طبق مأموریت) |
+- «APK قبلی overwrite نشود»: artifact هر run در فضای خودش است (run قبلی Performance `42771904063` دست‌نخورده باقی است؛ نام artifact در workflow فروزن است و دستکاری آن تغییر غیرضروری workflow می‌شد).
+
+### ۵. دستور نصب روی گوشی مالک (POCO X3، Android، arm64-v8a)
+
+```bash
+# 1) artifact را از Actions دانلود کنید (نیاز به لاگین GitHub):
+#    https://github.com/CHAKCAAD/AETHONE/actions/runs/42869865882/artifacts/13790711461
+#    (zip را باز کنید: AETHONE-DA-Firefox-Debug.apk + build-report.txt + SHA256SUMS.txt)
+
+# 2) صحت فایل را تأیید کنید:
+sha256sum AETHONE-DA-Firefox-Debug.apk
+#    باید چاپ کند: 7914908e916c74f489aff62f82950db84410301a811d7abbf4d700bb51ced93e
+
+# 3) گوشی را با USB debugging وصل کنید و نصب کنید:
+adb devices
+adb install -r AETHONE-DA-Firefox-Debug.apk
+#    اگر قبلاً نسخه DA قدیمی (از run قبلی Performance) نصب بوده و خطای signature گرفتید
+#    (debug-keystore در CI هر بار تازه است)، اول:
+adb uninstall com.chakcaad.aethone.da
+#    و دوباره adb install -r …
+
+# نکته: پکیج DA (com.chakcaad.aethone.da) کنار اپ اصلی نصب می‌شود؛
+# برچسب آن «AETHONE DA» است تا با نسخه اصلی اشتباه نشود.
+```
+
+### ۶. NOT TESTED (Stage 8)
+
+- نصب و اجرای واقعی روی POCO X3 (موضوع Stage 9 — نیاز به گوشی مالک؛ ایجنت بدون دسترسی واقعی PASS اعلام نمی‌کند).
+- رفتار ۴۵۱/Bootstrap روی شبکه ایران (Stage 9 سناریوهای B/C/F).
+- مقایسه سطری build-report با artifactهای جانبی native (فقط گزارش اصلی و APK بازبینی شد؛ artifactهای engine/native برای عمق بیشتر در همان run موجودند).
+
+---
+
+## دستور دقیق ادامه کار (جلسه بعدی — Stage 9)
+
+1. همین فایل را بخوان؛ **ابتدا `git fetch` + `git ls-remote` ریموت را بررسی کن** (درس Stage 8: HEAD لوکال ممکن است عقب باشد)؛ HEAD باید commit Stage 8 باشد و working tree پاک.
+2. **فقط Stage 9 را اجرا کن** — تست واقعی روی گوشی مالک (طبق «مرحله نهم» مأموریت، سناریوهای A–F): Guardian مستقیم؛ Psiphon مستقیم (شرط ۴۵۱)؛ Mask→Psiphon (معادل واقعی AETHER→PSIPHON)؛ سایر ترکیبهای شناسایی‌شده؛ Renewal؛ جداسازی ترافیک. برای هر سناریو: زمان اتصال، نتیجه، علت شکست/موفقیت، مسیر واقعی. **بدون دسترسی واقعی به گوشی هیچ سناریویی PASS اعلام نشود** — NOT TESTED صادقانه ثبت شود. جدول معیارهای موفقیت مأموریت ملاک است.
+3. قانون توقف: بعد از Stage 9 (یا ثبت NOT TESTED و تحلیل) متوقف شو؛ جمع‌بندی نهایی مأموریت در همان اجرا.
 
 ---
 
@@ -618,5 +688,7 @@ Integration (۱۰ سناریوی مأموریت با double/سرور محلی �
 | 6 — کد+مستندات | `2c31cba` | feat(guardian): renewal lifecycle — expiry-based bootstrap release policy, renewal event plumbing, quota outcome mapping (stage 6) — شامل بخش Stage 6 این فایل + به‌روزرسانی وضعیت/نقشه/دستور Stage 7 |
 | 6 — پین هش | `d36cf1e` | docs(guardian-bootstrap): pin the stage-6 commit hash in the progress table |
 | 7 — کد+مستندات | `efe707a` | test(guardian): comprehensive coverage + data-plane separation proof (stage 7) — تست تفکیک Data Plane در Go، تستهای UI/l10n در Flutter، تکمیل l10n کلاسهای Stage 6، جدول پوشش رسمی این فایل |
+| 7 — پین هش | `332ff03` | docs(guardian-bootstrap): pin the stage-7 commit hash in the progress table |
+| 8 — مستندات | (tip شاخه پس از همین commit) | docs(guardian-bootstrap): stage 8 — trial build report via Actions run 42869865882 (sha256 verified, package id .da, engines 12/12, install commands) |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
