@@ -13,8 +13,8 @@
 | Branch کاری | `performance/firefox-vpn-optimization` |
 | Commit پایه شاخه | `ff9bc38` (= tip شاخه `integration/firefox-vpn-debug`) |
 | Commit آخرین مرحله تکمیل‌شده | (در انتهای همین فایل — بخش «گیت مرحله آخر») |
-| مرحله تکمیل‌شده آخر | **Stage 6 — CPU/حافظه/Go Child Process: PASS** (بازگرداندن نظم سطح لاگ upstream در لایه SOCKS + خط شواهد آماری ۶۰ ثانیه‌ای — بخش «نتیجه Stage 6») |
-| مرحله فعلی برای اجرای بعدی | **Stage 7 — TLS Fragmentation (تصمیم فنی: پیاده‌سازی فقط با شواهد DPI/handshake-failure)** |
+| مرحله تکمیل‌شده آخر | **Stage 7 — TLS Fragmentation: PASS (تصمیم فنی: عدم پیاده‌سازی؛ بدون تغییر کد — بخش «نتیجه Stage 7»)** |
+| مرحله فعلی برای اجرای بعدی | **Stage 8 — مقایسه نهایی، بررسی سازگاری و Build Debug APK (نام جدید + SHA256 + حفظ CGO/A1)** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### جدول مراحل
@@ -28,7 +28,7 @@
 | 4 — MTU | **PASS** (حسابرسی کامل با شواهد کد؛ بدون تغییر کد — بخش «نتیجه Stage 4») |
 | 5 — IPv4/IPv6 و Endpoint | **PASS** (تحلیل کامل + اصلاح واقعی: لاگ endpoint واقعی remote=IP هر دو transport — بخش «نتیجه Stage 5») |
 | 6 — CPU/حافظه/Go Child Process | **PASS** (اصلاح واقعی: نظم سطح لاگ upstream — حذف ۶ خط debug هر اتصال + ریدکشن دامنه‌ها و body خطاها در سطح normal؛ کانال شواهد live=N به Info ارتقا؛ خط آماری ۶۰ ثانیه‌ای — بخش «نتیجه Stage 6») |
-| 7 — TLS Fragmentation | PENDING |
+| 7 — TLS Fragmentation | **PASS** (تصمیم مستند: **عدم پیاده‌سازی** — مشکل post-connection است؛ هیچ شواهد DPI/شکست handshake؛ موتور قابلیت ندارد — بخش «نتیجه Stage 7») |
 | 8 — مقایسه نهایی و Build | PENDING |
 
 ---
@@ -546,17 +546,52 @@ RemoteSettings زنده (vpnclient.FetchServerList با uTLS Firefox ClientHello
 
 ---
 
+## نتیجه Stage 7 (اجرای 2026-11-10) — TLS Fragmentation: تصمیم فنی «عدم پیاده‌سازی»
+
+### ۱. وضعیت — PASS (مرحله تصمیم؛ بدون تغییر کد — الگوی Stage 4)
+
+### ۲. شواهد جمع‌آوری‌شده
+
+1. **طبیعت مشکل مالک**: «بعد از برقراری اتصال» است — پینگ ۲۰۰→۸۰۰۰ms با گذشت زمان اتصال و اختلاف throughput در انتقال داده. ورود حساب و برقراری اتصال هر دو موفق‌اند (خود مأموریت، بخش ۱). TLS fragmentation صرفاً ClientHello را در لحظه handshake تغییر می‌دهد و هیچ مکانیزمی برای اثر بر انتقال داده‌ی steady-state ندارد.
+2. **معماری handshake موتور (h2 پیش‌فرض)**: `internal/upstream/h2.go` (NewH2ProxySession، خطوط ~103-139) — دقیقاً **یک** TLS handshake با stdlib crypto/tls در هر session (`tls.DialWithDialer`، `MinVersion: TLS 1.2`، `NextProtos: ["h2"]`)؛ همه tunnelهای CONNECT روی همان یک اتصال h2 multiplex می‌شوند. renewal هم روی session زنده انجام می‌شود (token swap، بدون re-handshake). یعنی دامنه اثر هر قابلیت handshake-محور: فقط لحظه اتصال، نه پنجره زمانی مشکل.
+3. **h3**: QUIC — fragmentation متن TCP اساساً موضوعیت ندارد (پکت‌بندی/رمزنگاری خود QUIC).
+4. **exit probe**: uTLS با `HelloFirefox_Auto` (`internal/upstream/exitprobe.go:68-71`) — تطابق هویت با control plane (pin upstream: `55ad91a fix(fxa): present Firefox ClientHello on the control plane`)؛ مسیر control-plane، نه data path.
+5. **کانال مشاهده شکست handshake موجود است و خاموش نمانده**: شکست session-build صادقانه به host برمی‌گردد — `classifyUpstream` (`cmd/libfirefoxvpn/main.go:493-502`): پیام «the proxy did not negotiate the requested transport» برای شکست negotiation h2/h3 + خط Info `upstream session established` (Stage 3/5) + خط Warn `socks: upstream tunnel open failed` (Stage 6، ریداکشن‌شده). **هیچ گزارشی از شکست handshake/retry از دستگاه وجود ندارد** — برقراری اتصال همیشه موفق بوده است.
+6. **قابلیت موتور**: pin upstream `55ad91a2` **هیچ** کد fragmentation ندارد (جستجوی کامل سورس Go در pin: صفر مورد).
+7. **جریان تنظیمات Fragment در خود AETHONE**: UI مربوطه (`FragmentPreset` off/standard/balanced/aggressive/custom + size/delay؛ `lib/features/settings/core_page.dart:46-90`) فقط به argv هسته Rust تا می‌شود (`--fragment`، `--fragment-size`، `--fragment-delay`؛ `platform_engine_adapter.dart:247-251`) برای پروتکل‌های دیگر برنامه. `FirefoxEngineConfig` (`firefox_protocol.dart:43-51`: socksListen/auth/guardian/country/transport/upstreamOverride/logLevel) **هیچ فیلد fragment ندارد** و محل ساخت آن (`platform_engine_adapter.dart:2440`) چیزی از این دست پاس نمی‌دهد — قابلیت اصلاً به موتور Firefox نمی‌رسد.
+8. **مقایسه Arman** (مخزن مرجع `armanlife/arman-vpn-client`): ضد-DPI سطح TLS آن **ECH** است (`core/internal/service/relay_ech.go` — `EncryptedClientHelloConfigList`، TLS 1.3، fallback `withoutECH`)، نه ClientHello fragmentation؛ موارد «fragment» در سورس Arman مربوط به دیتاگرام UDP است. یعنی برتری throughput مشاهده‌شده Arman (خودِ مشکل مالک) به TLS fragmentation نسبت‌پذیر نیست.
+
+### ۳. تصمیم و دلیل (قاطع)
+
+**TLS fragmentation پیاده‌سازی نشد.** مبنا — مأموریت بخش ۶ (مرحله هفتم): «اگر این قابلیت برای مشکل فعلی ضروری نیست، آن را پیاده‌سازی نکن و دلیل تصمیم را ثبت کن»:
+- مشکل، post-connection است → خارج از دامنه اثر قابلیت (بند ۱ و ۲ بالا).
+- هیچ شواهد DPI/شکست handshake وجود ندارد (بند ۵).
+- موتور pin قابلیت ندارد (بند ۶) → پیاده‌سازی یعنی توسعه موازی جدید در هسته پین‌شده، در تضاد با محدودیت‌های سراسری بخش ۸ («تغییر بی‌دلیل هسته» / «اضافه‌کردن TLS fragmentation صرفاً با تصور افزایش سرعت»).
+- الگوی Arman هم توجیهی نمی‌سازد (بند ۸).
+
+### ۴. مسیر آینده — فقط در صورت ظهور شواهد DPI (مستند، بدون اقدام)
+
+نقطه صحیح پیاده‌سازی احتمالی: handshake سطح session در `NewH2ProxySession` (جایگزینی stdlib tls با utls یا split در سطح TLS record)، پشت knob جدید config با **پیش‌فرض خاموش**، فقط مسیر h2، بدون دست‌زدن به h3 و بدون تغییر pin upstream. پیش‌نیاز پذیرش: شواهد لاگ شکست handshake از دستگاه از طریق کانال‌های موجود (بند ۵).
+
+### ۵. تست‌های این اجرا
+
+بدون تغییر کد → تست جدیدی لازم نیست. برای اطمینان از سلامت HEAD: `go test ./... -count=1` روی HEAD اجرا شد — هر ۷ پکیج PASS (Go 1.25.0).
+
+### ۶. NOT TESTED
+
+- رفتار DPI واقعی روی شبکه مالک — لاگ دستگاه موجود نیست؛ صرفاً عدم وجود *شواهد مثبت* مستند شد، نه اثبات عدم وجود DPI.
+
+---
+
 ## دستور دقیق ادامه کار (جلسه بعدی)
 
-1. همین فایل را بخوان؛ `git -C <repo> log --oneline -3` و `git status` را بررسی کن (باید HEAD = commit مستندات Stage 6 باشد و working tree پاک).
-2. **فقط Stage 7 را اجرا کن**: TLS Fragmentation — **مرحله تصمیم فنی، نه پیاده‌سازی پیش‌فرض** —
-   - طبق مأموریت: این قابلیت عمدتاً برای عبور از محدودیت DPI در TLS handshake است و مستقیماً سرعت دانلود/آپلود بعد از برقراری تونل را افزایش نمی‌دهد؛ مشکل گزارش‌شده مالک «بعد از اتصال» است (پینگ ۲۰۰→۸۰۰۰ms، اختلاف سرعت در انتقال داده).
-   - بررسی‌ها (فقط با شواهد): چگونه handshake انجام می‌شود (h2: `internal/upstream/h2.go` NewH2ProxySession با TLS 1.2+/ALPN؛ h3: QUIC — fragmentation اصلاً موضوعیت ندارد)، آیا شکست handshake یا retry در لاگهای موجود ثبت شده (خطوط `upstream session established` و `socks: upstream tunnel open failed` — اکنون با ریدکشن)، آیا موتور فعلی (upstream pin) اصلاً قابلیت fragmentation دارد (در pin `55ad91a2` جستجو شود).
-   - اگر شواهد DPI/شکست handshake موجود نباشد: **پیاده‌سازی نکن** و تصمیم + دلیل را در همین فایل ثبت کن (خروجی مرحله = گزارش تصمیم + مستندات؛ مانند الگوی Stage 4).
-   - اگر شواهد موجود بود: امکان پیاده‌سازی اختیاری بررسی شود (روشن/خاموش، بدون آسیب به transportهای دیگر، بدون پیاده‌سازی موازی در صورت وجود قابلیت در موتور).
+1. همین فایل را بخوان؛ `git -C <repo> log --oneline -3` و `git status` را بررسی کن (باید HEAD = commit مستندات Stage 7 باشد و working tree پاک).
+2. **فقط Stage 8 را اجرا کن** — مقایسه نهایی و تثبیت عملکرد (آخرین مرحله):
+   - **بررسی نهایی**: تمام commitهای مراحل ۰-۷ (جدول «گیت مرحله آخر»)، تست‌های جدید (پکیج‌های socks/upstream/cmd)، سازگاری معماری (Child Process/stdin-stdout JSON دست‌نخورده)، حفظ اصلاح A1 (CGO_ENABLED=1 + aarch64-linux-android34-clang در اسکریپت build)، رفتار پروتکل‌های دیگر (هسته Rust و UI fragment آن‌ها دست نخورده)، امنیت اطلاعات (ریدکشن Stage 6).
+   - **مقایسه عملکرد**: دستگاه در دسترس نیست → جدول ۹-ستونه مأموریت (Idle/Loaded/Max Ping، Packet Loss، Down/Up، CPU، RAM، Stability) با `NOT TESTED` پر شود؛ عدد تخمینی ممنوع. روش اندازه‌گیری برای مالک مستند شود (استفاده از خطوط جدید `runtime stats` و `live=N` و `upstream session established` در core-log.txt برای جمع‌آوری شواهد on-device).
+   - **Build نهایی**: APK Debug آزمایشی با نام جدید (بدون overwrite)؛ حفظ CGO/A1 برای ARM64؛ ثبت SHA256؛ تطبیق باینری داخل APK (libfirefoxvpn.so و lib/arm64-v8a) با خروجی مورد انتظار؛ بررسی package ID نسخه آزمایشی؛ اعتبار APK. اگر build در sandbox ممکن نشد (NDK/flutter دسترسی)، صریحاً NOT TESTED ثبت و روش build مستند شود.
 3. قوانین: فقط مخزن `CHAKCAAD/AETHONE`؛ push فقط به `performance/firefox-vpn-optimization`؛ بدون Force Push/Release/تغییر pin upstream؛ CGO اندروید دست‌نخورده؛ برای فایل‌های tab-indent فقط اسکریپت python (قانون بخش ۸ Stage 6).
-4. پایان مرحله: commit مستقل (در صورت تغییر کد) + به‌روزرسانی همین فایل + push + گزارش با قالب ۱۰ بندی مأموریت + توقف.
-5. بعد از Stage 7: مرحله بعد Stage 8 (مقایسه نهایی + Debug APK با نام جدید + SHA256 + حفظ CGO/A1) است.
+4. پایان مرحله: commit مستقل + به‌روزرسانی همین فایل + push + گزارش با قالب ۱۰ بندی مأموریت + توقف.
 
 *(Token دسترسی در دستور مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
 
