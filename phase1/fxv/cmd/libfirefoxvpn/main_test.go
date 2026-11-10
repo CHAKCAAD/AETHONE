@@ -11,6 +11,7 @@ package main
 
 import (
         "bufio"
+        "context"
         "encoding/json"
         "fmt"
         "io"
@@ -18,7 +19,9 @@ import (
         "os"
         "os/exec"
         "path/filepath"
+        "runtime"
         "strings"
+        "sync"
         "testing"
         "time"
 )
@@ -376,5 +379,80 @@ func TestStderrLoggerLevelDiscipline(t *testing.T) {
         log = &stderrLogger{enabled: true}
         if log.Verbose() {
                 t.Fatal("normal logger must report Verbose()=false")
+        }
+}
+
+// TestFormatRuntimeStats (Stage 6): the evidence line renders the
+// counters and the allocation rate from the window delta; a zero
+// window must not panic.
+func TestFormatRuntimeStats(t *testing.T) {
+        prev := &runtime.MemStats{HeapAlloc: 10 << 20, Sys: 50 << 20, NumGC: 2, TotalAlloc: 100 << 20}
+        cur := &runtime.MemStats{HeapAlloc: 20 << 20, Sys: 80 << 20, NumGC: 5, TotalAlloc: 160 << 20}
+        line := formatRuntimeStats(prev, cur, 60*time.Second)
+        for _, want := range []string{
+                "goroutines=",
+                "heap_mb=20.0",
+                "sys_mb=80.0",
+                "num_gc=5",
+                "total_alloc_mb=160.0",
+                // 60 MiB allocated over 60s = 1024 KB/s.
+                "alloc_kbps=1024",
+        } {
+                if !strings.Contains(line, want) {
+                        t.Fatalf("stats line %q missing %q", line, want)
+                }
+        }
+        if zero := formatRuntimeStats(prev, cur, 0); !strings.Contains(zero, "alloc_kbps=0") {
+                t.Fatalf("zero window must render alloc_kbps=0 without panicking: %q", zero)
+        }
+}
+
+// syncBuffer is a mutex-guarded writer (the stats goroutine and the
+// test read concurrently; -race would catch an unsynchronized builder).
+type syncBuffer struct {
+        mu  sync.Mutex
+        buf strings.Builder
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+        b.mu.Lock()
+        defer b.mu.Unlock()
+        return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+        b.mu.Lock()
+        defer b.mu.Unlock()
+        return b.buf.String()
+}
+
+// TestRuntimeStatsLoopEmitsAndStops (Stage 6): the loop emits Info
+// stats lines on its ticker and exits promptly on context cancel.
+func TestRuntimeStatsLoopEmitsAndStops(t *testing.T) {
+        out := &syncBuffer{}
+        log := &stderrLogger{enabled: true, redact: func(s string) string { return s }, w: out}
+        ctx, cancel := context.WithCancel(context.Background())
+        done := make(chan struct{})
+        go func() {
+                runtimeStatsLoop(ctx, log, 5*time.Millisecond)
+                close(done)
+        }()
+
+        deadline := time.Now().Add(3 * time.Second)
+        for {
+                if strings.Contains(out.String(), "info: runtime stats goroutines=") {
+                        break
+                }
+                if time.Now().After(deadline) {
+                        t.Fatal("no runtime stats line within 3s")
+                }
+                time.Sleep(5 * time.Millisecond)
+        }
+
+        cancel()
+        select {
+        case <-done:
+        case <-time.After(3 * time.Second):
+                t.Fatal("the stats loop did not stop on cancel")
         }
 }

@@ -25,6 +25,7 @@ import (
         "io"
         "net/url"
         "os"
+        "runtime"
         "strings"
         "sync"
         "time"
@@ -293,6 +294,14 @@ func runTunnel() int {
                 time.Duration(cfg.IdleTimeoutMs)*time.Millisecond,
                 cfg.MaxConns)
 
+        // Stage 6: the periodic runtime-stats evidence line — one Info
+        // line per minute of goroutine/heap/GC/allocation counters. The
+        // child's environment is deliberately EMPTY (no GODEBUG/pprof
+        // injection is possible), so core-log.txt is the only on-device
+        // channel for the CPU/memory picture; the loop stops with the
+        // engine's context.
+        go runtimeStatsLoop(ctx, log, runtimeStatsInterval)
+
         // 6. the engine-side exit probe — NON-FATAL evidence only.
         go func() {
                 result, err := upstream.VerifyExit(controller, cfg.ExitCheckURL,
@@ -338,6 +347,56 @@ func runTunnel() int {
                 })
                 return engine.ExitRenewal
         }
+}
+
+// runtimeStatsInterval is the on-device evidence cadence (Stage 6):
+// one line per minute — cheap (ReadMemStats stops the world for
+// microseconds) and deliberately NOT a knob (no config field; the
+// contract stays the stdin JSON config only).
+const runtimeStatsInterval = 60 * time.Second
+
+// runtimeStatsLoop emits one Info stats line per interval until the
+// context is cancelled (the engine's park-loop exit).
+func runtimeStatsLoop(ctx context.Context, log *stderrLogger, interval time.Duration) {
+        var prev runtime.MemStats
+        runtime.ReadMemStats(&prev)
+        prevAt := time.Now()
+        ticker := time.NewTicker(interval)
+        defer ticker.Stop()
+        for {
+                select {
+                case <-ctx.Done():
+                        return
+                case <-ticker.C:
+                        var cur runtime.MemStats
+                        runtime.ReadMemStats(&cur)
+                        now := time.Now()
+                        log.Infof("runtime stats %s", formatRuntimeStats(&prev, &cur, now.Sub(prevAt)))
+                        prev = cur
+                        prevAt = now
+                }
+        }
+}
+
+// formatRuntimeStats renders one stats line: goroutine count, live
+// heap, OS view, GC count, cumulative allocation and the allocation
+// RATE over the elapsed window. The counters are cumulative — the
+// reader diffs consecutive lines for trends (e.g. GC frequency,
+// goroutine accumulation — the ping-degradation evidence Stage 6
+// needs from the owner's device).
+func formatRuntimeStats(prev, cur *runtime.MemStats, dt time.Duration) string {
+        allocKBps := 0.0
+        if dt > 0 {
+                allocKBps = float64(cur.TotalAlloc-prev.TotalAlloc) / 1024 / dt.Seconds()
+        }
+        return fmt.Sprintf("goroutines=%d heap_mb=%.1f sys_mb=%.1f num_gc=%d total_alloc_mb=%.1f alloc_kbps=%.0f",
+                runtime.NumGoroutine(),
+                float64(cur.HeapAlloc)/(1024*1024),
+                float64(cur.Sys)/(1024*1024),
+                cur.NumGC,
+                float64(cur.TotalAlloc)/(1024*1024),
+                allocKBps,
+        )
 }
 
 // watchStdinClose resolves when the host closes the child's stdin (the
