@@ -13,8 +13,8 @@
 | Branch کاری | `feature/firefox-guardian-psiphon-bootstrap` |
 | Base Commit | `ce852ea` (= tip شاخه `performance/firefox-vpn-optimization`؛ شامل تمام اصلاحات Performance مراحل ۰–۸) |
 | آخرین Commit | (انتهای فایل — «گیت مراحل») |
-| مرحله فعلی | **Stage 4 — Bootstrap Strategy Manager (Firefox Guardian Bootstrap Manager)** |
-| مرحله تکمیل‌شده آخر | **Stage 3 — PASS (ترکیب موجود AETHER → PSIPHON برای Bootstrap؛ کد + مستندات همین ردیفها؛ جزئیات بخش Stage 3)** |
+| مرحله فعلی | **Stage 5 — Routing RoundTripper و اتصال انتخابی Guardian** |
+| مرحله تکمیل‌شده آخر | **Stage 4 — PASS (Bootstrap Strategy Manager؛ کد + مستندات همین ردیفها؛ جزئیات بخش Stage 4)** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### وضعیت Git در شروع مأموریت (تأییدشده)
@@ -302,6 +302,63 @@
 - متن خطای تعارض bind از هسته واقعی روی دستگاه (منجمد فرض شد؛ evidence-locked).
 - انحصار هم‌زمانی bootstrap ↔ walk کاربر (تحویل به Stage 4).
 
+## یافته‌ها و تغییرات Stage 4 (اجرای 2026-11-10)
+
+### ۱. معماری پیاده‌سازی‌شده — Firefox Guardian Bootstrap Manager
+
+- دو فایل جدید: `lib/connection/firefox/guardian_bootstrap_manager.dart` (مدیر + ماشین وضعیت + singleflight + Fast Path/Discovery + Cancellation) و `lib/connection/firefox/bootstrap_route_memory.dart` (حافظه مسیر سطح دوم مأموریت §۷.۱). **مدیر مرحله ۲/۳ (`PsiphonBootstrapProxy`) دست‌نخورده ماند** — مدیر فقط آن را از طریق `proxyFactory` می‌سازد (تست‌ها همان fake core/probe مراحل قبل را تزریق می‌کنند).
+- **پنج Seam برای Stage 5** (مأموریت: Authorization واقعی هنوز وجود ندارد — این مرحله آن را به‌صورت interface طراحی کرد تا Stage 5 بدون بازنویسی وصل شود):
+  1. `GuardianDirectAttempt` — تلاش مستقیم Guardian با سه خروجی: success / regionUnavailable (فقط 451 واقعی طبق طبقه‌بندی Stage 1) / otherFailure (۴۰۱/۴۰۳/عمومی — هرگز Bootstrap نمی‌سازند).
+  2. `GuardianAuthorizationVerifier` — Authorization واقعی «از مسیر پراکسی برنده»؛ مسیر فقط پس از readiness+probe+verify موفق در حافظه موفق ثبت می‌شود (الزام §۴-۴).
+  3. `GuardianNetworkContextProvider` — پیش‌فرض: باکت واحد («محدودیت مستند»: اپ منبع connectivity ندارد؛ مأموریت §۷.۱ دسته‌بندی محدود را با مستندسازی مجاز دانست؛ با یک باکت، حافظه بین شبکه‌ها مشترک است اما Fast Path فقط «اولویت» را عوض می‌کند — آمادگی/Authorization همیشه دوباره تأیید می‌شوند). Stage 5+ می‌تواند دسته کلی wifi/cellular از منبع مجاز موجود وصل کند.
+  4. `UserWalkGuard` — ممنوعیت شروع Bootstrap حین walk کاربر aether (env فرایند + identity مشترک — قید مراحل ۲/۳؛ قبل از هر start چک می‌شود، خطای `walkActive`).
+  5. `proxyFactory` — ساخت مدیر پراکسی بر اساس mode.
+
+### ۲. ماشین وضعیت (§۴-۶) و نگاشت صادقانه
+
+- حالتها: idle / directRequest / guardian451 / bootstrapSelecting / psiphonDirectStarting / psiphonDirectReady / **combinedStarting / combinedReady** / guardianAuthorizing / authorized / failed / stopping / stopped.
+- دو حالت AETHER_UPSTREAM_STARTING و COMBINED_PSIPHON_STARTING مأموریت عمداً یکی شدند (combinedStarting): هسته pin کل زنجیره را «یک job FFI» اجرا می‌کند و مرز قابل‌مشاهده Dart بین پای WARP و فرزند psiphon وجود ندارد (جدا کردن آنها فقط با parse لاگ ممکن بود که ممنوع است). مدل سطح اپ (`VpnState` در connection_state.dart) دست‌نخورده — نگاشت به آن در ادغام Stage 5.
+- رخدادها typed (`GuardianBootstrapEvent`) — بدون parse لاگ.
+
+### ۳. حافظه مسیر (سطح دوم) — قواعد §۷.۱
+
+- فایل JSON نسخه‌دار (`$filesDir/guardian-bootstrap/route-memory.json`)، نوشتن اتمی (tmp+rename)، بارگذاری tolerant (خرابی/نبود → خالی — هرگز crash یا مانع Direct؛ تست‌دار).
+- رکورد هر Network Context: مسیر آخرین موفقیت کامل، طبقه‌بندی آخرین Direct (ok/451/other + زمان)، و به‌ازای هر مسیر: شمارنده‌ها، زمانهای جداگانه آماده‌سازی/Authorization، آخرین شکست با تفکیک start/authorization و cooldownUntil.
+- **Schema بدون فیلد راز**: تست، کلیدهای فایل را با مجموعه ممنوعه دقیق (token/session/ssid/bssid/ip/…) و مجموعه مجاز دقیق فیلدهای stats قفل می‌کند.
+- TTL پیش‌فرض ۲۴h و Cooldown پیش‌فرض ۱۰min (ثابتهای سیاستی مستند؛ قابل تزریق). TTL منقضی → Discovery؛ موفقیت تازه Cooldown را پاک می‌کند.
+- ترتیب Discovery (§۴-۳، عمداً ساده/تست‌پذیر — بدون مدل ضرایب): مسیرهای بدون Cooldown مقدم؛ میان آنها «آخرین موفقیت اخیرتر اول» (تازگی = وزن‌دهی)؛ بدون سابقه → نردبان پیش‌فرض مأموریت (Standalone سپس Chain)؛ Cooldownدار آخر (جرم محدود، نه لیست سیاه).
+- Fast Path (§۴-۲): فقط وقتی «مسیر Bootstrap ذخیرهشده معتبر (TTL/بدون Cooldown)» + «شاهد 451 واقعی اخیر در همین Context» → پرش از Direct. هرگز کورکورانه نیست: آمادگی واقعی (probe چندشاهدی مراحل ۲/۳) و Authorization دوباره اجرا می‌شوند (تست: پس از restart، Direct صفر بار و verify دوباره صدا زده شد).
+
+### ۴. مدیریت درخواست، شکستها و Cancellation (§۴-۵)
+
+- **Singleflight کل عملیات**: آینده عمل در همان فراخوانی اول به‌صورت همزمان نصب می‌شود (بدون پنجره رقابت)؛ چند ensureAuthorized هم‌زمان = یک پراکسی/یک core job (تست‌دار).
+- **بازاستفاده سشن**: سشن سالم در همان Context دوباره برگردانده می‌شود بدون کار جدید؛ پراکسی مُرده → بازسازی (با ابطال فوری در healthCheck برای بستن پنجره رقابت).
+- شکستها با کدهای پایدار: `walkActive` / `directFailed` (با کد داخلی؛ بدون Bootstrap) / `allRoutesFailed` (با جمع شکست هر مسیر) / `authorizationFailed` / `cancelled` / `disposed`؛ در حافظه: شکست start (کد خود هسته از مراحل ۲/۳) جدا از شکست authorization (کد verifier).
+- Retry: هر مسیر حداکثر یک‌بار در هر فراخوانی؛ Backoff بین‌فراخوانی از طریق Cooldown حافظه — حلقه بی‌نهایت ممنوع.
+- Cancellation: چک‌پوینت در همه مراحل + «مسابقه stop» روی awaitهای Seam (روی verify و direct فوراً اثر می‌کند)؛ stop مالک حالت پایانی است (stopping→stopped)؛ فراخوانی بعدی پس از stop مجدد کار می‌کند.
+- `release()` سطح Stage 6 (سیاست توقف Psiphon پس از Authorization مال آن مرحله است)؛ حافظه پس از release زنده می‌ماند.
+- تغییر شبکه: `notifyNetworkContextChanged` سشن با Context متفاوت را باطل می‌کند (توقف پراکسی؛ حافظه می‌ماند؛ ارزیابی مجدد در فراخوانی بعد).
+- اندازه‌گیری جداگانه (§۷.۱): `directMillis` / `bootstrapReadyMillis` / `authorizationMillis` — در سشن و در حافظه (برای مقایسه Cold/Warm مرحله ۷/۹؛ بدون اعلام عدد اندازه‌گیری‌نشده).
+
+### ۵. فایلهای تغییرکرده (Stage 4)
+
+- **جدید**: `lib/connection/firefox/guardian_bootstrap_manager.dart`، `lib/connection/firefox/bootstrap_route_memory.dart`، `test/guardian_bootstrap_manager_test.dart` (۲۳ تست).
+- دست‌نخورده: همه فایلهای قبلی شامل مدیر مراحل ۲/۳ (گواهی: git status فقط سه فایل جدید). pinها، Go، CGO/A1، workflowها، Data Plane — بدون تغییر.
+
+### ۶. تستها و نتایج واقعی (Stage 4)
+
+- `flutter analyze` → **صفر یافته**.
+- فایل جدید: **۲۳/۲۳ سبز** — شش گروه: حافظه (نبود/خرابی فایل، ترتیب Discovery، TTL، ایزوله‌سازی Context، قرارداد Schema بدون راز)؛ مسیر Direct (سناریو A: موفقیت بدون هیچ موتور؛ خطای غیر-۴۵۱ بدون حلقه Bootstrap)؛ Discovery (سناریوهای B/C: توالی وضعیت کامل + زمانها، شکست Standalone→موفقیت Chain، allRoutesFailed با تفکیک و آزادسازی، شکست Authorization جدا از start)؛ Singleflight/بازاستفاده (۳ فراخوانی هم‌زمان = ۱ job؛ سشن سالم بدون کار جدید؛ پراکسی مُرده بازسازی می‌شود)؛ Fast Path (سناریو G: پس از restart پرش از Direct + تأیید مجدد؛ شکست Fast Path→Cooldown→Discovery؛ انقضای TTL→Direct اول؛ Context دیگر هرگز)؛ تغییر شبکه/release/walk؛ Cancellation/dispose.
+- `flutter test` کل مخزن: **۳۶۸ پاس / ۸ skip قبلی / ۰ شکست**.
+- Go: بدون تغییر (اثبات با git status) — CI نهایی.
+
+### ۷. NOT TESTED (Stage 4)
+
+- Authorization و Direct واقعی Guardian (Seamها با fake تست شدند — وصلکردن واقعی Stage 5 است).
+- منبع واقعی Network Context (دسته‌بندی wifi/cellular) — اپ منبع ندارد؛ باکت واحد پیش‌فرض با محدودیت مستند.
+- رفتار روی دستگاه/شبکه ایران (Stage 8/9).
+- اعداد Cold/Warm واقعی — فقط ساختار اندازه‌گیری ساخته شد؛ عدد بدون اندازه‌گیری اعلام نشده (Stage 9).
+
 ---
 ## نقشه فایل‌های کلیدی (برای مراحل بعد)
 
@@ -320,24 +377,26 @@
 | ترکیب‌ها/پورت‌ها | `lib/connection/transport_modes.dart` + `docs/CLI_REFERENCE.md` + `docs/FEATURE_MATRIX.md` §4 |
 | spawn/notice های psiphon | pin `CluvexStudio/Aether` @ `d58f9d56` → `aether/src/psiphon.rs` |
 | مدیر Bootstrap Psiphon — مستقل + زنجیره (Stage 2+3) | `lib/connection/firefox/psiphon_bootstrap.dart` (PsiphonBootstrapProxy با دو mode + SocksTlsReadyProbe + buildArgs/buildChainArgs/warpProtocolArgs/pickTwoDistinctLoopbackPorts) + `test/psiphon_bootstrap_test.dart` |
+| Bootstrap Strategy Manager + حافظه مسیر (Stage 4) | `lib/connection/firefox/guardian_bootstrap_manager.dart` (GuardianBootstrapManager + پنج Seam: DirectAttempt/AuthorizationVerifier/NetworkContext/UserWalkGuard/proxyFactory + ماشین وضعیت) + `lib/connection/firefox/bootstrap_route_memory.dart` + `test/guardian_bootstrap_manager_test.dart` |
 | طبقه‌بندی 451 Guardian (Go) | `phase1/fxv/internal/fferr/classify.go` (ClassifyGuardian) + `cmd/libfirefoxvpn/main.go` (classifyGuardian) + `internal/upstream/controller.go` (renewalFailCode) |
 | مدل خطای Dart + متنها | `lib/connection/firefox/firefox_errors.dart` + `lib/connection/firefox/firefox_protocol.dart` + `lib/l10n/app_strings.dart` (firefoxErrGuardianRegion) |
 
 ---
 
-## دستور دقیق ادامه کار (جلسه بعدی — Stage 4)
+## دستور دقیق ادامه کار (جلسه بعدی — Stage 5)
 
-1. همین فایل را بخوان؛ HEAD باید commit مستندات Stage 3 باشد و working tree پاک (شاخه شامل کد Stage 2+3 و مستندات و راستی‌آزمایی Stage 2).
-2. **فقط Stage 4 را اجرا کن** — Bootstrap Strategy Manager (`Firefox Guardian Bootstrap Manager`):
-   - فقط مسیرهای تأییدشده مراحل ۲ و ۳ وارد سیستم شوند: `PsiphonBootstrapMode.psiphonOnly` و `aetherPsiphonChain` (PSIPHON → AETHER در Stage 3 ارزیابی و رد شد — بخش ۴؛ مجدد وارد نشود مگر با تأیید مالک).
-   - ترتیب Discovery برای Network Context جدید: Direct Guardian → Psiphon Standalone → AETHER → PSIPHON؛ تلاشها ترتیبی با Timeout محدود، هرگز همزمان همه موتورها.
-   - Fast Path (بخش ۷.۱ مأموریت): حافظه مسیر در سطح AETHONE با Network Context غیرشناسایی‌کننده (بدون raw SSID/BSSID/IP؛ بدون مجوز حساس جدید)، TTL/Cooldown، ذخیره اتمی مقاوم به خرابی، ماندگاری پس از Restart؛ شکست Fast Path → Discovery؛ خطاهای 401/403/عمومی هرگز 451 تلقی نشوند و حلقه Bootstrap نسازند.
-   - ذخیره مسیر موفق فقط پس از Bootstrap readiness + Probe + Guardian Authorization موفق — توجه: Authorization واقعی هنوز وجود ندارد (Stage 5)؛ در Stage 4 این «تأیید نهایی» را به‌صورت seam/اینترفیس طراحی کن (تست با fake Authorization verifier) تا Stage 5 بدون بازنویسی وصل شود.
-   - انحصار: فقط یک Bootstrap فعال در کل برنامه؛ چند درخواست Guardian یک Psiphon جدید نسازند (singleflight در سطح Strategy Manager، نه فقط هر PsiphonBootstrapProxy)؛ **bootstrap هنگام walk کاربر aether شروع نشود** (env فرایند + identity مشترک — قید مستند Sections 2/3 همین فایل).
-   - State Machine مأموریت (IDLE/DIRECT_REQUEST/GUARDIAN_451/BOOTSTRAP_SELECTING/PSIPHON_DIRECT_STARTING/…/STOPPED) هماهنگ با مدل وضعیت موجود پروژه (connection_state.dart)؛ نامها قابل تغییر، رفتارها قابل تفکیک.
-   - اندازه‌گیری جداگانه: زمان شروع تا آماده‌شدن Bootstrap و زمان شروع درخواست تا Authorization (ساختار آماده برای مقایسه Cold/Warm در Stage 7/9؛ بدون اعلام عدد بدون اندازه‌گیری).
+1. همین فایل را بخوان؛ HEAD باید commit مستندات Stage 4 باشد و working tree پاک (شاخه شامل کد Stage 2+3+4 و مستندات).
+2. **فقط Stage 5 را اجرا کن** — Routing RoundTripper و اتصال انتخابی Guardian:
+   - مشکل Transport مشترک: `vpnclient.SetControlPlaneTransport(http.RoundTripper)` روی Client مشترک FxA+Guardian+Remote Settings اثر می‌گذارد — کل این Client به Psiphon وصل نشود.
+   - ساختار: RoutingRoundTripper با Default = همان Transport مستقیم uTLS موجود (بدون جایگزینی بی‌دلیل) + Allowlist Guardian.
+   - Allowlist دقیق: بر اساس Base URL واقعی `FirefoxEngineConfig.guardian` + Host واقعی + Method + Path (نه فقط Host). در نسخه فعلی فقط `GET /api/v1/fpn/token` در مسیر اجرایی واقعی است (FetchProxyPass اولیه+Renewal)؛ `/status` و `/activate` فقط با تأیید مسیر واقعی در سورس اضافه شوند. FxA و Remote Settings همیشه Direct.
+   - رفتار درخواست (§۵-۴): ابتدا Direct؛ موفق → هیچ Bootstrap؛ 451 واقعی (طبق `guardianRegionUnavailable` Stage 1) → فعال‌سازی Manager (Stage 4)؛ پس از آماده‌شدن Proxy همان درخواست با Retry محدود دوباره؛ نتیجه واقعی HTTP؛ خطای درست به Dart. Redirect دوباره با Allowlist بررسی شود.
+   - وصل‌کردن Seamهای Stage 4: `GuardianDirectAttempt` و `GuardianAuthorizationVerifier` با درخواست واقعی Guardian (از طریق transport جدید)؛ UserWalkGuard به وضعیت walk کاربر؛ NetworkContext در صورت وجود منبع مجاز.
+   - نقطه ادغام Go (یافته Stage 0): فیلد stdin-JSON جدید (مثل `apiProxy`) در FirefoxEngineConfig → `main.go` → ساخت transport مطابق `configureAPIProxy` در proxy-demo (مرجع pin؛ http/https/socks5/socks5h) → `SetControlPlaneTransport`.
+   - امنیت (§۵-۵): TLS سرتاسری + Certificate/Hostname Verification بدون تضعیف؛ بدون MITM؛ توکن‌ها هرگز در URL پروکسی/Log/Error؛ DNS از مسیر پروکسی بدون افشای ناخواسته.
+   - تستهای صریح (§۵-۶): FxA OAuth → Direct؛ Remote Settings → Direct؛ Guardian Token → Bootstrap پس از 451؛ Guardian Renewal → Bootstrap در صورت نیاز؛ + Allowlist (Host/Method/Path)، Redirect، DNS، TLS.
    - قواعد ثابت: تغییر حدسی نکن؛ pinها دست‌نخورده؛ هیچ تست قبلی حذف/ضعیف نشود؛ commit مستقل؛ push به همین شاخه؛ به‌روزرسانی همین فایل؛ گزارش ۹-بندی؛ توقف.
-3. قانون توقف: بعد از Stage 4 متوقف شو؛ مرحله ۵ (Routing RoundTripper و اتصال انتخابی Guardian) در اجرای بعدی.
+3. قانون توقف: بعد از Stage 5 متوقف شو؛ مرحله ۶ (Renewal و Lifecycle کامل) در اجرای بعدی.
 
 ---
 
@@ -351,7 +410,9 @@
 | 2 — کد | `b88b423` | feat(psiphon): standalone guardian-bootstrap local proxy (stage 2) |
 | 2 — مستندات | `e28e93b` | docs(guardian-bootstrap): stage 2 — standalone proxy report (pins `b88b423`) |
 | 2 — راستی‌آزمایی | `27d0319` | docs(guardian-bootstrap): stage 2 — independent verification (git/remote sync، analyze 0، 331+8~0، 21/21 + LIVE سبز؛ بدون بازنویسی کد) |
-| 3 — کد | (tip شاخه پس از همین commit) | feat(psiphon): launch the EXISTING aether→psiphon chain for guardian bootstrap (stage 3) |
-| 3 — مستندات | (همان tip؛ docs و کد در یک commit مستقل این مرحله) | شامل همین بخش Stage 3 + به‌روزرسانی وضعیت/نقشه/دستور Stage 4 |
+| 3 — کد | `cebb710` | feat(psiphon): launch the EXISTING aether-psiphon chain for guardian bootstrap (stage 3) |
+| 3 — مستندات | (همان `cebb710`؛ کد و مستندات در یک commit مستقل این مرحله) | شامل بخش Stage 3 + به‌روزرسانی وضعیت/نقشه/دستور Stage 4 |
+| 4 — کد | (tip شاخه پس از همین commit) | feat(guardian): bootstrap strategy manager — fast path, discovery, route memory (stage 4) |
+| 4 — مستندات | (همان tip؛ کد و مستندات در یک commit مستقل این مرحله) | شامل همین بخش Stage 4 + به‌روزرسانی وضعیت/نقشه/دستور Stage 5 |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
