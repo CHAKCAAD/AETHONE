@@ -341,6 +341,17 @@ class AppStrings {
   String get firefoxTransportH2 => _v['firefoxTransportH2']!;
   String get firefoxTransportH3 => _v['firefoxTransportH3']!;
   String get firefoxTransportDesc => _v['firefoxTransportDesc']!;
+  String get secFirefoxDns => _v['secFirefoxDns']!;
+  String get firefoxDnsMode => _v['firefoxDnsMode']!;
+  String get firefoxDnsSystem => _v['firefoxDnsSystem']!;
+  String get firefoxDnsDoH => _v['firefoxDnsDoH']!;
+  String get firefoxDnsProvider => _v['firefoxDnsProvider']!;
+  String get firefoxDnsCustom => _v['firefoxDnsCustom']!;
+  String get firefoxDnsEndpoint => _v['firefoxDnsEndpoint']!;
+  String get firefoxDnsBootstrap => _v['firefoxDnsBootstrap']!;
+  String get firefoxDnsSave => _v['firefoxDnsSave']!;
+  String get firefoxDnsDesc => _v['firefoxDnsDesc']!;
+  String get firefoxDnsWebViewNote => _v['firefoxDnsWebViewNote']!;
   String get firefoxLoginTitle => _v['firefoxLoginTitle']!;
   String get firefoxLoginSubtitle => _v['firefoxLoginSubtitle']!;
   String get firefoxLoginWaiting => _v['firefoxLoginWaiting']!;
@@ -601,6 +612,17 @@ class AppStrings {
       'firefoxTransportH2': 'H2 (پیش‌فرض)',
       'firefoxTransportH3': 'H3 (کوئیک)',
       'firefoxTransportDesc': 'H2 روی TCP+TLS و H3 روی QUIC کار می‌کند. اگر مطمئن نیستید همان H2 بماند.',
+      'secFirefoxDns': 'DNS فایرفاکس',
+      'firefoxDnsMode': 'حالت DNS',
+      'firefoxDnsSystem': 'DNS سیستم اندروید',
+      'firefoxDnsDoH': 'DNS رمزگذاری‌شده (DoH)',
+      'firefoxDnsProvider': 'ارائه‌دهنده DNS',
+      'firefoxDnsCustom': 'سفارشی',
+      'firefoxDnsEndpoint': 'نشانی DoH (HTTPS)',
+      'firefoxDnsBootstrap': 'IPهای اولیه (اختیاری، جداشده با ویرگول)',
+      'firefoxDnsSave': 'ذخیره تنظیمات DNS',
+      'firefoxDnsDesc': 'این DNS فقط در موتور Firefox استفاده می‌شود. در حالت DoH، خطا باعث برگشت پنهانی به DNS معمولی نمی‌شود. دامنه‌های محلی از DNS سیستم استفاده می‌کنند.',
+      'firefoxDnsWebViewNote': 'صفحه ورود تعبیه‌شده Firefox در WebView اندروید هنوز از شبکه خود WebView استفاده می‌کند؛ پوشش DoH برای این صفحه هنوز فعال نشده است.',
       'firefoxLoginTitle': 'ورود به فایرفاکس',
       'firefoxLoginSubtitle': 'ورود در صفحهٔ رسمی موزیلا انجام می‌شود',
       'firefoxLoginWaiting': 'در انتظار ورود شما در صفحهٔ موزیلا…',
@@ -935,6 +957,17 @@ class AppStrings {
       'firefoxTransportH2': 'H2 (default)',
       'firefoxTransportH3': 'H3 (QUIC)',
       'firefoxTransportDesc': 'H2 runs over TCP+TLS; H3 runs over QUIC. Keep H2 if unsure.',
+      'secFirefoxDns': 'Firefox DNS',
+      'firefoxDnsMode': 'DNS mode',
+      'firefoxDnsSystem': 'Android System DNS',
+      'firefoxDnsDoH': 'Encrypted DNS (DoH)',
+      'firefoxDnsProvider': 'DNS provider',
+      'firefoxDnsCustom': 'Custom',
+      'firefoxDnsEndpoint': 'DoH endpoint (HTTPS)',
+      'firefoxDnsBootstrap': 'Bootstrap IPs (optional, comma-separated)',
+      'firefoxDnsSave': 'Save DNS settings',
+      'firefoxDnsDesc': 'This resolver is used only inside the Firefox engine. DoH failures do not silently fall back to plain DNS. Local domains continue to use the system resolver.',
+      'firefoxDnsWebViewNote': 'The embedded Firefox sign-in page still uses Android WebView networking. DoH coverage for this page is not enabled yet.',
       'firefoxLoginTitle': 'Sign in to Firefox',
       'firefoxLoginSubtitle': 'Sign-in happens on Mozilla\'s official page',
       'firefoxLoginWaiting': 'Waiting for you to sign in on Mozilla\'s page…',
@@ -1267,6 +1300,17 @@ class AppStrings {
       'firefoxTransportH2': 'H2 (по умолчанию)',
       'firefoxTransportH3': 'H3 (QUIC)',
       'firefoxTransportDesc': 'H2 работает поверх TCP+TLS; H3 — поверх QUIC. Если сомневаетесь, оставьте H2.',
+      'secFirefoxDns': 'DNS Firefox',
+      'firefoxDnsMode': 'Режим DNS',
+      'firefoxDnsSystem': 'Системный DNS Android',
+      'firefoxDnsDoH': 'Зашифрованный DNS (DoH)',
+      'firefoxDnsProvider': 'Поставщик DNS',
+      'firefoxDnsCustom': 'Другой',
+      'firefoxDnsEndpoint': 'Адрес DoH (HTTPS)',
+      'firefoxDnsBootstrap': 'Начальные IP (необязательно, через запятую)',
+      'firefoxDnsSave': 'Сохранить настройки DNS',
+      'firefoxDnsDesc': 'Этот DNS используется только внутри движка Firefox. При сбое DoH скрытого перехода на обычный DNS нет. Локальные домены используют системный DNS.',
+      'firefoxDnsWebViewNote': 'Встроенная страница входа Firefox пока использует сетевой стек Android WebView; DoH для этой страницы ещё не включён.',
       'firefoxLoginTitle': 'Вход в Firefox',
       'firefoxLoginSubtitle': 'Вход выполняется на официальной странице Mozilla',
       'firefoxLoginWaiting': 'Ожидание входа на странице Mozilla…',
@@ -1597,6 +1641,17 @@ class AppStrings {
       'firefoxTransportH2': 'H2（默认）',
       'firefoxTransportH3': 'H3（QUIC）',
       'firefoxTransportDesc': 'H2 基于 TCP+TLS；H3 基于 QUIC。不确定时保持 H2。',
+      'secFirefoxDns': 'Firefox DNS',
+      'firefoxDnsMode': 'DNS 模式',
+      'firefoxDnsSystem': 'Android 系统 DNS',
+      'firefoxDnsDoH': '加密 DNS (DoH)',
+      'firefoxDnsProvider': 'DNS 服务商',
+      'firefoxDnsCustom': '自定义',
+      'firefoxDnsEndpoint': 'DoH 地址 (HTTPS)',
+      'firefoxDnsBootstrap': '引导 IP（可选，逗号分隔）',
+      'firefoxDnsSave': '保存 DNS 设置',
+      'firefoxDnsDesc': '此解析器仅在 Firefox 引擎进程内使用。DoH 失败时不会静默回退到明文 DNS。本地域名仍使用系统解析器。',
+      'firefoxDnsWebViewNote': '内嵌的 Firefox 登录页面仍使用 Android WebView 网络栈；该页面尚未启用 DoH。',
       'firefoxLoginTitle': '登录 Firefox',
       'firefoxLoginSubtitle': '登录在 Mozilla 官方页面进行',
       'firefoxLoginWaiting': '等待您在 Mozilla 页面完成登录…',
@@ -1933,6 +1988,17 @@ class AppStrings {
       'firefoxTransportH2': 'H2 (adaty)',
       'firefoxTransportH3': 'H3 (QUIC)',
       'firefoxTransportDesc': 'H2 TCP+TLS üstünde, H3 QUIC üstünde işleýär. Ynamyňyz ýok bolsa H2 galsyn.',
+      'secFirefoxDns': 'Firefox DNS',
+      'firefoxDnsMode': 'DNS tertibi',
+      'firefoxDnsSystem': 'Android ulgam DNS-i',
+      'firefoxDnsDoH': 'Şifrlenen DNS (DoH)',
+      'firefoxDnsProvider': 'DNS üpjünçisi',
+      'firefoxDnsCustom': 'Ýörite',
+      'firefoxDnsEndpoint': 'DoH salgysy (HTTPS)',
+      'firefoxDnsBootstrap': 'Başlangyç IP-ler (islege görä, otur bilen)',
+      'firefoxDnsSave': 'DNS sazlamalaryny ýatda sakla',
+      'firefoxDnsDesc': 'Bu çözüji diňe Firefox hereketlendirijisiniň içinde ulanylýar. DoH şowsuz bolsa, adaty DNS-e sessiz geçilmeýär. Ýerli domenler ulgam DNS-ini ulanýar.',
+      'firefoxDnsWebViewNote': 'Firefox giriş sahypasy häzirlikçe Android WebView tor ulgamyny ulanýar; bu sahypa üçin DoH entek açylmady.',
       'firefoxLoginTitle': 'Firefox-a gir',
       'firefoxLoginSubtitle': 'Giriş Mozillanyň resmi sahyponda geçýär',
       'firefoxLoginWaiting': 'Mozillanyň sahyponda girişiňizi garaşýarys…',
