@@ -190,7 +190,7 @@ abstract class EngineConfigSource {
   String get firefoxTransport;
 
   /// Process-local resolver policy for Firefox control-plane traffic only.
-  Map<String, dynamic> get firefoxDnsConfig;
+  Map<String, dynamic> get firefoxDnsConfig => const {'mode': 'system'};
 
   /// «سرعت اسکن» 1..5 (protocol sheet; feeds the core scan profile).
   int get scanSpeed;
