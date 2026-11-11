@@ -791,6 +791,7 @@ adb uninstall com.chakcaad.aethone.da
 | 7 — پین هش | `332ff03` | docs(guardian-bootstrap): pin the stage-7 commit hash in the progress table |
 | 8 — مستندات | `278b1a1` | docs(guardian-bootstrap): stage 8 — trial build report via Actions run 42869865882 (sha256 verified, package id .da, engines 12/12, install commands) |
 | 9 — اجرای میدانی ۱ (تحلیل لاگ) | `3bcf278` | docs(guardian-bootstrap): field run 1 — mechanism present, but the 451-only trigger did not fire because the network blackholed the direct control-plane dial |
-| 9.1 — کد + تست + گزارش | (همین commit؛ SHA پس از ثبت پین می‌شود) | feat(firefox): add optional failureStage diagnostics for Remote Settings, Guardian pass and upstream session; no routing/timeout behavior changed |
+| 9.1 — کد + تست + گزارش | `21cc5ad` | feat(firefox): add optional failureStage diagnostics for Remote Settings, Guardian pass and upstream session; no routing/timeout behavior changed |
+| 9.1 — اصلاح جزئی + پین | (این commit) | fix(test): wait for the child stdout pipe to flush; tag config failures; pin the Stage 9.1 implementation SHA |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*

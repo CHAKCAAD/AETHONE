@@ -89,11 +89,13 @@ func runTunnel() int {
                         _ = emit.Emit(engine.Event{
                                 Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
                                 Message: cfgErr.DetailCode(), Code: engine.ExitStartup,
+                                FailureStage: engine.FailureStageConfiguration,
                         })
                 } else {
                         _ = emit.Emit(engine.Event{
                                 Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
                                 Message: "configNotJSON", Code: engine.ExitStartup,
+                                FailureStage: engine.FailureStageConfiguration,
                         })
                 }
                 return engine.ExitStartup
@@ -108,6 +110,7 @@ func runTunnel() int {
                 _ = emit.Emit(engine.Event{
                         Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
                         Message: detail, Code: engine.ExitStartup,
+                        FailureStage: engine.FailureStageConfiguration,
                 })
                 return engine.ExitStartup
         }

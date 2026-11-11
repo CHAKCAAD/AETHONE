@@ -122,6 +122,7 @@ void main() {
       );
       expect(ev.failCode, FirefoxEngineFailure.badConfig);
       expect(ev.failureStage, 'guardianPass');
+      expect(ev.logLine, contains('stage=guardianPass'));
       expect(ev.exitCode, FirefoxEngineExitCode.startup);
       expect(ev.message, contains('socksListenNotLoopback'));
     });
@@ -134,6 +135,7 @@ void main() {
       await script.writeAsString('''#!/bin/sh
 IFS= read -r config
 printf '%s\\n' '{"event":"failed","code":1,"failCode":"timeout","failureStage":"remoteSettingsDiscovery","message":"The server took too long to respond"}'
+sleep 0.1
 exit 1
 ''');
       final chmod = await Process.run('chmod', ['700', script.path]);
