@@ -13,8 +13,8 @@
 | Branch کاری | `feature/firefox-guardian-psiphon-bootstrap` |
 | Base Commit | `ce852ea` (= tip شاخه `performance/firefox-vpn-optimization`؛ شامل تمام اصلاحات Performance مراحل ۰–۸) |
 | آخرین Commit | (انتهای فایل — «گیت مراحل») |
-| مرحله فعلی | **Stage 9 — تست واقعی روی گوشی مالک (سناریوهای A–F؛ نیازمند دسترسی مالک)** |
-| مرحله تکمیل‌شده آخر | **Stage 8 — PASS (Build آزمایشی APK دیباگ از Actions run `42869865882`؛ SHA256 مستقل تأیید؛ جزئیات بخش Stage 8)** |
+| مرحله فعلی | **Stage 9 — اجرای میدانی ۱ ثبت شد (PARTIAL)؛ اصلاح تریگر در انتظار تصویب مالک (بخش ۴ اجرای میدانی ۱)** |
+| مرحله تکمیل‌شده آخر | **Stage 8 — PASS (Build آزمایشی APK دیباگ از Actions run `42869865882`؛ SHA256 مستقل تأیید؛ جزئیات بخش Stage 8)** — سپس اجرای میدانی ۱ Stage 9: مکانیزم روی گوشی حاضر تأیید شد اما تریگر 451 با رفتار واقعی شبکه (blackhole) هرگز نشد |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### وضعیت Git در شروع مأموریت (تأییدشده)
@@ -662,11 +662,72 @@ adb uninstall com.chakcaad.aethone.da
 
 ---
 
-## دستور دقیق ادامه کار (جلسه بعدی — Stage 9)
+## یافته‌های Stage 9 — اجرای میدانی ۱ (تحلیل لاگ گوشی مالک؛ 2026-11-11)
 
-1. همین فایل را بخوان؛ **ابتدا `git fetch` + `git ls-remote` ریموت را بررسی کن** (درس Stage 8: HEAD لوکال ممکن است عقب باشد)؛ HEAD باید commit Stage 8 باشد و working tree پاک.
-2. **فقط Stage 9 را اجرا کن** — تست واقعی روی گوشی مالک (طبق «مرحله نهم» مأموریت، سناریوهای A–F): Guardian مستقیم؛ Psiphon مستقیم (شرط ۴۵۱)؛ Mask→Psiphon (معادل واقعی AETHER→PSIPHON)؛ سایر ترکیبهای شناسایی‌شده؛ Renewal؛ جداسازی ترافیک. برای هر سناریو: زمان اتصال، نتیجه، علت شکست/موفقیت، مسیر واقعی. **بدون دسترسی واقعی به گوشی هیچ سناریویی PASS اعلام نشود** — NOT TESTED صادقانه ثبت شود. جدول معیارهای موفقیت مأموریت ملاک است.
-3. قانون توقف: بعد از Stage 9 (یا ثبت NOT TESTED و تحلیل) متوقف شو؛ جمع‌بندی نهایی مأموریت در همان اجرا.
+> ورودی: لاگ فیلترشده `connection-20261110-224329-filtered.log` (مالک؛ POCO X3). این اجرا فقط تحلیل شواهد است — هیچ سناریویی PASS اعلام نمی‌شود.
+
+### ۰. پاسخ پرسش مالک («آیا مکانیزم اصلاً به بیلد اضافه شده؟») — **بله؛ سه گواهی مستقل**
+
+1. **بستهٔ نصبی درست است**: نصب/به‌روزرسانی `com.chakcaad.aethone.da` (uid 10870) در `11-10 22:35:09` — همان APK آزمایشی Stage 8 (run `42869865882`، commit `332ff03`)؛ پروسه‌های بعدی با برچسب `1.2.0-phaseb`.
+2. **کد Stage 6 واقعاً روی گوشی اجرا می‌شود**: سه رشتهٔ `guardian-renewal: session attached direct` / `guardian-renewal: engine gone — teardown owns the release; the expiry backstop stays armed` / `guardian-renewal: session torn down — backstop cancelled` فقط در `guardian_renewal_policy.dart` (Stage 6) وجود دارند و در لاگ ظاهر شده‌اند — با semantics درست (spawn مستقیم → attach بدون پراکسی؛ مرگ موتور → backstop مسلح؛ teardown → لغو).
+3. **کد Stage 5 در همان سورس بیلد حاضر است**: بلاک escalation در `_connectFirefox` (شرط `failCode == guardianRegionUnavailable && apiProxy.isEmpty && attempt == 0`) در commit `332ff03` موجود است (HEAD فعلی `c3ca2a9` فقط دو commit مستندات بالاتر است).
+
+پس «مکانیزم در بیلد نیست» **رد شد**. آنچه اجرا نشد **تریگر** است (بند ۲).
+
+### ۱. شواهد زمانی: مرگ موتور دقیقاً روی تایم‌اوت dial کنترل‌پلن (۱۵ ثانیهٔ pin)
+
+| تلاش | engine: started | engine failed (timeout) | طول |
+|---|---|---|---|
+| ۱ | 22:37:26.660 | 22:37:42.021 | 15.36s |
+| ۲ | 22:41:55.124 | 22:42:10.297 | 15.17s |
+| ۳ | 22:43:30.980 | 22:43:46.329 | 15.35s |
+
+- pin `firefox-vpn-client/http_client.go`: `controlPlaneDialTimeout = 15 * time.Second` (سقف TCP connect + handshake uTLS برای FxA/Guardian/Remote Settings) — تطابق کامل سه تلاش.
+- پیام روی سیم = پیام استاتیک `fferr.CodeTimeout` («The server took too long to respond»؛ classify.go L67)؛ طبقه‌بندی از `net.Error.Timeout()` / `DeadlineExceeded` (classify.go L108-116) — یعنی **شکست در سطح transport، بدون هیچ پاسخ HTTP**.
+- متن UI همان کلاس timeout است («The account server took too long to respond») — ارور گزارش‌شدهٔ مالک.
+
+### ۲. چرا Bootstrap اجرا نشد — زنجیرهٔ علّی کامل
+
+1. walk مرحله ۵ عمداً مستقیم‌اول است: spawn بدون `apiProxy` (درست طبق مأموریت؛ مستقیم در اولویت). `guardian-renewal: session attached direct` هم دقیقاً همین را تأیید می‌کند.
+2. موتور pin در runTunnel اول `FetchServerList` (Remote Settings: `firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records`) و بعد `AcquireInitialPass` (`GET <guardian>/api/v1/fpn/token`) را می‌زند — هر دو مستقیم.
+3. روی این شبکه، dial مستقیم به endpoint کنترل‌پلن **بی‌پاسخ ماند (blackhole)** → ۱۵ث → failCode=`timeout`.
+4. شرط escalation فقط `guardianRegionUnavailable` (451 واقعی) را می‌پذیرد → `timeout ≠ 451` → مسیر «شکست صادقانهٔ pre-Stage-5» → `fail('firefoxTransport:timeout')`.
+5. منیجر هرگز صدا زده نشد → در کل لاگ **صفر** خط `guardian bootstrap:` (fast path / activating / all routes failed)؛ صفر نشانهٔ Psiphon از پروسهٔ AETHONE (psiphonهای موجود در لاگ متعلق به اپ‌های دیگر گوشی‌اند؛ یک `libpsiphon.so/u0a864` در 22:22 مربوط به walk عادی aether اپ اصلی بود) — دقیقاً مشاهدهٔ مالک: نه ListeningSocksProxyPort، نه PSIPHON ONLY، نه AETHER→PSIPHON.
+6. Fast Path هم هرگز eligible نیست (حافظهٔ مسیر شاهد 451 می‌خواهد؛ هیچ 451 واقعی هرگز دیده نشد).
+
+### ۳. یافتهٔ میدانی کلیدی: بلاک منطقه‌ای این‌بار Blackhole است، نه 451
+
+- پیش‌فرض مأموریت (و طراحی Stage 1–5) بر «Guardian با HTTP 451 جواب می‌دهد» بود. در این اجرای میدانی **هیچ پاسخ HTTP‌ای** از پای کنترل‌پلن مستقیم برنگشت — اتصال در سطح TCP/uTLS بلعیده شد.
+- FxA در همین پنجره از همین شبکه پاسخ می‌داد (خطاهای HTTP 400 errno 138 واقعی در 22:36:47–22:37:02 و mint موفق توکن‌ها در 22:37:06) → **ورود حساب در این لاگ کامل شد**؛ کندیِ چندتلاشی بود، نه بن‌بست (با گفتهٔ مالک دربارهٔ تحریم ورود، سازگار — فعلاً خارج از محدوده).
+- **باز ماند (از این لاگ قابل تعیین نیست)**: پای مرده Remote Settings است یا Guardian — زنجیرهٔ خام فقط به diagnostics (redact) می‌رود و `discoveryFetched` لاگ عمومی ندارد. **فیک باید هر دو را پوشش دهد.**
+- مورد جانبی 172.19.0.2: اعتبارسنجی Private DNS اندروید با DNS داخلی VPN — شبکه بعداً validated شد؛ **عامل Timeout نیست** (تشخیص مالک تأیید شد).
+
+### ۴. طرح اصلاح پیشنهادی — نیازمند تصویب مالک (دو تغییر صریح نسبت به متن مأموریت)
+
+1. **تریگر**: شکست transport-level `timeout` در تلاش مستقیم نیز evidence قابل escalation شود (در کنار 451؛ در صورت تأیید مالک: `networkUnreach`/`dns` هم). همان‌ها: سقف یک‌بار در هر walk، verify واقعی از مسیر پراکسی (بدون موفقیت کاذب)، cooldown/حافظهٔ مسیر. دلیل: شواهد بند ۳ — بلاک عملاً blackhole است.
+2. **دامنهٔ allowlist**: اگر پای مرده Remote Settings باشد، respawn با apiProxy باز در `FetchServerList` می‌میرد (allowlist فعلی فقط endpoint توکن Guardian را پراکسی می‌کند). گزینه‌ها: (الف) افزودن همان یک GET عمومی server-list به allowlist فقط هنگام bootstrap فعال؛ (ب) fallback کش لیست سرور. انحراف از قید «فقط Guardian» — تصمیم با مالک.
+3. **لاگ تشخیصی**: یک خط engine-level (بدون URL/توکن) که اعلام کند کدام پا مُرد (discovery vs pass) — تا ابهام بند ۳ در اجرای بعدی رفع شود.
+
+### ۵. نتیجهٔ Stage 9 اجرای میدانی ۱: **PARTIAL**
+
+- سناریو A (Guardian مستقیم): اجرا شد — نتیجه: **timeout سطح transport** (نه 451). یافتهٔ بالا ثبت شد.
+- سناریوهای B–F: **شروع نشدند** (تریگر 451 هرگز رؤیت نشد) — NOT TESTED صادقانه.
+- جمع‌بندی: مکانیزم حاضر/وصل، اما طراحی تریگر 451-only با رفتار واقعی شبکه (blackhole) قابل شروع نیست. اصلاح بند ۴ در انتظار تصمیم مالک.
+
+### ۶. NOT TESTED (اجرای میدانی ۱)
+
+- پایداری الگوی blackhole-vs-451 در ساعات/شبکه‌های دیگر (رفتار مسدودسازی ناپایدار است).
+- کدام پای کنترل‌پلن (Remote Settings/Guardian) دقیقاً بی‌پاسخ می‌ماند (نیاز به لاگ بند ۴-۳).
+- عملکرد واقعی bootstrap در این شبکه (چون هرگز تریگر نشد).
+
+---
+
+## دستور دقیق ادامه کار (جلسه بعدی — اصلاح تریگر، پس از تصویب مالک)
+
+1. همین فایل را بخوان؛ **ابتدا `git fetch` + `git ls-remote` ریموت را بررسی کن** (درس Stage 8)؛ HEAD باید commit همین اجرا باشد و working tree پاک.
+2. **پیش‌نیاز تصمیم مالک** (بند ۴ اجرای میدانی ۱): (۱) آیا timeout مستقیم هم تریگر شود؟ (۲) آیا server-list (Remote Settings) هم در allowlist مسیر bootstrap بیاید؟ (۳) افزودن لاگ تشخیصی پا.
+3. اگر تصویب شد: **فقط همان یک مرحلهٔ اصلاح** را اجرا کن (کد+تست+کامیت مستقل): تریگر در Dart/مدیر + (در صورت تصویب) مدخل allowlist در Go + لاگ تشخیصی پا؛ تست‌ها سبز؛ push؛ سپس بیلد آزمایشی جدید **فقط از Actions** (رویهٔ Stage 8؛ بدون build محلی) برای اجرای میدانی دوم.
+4. قانون توقف: بعد از همان یک مرحله متوقف شو و گزارش بده.
 
 ---
 
@@ -690,5 +751,6 @@ adb uninstall com.chakcaad.aethone.da
 | 7 — کد+مستندات | `efe707a` | test(guardian): comprehensive coverage + data-plane separation proof (stage 7) — تست تفکیک Data Plane در Go، تستهای UI/l10n در Flutter، تکمیل l10n کلاسهای Stage 6، جدول پوشش رسمی این فایل |
 | 7 — پین هش | `332ff03` | docs(guardian-bootstrap): pin the stage-7 commit hash in the progress table |
 | 8 — مستندات | `278b1a1` | docs(guardian-bootstrap): stage 8 — trial build report via Actions run 42869865882 (sha256 verified, package id .da, engines 12/12, install commands) |
+| 9 — اجرای میدانی ۱ (تحلیل لاگ) | (tip شاخه پس از همین commit) | docs(guardian-bootstrap): stage 9 field run 1 — on-device log analysis: mechanism verified present & running (stage-6 supervisor logs on device), but the 451-only trigger never fired — the region block manifested as a 15s transport blackhole (controlPlaneDialTimeout), failCode=timeout ≠ guardianRegionUnavailable; fix proposal (timeout trigger + optional RS allowlist entry + leg-identification log) awaiting owner ratification |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
