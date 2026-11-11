@@ -46,6 +46,7 @@ import (
 
 	"aethone/fxv/internal/cptransport"
 	"aethone/fxv/internal/engine"
+	"aethone/fxv/internal/fferr"
 	"aethone/fxv/internal/upstream"
 )
 
