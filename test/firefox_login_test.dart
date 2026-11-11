@@ -280,6 +280,17 @@ void main() {
       expect(store.firefoxTransport, 'h3');
       store.setFirefoxTransport('quic'); // unknown → h2
       expect(store.firefoxTransport, 'h2');
+
+      expect(store.firefoxDnsConfig, {'mode': 'system'});
+      store.setFirefoxDnsMode('doh');
+      store.setFirefoxDnsProvider('quad9');
+      expect(store.firefoxDnsConfig, {
+        'mode': 'doh',
+        'provider': 'quad9',
+        'systemForLocalDomains': true,
+      });
+      store.setFirefoxDnsMode('unknown');
+      expect(store.firefoxDnsMode, 'system');
     });
 
     test('applyFirefoxLocations swaps the live set and labels it', () {
