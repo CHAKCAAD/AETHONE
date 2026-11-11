@@ -273,6 +273,12 @@ abstract class EngineAdapter {
 
 }
 
+/// Optional capability for loading persisted Firefox DNS settings before
+/// any Go process (login, discovery or tunnel) is spawned.
+abstract interface class FirefoxDnsSettingsLoader {
+  Future<void> loadFirefoxDnsSettings();
+}
+
 /// Optional capability implemented only by the real Firefox platform adapter.
 abstract interface class FirefoxDnsProbeCapable {
   Future<List<Map<String, dynamic>>?> firefoxDnsProbe(
