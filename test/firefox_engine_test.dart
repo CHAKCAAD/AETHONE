@@ -139,6 +139,22 @@ void main() {
       expect('at-secret'.allMatches(blob), hasLength(1));
       expect(cfg.transport, 'h2');
       expect(cfg.toJson()['version'], 1);
+
+      expect(cfg.toJson()['dns'], {'mode': 'system'});
+      const doh = FirefoxEngineConfig(
+        socksListen: '127.0.0.1:1822',
+        auth: FirefoxSessionAuth(accessToken: 'at'),
+        dns: {
+          'mode': 'doh',
+          'provider': 'quad9',
+          'systemForLocalDomains': true,
+        },
+      );
+      expect(doh.toJson()['dns'], {
+        'mode': 'doh',
+        'provider': 'quad9',
+        'systemForLocalDomains': true,
+      });
     });
   });
 
