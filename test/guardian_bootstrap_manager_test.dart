@@ -138,6 +138,30 @@ void main() {
       expect(memory.shouldSkipDirect('wifi', now: later), isFalse);
     });
 
+    test('transport outage alone cannot fast-path; a verified route can', () async {
+      final memory = await GuardianBootstrapRouteMemory.load(
+        '${tempDir.path}/transport-memory.json',
+        ttl: const Duration(hours: 24),
+      );
+      final now = DateTime.now();
+      memory.recordDirectTransportUnavailable('wifi', now: now);
+      expect(memory.shouldSkipDirect('wifi', now: now), isFalse,
+          reason: 'transport evidence without a verified route is insufficient');
+      memory.recordRouteSuccess(
+        'wifi',
+        GuardianBootstrapRouteKind.aetherPsiphonChain,
+        readyMillis: 12,
+        authMillis: 34,
+        now: now,
+      );
+      expect(memory.shouldSkipDirect('wifi', now: now), isTrue);
+      expect(
+        memory.shouldSkipDirect('wifi', now: now.add(const Duration(hours: 25))),
+        isFalse,
+        reason: 'expired evidence must return the next walk to Direct first',
+      );
+    });
+
     test('context isolation: another context never sees this one\'s route',
         () async {
       final memory = await GuardianBootstrapRouteMemory.load(
@@ -220,6 +244,60 @@ void main() {
       expect(memory.validFastPathRoute('wifi'),
           GuardianBootstrapRouteKind.direct);
       await manager.dispose();
+    });
+
+    test('transport blackhole tries standalone, then the configured chain; '
+        'a verified chain becomes the next fast path', () async {
+      final path = '${tempDir.path}/transport-fallback-memory.json';
+      final harness = _Harness(
+        // The standalone starts but never passes its readiness probe.
+        // Its short test budget proves that the manager moves to the
+        // existing AETHER → PSIPHON chain instead of waiting indefinitely.
+        probeFailFirstBy: (index) => index == 0 ? 1 << 20 : 0,
+        readyBudgetMs: 80,
+      );
+      final direct = _FakeDirect([
+        const GuardianDirectResult(
+          outcome: GuardianDirectOutcome.transportUnavailable,
+          errorCode: 'timeout',
+        ),
+      ]);
+      final manager = managerOf(
+        direct: direct,
+        verifier: _FakeVerifier(ok: true),
+        harness: harness,
+        memoryPath: path,
+      );
+
+      final session = await manager.ensureAuthorized();
+      expect(
+        harness.modesCalled,
+        [PsiphonBootstrapMode.psiphonOnly, PsiphonBootstrapMode.aetherPsiphonChain],
+        reason: 'cold route order is standalone Psiphon, then the existing chain',
+      );
+      expect(session.routeKind, GuardianBootstrapRouteKind.aetherPsiphonChain);
+      final memory = await manager.memory;
+      expect(memory.shouldSkipDirect('wifi'), isTrue,
+          reason: 'only the fully authorized chain is remembered as fast path');
+      await manager.dispose();
+
+      // On the next walk the recent direct transport failure plus the
+      // verified route lets the app start the known-good chain immediately.
+      final nextHarness = _Harness();
+      final nextDirect = _FakeDirect([
+        const GuardianDirectResult(outcome: GuardianDirectOutcome.success),
+      ]);
+      final nextManager = managerOf(
+        direct: nextDirect,
+        verifier: _FakeVerifier(ok: true),
+        harness: nextHarness,
+        memoryPath: path,
+      );
+      final nextSession = await nextManager.ensureAuthorized();
+      expect(nextSession.routeKind, GuardianBootstrapRouteKind.aetherPsiphonChain);
+      expect(nextDirect.calls, 0, reason: 'fast path must not repeat a known direct blackhole');
+      expect(nextHarness.modesCalled, [PsiphonBootstrapMode.aetherPsiphonChain]);
+      await nextManager.dispose();
     });
 
     test('a NON-451 direct failure fails honestly — no bootstrap loop',

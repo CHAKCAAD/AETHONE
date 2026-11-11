@@ -469,8 +469,9 @@ class GuardianBootstrapManager {
     _checkStop();
 
     // Fast Path eligibility (mission §4-2): a valid saved BOOTSTRAP
-    // route plus recent REAL 451 evidence — then the doomed direct
-    // attempt is skipped. Anything less: direct first.
+    // route plus recent direct-block evidence (Guardian HTTP 451 or a
+    // transport-level blackhole) — then Direct may be skipped. Anything
+    // less: direct first.
     final savedRoute = routeMemory.validFastPathRoute(contextId);
     final skipDirect = savedRoute != null &&
         savedRoute != GuardianBootstrapRouteKind.direct &&
@@ -483,10 +484,9 @@ class GuardianBootstrapManager {
       if (directSession != null) {
         return directSession;
       }
-      // A REAL 451 — recorded by _runDirect; continue to bootstrap.
-      // The direct attempt's cost rides along (mission §7.1: the
-      // cold/warm comparison needs it — a 451 region pays it on EVERY
-      // discovery walk).
+      // An eligible direct block (HTTP 451 or transport-level
+      // unavailability) was recorded by _runDirect; continue to
+      // bootstrap. The direct attempt's cost remains in the timings.
       directMillis = directRun.elapsedMillis;
     } else if (_userWalkActive()) {
       // Skipping direct means starting a bootstrap right away — under
@@ -526,8 +526,9 @@ class GuardianBootstrapManager {
   }
 
   /// The direct phase. Returns the completed session on success (no
-  /// bootstrap is started — mission scenario A) or marks the 451
-  /// evidence and returns without a session.
+  /// bootstrap is started — mission scenario A) or marks eligible
+  /// direct-block evidence (451 / transport-unavailable) and returns
+  /// without a session.
   Future<_DirectRun> _runDirect(
     String contextId,
     GuardianBootstrapRouteMemory routeMemory,

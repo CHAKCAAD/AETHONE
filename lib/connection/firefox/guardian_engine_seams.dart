@@ -47,7 +47,8 @@ enum GuardianProbeKind {
   passAcquired,
 
   /// A REAL Guardian region block (HTTP 451 through the engine's
-  /// Stage-1 classification) — the only bootstrap trigger.
+  /// Stage-1 classification). This and transport-unavailable failures
+  /// with no HTTP response are the only bootstrap-eligible outcomes.
   regionUnavailable,
 
   /// DNS/network/timeout from Remote Settings or Guardian with no
@@ -134,9 +135,9 @@ class EngineGuardianProbe {
   final Duration shutdownGrace;
 
   /// Runs one probe. [apiProxy] empty = the direct uTLS transport;
-  /// non-empty = the Stage-5 RoutingRoundTripper routes the allowlisted
-  /// Guardian request through that local proxy (FxA and Remote Settings
-  /// stay direct inside the engine).
+  /// non-empty = the Stage-5 RoutingRoundTripper routes only the exact
+  /// Guardian token request and the pinned Remote Settings server-list
+  /// GET through that local proxy. FxA and all other endpoints stay direct.
   Future<GuardianProbeResult> probe({
     String apiProxy = '',
     required Duration timeout,
@@ -322,8 +323,8 @@ class EngineGuardianAuthorizationVerifier
 
 /// The one-shot evidence carrier for direct answers the walk ALREADY
 /// collected: the firefox walk's main engine spawn performs the real
-/// direct Guardian request itself, so on a 451 the manager must not
-/// repeat it. [forward] installs the classified result; the next
+/// direct control-plane walk itself, so after a 451 or eligible transport
+/// failure the manager must not repeat it. [forward] installs the result; the next
 /// [attempt] consumes it (exactly once) and later calls fall through
 /// to the inner attempt (the real probe — e.g. Stage 6's renewal-time
 /// reauthorization, which has no prior evidence).

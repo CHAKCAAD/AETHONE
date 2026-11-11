@@ -26,6 +26,7 @@ import 'dart:typed_data';
 
 import 'package:aethone/connection/aether_ffi.dart';
 import 'package:aethone/connection/firefox/psiphon_bootstrap.dart';
+import 'package:aethone/connection/core_settings.dart';
 import 'package:aethone/connection/platform_engine_adapter.dart';
 import 'package:aethone/core/app_assets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -598,6 +599,35 @@ Future<void> main() async {
           reason: 'leg $leg must map exactly like the walk does',
         );
       }
+    });
+
+    test('the persisted Psiphon leg setting reaches the chain protocol flag', () {
+      for (final setting in AetherLegProtocol.values) {
+        final selectedLeg = AetherArguments.legProtocolId(setting);
+        final args = PsiphonBootstrapProxy.buildChainArgs(
+          bindPort: 45678,
+          psiphonBindPort: 45679,
+          filesDir: '/f',
+          nativeLibraryDir: '/l',
+          warpProtocol: selectedLeg,
+        );
+        expect(
+          args,
+          containsAllInOrder(
+            AetherArguments.protocolArgs(selectedLeg, ProtocolId.psiphonChain),
+          ),
+          reason: 'the bootstrap chain must use the user-selected $setting leg',
+        );
+      }
+      final masque = AetherArguments.legProtocolId(AetherLegProtocol.masque);
+      final masqueArgs = PsiphonBootstrapProxy.buildChainArgs(
+        bindPort: 45678,
+        psiphonBindPort: 45679,
+        filesDir: '/f',
+        nativeLibraryDir: '/l',
+        warpProtocol: masque,
+      );
+      expect(masqueArgs, containsAllInOrder(['--protocol', 'masque']));
     });
 
     test('two distinct loopback ports, never the pinned map', () async {

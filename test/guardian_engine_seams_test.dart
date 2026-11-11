@@ -61,6 +61,27 @@ fi
 echo '{"event":"failed","failCode":"guardianRegionUnavailable","httpStatus":451,"retryable":false,"message":"guardian returned HTTP 451","code":1}'
 exit 1
 ''',
+    // Transport blackholes are eligible only when there is no HTTP response
+    // and the failed stage is one of the two direct control-plane legs.
+    'remoteSettingsTimeout': '''
+IFS= read -r line
+echo '{"event":"started","message":"1.2.0-phaseb guardian-probe","pid":1}'
+echo '{"event":"failed","failCode":"timeout","httpStatus":0,"retryable":true,"failureStage":"remoteSettingsDiscovery","message":"remote settings dial timed out","code":1}'
+exit 1
+''',
+    'guardianTimeout': '''
+IFS= read -r line
+echo '{"event":"started","message":"1.2.0-phaseb guardian-probe","pid":1}'
+echo '{"event":"failed","failCode":"timeout","httpStatus":0,"retryable":true,"failureStage":"guardianPass","message":"guardian dial timed out","code":1}'
+exit 1
+''',
+    // HTTP errors have a response and must never be treated as network blackholes.
+    'http401': '''
+IFS= read -r line
+echo '{"event":"started","message":"1.2.0-phaseb guardian-probe","pid":1}'
+echo '{"event":"failed","failCode":"serverRejection","httpStatus":401,"retryable":false,"failureStage":"guardianPass","message":"guardian rejected token","code":1}'
+exit 1
+''',
     // Garbage output + a non-zero exit (no failed event at all).
     'garbage': '''
 IFS= read -r line
@@ -167,6 +188,28 @@ void main() {
         timeout: const Duration(seconds: 10),
       );
       expect(proxied.kind, GuardianProbeKind.passAcquired);
+    });
+
+    test('transport blackholes at Remote Settings and Guardian are bootstrap-eligible', () async {
+      final remote = await (await probeOf('remoteSettingsTimeout'))
+          .probe(timeout: const Duration(seconds: 10));
+      expect(remote.kind, GuardianProbeKind.transportUnavailable);
+      expect(remote.failureStage, 'remoteSettingsDiscovery');
+      expect(remote.httpStatus, 0);
+
+      final guardian = await (await probeOf('guardianTimeout'))
+          .probe(timeout: const Duration(seconds: 10));
+      expect(guardian.kind, GuardianProbeKind.transportUnavailable);
+      expect(guardian.failureStage, 'guardianPass');
+      expect(guardian.httpStatus, 0);
+    });
+
+    test('an HTTP 401 response is not a transport fallback trigger', () async {
+      final result = await (await probeOf('http401'))
+          .probe(timeout: const Duration(seconds: 10));
+      expect(result.kind, GuardianProbeKind.otherFailure);
+      expect(result.httpStatus, 401);
+      expect(result.failureStage, 'guardianPass');
     });
 
     test('garbage + non-zero exit is an otherFailure, never a 451',

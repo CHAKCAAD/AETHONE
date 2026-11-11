@@ -2635,7 +2635,10 @@ class PlatformEngineAdapter implements EngineAdapter {
           (guardianRegionBlock || directControlPlaneTransportFailure) &&
           apiProxy.isEmpty &&
           attempt == 0) {
-        _debugLog('firefox guardian 451 — activating the bootstrap '
+        final escalationReason = guardianRegionBlock
+            ? 'Guardian HTTP 451'
+            : 'direct control-plane transport unavailable';
+        _debugLog('firefox $escalationReason — activating the bootstrap '
             'manager with the walk\'s own direct evidence');
         guardianBootstrap.directEvidence.forward(GuardianDirectResult(
           outcome: guardianRegionBlock
