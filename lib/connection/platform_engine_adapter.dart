@@ -2194,7 +2194,7 @@ class PlatformEngineAdapter implements EngineAdapter {
       // line too (FxA unreachability coverage).
       final result = await client.runWebChannel(
         sessionToken: sessionToken,
-        relay: _config?.firefoxRelaySettings,
+        relay: _config == null ? null : _firefoxRelayFor(_config!),
       );
       if (result.isCompleted && result.auth != null) {
         final vault = await _firefoxVault();
@@ -2292,6 +2292,19 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// (the engine's default and the evidence-backed path).
   static String _firefoxTransportForEngine(EngineConfigSource config) {
     return config.firefoxTransport == 'h3' ? 'h3' : 'h2';
+  }
+
+  /// v1.3.0-relay — aggregates the config source's relay fields into
+  /// the engine's `relay` config block (sent on BOTH the tunnel and
+  /// the login lines).
+  static FirefoxRelaySettings _firefoxRelayFor(EngineConfigSource config) {
+    return FirefoxRelaySettings(
+      personalUrl: config.firefoxRelayPersonalUrl,
+      personalEnabled: config.firefoxRelayPersonalEnabled,
+      sharedEnabled: config.firefoxRelaySharedEnabled,
+      echMode: config.firefoxRelayEchMode,
+      echConfig: config.firefoxRelayEchConfig,
+    );
   }
 
   /// The firefox walk (the aether skeleton, engine swapped in).
@@ -2453,7 +2466,7 @@ class PlatformEngineAdapter implements EngineAdapter {
         transport: _firefoxTransportForEngine(config),
         // v1.3.0-relay — the control-plane relay block (the engine's
         // additive `relay` object; Guardian 451 recovery).
-        relay: config.firefoxRelaySettings,
+        relay: _firefoxRelayFor(config),
       ),
       onAuthRefreshed: (refreshed) {
         // The private channel: straight back into the Keystore vault,

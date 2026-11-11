@@ -2090,6 +2090,18 @@ class _FixedConfig implements EngineConfigSource {
   String get firefoxLocation => 'auto';
   @override
   String get firefoxTransport => 'h2';
+  // v1.3.0-relay — the relay seam's new members (defaults: no
+  // personal relay, the shared pool ON — the app's default posture).
+  @override
+  String get firefoxRelayPersonalUrl => '';
+  @override
+  bool get firefoxRelayPersonalEnabled => false;
+  @override
+  bool get firefoxRelaySharedEnabled => true;
+  @override
+  String get firefoxRelayEchMode => '';
+  @override
+  String get firefoxRelayEchConfig => '';
   /// v4.41 — the seam's new members (routing profile + per-app pick).
   @override
   String? get routingRegion => null;
