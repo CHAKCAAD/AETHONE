@@ -2188,6 +2188,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     final client = _firefoxLogin = FirefoxLoginClient(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
       onLog: onLog ?? _debugLog,
+      dnsConfig: _config?.firefoxDnsConfig ?? const {'mode': 'system'},
     );
     try {
       final result = await client.runWebChannel(sessionToken: sessionToken);
@@ -2239,7 +2240,10 @@ class PlatformEngineAdapter implements EngineAdapter {
     final discovery = _firefoxDiscovery ??= FirefoxDiscovery(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
       cachePath: '${paths.filesDir}/firefox/serverlist.json',
+      dnsConfig: _config?.firefoxDnsConfig ?? const {'mode': 'system'},
     );
+    discovery.dnsConfig =
+        Map<String, dynamic>.from(_config?.firefoxDnsConfig ?? const {'mode': 'system'});
     final list = await discovery.refresh();
     if (list != null) {
       _emit(EngineFirefoxLocations(
@@ -2446,6 +2450,7 @@ class PlatformEngineAdapter implements EngineAdapter {
         // wheel + the firefox settings page.
         country: _firefoxCountryForEngine(config),
         transport: _firefoxTransportForEngine(config),
+        dns: config.firefoxDnsConfig,
       ),
       onAuthRefreshed: (refreshed) {
         // The private channel: straight back into the Keystore vault,
