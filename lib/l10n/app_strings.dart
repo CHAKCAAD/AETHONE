@@ -352,6 +352,10 @@ class AppStrings {
   String get firefoxDnsSave => _v['firefoxDnsSave']!;
   String get firefoxDnsDesc => _v['firefoxDnsDesc']!;
   String get firefoxDnsWebViewNote => _v['firefoxDnsWebViewNote']!;
+  String get 0 => _v['0']!;
+  String get 1 => _v['1']!;
+  String get 2 => _v['2']!;
+  String get 3 => _v['3']!;
   String get firefoxLoginTitle => _v['firefoxLoginTitle']!;
   String get firefoxLoginSubtitle => _v['firefoxLoginSubtitle']!;
   String get firefoxLoginWaiting => _v['firefoxLoginWaiting']!;
@@ -623,6 +627,10 @@ class AppStrings {
       'firefoxDnsSave': 'ذخیره تنظیمات DNS',
       'firefoxDnsDesc': 'این DNS فقط در موتور Firefox استفاده می‌شود. در حالت DoH، خطا باعث برگشت پنهانی به DNS معمولی نمی‌شود. دامنه‌های محلی از DNS سیستم استفاده می‌کنند.',
       'firefoxDnsWebViewNote': 'صفحه ورود تعبیه‌شده Firefox در WebView اندروید هنوز از شبکه خود WebView استفاده می‌کند؛ پوشش DoH برای این صفحه هنوز فعال نشده است.',
+      'firefoxDnsTestButton': 'آزمایش DNS',
+      'firefoxDnsTesting': 'در حال آزمایش DNS…',
+      'firefoxDnsTestSuccess': 'DNS برای همه دامنه‌های آزمایش‌شده پاسخ داد.',
+      'firefoxDnsTestFailed': 'برخی درخواست‌های DNS ناموفق بودند.',
       'firefoxLoginTitle': 'ورود به فایرفاکس',
       'firefoxLoginSubtitle': 'ورود در صفحهٔ رسمی موزیلا انجام می‌شود',
       'firefoxLoginWaiting': 'در انتظار ورود شما در صفحهٔ موزیلا…',
@@ -968,6 +976,10 @@ class AppStrings {
       'firefoxDnsSave': 'Save DNS settings',
       'firefoxDnsDesc': 'This resolver is used only inside the Firefox engine. DoH failures do not silently fall back to plain DNS. Local domains continue to use the system resolver.',
       'firefoxDnsWebViewNote': 'The embedded Firefox sign-in page still uses Android WebView networking. DoH coverage for this page is not enabled yet.',
+      'firefoxDnsTestButton': 'Test DNS',
+      'firefoxDnsTesting': 'Testing DNS…',
+      'firefoxDnsTestSuccess': 'DNS answered for every tested domain.',
+      'firefoxDnsTestFailed': 'Some DNS lookups failed.',
       'firefoxLoginTitle': 'Sign in to Firefox',
       'firefoxLoginSubtitle': 'Sign-in happens on Mozilla\'s official page',
       'firefoxLoginWaiting': 'Waiting for you to sign in on Mozilla\'s page…',
@@ -1311,6 +1323,10 @@ class AppStrings {
       'firefoxDnsSave': 'Сохранить настройки DNS',
       'firefoxDnsDesc': 'Этот DNS используется только внутри движка Firefox. При сбое DoH скрытого перехода на обычный DNS нет. Локальные домены используют системный DNS.',
       'firefoxDnsWebViewNote': 'Встроенная страница входа Firefox пока использует сетевой стек Android WebView; DoH для этой страницы ещё не включён.',
+      'firefoxDnsTestButton': 'Проверить DNS',
+      'firefoxDnsTesting': 'Проверка DNS…',
+      'firefoxDnsTestSuccess': 'DNS ответил для всех проверенных доменов.',
+      'firefoxDnsTestFailed': 'Некоторые DNS-запросы завершились ошибкой.',
       'firefoxLoginTitle': 'Вход в Firefox',
       'firefoxLoginSubtitle': 'Вход выполняется на официальной странице Mozilla',
       'firefoxLoginWaiting': 'Ожидание входа на странице Mozilla…',
@@ -1652,6 +1668,10 @@ class AppStrings {
       'firefoxDnsSave': '保存 DNS 设置',
       'firefoxDnsDesc': '此解析器仅在 Firefox 引擎进程内使用。DoH 失败时不会静默回退到明文 DNS。本地域名仍使用系统解析器。',
       'firefoxDnsWebViewNote': '内嵌的 Firefox 登录页面仍使用 Android WebView 网络栈；该页面尚未启用 DoH。',
+      'firefoxDnsTestButton': '测试 DNS',
+      'firefoxDnsTesting': '正在测试 DNS…',
+      'firefoxDnsTestSuccess': '所有测试域名均获得 DNS 响应。',
+      'firefoxDnsTestFailed': '部分 DNS 查询失败。',
       'firefoxLoginTitle': '登录 Firefox',
       'firefoxLoginSubtitle': '登录在 Mozilla 官方页面进行',
       'firefoxLoginWaiting': '等待您在 Mozilla 页面完成登录…',
@@ -1999,6 +2019,10 @@ class AppStrings {
       'firefoxDnsSave': 'DNS sazlamalaryny ýatda sakla',
       'firefoxDnsDesc': 'Bu çözüji diňe Firefox hereketlendirijisiniň içinde ulanylýar. DoH şowsuz bolsa, adaty DNS-e sessiz geçilmeýär. Ýerli domenler ulgam DNS-ini ulanýar.',
       'firefoxDnsWebViewNote': 'Firefox giriş sahypasy häzirlikçe Android WebView tor ulgamyny ulanýar; bu sahypa üçin DoH entek açylmady.',
+      'firefoxDnsTestButton': 'DNS-i barla',
+      'firefoxDnsTesting': 'DNS barlanýar…',
+      'firefoxDnsTestSuccess': 'Synag edilen ähli domenler üçin DNS jogap berdi.',
+      'firefoxDnsTestFailed': 'Käbir DNS gözlegleri şowsuz boldy.',
       'firefoxLoginTitle': 'Firefox-a gir',
       'firefoxLoginSubtitle': 'Giriş Mozillanyň resmi sahyponda geçýär',
       'firefoxLoginWaiting': 'Mozillanyň sahyponda girişiňizi garaşýarys…',
