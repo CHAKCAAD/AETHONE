@@ -25,8 +25,9 @@
 #     scope (the owner did not request it).
 #
 # Containment (upstream license UNRESOLVED — phase1/fxv/ORIGIN.md): this
-# workflow lives on integration/firefox-vpn-debug, delivers expiring
-# Actions artifacts only (14 days), and creates nothing public.
+# workflow runs only on the explicit Firefox debug branches below,
+# delivers expiring Actions artifacts only (14 days), and creates
+# nothing public. The default branch and public releases are untouched.
 #
 # Pins mirror .github/workflows/native-ci.yml (the project's frozen
 # recipe, decisions N1/N8) plus the phase-1 Firefox decrees. Actions are
@@ -35,17 +36,17 @@
 # =============================================================================
 name: AETHONE DA — Firefox Debug APK
 
-# Branch-scoped debug builds. Pushes to the dedicated Firefox
-# Guardian/Psiphon feature branch and the existing integration branch
-# may build this DA debug APK. The workflow_dispatch declaration is kept
-# for installations where this workflow is exposed from the default
-# branch; no default-branch change is required for feature-branch CI.
+# Trigger policy: GitHub indexes workflow_dispatch targets from the
+# DEFAULT branch only (ci-bootstrap/v4.4), which remains untouched.
+# Push builds are limited to the three explicit Firefox development
+# branches; they produce expiring debug artifacts only.
 on:
   workflow_dispatch:
   push:
     branches:
       - feature/firefox-guardian-psiphon-bootstrap
       - integration/firefox-vpn-debug
+      - update/firefox-vpn-core
 
 permissions:
   contents: read

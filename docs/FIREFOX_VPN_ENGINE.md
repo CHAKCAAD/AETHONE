@@ -17,8 +17,10 @@ Dart host runs it with `dart:io Process.start` (on Android the same
 fork/exec `ProcessBuilder` uses), argv bare, environment empty.
 
 Module: `aethone/fxv` (Go 1.25.0). Upstream core pinned to
-`55ad91a2ccea1c93e69c82a08a7681e279884db5` (2026-11-06, "fix(fxa):
-present Firefox ClientHello on the control plane") via a `replace`
+`c1c5d895a2c52c69a9e06e672eae5074c9cc3fa1` (2026-11-10, "chore:
+update pinned Firefox identity (#7)"; owner-ordered re-pin 2026-11-11
+from `55ad91a2ccea1c93e69c82a08a7681e279884db5` — delta analysis in
+`docs/firefox-vpn/core-update-2026-11-11.md`) via a `replace`
 directive to the vendored pristine copy at `phase1/firefox-vpn-client/`.
 Provenance of every adapted piece: `fxv/ORIGIN.md`.
 
@@ -105,7 +107,6 @@ additive `--login` role — the tunnel contract is unchanged).
 | `upstreamTimeoutMs` / `handshakeTimeoutMs` / `idleTimeoutMs` / `maxConns` | 0 → upstream defaults (20 s / 10 s / unlimited / 256) |
 | `exitCheckUrl` / `exitTimeoutMs` | engine-side exit probe; default `https://www.cloudflare.com/cdn-cgi/trace`, 10 s |
 | `logLevel` | `quiet` / `normal` / `verbose` (stderr) |
-| `apiProxy` | GUARDIAN-BOOTSTRAP STAGE 5 — optional local proxy (`socks5://127.0.0.1:<port>`, also `socks5h`/`http`/`https`) for the GUARDIAN control-plane leg ONLY; loopback host and NO credentials in the URL (`apiProxyNotLoopback` / `apiProxyCredentialsForbidden` / `apiProxySchemeUnsupported` / `apiProxyInvalid` otherwise); empty (default/omitted) = the direct uTLS transport, byte-identical to the pre-Stage-5 behavior. The engine's RoutingRoundTripper routes only the allowlisted Guardian request (`GET /api/v1/fpn/token` on the configured `guardian` host) through it — FxA and Remote Settings stay DIRECT |
 | `auth.accessToken` | required (`authAccessTokenMissing`) |
 | `auth.refreshToken` | optional but expected for renewal |
 
@@ -129,22 +130,6 @@ Failure codes: `badConfig`, `discoveryFailed`, `noMatchForCountry`,
 negotiation included), `socksListenFailed`, `renewalTimeout`,
 `internalError`.
 
-### The `--guardian-probe` role (guardian-bootstrap Stage 5)
-
-`libfirefoxvpn --guardian-probe` — the Guardian-only authorization walk:
-the SAME config line contract, then `AcquireInitialPass` (FetchProxyPass
-+ the same-account FxA recovery) through the SAME control-plane
-transport decision (no `apiProxy` = direct; `apiProxy` set = the
-RoutingRoundTripper's allowlisted leg through the local bootstrap
-proxy). No RemoteSettings discovery, no upstream session, no SOCKS
-listener. Events: `started` (message carries `guardian-probe`), then
-`passAcquired` + a clean exit on success, or `quotaExhausted` /
-`failed` (the Stage-1 classification — a real 451 surfaces as
-`guardianRegionUnavailable`) with the startup exit codes. The Dart
-host's Stage-4/5 seams (`lib/connection/firefox/guardian_engine_seams.dart`)
-spawn this role for the direct attempt and the through-the-proxy
-authorization verification.
-
 PHASE B (Part 2, 2026-11-09) — the `failed` event additionally carries
 OPTIONAL `httpStatus` (int, the REAL status code on HTTP-level
 failures) and `retryable` (bool) fields, and `failCode` may carry the
@@ -155,49 +140,6 @@ engine-side classifier (`docs/phaseb-engine-patch/`; type-based
 `errors.As` discrimination, no string matching). Additive only — the
 1.1.0 field names and codes remain valid forever; the raw Go chain
 stays in the engine's stderr log (redacted), never in the UI.
-
-### Renewal & lifecycle policy (guardian-bootstrap Stage 6)
-
-The pinned renewal contract, evidenced from the source
-(`internal/upstream/controller.go`, `firefox-vpn-client/guardian.go`):
-
-* **Pass lifetime**: the pass's own JWT `exp` claim, claim-time
-corrected (`ProxyPassInfo.ExpiresAt()`) — the host NEVER assumes a
-lifetime. `passAcquired` / `renewed` carry it as `passExpiresAt`
-(RFC3339 UTC).
-* **Renewal timing**: the loop sleeps until `exp − 2 min`
-(`proxyPassRenewLead`) and renews `GET /api/v1/fpn/token` through the
-SAME installed control-plane transport — with `apiProxy` set (Stage 5)
-the renewal traverses the bootstrap route; without it, direct.
-* **Rotation**: a successful renewal swaps the fresh raw token onto the
-LIVE session in-engine (`Session.UpdateToken`) — the host never sees
-the token — and adopts the new expiry (`renewed` + `passExpiresAt`).
-* **Failure**: one failed renewal emits `renewalFailed` (redacted
-message, the Stage-1 `failCode` class — a 451 surfaces as
-`guardianRegionUnavailable` — and `retryInMs` = the pinned 30 s
-`proxyPassRetryDelay`) and the loop retries; it never parks on a
-retryable failure.
-* **Terminals**: HTTP 429 → `quotaExhausted` + exit 2 (the account is
-done for the month); an expiry over-stayed by more than the 2-min
-`proxyPassRenewTimeout` budget → `failed` (`renewalTimeout`) + exit 3
-(the host must reconnect). Both surface with their OWN classes on the
-Dart side (Stage 6): the `quotaExhausted` EVENT completes the engine
-outcome with its class (a bare exit-code `engineExited:2` used to hide
-it), and both codes classify to their own failure classes instead of
-`unknown`.
-
-The host-side policy (`lib/connection/firefox/guardian_renewal_policy.dart`,
-`GuardianRenewalSupervisor`): while a session lives on a bootstrap
-route, the route IS the renewal path — the default is KEEP (releasing
-early would break the current renewal); every `renewed` re-arms the
-keep window from the new expiry; the definitive release is the session
-teardown (`_hardCleanup` → `manager.stop()`), with an expiry-derived
-backstop (`passExpiresAt` + the mirrored 2-min engine budget) bounding
-a missed teardown so the bootstrap can never outlive its reason. The
-supervisor never auto-rebuilds in the background (mission §7.1): the
-reconnect walk is the ask, and `ensureAuthorized()` reactivates the
-manager after any release/stop (the instance, the singleflight and the
-route memory survive).
 
 ## 4. Data plane (upstream session)
 
@@ -226,9 +168,6 @@ the sole gate to `Connected`.
 ## 5. How it is tested
 
 `fxv/cmd/libfirefoxvpn/main_test.go` (and `upstream_test.go`,
-`renewal_loop_test.go` — the Stage-6 renewal-loop contract: rotation
-through the installed transport, the 451 class + retry delay on
-`OnRenewalFail`, the quota and renewal-timeout terminals —,
 `socks_test.go`, `discovery_test.go`, `engine/config_test.go`) — the
 lifecycle tests spawn the REAL engine binary and speak the REAL wire
 contract. Honesty rules baked into the tests: RemoteSettings discovery

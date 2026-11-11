@@ -36,7 +36,7 @@ const String kFirefoxLoginUrl =
 /// The pinned Firefox identity major version (matches the engine's
 /// control-plane pin, `defaultFirefoxVersion` in the vendored
 /// firefox_identity.go — one identity everywhere).
-const String kFirefoxIdentityVersion = '159.0';
+const String kFirefoxIdentityVersion = '160.0';
 
 /// The WebView user agent: Firefox-on-Android, matching the pinned
 /// identity (the FxA page must believe it runs inside Firefox for the

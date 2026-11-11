@@ -12,15 +12,10 @@ package main
 import (
         "bufio"
         "context"
-        "crypto/tls"
         "encoding/json"
-        "errors"
         "fmt"
         "io"
         "net"
-        "net/http"
-        "net/http/httptest"
-        "net/url"
         "os"
         "os/exec"
         "path/filepath"
@@ -29,11 +24,6 @@ import (
         "sync"
         "testing"
         "time"
-
-        vpnclient "firefox-vpn-client"
-
-        "aethone/fxv/internal/engine"
-        "aethone/fxv/internal/fferr"
 )
 
 var binaryPath string
@@ -464,195 +454,5 @@ func TestRuntimeStatsLoopEmitsAndStops(t *testing.T) {
         case <-done:
         case <-time.After(3 * time.Second):
                 t.Fatal("the stats loop did not stop on cancel")
-        }
-}
-
-// ---------------------------------------------------------------------------
-// guardian-bootstrap Stage 1 — the Guardian 451 region classification.
-// ---------------------------------------------------------------------------
-
-// TestClassifyGuardianMatrix — the engine-side classifier: the typed
-// GuardianHTTPError (endpoint identity by construction — the pin builds
-// it only in the /api/v1/fpn/* walks) through the dedicated region rule,
-// the sentinels, and the transport classes; secrets never survive.
-func TestClassifyGuardianMatrix(t *testing.T) {
-        cfg := engine.Config{}
-        cfg.Auth.AccessToken = "AT-secret-run-0123456789"
-        cfg.Auth.RefreshToken = "RT-secret-run-0123456789"
-
-        dnsErr := &url.Error{Op: "Get", URL: "https://vpn.mozilla.org/api/v1/fpn/token",
-                Err: &net.OpError{Op: "dial", Net: "tcp",
-                        Err: &net.DNSError{Err: "no such host", Name: "vpn.mozilla.org", IsNotFound: true}}}
-
-        cases := []struct {
-                name       string
-                err        error
-                wantCode   fferr.Code
-                wantStatus int
-                wantRetry  bool
-        }{
-                {"guardian 451 region body", &vpnclient.GuardianHTTPError{Operation: "guardian", StatusCode: 451, Body: `{"error":"unavailable_in_region"}`}, fferr.CodeGuardianRegionUnavailable, 451, false},
-                {"guardian 451 empty body", &vpnclient.GuardianHTTPError{Operation: "guardian", StatusCode: 451, Body: ""}, fferr.CodeGuardianRegionUnavailable, 451, false},
-                {"guardian user info 451 (renewal-lifecycle endpoint)", &vpnclient.GuardianHTTPError{Operation: "guardian user info", StatusCode: 451, Body: `{"error":"unavailable_in_region"}`}, fferr.CodeGuardianRegionUnavailable, 451, false},
-                {"guardian 451 other structured reason", &vpnclient.GuardianHTTPError{Operation: "guardian", StatusCode: 451, Body: `{"error":"other_reason"}`}, fferr.CodeServerRejection, 451, false},
-                {"guardian 401", &vpnclient.GuardianHTTPError{Operation: "guardian", StatusCode: 401, Body: ""}, fferr.CodeSessionRejected, 401, false},
-                {"guardian 403", &vpnclient.GuardianHTTPError{Operation: "guardian", StatusCode: 403, Body: ""}, fferr.CodeSessionRejected, 403, false},
-                {"guardian 429 through the typed error", &vpnclient.GuardianHTTPError{Operation: "guardian", StatusCode: 429, Body: ""}, fferr.CodeServerRejection, 429, false},
-                {"guardian 503", &vpnclient.GuardianHTTPError{Operation: "guardian", StatusCode: 503, Body: ""}, fferr.CodeServerRejection, 503, true},
-                {"token-invalid sentinel (401 text seam)", fmt.Errorf("%w (HTTP 401): rejected", vpnclient.ErrTokenInvalid), fferr.CodeSessionRejected, 401, false},
-                {"dns transport class", dnsErr, fferr.CodeDNS, 0, false},
-                {"timeout transport class", context.DeadlineExceeded, fferr.CodeTimeout, 0, true},
-        }
-        for _, tc := range cases {
-                got := classifyGuardian(tc.err, cfg)
-                if got.Code != tc.wantCode {
-                        t.Fatalf("%s: code = %s, want %s", tc.name, got.Code, tc.wantCode)
-                }
-                if got.HTTPStatus != tc.wantStatus {
-                        t.Fatalf("%s: httpStatus = %d, want %d", tc.name, got.HTTPStatus, tc.wantStatus)
-                }
-                if got.Retryable != tc.wantRetry {
-                        t.Fatalf("%s: retryable = %v, want %v", tc.name, got.Retryable, tc.wantRetry)
-                }
-                // the secrecy rule: neither token value survives the class
-                if s := fmt.Sprint(got); strings.Contains(s, "AT-secret-run") || strings.Contains(s, "RT-secret-run") {
-                        t.Fatalf("%s: a secret leaked into the classification", tc.name)
-                }
-                t.Logf("%s -> %s (httpStatus=%d retryable=%v)", tc.name, got.Code, got.HTTPStatus, got.Retryable)
-        }
-}
-
-// TestGuardian451ThroughRealUpstreamClient — the REAL chain proof: a
-// local TLS Guardian double answers the token walk; the pinned upstream
-// client (its control-plane transport swapped ONLY inside this test to
-// trust the double's self-signed certificate — the shipped engine path
-// keeps the uTLS Firefox ClientHello with FULL verification) surfaces
-// the typed GuardianHTTPError; classifyGuardian maps it to the dedicated
-// guardianRegionUnavailable class with the real 451. The 429/502 legs
-// ride the same double and keep their own classes.
-func TestGuardian451ThroughRealUpstreamClient(t *testing.T) {
-        srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-                if r.URL.Path != "/api/v1/fpn/token" {
-                        w.WriteHeader(http.StatusNotFound)
-                        return
-                }
-                switch r.Header.Get("Authorization") {
-                case "Bearer quota":
-                        w.WriteHeader(http.StatusTooManyRequests)
-                        _, _ = io.WriteString(w, `{"error":"quota_exceeded"}`)
-                case "Bearer server":
-                        w.WriteHeader(http.StatusBadGateway)
-                        _, _ = io.WriteString(w, `{"error":"bad_gateway"}`)
-                default:
-                        w.WriteHeader(http.StatusUnavailableForLegalReasons)
-                        _, _ = io.WriteString(w, `{"error":"unavailable_in_region"}`)
-                }
-        }))
-        defer srv.Close()
-
-        // TEST-ONLY transport: plain net/http trusting the local double's
-        // self-signed certificate. Restored to the pinned uTLS transport
-        // afterwards; the engine's production path is untouched.
-        vpnclient.SetControlPlaneTransport(&http.Transport{
-                TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-        })
-        t.Cleanup(func() {
-                vpnclient.SetControlPlaneTransport(vpnclient.NewControlPlaneTransport())
-        })
-
-        cfg := engine.Config{}
-        cfg.Auth.AccessToken = "AT-secret-run-0123456789"
-        cfg.Auth.RefreshToken = "RT-secret-run-0123456789"
-
-        // 451 + the structured region code -> the dedicated class.
-        _, err := vpnclient.FetchProxyPass(context.Background(), srv.URL, "token")
-        var httpErr *vpnclient.GuardianHTTPError
-        if !errors.As(err, &httpErr) {
-                t.Fatalf("want the typed GuardianHTTPError from the 451 double, got %T: %v", err, err)
-        }
-        if httpErr.StatusCode != 451 {
-                t.Fatalf("status = %d (want 451)", httpErr.StatusCode)
-        }
-        if !strings.Contains(httpErr.Body, "unavailable_in_region") {
-                t.Fatalf("body = %q (want the structured region code)", httpErr.Body)
-        }
-        class := classifyGuardian(err, cfg)
-        if class.Code != fferr.CodeGuardianRegionUnavailable {
-                t.Fatalf("class = %s (want guardianRegionUnavailable)", class.Code)
-        }
-        if class.HTTPStatus != 451 || class.Retryable {
-                t.Fatalf("class = %+v (want httpStatus=451 retryable=false)", class)
-        }
-        if strings.Contains(class.Message, "unavailable_in_region") {
-                t.Fatal("the raw body leaked into the user-facing message")
-        }
-        if s := fmt.Sprint(class); strings.Contains(s, "AT-secret-run") {
-                t.Fatal("the access token leaked into the classification")
-        }
-
-        // 429 keeps the quota sentinel (handled before classification).
-        _, err = vpnclient.FetchProxyPass(context.Background(), srv.URL, "quota")
-        if !errors.Is(err, vpnclient.ErrQuotaExceeded) {
-                t.Fatalf("want ErrQuotaExceeded from the 429 double, got %v", err)
-        }
-
-        // 502 keeps the retryable generic server rejection.
-        _, err = vpnclient.FetchProxyPass(context.Background(), srv.URL, "server")
-        if !errors.As(err, &httpErr) || httpErr.StatusCode != 502 {
-                t.Fatalf("want the typed GuardianHTTPError 502, got %v", err)
-        }
-        class = classifyGuardian(err, cfg)
-        if class.Code != fferr.CodeServerRejection || !class.Retryable {
-                t.Fatalf("502 class = %+v (want retryable serverRejection)", class)
-        }
-}
-
-
-// TestFailedFromStageWireField (Stage 9.1): failureStage identifies the
-// failing control-plane leg without changing the stable failure class.
-func TestFailedFromStageWireField(t *testing.T) {
-        stages := []string{
-                engine.FailureStageRemoteSettingsDiscovery,
-                engine.FailureStageGuardianPass,
-                engine.FailureStageUpstreamSession,
-        }
-        for _, stage := range stages {
-                ev := failedFromStage(engine.ErrDiscoveryFailed, fferr.Classified{
-                        Code:      fferr.CodeTimeout,
-                        Message:   "The server took too long to respond",
-                        Retryable: true,
-                }, engine.ExitStartup, stage)
-                blob, err := json.Marshal(ev)
-                if err != nil {
-                        t.Fatalf("%s: marshal failed: %v", stage, err)
-                }
-                var wire map[string]any
-                if err := json.Unmarshal(blob, &wire); err != nil {
-                        t.Fatalf("%s: unmarshal failed: %v", stage, err)
-                }
-                if got := wire["failureStage"]; got != stage {
-                        t.Fatalf("%s: failureStage = %v", stage, got)
-                }
-                if got := wire["failCode"]; got != string(fferr.CodeTimeout) {
-                        t.Fatalf("%s: failCode = %v", stage, got)
-                }
-                if got := wire["message"]; got != "The server took too long to respond" {
-                        t.Fatalf("%s: message changed: %v", stage, got)
-                }
-        }
-
-        // Old/other events that do not know about failureStage remain
-        // byte-compatible: omitempty keeps the new field absent.
-        legacy := engine.Event{Name: engine.EvFailed, FailCode: engine.ErrInternal}
-        blob, err := json.Marshal(legacy)
-        if err != nil {
-                t.Fatal(err)
-        }
-        var wire map[string]any
-        if err := json.Unmarshal(blob, &wire); err != nil {
-                t.Fatal(err)
-        }
-        if _, ok := wire["failureStage"]; ok {
-                t.Fatalf("empty failureStage must be omitted: %s", blob)
         }
 }

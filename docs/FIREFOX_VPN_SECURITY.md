@@ -92,7 +92,8 @@ the REAL binary.
 
 ## 6. License posture (UNRESOLVED)
 
-Upstream `firefox-vpn-client` (pinned `55ad91a`) declares no license
+Upstream `firefox-vpn-client` (pinned `c1c5d89`; still no license at
+the re-pin, re-verified 2026-11-11) declares no license
 that would allow redistribution or derivative works at the time of
 writing. Until the AETHONE owner settles this:
 

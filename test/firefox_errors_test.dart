@@ -112,23 +112,6 @@ void main() {
       expect(FirefoxErrors.classify('serverRejection').retryable, isFalse);
     });
 
-    test('GUARDIAN-BOOTSTRAP STAGE 6 — the renewal lifecycle codes map to ' 
-        'their own classes, never the unknown bucket', () {
-      // Quota (the renewal loop's 429 terminal): NOT retryable — the
-      // recovery is picking another engine, not a retry.
-      final quota = FirefoxErrors.classify(FirefoxTransportError.quotaExhausted);
-      expect(quota.code, FirefoxTransportError.quotaExhausted);
-      expect(quota.retryable, isFalse);
-      expect(FirefoxErrors.diagnostic(quota), contains('quota'));
-      // Renewal timeout (the engine parked, exit 3): retryable — a fresh
-      // walk re-runs the whole direct/bootstrap decision.
-      final renewal =
-          FirefoxErrors.classify(FirefoxTransportError.renewalTimeout);
-      expect(renewal.code, FirefoxTransportError.renewalTimeout);
-      expect(renewal.retryable, isTrue);
-      expect(FirefoxErrors.diagnostic(renewal), contains('renewed'));
-    });
-
     test('httpStatus passes through untouched (the REAL status code)', () {
       final f = FirefoxErrors.classify('sessionRejected', httpStatus: 401);
       expect(f.httpStatus, 401);
@@ -173,12 +156,10 @@ void main() {
         'failCode': 'dnsError',
         'httpStatus': '503',
         'retryable': 'yes',
-        'failureStage': 42,
         'message': 'x',
       });
       expect(event.httpStatus, 0);
       expect(event.retryable, isNull); // wrong type → no hint
-      expect(event.failureStage, isEmpty); // wrong stage type → no hint
 
       final completed = FirefoxEngineEvent.fromJson({
         'event': 'loginCompleted',
@@ -201,7 +182,6 @@ void main() {
       expect(event.failCode, FirefoxEngineFailure.exchangeFailed);
       expect(event.httpStatus, 0);
       expect(event.retryable, isNull);
-      expect(event.failureStage, isEmpty);
     });
   });
 
@@ -361,78 +341,6 @@ void main() {
       final diagnostic = FirefoxErrors.diagnostic(f);
       expect(diagnostic, isNot(contains('[::1]')));
       expect(diagnostic, isNot(contains('udp')));
-    });
-  });
-
-  // ----------------------------------------------------------------
-  group('guardian-bootstrap Stage 1 — the Guardian 451 region class', () {
-    test('the real 451 failed-event wire shape parses and classifies', () {
-      const wire =
-          '{"event":"failed","failCode":"guardianRegionUnavailable",'
-          '"message":"static","httpStatus":451,"retryable":false}';
-      final event = FirefoxEngineEvent.fromJson(
-          jsonDecode(wire) as Map<String, dynamic>);
-      expect(event.name, FirefoxEngineEvents.failed);
-      expect(event.failCode,
-          FirefoxTransportError.guardianRegionUnavailable);
-      expect(event.httpStatus, 451);
-      expect(event.retryable, isFalse);
-
-      final f = FirefoxErrors.classify(event.failCode,
-          httpStatus: event.httpStatus, retryable: event.retryable);
-      expect(f.code, FirefoxTransportError.guardianRegionUnavailable);
-      expect(f.httpStatus, 451);
-      expect(f.retryable, isFalse);
-      expect(f.legacy, isFalse);
-    });
-
-    test('the region class is emitted ONLY by the Guardian walk (isolation)',
-        () {
-      // A non-Guardian 451 (FxA / Remote Settings on the engine side)
-      // arrives as the GENERIC serverRejection class — never the region
-      // class, which only the engine's ClassifyGuardian may produce.
-      final generic =
-          FirefoxErrors.classify('serverRejection', httpStatus: 451);
-      expect(generic.code, FirefoxTransportError.serverRejection);
-      expect(generic.code,
-          isNot(FirefoxTransportError.guardianRegionUnavailable));
-    });
-
-    test('the diagnostic names the region, never the raw chain', () {
-      final f = FirefoxErrors.classify('guardianRegionUnavailable',
-          httpStatus: 451);
-      final text = FirefoxErrors.diagnostic(f);
-      expect(text, contains('region'));
-      expect(text, contains('451'));
-      expect(text, isNot(contains('unavailable_in_region')));
-      expect(text, isNot(contains('vpn.mozilla.org')));
-      expect(f.toString(), isNot(contains('unavailable_in_region')));
-    });
-
-    test('the renewalFailed event carries its class additively', () {
-      // Stage 1 adds failCode to renewalFailed; legacy engines without
-      // the field still parse (empty string, no crash).
-      final withCode = FirefoxEngineEvent.fromJson(jsonDecode(
-              '{"event":"renewalFailed","failCode":'
-              '"guardianRegionUnavailable","message":"x"}')
-          as Map<String, dynamic>);
-      expect(withCode.name, FirefoxEngineEvents.renewalFailed);
-      expect(withCode.failCode,
-          FirefoxTransportError.guardianRegionUnavailable);
-
-      final legacy = FirefoxEngineEvent.fromJson(
-          jsonDecode('{"event":"renewalFailed","message":"x"}')
-              as Map<String, dynamic>);
-      expect(legacy.name, FirefoxEngineEvents.renewalFailed);
-      expect(legacy.failCode, '');
-    });
-
-    test('the mirror constant matches the wire code exactly', () {
-      expect(FirefoxEngineFailure.guardianRegionUnavailable,
-          'guardianRegionUnavailable');
-      // Unknown codes still degrade — the future-proofing rule holds.
-      expect(FirefoxErrors.classify('somethingNewer').code,
-          FirefoxTransportError.unknown);
     });
   });
 }

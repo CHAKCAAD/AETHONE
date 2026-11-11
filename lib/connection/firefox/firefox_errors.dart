@@ -14,8 +14,7 @@
 ///    to the diagnostics log through [redactLine] only;
 ///  * the granular classes distinguish DNS / network unavailable /
 ///    timeout / TLS / session rejected / token exchange / invalid token
-///    response / server rejection / Guardian region-unavailable (the
-///    Guardian-only 451 class — guardian-bootstrap Stage 1) / unknown;
+///    response / server rejection / unknown;
 ///  * HTTP-level failures carry the REAL status code ([FirefoxFailure.httpStatus]);
 ///  * [FirefoxFailure.retryable] is the UI policy (a "try again" hint);
 ///  * LEGACY engines (EngineVersion 1.1.0-phase2, the 2026-11-08 field
@@ -39,24 +38,6 @@ abstract final class FirefoxTransportError {
   static const tokenExchange = 'tokenExchange';
   static const invalidTokenResponse = 'invalidTokenResponse';
   static const serverRejection = 'serverRejection';
-
-  /// guardian-bootstrap Stage 1 — the GUARDIAN-only 451 class: the
-  /// VPN authorization service refused the request for the
-  /// requester's region. Only the Guardian control-plane walk emits
-  /// it (the engine-side ClassifyGuardian); FxA / Remote Settings /
-  /// any other endpoint keep the generic classes for every status,
-  /// 451 included.
-  static const guardianRegionUnavailable = 'guardianRegionUnavailable';
-
-  /// guardian-bootstrap Stage 6 — the renewal loop's two terminal
-  /// outcomes (mirrors engine.ErrRenewalTimeout and the quota event's
-  /// own class; the engine's exit codes 3 / 2). They are engine
-  /// LIFECYCLE codes, not transport classes: quota means "this
-  /// account is done for the month" (never retryable), renewal
-  /// timeout means "the pass died unrenewed — reconnect" (the walk
-  /// re-runs the whole decision, bootstrap included).
-  static const quotaExhausted = 'quotaExhausted';
-  static const renewalTimeout = 'renewalTimeout';
   static const unknown = 'unknown';
 }
 
@@ -156,28 +137,6 @@ abstract final class FirefoxErrors {
           httpStatus: httpStatus,
           retryable: retryable ?? (httpStatus >= 500),
         );
-      case FirefoxTransportError.guardianRegionUnavailable:
-        return FirefoxFailure(
-          code: failCode,
-          httpStatus: httpStatus,
-          retryable: retryable ?? false,
-        );
-      case FirefoxTransportError.quotaExhausted:
-        // Stage 6: the renewal loop's quota terminal — picking another
-        // engine is the recovery, not a retry.
-        return FirefoxFailure(
-          code: failCode,
-          httpStatus: httpStatus,
-          retryable: retryable ?? false,
-        );
-      case FirefoxTransportError.renewalTimeout:
-        // Stage 6: the pass expired unrenewed — the honest recovery is a
-        // fresh walk (which re-runs the direct/bootstrap decision).
-        return FirefoxFailure(
-          code: failCode,
-          httpStatus: httpStatus,
-          retryable: retryable ?? true,
-        );
       default:
         // Unknown / empty / future codes: the generic class. The code
         // itself is not surfaced to the UI.
@@ -217,16 +176,6 @@ abstract final class FirefoxErrors {
       case FirefoxTransportError.serverRejection:
         return 'the account server rejected the request'
             '${f.httpStatus > 0 ? ' (HTTP ${f.httpStatus})' : ''}';
-      case FirefoxTransportError.guardianRegionUnavailable:
-        return 'the Firefox VPN authorization service is not available '
-            'in this region'
-            '${f.httpStatus > 0 ? ' (Guardian HTTP ${f.httpStatus})' : ''}';
-      case FirefoxTransportError.quotaExhausted:
-        return 'the account\'s monthly proxy quota is exhausted — pick '
-            'another communication engine';
-      case FirefoxTransportError.renewalTimeout:
-        return 'the connection\'s authorization could not be renewed in '
-            'time — reconnecting re-runs the whole decision';
       default:
         return 'the sign-in exchange failed for an unknown reason';
     }

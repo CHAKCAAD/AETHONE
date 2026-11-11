@@ -114,41 +114,14 @@ void main() {
 
     test('failure events carry engine codes verbatim', () {
       const real = '{"event":"failed","code":1,"failCode":"badConfig",'
-          '"failureStage":"guardianPass",'
           '"message":"socksListenNotLoopback: \\"0.0.0.0:1822\\" must be a '
           'loopback address"}';
       final ev = FirefoxEngineEvent.fromJson(
         (jsonDecode(real) as Map).cast<String, dynamic>(),
       );
       expect(ev.failCode, FirefoxEngineFailure.badConfig);
-      expect(ev.failureStage, 'guardianPass');
-      expect(ev.logLine, contains('stage=guardianPass'));
       expect(ev.exitCode, FirefoxEngineExitCode.startup);
       expect(ev.message, contains('socksListenNotLoopback'));
-    });
-
-
-    test('failure stage survives the child-process terminal outcome', () async {
-      final dir = await Directory.systemTemp.createTemp('fx-stage-outcome-');
-      addTearDown(() => dir.delete(recursive: true));
-      final script = File('${dir.path}/fake-engine.sh');
-      await script.writeAsString('''#!/bin/sh
-IFS= read -r config
-printf '%s\\n' '{"event":"failed","code":1,"failCode":"timeout","failureStage":"remoteSettingsDiscovery","message":"The server took too long to respond"}'
-sleep 0.1
-exit 1
-''');
-      final chmod = await Process.run('chmod', ['700', script.path]);
-      expect(chmod.exitCode, 0, reason: 'make fixture executable');
-
-      final engine = FirefoxVpnEngine(binaryPath: script.path, onLog: (_) {});
-      final outcome = await engine.start(const FirefoxEngineConfig(
-        socksListen: '127.0.0.1:1822',
-        auth: FirefoxSessionAuth(accessToken: 'test-access-token'),
-      ));
-      expect(outcome.state, FirefoxEngineState.failed);
-      expect(outcome.failCode, 'timeout');
-      expect(outcome.failureStage, 'remoteSettingsDiscovery');
     });
 
     test('config JSON never carries secrets outside auth', () {

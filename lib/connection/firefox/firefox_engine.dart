@@ -57,7 +57,6 @@ class FirefoxEngineOutcome {
     this.message = '',
     this.httpStatus = 0,
     this.retryable,
-    this.failureStage = '',
   });
 
   final FirefoxEngineState state;
@@ -73,9 +72,6 @@ class FirefoxEngineOutcome {
   /// null retryable means "the engine did not say").
   final int httpStatus;
   final bool? retryable;
-
-  /// Stage 9.1 — the named startup leg that failed (empty on legacy engines).
-  final String failureStage;
 
   bool get cleanStop =>
       (state == FirefoxEngineState.stopped && exitCode == 0) ||
@@ -127,12 +123,6 @@ class FirefoxVpnEngine {
   /// Starts the engine: spawns the binary, writes the config line on the
   /// PRIVATE stdin pipe, and begins consuming stdout events.
   ///
-  /// [args] carries FIXED ROLE FLAGS only (e.g. `--guardian-probe` — the
-  /// engine's own argv modes). The security contract is unchanged: argv
-  /// never carries secrets; every secret still travels on the stdin
-  /// pipe. The default (empty argv) is the bare tunnel-role spawn of
-  /// every previous version.
-  ///
   /// [onAuthRefreshed] receives the refreshed same-account OAuth pair
   /// (private channel — the caller persists it in the Keystore store).
   ///
@@ -142,20 +132,18 @@ class FirefoxVpnEngine {
     FirefoxEngineConfig config, {
     void Function(FirefoxSessionAuth refreshed)? onAuthRefreshed,
     Map<String, String> environment = const {},
-    List<String> args = const [],
   }) async {
     if (isAlive || _state == FirefoxEngineState.starting) {
       throw StateError('firefox engine already running (state: $_state)');
     }
     _setState(FirefoxEngineState.starting);
 
-    // Spawn with FIXED ROLE FLAGS ONLY: argv = [binary, --role...]. The
-    // Go engine reads its whole configuration from the stdin line —
-    // nothing secret can leak into /proc/<pid>/cmdline or the process
-    // environment.
+    // Spawn BARE: argv = [binary] only. The Go engine reads its whole
+    // configuration from the stdin line — nothing secret can leak into
+    // /proc/<pid>/cmdline or the process environment.
     final process = await Process.start(
       binaryPath,
-      args,
+      const [],
       environment: environment,
       includeParentEnvironment: false,
     );
@@ -208,26 +196,6 @@ class FirefoxVpnEngine {
               message: event.message,
               httpStatus: event.httpStatus,
               retryable: event.retryable,
-              failureStage: event.failureStage,
-            ));
-          case FirefoxEngineEvents.quotaExhausted:
-            // GUARDIAN-BOOTSTRAP STAGE 6 (renewal & lifecycle): the
-            // engine reports quota exhaustion as its OWN terminal event
-            // (initial-pass walk AND the renewal loop's park path —
-            // ExitQuota), never as a `failed` event. Without this case
-            // the outcome fell through to the bare exit-code mapping
-            // (`engineExited:2`) and the walk's quota branch never
-            // fired; now the owner's «pick another engine» surface is
-            // reachable from BOTH death points.
-            _finish(FirefoxEngineOutcome(
-              state: FirefoxEngineState.failed,
-              exitCode: event.exitCode != 0
-                  ? event.exitCode
-                  : FirefoxEngineExitCode.quota,
-              failCode: FirefoxEngineFailure.quotaExhausted,
-              message: event.message.isNotEmpty
-                  ? event.message
-                  : 'the account\'s monthly proxy quota is exhausted',
             ));
           default:
             break;
@@ -352,12 +320,11 @@ class FirefoxVpnEngine {
         _state == FirefoxEngineState.connected) {
       return true;
     }
-    final ready = events
-        .firstWhere((e) => e.name == FirefoxEngineEvents.socksReady)
-        .then((_) => true);
-    final terminated = _outcome.future.then((_) => false);
     try {
-      return await Future.any<bool>([ready, terminated]).timeout(timeout);
+      await events
+          .firstWhere((e) => e.name == FirefoxEngineEvents.socksReady)
+          .timeout(timeout);
+      return true;
     } catch (_) {
       return false;
     }

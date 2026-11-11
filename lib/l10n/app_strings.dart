@@ -359,12 +359,6 @@ class AppStrings {
   String get firefoxErrTokenExchange => _v['firefoxErrTokenExchange']!;
   String get firefoxErrInvalidToken => _v['firefoxErrInvalidToken']!;
   String get firefoxErrServerRejected => _v['firefoxErrServerRejected']!;
-  String get firefoxErrGuardianRegion => _v['firefoxErrGuardianRegion']!;
-
-  /// GUARDIAN-BOOTSTRAP (Stage 7 l10n completion): the Stage-6 lifecycle
-  /// classes — previously they fell to the generic login-failed text.
-  String get firefoxErrQuotaExhausted => _v['firefoxErrQuotaExhausted']!;
-  String get firefoxErrRenewalTimeout => _v['firefoxErrRenewalTimeout']!;
 
   /// The localized text for a CLASSIFIED Firefox transport failure
   /// ([FirefoxErrors.classify] output). Unknown/unmapped classes fall
@@ -378,10 +372,6 @@ class AppStrings {
         FirefoxTransportError.tokenExchange => firefoxErrTokenExchange,
         FirefoxTransportError.invalidTokenResponse => firefoxErrInvalidToken,
         FirefoxTransportError.serverRejection => firefoxErrServerRejected,
-        FirefoxTransportError.guardianRegionUnavailable =>
-            firefoxErrGuardianRegion,
-        FirefoxTransportError.quotaExhausted => firefoxErrQuotaExhausted,
-        FirefoxTransportError.renewalTimeout => firefoxErrRenewalTimeout,
         _ => firefoxLoginFailed,
       };
 
@@ -627,12 +617,6 @@ class AppStrings {
       'firefoxErrTokenExchange': 'تبادل ورود با سرور حساب ناتمام ماند؛ دوباره تلاش کنید',
       'firefoxErrInvalidToken': 'پاسخ سرور حساب معتبر نبود؛ دوباره تلاش کنید',
       'firefoxErrServerRejected': 'سرور حساب درخواست را رد کرد',
-      'firefoxErrGuardianRegion': 'سرویس مجوز فایرفاکس در این منطقه در دسترس نیست',
-      // GUARDIAN-BOOTSTRAP (Stage 7 l10n completion): the two Stage-6
-      // lifecycle classes had diagnostics but no localized text — they
-      // fell to the generic login-failed string.
-      'firefoxErrQuotaExhausted': 'سهمیه ماهانه این حساب فایرفاکس تمام شده؛ موتور ارتباطی دیگری انتخاب کنید',
-      'firefoxErrRenewalTimeout': 'تمدید مجوز اتصال در زمان مقرر انجام نشد؛ دوباره وصل شوید',
       'settingsPillSub': 'انتخاب لوکیشن و ...',
       'settingsAdvancedStatus': 'وضعیت پیکربندی',
       'settingsRoutingArea': 'منطقهٔ مسیریابی',
@@ -967,9 +951,6 @@ class AppStrings {
       'firefoxErrTokenExchange': 'The sign-in exchange with the account server did not complete; try again',
       'firefoxErrInvalidToken': 'The account server response was invalid; try again',
       'firefoxErrServerRejected': 'The account server rejected the request',
-      'firefoxErrGuardianRegion': 'The Firefox VPN authorization service is not available in this region',
-      'firefoxErrQuotaExhausted': 'This Firefox account\'s monthly quota is exhausted — pick another communication engine',
-      'firefoxErrRenewalTimeout': 'The connection\'s authorization could not be renewed in time — reconnect',
       'settingsPillSub': 'Location & more …',
       'settingsAdvancedStatus': 'Configuration status',
       'settingsRoutingArea': 'Routing region',
@@ -1302,9 +1283,6 @@ class AppStrings {
       'firefoxErrTokenExchange': 'Обмен входа с сервером аккаунтов не завершился; попробуйте снова',
       'firefoxErrInvalidToken': 'Ответ сервера аккаунтов был недействительным; попробуйте снова',
       'firefoxErrServerRejected': 'Сервер аккаунтов отклонил запрос',
-      'firefoxErrGuardianRegion': 'Сервис авторизации Firefox недоступен в этом регионе',
-      'firefoxErrQuotaExhausted': 'Месячная квота этого аккаунта Firefox исчерпана — выберите другой коммуникационный движок',
-      'firefoxErrRenewalTimeout': 'Не удалось вовремя продлить авторизацию подключения — переподключитесь',
       'settingsPillSub': 'Локация и другое …',
       'settingsAdvancedStatus': 'Статус конфигурации',
       'settingsRoutingArea': 'Регион маршрутизации',
@@ -1635,9 +1613,6 @@ class AppStrings {
       'firefoxErrTokenExchange': '与账户服务器的登录交换未完成；请重试',
       'firefoxErrInvalidToken': '账户服务器响应无效；请重试',
       'firefoxErrServerRejected': '账户服务器拒绝了请求',
-      'firefoxErrGuardianRegion': 'Firefox VPN 授权服务在此地区不可用',
-      'firefoxErrQuotaExhausted': '此 Firefox 账户的每月配额已用尽 — 请选择其他通信引擎',
-      'firefoxErrRenewalTimeout': '连接授权未能及时续期 — 请重新连接',
       'settingsPillSub': '位置等 …',
       'settingsAdvancedStatus': '配置状态',
       'settingsRoutingArea': '路由区域',
@@ -1974,9 +1949,6 @@ class AppStrings {
       'firefoxErrTokenExchange': 'Hasap serweri bilen giriş çalşygy tamamlanmady; ýene synanyş',
       'firefoxErrInvalidToken': 'Hasap serweriniň jogaby nädogrydy; ýene synanyş',
       'firefoxErrServerRejected': 'Hasap serweri sowaly ret etdi',
-      'firefoxErrGuardianRegion': 'Firefox VPN ygtyýar hyzmaty bu sebitde elýeterli däl',
-      'firefoxErrQuotaExhausted': 'Bu Firefox hasabynyň aýlyk möçberi tükenmdi — başga aragatnaşyk ulagyny saýlaň',
-      'firefoxErrRenewalTimeout': 'Birikmegiň ygtyýarnamasyny wagtynda täzelemek başarmady — täzeden birigiň',
       'settingsPillSub': 'Ýerleşýän ýer we başgalar …',
       'settingsAdvancedStatus': 'Konfigurasiýa ýagdaýy',
       'settingsRoutingArea': 'Marşrutizasiýa sebiti',

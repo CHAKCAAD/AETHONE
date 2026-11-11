@@ -79,21 +79,6 @@ const (
         ErrExchangeFailed      = "exchangeFailed"
 )
 
-// Failure stages are optional diagnostic metadata on failed events. They
-// identify the walk leg that produced the failure without exposing URLs,
-// credentials, or raw transport details. Empty/absent remains valid for
-// older callers and non-walk roles.
-const (
-        FailureStageConfiguration            = "configuration"
-        FailureStageControlPlaneRouting     = "controlPlaneRouting"
-        FailureStageRemoteSettingsDiscovery = "remoteSettingsDiscovery"
-        FailureStageDiscoverySelection      = "discoverySelection"
-        FailureStageGuardianPass            = "guardianPass"
-        FailureStageUpstreamSession         = "upstreamSession"
-        FailureStageSocksListener           = "socksListener"
-        FailureStageGuardianRenewal         = "guardianRenewal"
-)
-
 // Exit codes (mirrored by FirefoxEngineExitCode on the Dart side).
 const (
         ExitClean    = 0 // stdin closed / drained
@@ -114,13 +99,6 @@ const (
         detailConfigNotJSON         = "configNotJSON"
         detailUpstreamOverrideBad   = "upstreamOverrideInvalid"
         detailMaxConnsNegative      = "maxConnsNegative"
-
-        // guardian-bootstrap Stage 5 — the optional apiProxy leg's
-        // validation details (badConfig rides the failCode as usual).
-        detailAPIProxyInvalid     = "apiProxyInvalid"
-        detailAPIProxyBadScheme   = "apiProxySchemeUnsupported"
-        detailAPIProxyNotLoopback = "apiProxyNotLoopback"
-        detailAPIProxyCredentials = "apiProxyCredentialsForbidden"
 )
 
 // Event is one stdout JSON line. Only authRefreshed and loginCompleted
@@ -130,16 +108,11 @@ type Event struct {
         Name    string `json:"event"`
         Message string `json:"message,omitempty"`
 
-        // failed (the engine/legacy codes or the fferr classes) and
-        // renewalFailed (the failed attempt's fferr class — the 451
-        // region class included; empty when it classifies as unknown)
+        // failed
         FailCode   string `json:"failCode,omitempty"`
         Code       int    `json:"code,omitempty"` // the exit code the engine will use
         HTTPStatus int    `json:"httpStatus,omitempty"`
         Retryable  *bool  `json:"retryable,omitempty"`
-
-        // failed — optional, non-secret name of the engine walk leg that failed.
-        FailureStage string `json:"failureStage,omitempty"`
 
         // stopping / stopped
         Reason string `json:"reason,omitempty"`

@@ -46,7 +46,7 @@ API_LEVEL=34
 
 # The upstream pin the module's replace directive expects (verified by
 # fetch_upstream.sh; re-asserted here so a stale copy cannot build).
-UPSTREAM_PIN="55ad91a2ccea1c93e69c82a08a7681e279884db5"
+UPSTREAM_PIN="c1c5d895a2c52c69a9e06e672eae5074c9cc3fa1"
 
 log()  { printf 'build_engine: %s\n' "$*" >&2; }
 fail() { printf 'build_engine: FAIL: %s\n' "$*" >&2; exit 1; }

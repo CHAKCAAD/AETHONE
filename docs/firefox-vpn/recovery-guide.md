@@ -48,7 +48,7 @@ flutter pub get
 
 # دریافت upstream پین‌شده (هرگز Commit دیگری جایگزین نشود):
 phase1/scripts/fetch_upstream.sh
-# خروجی باید commit 55ad91a2ccea1c93e69c82a08a7681e279884db5 را تأیید کند
+# خروجی باید commit c1c5d895a2c52c69a9e06e672eae5074c9cc3fa1 را تأیید کند
 
 # ساخت موتور برای هر سه ABI + host:
 phase1/scripts/build_engine.sh all

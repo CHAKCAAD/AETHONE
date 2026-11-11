@@ -13,11 +13,6 @@
 //      libfirefoxvpn --dns-probe     resolve the control-plane domains
 //                                    through THIS process (the multi-arch
 //                                    DNS evidence role — no secrets)
-//      libfirefoxvpn --guardian-probe  the Guardian-only authorization
-//                                    walk (guardian-bootstrap Stage 5:
-//                                    AcquireInitialPass — no discovery,
-//                                    no session, no listener; honors the
-//                                    apiProxy routing decision)
 //
 // Spawn discipline (the Dart host): bare argv, EMPTY environment —
 // every secret travels on the stdin pipe only.
@@ -60,13 +55,11 @@ func run() int {
                         return runLogin()
                 case "--dns-probe":
                         return runDNSProbe()
-                case "--guardian-probe":
-                        return runGuardianProbe()
                 case "--help", "-h":
-                        fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe|--guardian-probe]\n")
+                        fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe]\n")
                         return 0
                 default:
-                        fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--dns-probe|--guardian-probe])\n", arg)
+                        fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--dns-probe])\n", arg)
                         return engine.ExitStartup
                 }
         }
@@ -89,13 +82,11 @@ func runTunnel() int {
                         _ = emit.Emit(engine.Event{
                                 Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
                                 Message: cfgErr.DetailCode(), Code: engine.ExitStartup,
-                                FailureStage: engine.FailureStageConfiguration,
                         })
                 } else {
                         _ = emit.Emit(engine.Event{
                                 Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
                                 Message: "configNotJSON", Code: engine.ExitStartup,
-                                FailureStage: engine.FailureStageConfiguration,
                         })
                 }
                 return engine.ExitStartup
@@ -110,7 +101,6 @@ func runTunnel() int {
                 _ = emit.Emit(engine.Event{
                         Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
                         Message: detail, Code: engine.ExitStartup,
-                        FailureStage: engine.FailureStageConfiguration,
                 })
                 return engine.ExitStartup
         }
@@ -124,20 +114,6 @@ func runTunnel() int {
                 Message: engine.EngineVersion,
                 PID:    os.Getpid(),
         })
-
-        // guardian-bootstrap Stage 5: the selective control-plane routing.
-        // MUST precede the FIRST control-plane request (discovery below is
-        // Remote Settings and Guardian use the exact bootstrap allowlist
-        // when apiProxy is supplied. Empty apiProxy =
-        // no change at all (the pinned default direct uTLS transport).
-        if err := installGuardianRouting(cfg, log); err != nil {
-                _ = emit.Emit(engine.Event{
-                        Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
-                        Message: "apiProxyTransport", Code: engine.ExitStartup,
-                        FailureStage: engine.FailureStageControlPlaneRouting,
-                })
-                return engine.ExitStartup
-        }
 
         // 2. discovery + selection (unless overridden). stdin close is
         // checked at EVERY stage boundary — the shutdown request is honored
@@ -158,14 +134,6 @@ func runTunnel() int {
                 }
         }
 
-        // Direct gets a fresh four-second deadline for EACH serial
-        // control-plane request: discovery cannot consume Guardian's
-        // authorization budget. A proxied bootstrap walk deliberately
-        // shares one bounded 55-second window so the host's 60-second
-        // authorization deadline remains the outer guard.
-        controlBudget := newControlPlaneBudget(ctx, cfg.ApiProxy)
-        defer controlBudget.close()
-
         var (
                 proxyURL *url.URL
                 sel      discovery.Selection
@@ -180,14 +148,12 @@ func runTunnel() int {
                 log.Infof("upstream override: %s", cfg.UpstreamOverride)
         } else {
                 started := time.Now()
-                discoveryCtx, cancelDiscovery := controlBudget.requestContext()
-                fetched, err := vpnclient.FetchServerList(discoveryCtx)
-                cancelDiscovery()
+                fetched, err := vpnclient.FetchServerList(ctx)
                 if err != nil {
                         if code, stop := cleanStopIfRequested(); stop {
                                 return code
                         }
-                        _ = emit.Emit(failedFromStage(engine.ErrDiscoveryFailed, fferr.ClassifyTransport(err).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken), engine.ExitStartup, engine.FailureStageRemoteSettingsDiscovery))
+                        _ = emit.Emit(failedFrom(engine.ErrDiscoveryFailed, fferr.ClassifyTransport(err).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken), engine.ExitStartup))
                         return engine.ExitStartup
                 }
                 if code, stop := cleanStopIfRequested(); stop {
@@ -206,11 +172,10 @@ func runTunnel() int {
                                 _ = emit.Emit(engine.Event{
                                         Name: engine.EvFailed, FailCode: engine.ErrNoMatchForCountry,
                                         Message: noMatch.Error(), Code: engine.ExitStartup,
-                                        FailureStage: engine.FailureStageDiscoverySelection,
                                 })
                                 return engine.ExitStartup
                         }
-                        _ = emit.Emit(failedFromStage(engine.ErrInternal, fferr.ClassifyTransport(err).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken), engine.ExitInternal, engine.FailureStageDiscoverySelection))
+                        _ = emit.Emit(failedFrom(engine.ErrInternal, fferr.ClassifyTransport(err).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken), engine.ExitInternal))
                         return engine.ExitInternal
                 }
                 sel = picked
@@ -255,11 +220,10 @@ func runTunnel() int {
                                 ObtainedAt:    time.Now().UTC().Format(time.RFC3339),
                         })
                 },
-                OnRenewalFail: func(redacted string, failCode string, retryInMs int64) {
+                OnRenewalFail: func(redacted string, retryInMs int64) {
                         _ = emit.Emit(engine.Event{
                                 Name:      engine.EvRenewalFailed,
                                 Message:   redact.Line(redacted),
-                                FailCode:  failCode,
                                 RetryInMs: retryInMs,
                         })
                 },
@@ -267,9 +231,7 @@ func runTunnel() int {
         })
         defer controller.Close()
 
-        guardianCtx, cancelGuardian := controlBudget.requestContext()
-        pass, err := controller.AcquireInitialPass(guardianCtx)
-        cancelGuardian()
+        pass, err := controller.AcquireInitialPass(ctx)
         if err != nil {
                 if code, stop := cleanStopIfRequested(); stop {
                         return code
@@ -282,7 +244,7 @@ func runTunnel() int {
                         return engine.ExitQuota
                 }
                 class := classifyGuardian(err, cfg)
-                _ = emit.Emit(failedFromStage(engine.ErrPassFetchFailed, class, engine.ExitStartup, engine.FailureStageGuardianPass))
+                _ = emit.Emit(failedFrom(engine.ErrPassFetchFailed, class, engine.ExitStartup))
                 return engine.ExitStartup
         }
         _ = emit.Emit(engine.Event{
@@ -296,7 +258,7 @@ func runTunnel() int {
         latency, err := controller.Start(ctx, pass)
         if err != nil {
                 class := classifyUpstream(err, cfg)
-                _ = emit.Emit(failedFromStage(engine.ErrUpstreamSession, class, engine.ExitStartup, engine.FailureStageUpstreamSession))
+                _ = emit.Emit(failedFrom(engine.ErrUpstreamSession, class, engine.ExitStartup))
                 return engine.ExitStartup
         }
         host, _ := controller.SessionHost()
@@ -317,7 +279,6 @@ func runTunnel() int {
                 _ = emit.Emit(engine.Event{
                         Name: engine.EvFailed, FailCode: engine.ErrSocksListenFailed,
                         Message: "the SOCKS listener could not be bound", Code: engine.ExitStartup,
-                        FailureStage: engine.FailureStageSocksListener,
                 })
                 return engine.ExitStartup
         }
@@ -383,7 +344,6 @@ func runTunnel() int {
                 _ = emit.Emit(engine.Event{
                         Name: engine.EvFailed, FailCode: engine.ErrRenewalTimeout,
                         Message: "the proxy pass could not be renewed in time", Code: engine.ExitRenewal,
-                        FailureStage: engine.FailureStageGuardianRenewal,
                 })
                 return engine.ExitRenewal
         }
@@ -442,13 +402,6 @@ func formatRuntimeStats(prev, cur *runtime.MemStats, dt time.Duration) string {
 // watchStdinClose resolves when the host closes the child's stdin (the
 // shutdown request). A goroutine blocks on a zero-byte read.
 func watchStdinClose(ctx context.Context, onClosed func()) <-chan struct{} {
-        return watchStdinCloseReader(ctx, os.Stdin, onClosed)
-}
-
-// watchStdinCloseReader is the reader-injected core (the probe role
-// passes its config reader so tests never race the os.Stdin global;
-// the production callers hand it os.Stdin via watchStdinClose).
-func watchStdinCloseReader(ctx context.Context, r io.Reader, onClosed func()) <-chan struct{} {
         done := make(chan struct{})
         var once sync.Once
         trigger := func() {
@@ -460,7 +413,7 @@ func watchStdinCloseReader(ctx context.Context, r io.Reader, onClosed func()) <-
         go func() {
                 buf := make([]byte, 1)
                 for {
-                        n, err := r.Read(buf)
+                        n, err := os.Stdin.Read(buf)
                         if n > 0 && err == nil {
                                 // The contract is ONE line then silence; extra bytes are
                                 // drained (never interpreted as a second config).
@@ -504,22 +457,11 @@ func failedFrom(failCode string, class fferr.Classified, exit int) engine.Event 
         return ev
 }
 
-// failedFromStage adds the optional, non-secret walk-leg diagnostic.
-func failedFromStage(failCode string, class fferr.Classified, exit int, stage string) engine.Event {
-        ev := failedFrom(failCode, class, exit)
-        ev.FailureStage = stage
-        return ev
-}
-
 // classifyGuardian maps Guardian failures. The typed sentinels first
 // (the upstream's own ErrTokenInvalid fires ONLY on 401/403 →
 // sessionRejected; ErrQuotaExceeded is handled before this point), then
-// the typed GuardianHTTPError through fferr.ClassifyGuardian with the
-// REAL status and body — the Guardian-only 451 becomes the dedicated
-// guardianRegionUnavailable class (guardian-bootstrap Stage 1; the
-// error type itself is the endpoint proof: the pin constructs
-// GuardianHTTPError only in the /api/v1/fpn/* walks) — then
-// type-based transport classification. The status for the
+// the typed GuardianHTTPError through fferr.ClassifyHTTP with the REAL
+// status, then type-based transport classification. The status for the
 // token-invalid sentinel rides the error text (the same documented
 // seam as the FxA errno — the upstream pin exports no typed status
 // there) and is extracted, never guessed.
@@ -537,7 +479,7 @@ func classifyGuardian(err error, cfg engine.Config) fferr.Classified {
         }
         var httpErr *vpnclient.GuardianHTTPError
         if errors.As(err, &httpErr) {
-                return fferr.ClassifyGuardian(httpErr.StatusCode, httpErr.Body).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken)
+                return fferr.ClassifyHTTP(httpErr.StatusCode, nil).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken)
         }
         class := fferr.ClassifyTransport(err)
         if class.Code == fferr.CodeUnknown {

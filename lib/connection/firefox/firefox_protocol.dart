@@ -22,8 +22,7 @@
 ///    working forever; a rebuilt engine emits the granular Phase B
 ///    transport classes (dnsError | networkUnavailable | timeout |
 ///    tlsError | sessionRejected | tokenExchange | invalidTokenResponse |
-///    serverRejection | guardianRegionUnavailable | unknown —
-///    fferr.Code on the Go side);
+///    serverRejection | unknown — fferr.Code on the Go side);
 ///  * `httpStatus` — OPTIONAL int, the REAL status code on HTTP-level
 ///    failures (absent/0 on transport-level ones);
 ///  * `retryable` — OPTIONAL bool, the engine's retry policy hint;
@@ -50,7 +49,6 @@ class FirefoxEngineConfig {
     this.transport = 'h2',
     this.upstreamOverride = '',
     this.logLevel = 'normal',
-    this.apiProxy = '',
   });
 
   /// Loopback listener ONLY (the engine refuses anything else).
@@ -74,17 +72,6 @@ class FirefoxEngineConfig {
 
   final String logLevel;
 
-  /// GUARDIAN-BOOTSTRAP STAGE 5 — the local bootstrap proxy for the
-  /// GUARDIAN control-plane leg only (`socks5://127.0.0.1:<ephemeral>`
-  /// or an http/https loopback proxy). Empty (the default) = the
-  /// engine's direct uTLS transport, exactly the pre-Stage-5 behavior.
-  /// The engine's RoutingRoundTripper sends the exact Guardian token
-  /// request and Remote Settings server-list GET through it. FxA and
-  /// every other control-plane endpoint stay DIRECT.
-  /// The engine validates: loopback host only, supported scheme, no
-  /// credentials in the URL.
-  final String apiProxy;
-
   Map<String, dynamic> toJson() => {
         'version': 1,
         'socksListen': socksListen,
@@ -93,8 +80,6 @@ class FirefoxEngineConfig {
         'transport': transport,
         if (upstreamOverride.isNotEmpty) 'upstreamOverride': upstreamOverride,
         'logLevel': logLevel,
-        // Omitted when empty — legacy engines never see the field.
-        if (apiProxy.isNotEmpty) 'apiProxy': apiProxy,
         'auth': {
           'accessToken': auth.accessToken,
           'refreshToken': auth.refreshToken,
@@ -140,9 +125,6 @@ class FirefoxEngineEvent {
       : name = raw['event'] as String? ?? '',
         message = raw['message'] as String? ?? '',
         failCode = raw['failCode'] as String? ?? '',
-        // Stage 9.1: optional diagnostic stage; older engines and
-        // wrong-typed values degrade to empty string.
-        failureStage = _tolerantString(raw['failureStage']),
         reason = raw['reason'] as String? ?? '',
         exitCode = (raw['code'] as num?)?.toInt() ?? 0,
         addr = raw['addr'] as String? ?? '',
@@ -167,11 +149,6 @@ class FirefoxEngineEvent {
         line = raw['line'] as String? ?? '',
         loginMode = raw['loginMode'] as String? ?? '',
         attempt = (raw['attempt'] as num?)?.toInt() ?? 0,
-        // GUARDIAN-BOOTSTRAP STAGE 6: the renewal-failed event's retry
-        // delay (the pinned engine's proxyPassRetryDelay, 30 s) — the
-        // host's renewal policy reads it; 0 when absent (legacy engines
-        // or non-renewal events).
-        retryInMs = _tolerantInt(raw['retryInMs']),
         expiresIn = (raw['expiresIn'] as num?)?.toInt() ?? 0,
         obtainedAt = DateTime.tryParse(raw['obtainedAt'] as String? ?? ''),
         // PHASE B (Part 2): the optional failed-event extras — tolerant
@@ -191,7 +168,6 @@ class FirefoxEngineEvent {
   final String name;
   final String message;
   final String failCode;
-  final String failureStage;
   final String reason;
   final int exitCode;
   final String addr;
@@ -216,10 +192,6 @@ class FirefoxEngineEvent {
   final String line;
   final String loginMode;
   final int attempt;
-
-  /// renewalFailed: the engine's own retry cadence in milliseconds
-  /// (0 when the engine did not send one).
-  final int retryInMs;
 
   /// loginCompleted / authRefreshed: the pair's lifetime facts (never
   /// secret; the tokens themselves live only in the private fields).
@@ -257,8 +229,7 @@ class FirefoxEngineEvent {
         return 'login: session not confirmed yet '
             '(attempt $attempt, retrying)';
       case 'failed':
-        final stage = failureStage.isEmpty ? '' : ' stage=$failureStage';
-        return 'engine failed ($failCode)$stage: $message';
+        return 'engine failed ($failCode): $message';
       default:
         return 'engine: $name${message.isEmpty ? '' : ' — $message'}';
     }
@@ -317,10 +288,6 @@ abstract final class FirefoxEngineFailure {
   static const tokenExchange = FirefoxTransportError.tokenExchange;
   static const invalidTokenResponse = FirefoxTransportError.invalidTokenResponse;
   static const serverRejection = FirefoxTransportError.serverRejection;
-
-  /// guardian-bootstrap Stage 1 — the Guardian-only 451 class.
-  static const guardianRegionUnavailable =
-      FirefoxTransportError.guardianRegionUnavailable;
   static const unknown = FirefoxTransportError.unknown;
 }
 
