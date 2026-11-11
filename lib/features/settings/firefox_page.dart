@@ -220,32 +220,23 @@ class _FirefoxDnsCard extends StatefulWidget {
 }
 
 class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
-  late final TextEditingController _endpoint = TextEditingController(
-    text: widget.store.firefoxDnsEndpoint,
-  );
-  late final TextEditingController _bootstrap = TextEditingController(
-    text: widget.store.firefoxDnsBootstrapIps.join(', '),
-  );
+  String _endpoint = '';
+  String _bootstrap = '';
 
   @override
   void initState() {
     super.initState();
+    _endpoint = widget.store.firefoxDnsEndpoint;
+    _bootstrap = widget.store.firefoxDnsBootstrapIps.join(', ');
     _restoreFields();
   }
 
   Future<void> _restoreFields() async {
     await widget.store.loadFirefoxDnsSettings();
     if (!mounted) return;
-    _endpoint.text = widget.store.firefoxDnsEndpoint;
-    _bootstrap.text = widget.store.firefoxDnsBootstrapIps.join(', ');
+    _endpoint = widget.store.firefoxDnsEndpoint;
+    _bootstrap = widget.store.firefoxDnsBootstrapIps.join(', ');
     setState(() {});
-  }
-
-  @override
-  void dispose() {
-    _endpoint.dispose();
-    _bootstrap.dispose();
-    super.dispose();
   }
 
   @override
@@ -287,28 +278,28 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
           if (store.firefoxDnsProvider == 'custom') ...[
             SizedBox(height: 16 * s),
             SettingField(
-              key: ValueKey('firefox-dns-endpoint-${_endpoint.text}'),
+              key: ValueKey('firefox-dns-endpoint-$_endpoint'),
               keyId: 'firefox-dns-endpoint',
               label: strings.firefoxDnsEndpoint,
               hint: 'https://dns.example/dns-query',
-              initial: _endpoint.text,
-              onChanged: (value) => _endpoint.text = value,
+              initial: _endpoint,
+              onChanged: (value) => _endpoint = value,
             ),
             SizedBox(height: 12 * s),
             SettingField(
-              key: ValueKey('firefox-dns-bootstrap-${_bootstrap.text}'),
+              key: ValueKey('firefox-dns-bootstrap-$_bootstrap'),
               keyId: 'firefox-dns-bootstrap',
               label: strings.firefoxDnsBootstrap,
               hint: 'Optional IP addresses',
-              initial: _bootstrap.text,
-              onChanged: (value) => _bootstrap.text = value,
+              initial: _bootstrap,
+              onChanged: (value) => _bootstrap = value,
             ),
             SizedBox(height: 12 * s),
             SettingActionButton(
               keyId: 'firefox-dns-save',
               label: strings.firefoxDnsSave,
               onTap: () {
-                store.setFirefoxDnsCustom(_endpoint.text, _bootstrap.text);
+                store.setFirefoxDnsCustom(_endpoint, _bootstrap);
                 FocusScope.of(context).unfocus();
               },
             ),
