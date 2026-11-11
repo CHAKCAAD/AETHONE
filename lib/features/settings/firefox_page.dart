@@ -308,26 +308,26 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
               initial: _endpoint,
               onChanged: (value) => _endpoint = value,
             ),
-            SizedBox(height: 12 * s),
-            SettingField(
-              key: ValueKey('firefox-dns-bootstrap-$_bootstrap'),
-              keyId: 'firefox-dns-bootstrap',
-              label: strings.firefoxDnsBootstrap,
-              hint: 'Optional IP addresses',
-              initial: _bootstrap,
-              onChanged: (value) => _bootstrap = value,
-            ),
-            SizedBox(height: 12 * s),
-            SettingActionButton(
-              keyId: 'firefox-dns-save',
-              label: strings.firefoxDnsSave,
-              onTap: () {
-                store.setFirefoxDnsCustom(_endpoint, _bootstrap);
-                setState(() => _probeEvents = null);
-                FocusScope.of(context).unfocus();
-              },
-            ),
           ],
+          SizedBox(height: 12 * s),
+          SettingField(
+            key: ValueKey('firefox-dns-bootstrap-$_bootstrap'),
+            keyId: 'firefox-dns-bootstrap',
+            label: strings.firefoxDnsBootstrap,
+            hint: 'Optional IP addresses',
+            initial: _bootstrap,
+            onChanged: (value) => _bootstrap = value,
+          ),
+          SizedBox(height: 12 * s),
+          SettingActionButton(
+            keyId: 'firefox-dns-save',
+            label: strings.firefoxDnsSave,
+            onTap: () {
+              store.setFirefoxDnsCustom(_endpoint, _bootstrap);
+              setState(() => _probeEvents = null);
+              FocusScope.of(context).unfocus();
+            },
+          ),
         ],
         SizedBox(height: 14 * s),
         if (_testing)
