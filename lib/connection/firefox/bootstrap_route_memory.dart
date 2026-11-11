@@ -426,7 +426,9 @@ class GuardianBootstrapRouteMemory {
     }
     final record = _contexts[contextId]!;
     if (record.lastDirectOutcome != 'regionUnavailable' &&
-        record.lastDirectOutcome != 'transportUnavailable') return false;
+        record.lastDirectOutcome != 'transportUnavailable') {
+      return false;
+    }
     final at = now ?? DateTime.now();
     final directAt = record.lastDirectAt;
     if (directAt == null) return false;
