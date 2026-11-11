@@ -358,9 +358,12 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
                 for (final event in _probeEvents!)
                   if (event['event'] == 'dnsProbe')
                     SettingInfoText(
-                      '${event['domain'] ?? '—'} · '
-                      '${(event['addresses'] as List?)?.join(', ') ?? '—'} · '
-                      '${event['elapsedMs'] ?? 0} ms',
+                      (event['domain']?.toString() ?? '—') +
+                          ' · ' +
+                          ((event['addresses'] as List?)?.join(', ') ?? '—') +
+                          ' · ' +
+                          (event['elapsedMs']?.toString() ?? '0') +
+                          ' ms',
                     ),
               ],
             );
