@@ -12,7 +12,7 @@
 | Repository | `CHAKCAAD/AETHONE` (تنها مخزن مجاز) |
 | Branch کاری | `feature/firefox-guardian-psiphon-bootstrap` |
 | Base Commit | `ce852ea` (= tip شاخه `performance/firefox-vpn-optimization`؛ شامل تمام اصلاحات Performance مراحل ۰–۸) |
-| آخرین Commit کد | `1759bac32b3535e2e0d15ca02dced8404c8aea95` |
+| آخرین Commit کد | `0a9e7e1dea51e3cea7f63f5503f963fa6975f374` |
 | مرحله فعلی | **Stage 9.2 — Direct → Psiphon Standalone → Aether-selected-protocol + Psiphon؛ کد و تست‌های هدفمند ثبت شده، CI و دستگاه هنوز pending** |
 | مرحله تکمیل‌شده آخر | **Stage 9.2 — منطق fallback حمل‌ونقل و انتخاب پروتکل در شاخه feature پیاده‌سازی شده؛ اثبات نهایی با CI و اجرای POCO X3 باقی است** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
@@ -770,7 +770,7 @@ adb uninstall com.chakcaad.aethone.da
 
 ### ترتیب اتصال نهایی
 
-1. **Direct first:** موتور Firefox ابتدا بدون Psiphon اجرا می‌شود. در Go، Remote Settings server-list discovery و دریافت مجوز اولیه Guardian از یک context مستقیم با بودجهٔ حداکثر ۴ ثانیه عبور می‌کنند. این deadline واقعی HTTP است، نه صرفاً تایمر UI.
+1. **Direct first:** موتور Firefox ابتدا بدون Psiphon اجرا می‌شود. در Go، Remote Settings server-list discovery ابتدا با context مستقیم مستقلِ حداکثر ۴ ثانیه اجرا می‌شود. اگر موفق شد، دریافت مجوز اولیه Guardian یک context تازه با ۴ ثانیهٔ کامل می‌گیرد؛ زمان مصرف‌شده در discovery از فرصت Guardian کم نمی‌شود. این deadline واقعی HTTP است، نه صرفاً تایمر UI.
 2. **Psiphon Standalone:** در صورت Guardian HTTP 451 معتبر یا خطای transport بدون پاسخ در `remoteSettingsDiscovery` یا `guardianPass`، موتور مستقیم متوقف می‌شود و شاهد خطای همان تلاش فقط یک‌بار به manager داده می‌شود. مسیر Standalone با بودجهٔ readiness سی‌ثانیه‌ای شروع می‌شود. Ready فقط با probe کامل SOCKS5، CONNECT دامنه‌ای (DNS از داخل تونل) و HTTPS/TLS با اعتبارسنجی گواهی پذیرفته می‌شود؛ بازبودن پورت به‌تنهایی کافی نیست. سپس همان مجوز واقعی Guardian از مسیر پراکسی درخواست می‌شود.
 3. **Aether → Psiphon:** اگر Standalone در بودجه آماده نشود یا مجوز واقعی Guardian از آن مسیر دریافت نشود، پراکسی Standalone پاک‌سازی می‌شود و manager ترکیب موجود هسته Aether → Psiphon را راه می‌اندازد. این ترکیب پیاده‌سازی پروتکل جدید نیست؛ همان mode و argument builder هسته اصلی استفاده می‌شود. بودجهٔ پیش‌فرض readiness ترکیب ۳۳۰ ثانیه است و مسیر خروجی همان listener زنجیره است.
 
@@ -805,21 +805,23 @@ FxA و سایر endpointهای Guardian/Remote Settings همچنان مستقی�
 - تست route memory: transport evidence به‌تنهایی Fast Path نمی‌سازد؛ route باید قبلاً کاملاً تأیید شده باشد و TTL معتبر بماند.
 - تست protocol: هر مقدار `AetherLegProtocol` از تنظیمات به argumentهای chain نگاشت می‌شود؛ MASQUE به‌طور مشخص `--protocol masque` را می‌دهد.
 - تست engine seam: timeout در Remote Settings و Guardian با status صفر eligible است؛ HTTP 401 با وجود stage Guardian eligible نیست.
+- تست Go جدید: اگر Remote Settings دو ثانیه از بودجه‌اش را مصرف کند، Guardian همچنان context مستقل چهارثانیه‌ای می‌گیرد؛ مسیر پروکسی‌شده deadline مشترک ۵۵ثانیه‌ای خود را حفظ می‌کند.
+- خطای کامپایل CI قبلی (`undefined: fferr` در `guardianprobe.go`) با import صریح `internal/fferr` در commit `410de85` اصلاح شد.
 
 ### گیت تأیید — هنوز انجام نشده
 
-- Commit کد `1759bac32b3535e2e0d15ca02dced8404c8aea95` ثبت شده است.
-- **CI هنوز در حال اجراست.** GitHub Actions run `43028323588` (run #7) روی commit `b25e61a` با رویداد push ایجاد شد و در آخرین مشاهده queued بود؛ تست‌های Go/Flutter یا APK هنوز PASS اعلام نمی‌شوند.
-- **APK جدید هنوز آماده نیست.** run #7 شامل build همین کد است؛ فقط پس از conclusion=success و موجودشدن Artifact می‌توان آن را نصب کرد. run قبلی #6 با SHA `218f42c` قدیمی است.
+- Commit سخت‌سازی کد `1759bac32b3535e2e0d15ca02dced8404c8aea95`، اصلاح import `410de854847775c4826c2e2cfd823a7d3a37d618` و اصلاح بودجه‌های مجزای Direct `0a9e7e1dea51e3cea7f63f5503f963fa6975f374` ثبت شده‌اند.
+- **CI هنوز تأیید نشده است.** run #7 روی SHA قدیمی‌تر به‌خاطر import جاافتادهٔ `fferr` در مرحلهٔ `go vet` شکست خورد؛ اصلاح در `410de85` ثبت شد. run #10 با شناسهٔ `43029425484` روی commit بودجهٔ مستقل `0a9e7e1` در آخرین مشاهده pending بود. تست‌های Go/Flutter یا APK هنوز PASS اعلام نمی‌شوند.
+- **APK جدید هنوز آماده نیست.** run #10 باید پس از خروج از صف اجرا و با conclusion=success تمام شود تا Artifact آن قابل نصب باشد. run قبلی #6 با SHA `218f42c` قدیمی است.
 - نصب، اتصال واقعی و بررسی خروجی روی POCO X3 انجام نشده است؛ تا آن زمان عملکرد شبکه‌ای نهایی NOT VERIFIED باقی می‌ماند.
 
 ---
 ## دستور دقیق ادامه کار (پس از Stage 9.2)
 
-1. HEAD شاخه `feature/firefox-guardian-psiphon-bootstrap` را بررسی کن؛ آخرین HEAD مستند این مرحله `b25e61a` است.
-2. push روی همین feature branch اکنون workflow شمارهٔ 412045413 را خودکار اجرا می‌کند؛ آخرین اجرا #7 با شناسهٔ `43028323588` است.
-3. نتیجهٔ run باید success باشد و Artifact ساخته شود؛ SHA اجرای #7 باید `b25e61a` باشد، یعنی commit کد `1759bac` به‌علاوهٔ مستندات و فعال‌سازی trigger.
-4. فقط Artifact run #7 را نصب کن؛ APK اجرای شمارهٔ 6 (`218f42c`) قدیمی است.
+1. HEAD شاخه `feature/firefox-guardian-psiphon-bootstrap` را بررسی کن؛ commitهای کد `1759bac`، `410de85` و `0a9e7e1` باید در تاریخچهٔ آن باشند.
+2. push روی همین feature branch workflow شمارهٔ 412045413 را خودکار اجرا می‌کند؛ آخرین اجرا در زمان این گزارش #10 (`43029425484`) است.
+3. نتیجهٔ run باید success باشد و Artifact ساخته شود؛ SHA run باید همین HEAD یا commit مستندات فرزند آن باشد.
+4. فقط Artifact همان run موفق را نصب کن؛ APK اجرای شمارهٔ 6 (`218f42c`) قدیمی است.
 5. روی POCO X3 لاگ کامل بگیر و بررسی کن: Direct start، علت escalation، آماده‌شدن یا timeout مسیر Standalone، انتخاب chain، `passAcquired` و SOCKS readiness.
 6. تا دریافت شواهد دستگاه، اتصال واقعی و عبور ترافیک را PASS اعلام نکن. به default branch، شاخه integration یا Release دست نزن.
 
@@ -847,6 +849,8 @@ FxA و سایر endpointهای Guardian/Remote Settings همچنان مستقی�
 | 9.1 — کد + تست + گزارش | `21cc5ad` | feat(firefox): add optional failureStage diagnostics for Remote Settings, Guardian pass and upstream session; no routing/timeout behavior changed |
 | 9.1 — اصلاح جزئی + پین | `218f42c` | fix(test): wait for the child stdout pipe to flush; tag config failures; pin the Stage 9.1 implementation SHA |
 | 9.2 — کد + تست سخت‌سازی | `1759bac` | test(firefox): harden direct-timeout and selected Psiphon fallback (transport escalation, Standalone→selected chain, route Fast Path, settings→protocol mapping, HTTP non-trigger tests) |
+| 9.2 — اصلاح compile | `410de85` | fix(firefox): import transport error classifier in Guardian probe (fixes CI go vet undefined fferr) |
+| 9.2 — deadline مستقل | `0a9e7e1` | fix(firefox): give Direct Guardian its own four-second window (separate 4s Remote Settings and Guardian contexts; shared 55s proxied budget; Go tests) |
 | CI feature branch | `b25e61a` | ci(android): include the Guardian/Psiphon feature branch in push builds; Actions run #7 queued (`43028323588`) |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
