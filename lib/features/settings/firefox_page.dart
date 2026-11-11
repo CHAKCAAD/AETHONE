@@ -222,6 +222,8 @@ class _FirefoxDnsCard extends StatefulWidget {
 class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
   String _endpoint = '';
   String _bootstrap = '';
+  bool _testing = false;
+  List<Map<String, dynamic>>? _probeEvents;
 
   @override
   void initState() {
@@ -229,6 +231,21 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
     _endpoint = widget.store.firefoxDnsEndpoint;
     _bootstrap = widget.store.firefoxDnsBootstrapIps.join(', ');
     _restoreFields();
+  }
+
+  Future<void> _runDnsProbe() async {
+    setState(() {
+      _testing = true;
+      _probeEvents = null;
+    });
+    try {
+      final events = await widget.store.firefoxDnsProbe();
+      if (mounted) setState(() => _probeEvents = events ?? const []);
+    } catch (_) {
+      if (mounted) setState(() => _probeEvents = const []);
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
   }
 
   Future<void> _restoreFields() async {
@@ -258,7 +275,10 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
             ('doh', strings.firefoxDnsDoH),
           ],
           selected: store.firefoxDnsMode,
-          onSelect: store.setFirefoxDnsMode,
+          onSelect: (value) {
+            store.setFirefoxDnsMode(value);
+            setState(() => _probeEvents = null);
+          },
         ),
         if (doh) ...[
           SizedBox(height: 16 * s),
@@ -273,7 +293,10 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
               ('custom', 'Custom'),
             ],
             selected: store.firefoxDnsProvider,
-            onSelect: store.setFirefoxDnsProvider,
+            onSelect: (value) {
+              store.setFirefoxDnsProvider(value);
+              setState(() => _probeEvents = null);
+            },
           ),
           if (store.firefoxDnsProvider == 'custom') ...[
             SizedBox(height: 16 * s),
@@ -300,10 +323,48 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
               label: strings.firefoxDnsSave,
               onTap: () {
                 store.setFirefoxDnsCustom(_endpoint, _bootstrap);
+                setState(() => _probeEvents = null);
                 FocusScope.of(context).unfocus();
               },
             ),
           ],
+        ],
+        SizedBox(height: 14 * s),
+        if (_testing)
+          SettingInfoText(strings.firefoxDnsTesting)
+        else
+          SettingActionButton(
+            keyId: 'firefox-dns-test',
+            label: strings.firefoxDnsTestButton,
+            onTap: _runDnsProbe,
+          ),
+        if (_probeEvents != null) ...[
+          SizedBox(height: 10 * s),
+          Builder(builder: (context) {
+            Map<String, dynamic>? summary;
+            for (final event in _probeEvents!) {
+              if (event['event'] == 'dnsProbeSummary') {
+                summary = event;
+                break;
+              }
+            }
+            final ok = summary?['ok'] == true;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SettingInfoText(
+                  ok ? strings.firefoxDnsTestSuccess : strings.firefoxDnsTestFailed,
+                ),
+                for (final event in _probeEvents!)
+                  if (event['event'] == 'dnsProbe')
+                    SettingInfoText(
+                      '${event['domain'] ?? '—'} · '
+                      '${(event['addresses'] as List?)?.join(', ') ?? '—'} · '
+                      '${event['elapsedMs'] ?? 0} ms',
+                    ),
+              ],
+            );
+          }),
         ],
         const SubSectionDivider(),
         SettingInfoText(strings.firefoxDnsDesc),
