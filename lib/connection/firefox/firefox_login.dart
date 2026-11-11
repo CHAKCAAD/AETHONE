@@ -35,6 +35,7 @@ class FirefoxLoginClient {
     required this.binaryPath,
     this.shutdownGrace = const Duration(seconds: 3),
     this.onLog,
+    this.dnsConfig = const {'mode': 'system'},
   });
 
   /// Absolute path of `libfirefoxvpn.so` (nativeLibraryDir) or a host
@@ -45,6 +46,9 @@ class FirefoxLoginClient {
 
   /// Redacted diagnostics sink (NEVER receives tokens).
   final void Function(String line)? onLog;
+
+  /// Same process-local resolver policy used by the Firefox engine.
+  final Map<String, dynamic> dnsConfig;
 
   Process? _process;
   StreamSubscription<String>? _stdoutSub;
@@ -180,6 +184,7 @@ class FirefoxLoginClient {
       'version': 1,
       'mode': 'webchannel',
       'sessionToken': sessionToken,
+      'dns': dnsConfig,
     }));
 
     unawaited(process.exitCode.then((code) {
