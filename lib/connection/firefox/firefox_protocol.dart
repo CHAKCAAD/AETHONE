@@ -78,9 +78,9 @@ class FirefoxEngineConfig {
   /// GUARDIAN control-plane leg only (`socks5://127.0.0.1:<ephemeral>`
   /// or an http/https loopback proxy). Empty (the default) = the
   /// engine's direct uTLS transport, exactly the pre-Stage-5 behavior.
-  /// The engine's RoutingRoundTripper routes ONLY the allowlisted
-  /// Guardian request (GET /api/v1/fpn/token on the configured
-  /// guardian host) through it — FxA and Remote Settings stay DIRECT.
+  /// The engine's RoutingRoundTripper sends the exact Guardian token
+  /// request and Remote Settings server-list GET through it. FxA and
+  /// every other control-plane endpoint stay DIRECT.
   /// The engine validates: loopback host only, supported scheme, no
   /// credentials in the URL.
   final String apiProxy;

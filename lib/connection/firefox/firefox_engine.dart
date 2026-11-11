@@ -352,11 +352,12 @@ class FirefoxVpnEngine {
         _state == FirefoxEngineState.connected) {
       return true;
     }
+    final ready = events
+        .firstWhere((e) => e.name == FirefoxEngineEvents.socksReady)
+        .then((_) => true);
+    final terminated = _outcome.future.then((_) => false);
     try {
-      await events
-          .firstWhere((e) => e.name == FirefoxEngineEvents.socksReady)
-          .timeout(timeout);
-      return true;
+      return await Future.any<bool>([ready, terminated]).timeout(timeout);
     } catch (_) {
       return false;
     }

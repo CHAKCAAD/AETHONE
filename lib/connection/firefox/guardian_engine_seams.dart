@@ -36,6 +36,8 @@ import 'dart:async';
 
 import 'firefox_engine.dart';
 import 'firefox_protocol.dart';
+import 'firefox_errors.dart';
+import '../../core/app_assets.dart';
 import 'bootstrap_route_memory.dart';
 import 'guardian_bootstrap_manager.dart';
 
@@ -48,8 +50,11 @@ enum GuardianProbeKind {
   /// Stage-1 classification) — the only bootstrap trigger.
   regionUnavailable,
 
-  /// Everything else (401/403/quota/transport/general) — never a
-  /// region block, never a bootstrap trigger.
+  /// DNS/network/timeout from Remote Settings or Guardian with no
+  /// HTTP response.
+  transportUnavailable,
+
+  /// HTTP rejection, quota, validation or authentication failure.
   otherFailure,
 
   /// The probe exceeded its budget; the process was stopped (no orphan).
@@ -61,6 +66,8 @@ class GuardianProbeResult {
     required this.kind,
     this.failCode,
     this.message,
+    this.failureStage = '',
+    this.httpStatus = 0,
   });
 
   final GuardianProbeKind kind;
@@ -71,6 +78,23 @@ class GuardianProbeResult {
   final String? failCode;
 
   final String? message;
+  final String failureStage;
+  final int httpStatus;
+}
+
+bool _isBootstrapEligibleTransportFailure(
+  String failCode,
+  String failureStage,
+  int httpStatus,
+) {
+  if (httpStatus != 0) return false;
+  if (failureStage != 'remoteSettingsDiscovery' &&
+      failureStage != 'guardianPass') {
+    return false;
+  }
+  return failCode == FirefoxTransportError.timeout ||
+      failCode == FirefoxTransportError.dnsError ||
+      failCode == FirefoxTransportError.networkUnavailable;
 }
 
 /// Spawns the engine's `--guardian-probe` role and classifies the
@@ -175,7 +199,10 @@ class EngineGuardianProbe {
       if (result.state == FirefoxEngineState.failed) {
         if (result.failCode == 'probeTimeout') {
           return const GuardianProbeResult(
-              kind: GuardianProbeKind.timeout, failCode: 'probeTimeout');
+            kind: GuardianProbeKind.timeout,
+            failCode: 'timeout',
+            failureStage: 'remoteSettingsDiscovery',
+          );
         }
         if (result.failCode ==
             FirefoxEngineFailure.guardianRegionUnavailable) {
@@ -183,12 +210,19 @@ class EngineGuardianProbe {
             kind: GuardianProbeKind.regionUnavailable,
             failCode: result.failCode,
             message: result.message,
+            failureStage: result.failureStage,
+            httpStatus: result.httpStatus,
           );
         }
         return GuardianProbeResult(
-          kind: GuardianProbeKind.otherFailure,
+          kind: _isBootstrapEligibleTransportFailure(
+                  result.failCode, result.failureStage, result.httpStatus)
+              ? GuardianProbeKind.transportUnavailable
+              : GuardianProbeKind.otherFailure,
           failCode: result.failCode.isEmpty ? 'unknown' : result.failCode,
           message: result.message,
+          failureStage: result.failureStage,
+          httpStatus: result.httpStatus,
         );
       }
       // A clean exit: success ONLY with the engine's own passAcquired
@@ -241,6 +275,12 @@ class EngineGuardianDirectAttempt implements GuardianDirectAttempt {
           message: result.message,
         );
       case GuardianProbeKind.timeout:
+      case GuardianProbeKind.transportUnavailable:
+        return GuardianDirectResult(
+          outcome: GuardianDirectOutcome.transportUnavailable,
+          errorCode: result.failCode ?? 'timeout',
+          message: result.message,
+        );
       case GuardianProbeKind.otherFailure:
         return GuardianDirectResult(
           outcome: GuardianDirectOutcome.otherFailure,
@@ -344,6 +384,7 @@ class GuardianBootstrapEngineIntegration {
     required Future<FirefoxSessionAuth> Function() authProvider,
     String guardian = 'https://vpn.mozilla.org',
     UserWalkGuard? userWalkActive,
+    ProtocolId Function()? chainProtocolProvider,
     void Function(FirefoxSessionAuth refreshed)? onAuthRefreshed,
     void Function(String line)? onLog,
     Duration routeTtl = kDefaultRouteTtl,
@@ -367,6 +408,9 @@ class GuardianBootstrapEngineIntegration {
         probe: probe,
       ),
       userWalkActive: userWalkActive,
+      chainProtocolProvider: chainProtocolProvider,
+      directTimeout: const Duration(seconds: 4),
+      standaloneReadyBudget: const Duration(seconds: 30),
       routeTtl: routeTtl,
       routeCooldown: routeCooldown,
       onLog: onLog,

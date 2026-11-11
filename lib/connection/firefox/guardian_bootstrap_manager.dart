@@ -61,6 +61,7 @@ import 'dart:async';
 
 import 'psiphon_bootstrap.dart';
 import 'bootstrap_route_memory.dart';
+import '../../core/app_assets.dart';
 
 /// The Guardian sub-flow's states (see the library comment for the
 /// honest mapping onto the mission's §4-6 list).
@@ -68,6 +69,7 @@ enum GuardianBootstrapManagerState {
   idle,
   directRequest,
   guardian451,
+  directUnavailable,
   bootstrapSelecting,
   psiphonDirectStarting,
   psiphonDirectReady,
@@ -166,14 +168,15 @@ enum GuardianDirectOutcome {
   /// Guardian answered successfully — no bootstrap needed at all.
   success,
 
-  /// A REAL region-unavailable answer (Stage 1's classification:
-  /// a genuine Guardian endpoint + HTTP 451 + the structured code when
-  /// the body parses) — the only trigger for bootstrap.
+  /// A REAL region-unavailable answer (HTTP 451 from Guardian).
   regionUnavailable,
 
-  /// Anything else — 401/403/validation/network/general errors. These
-  /// NEVER look like region blocks and never start a bootstrap
-  /// (mission §4-2).
+  /// Transport failure while contacting Remote Settings or Guardian
+  /// (DNS/network/timeout), with no HTTP response.
+  transportUnavailable,
+
+  /// HTTP rejection, quota, validation, authentication or another
+  /// non-transport failure — never a bootstrap trigger.
   otherFailure,
 }
 
@@ -280,8 +283,10 @@ class GuardianBootstrapManager {
     String? memoryPath,
     this.routeTtl = kDefaultRouteTtl,
     this.routeCooldown = kDefaultRouteCooldown,
-    this.directTimeout = const Duration(seconds: 30),
+    this.directTimeout = const Duration(seconds: 4),
     this.authorizationTimeout = const Duration(seconds: 60),
+    this.standaloneReadyBudget = const Duration(seconds: 30),
+    ProtocolId Function()? chainProtocolProvider,
     void Function(String line)? onLog,
   })  : _directSeam = directAttempt,
         _verifierSeam = authorizationVerifier,
@@ -293,6 +298,12 @@ class GuardianBootstrapManager {
                   filesDir: filesDir,
                   nativeLibraryDir: nativeLibraryDir,
                   mode: mode,
+                  readyBudget: mode == PsiphonBootstrapMode.psiphonOnly
+                      ? standaloneReadyBudget
+                      : null,
+                  warpProtocol: mode == PsiphonBootstrapMode.aetherPsiphonChain
+                      ? chainProtocolProvider?.call() ?? ProtocolId.wireguard
+                      : ProtocolId.wireguard,
                 )),
         _memoryPath =
             memoryPath ?? '$filesDir/guardian-bootstrap/route-memory.json',
@@ -324,6 +335,10 @@ class GuardianBootstrapManager {
 
   /// Budget of ONE authorization (the seam must honor it).
   final Duration authorizationTimeout;
+
+  /// Maximum startup/readiness time for standalone Psiphon before
+  /// the manager tears it down and tries the combined route.
+  final Duration standaloneReadyBudget;
 
   // ---- state ---------------------------------------------------------------
 
@@ -482,7 +497,6 @@ class GuardianBootstrapManager {
       ));
     }
 
-    _setState(GuardianBootstrapManagerState.guardian451);
     _setState(GuardianBootstrapManagerState.bootstrapSelecting);
     final order = _orderedRoutes(routeMemory, contextId, savedRoute);
     final perRoute = <String>[];
@@ -551,6 +565,12 @@ class GuardianBootstrapManager {
       case GuardianDirectOutcome.regionUnavailable:
         routeMemory.recordDirectRegionUnavailable(contextId);
         await routeMemory.persist();
+        _setState(GuardianBootstrapManagerState.guardian451);
+        return _DirectRun(elapsedMillis: stopwatch.elapsedMilliseconds);
+      case GuardianDirectOutcome.transportUnavailable:
+        routeMemory.recordDirectTransportUnavailable(contextId);
+        await routeMemory.persist();
+        _setState(GuardianBootstrapManagerState.directUnavailable);
         return _DirectRun(elapsedMillis: stopwatch.elapsedMilliseconds);
       case GuardianDirectOutcome.otherFailure:
         routeMemory.recordDirectOtherFailure(contextId);

@@ -171,7 +171,7 @@ class GuardianContextRecord {
   /// evidence that lets a later connection skip the doomed direct
   /// attempt (mission §4-2: only when history shows a RECENT real 451
   /// AND a valid saved bootstrap route).
-  String? lastDirectOutcome; // 'ok' | 'regionUnavailable' | 'other'
+  String? lastDirectOutcome; // 'ok' | 'regionUnavailable' | 'transportUnavailable' | 'other'
   DateTime? lastDirectAt;
 
   Map<GuardianBootstrapRouteKind, GuardianRouteStats> routes;
@@ -336,6 +336,15 @@ class GuardianBootstrapRouteMemory {
     record.lastDirectAt = now ?? DateTime.now();
   }
 
+  /// Direct control-plane transport was unavailable (DNS/network/timeout,
+  /// with no HTTP response). A recently verified bootstrap route may be
+  /// prioritized on the next walk instead of repeating the same blackhole.
+  void recordDirectTransportUnavailable(String contextId, {DateTime? now}) {
+    final record = _recordFor(contextId);
+    record.lastDirectOutcome = 'transportUnavailable';
+    record.lastDirectAt = now ?? DateTime.now();
+  }
+
   /// A bootstrap route FULLY succeeded (readiness + probe +
   /// authorization) — the only way a route becomes Fast-Path eligible.
   void recordRouteSuccess(
@@ -403,10 +412,10 @@ class GuardianBootstrapRouteMemory {
     return kind;
   }
 
-  /// Whether the next connection may SKIP the direct attempt: only
-  /// when a valid saved BOOTSTRAP route exists AND the direct path was
-  /// answered with a real 451 recently (mission §4-2 — never skip on a
-  /// hunch, and never generalize across contexts).
+  /// Whether the next connection may SKIP Direct: a valid saved
+  /// bootstrap route plus recent evidence that Direct was blocked by
+  /// Guardian 451 or a transport-level blackhole. Other failures never
+  /// qualify; TTL and context rules still apply.
   bool shouldSkipDirect(
     String contextId, {
     DateTime? now,
@@ -416,7 +425,8 @@ class GuardianBootstrapRouteMemory {
       return false;
     }
     final record = _contexts[contextId]!;
-    if (record.lastDirectOutcome != 'regionUnavailable') return false;
+    if (record.lastDirectOutcome != 'regionUnavailable' &&
+        record.lastDirectOutcome != 'transportUnavailable') return false;
     final at = now ?? DateTime.now();
     final directAt = record.lastDirectAt;
     if (directAt == null) return false;

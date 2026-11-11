@@ -2205,6 +2205,7 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// back into the vault (never logged).
   Future<GuardianBootstrapEngineIntegration> _ensureGuardianBootstrap(
     _PlatformPaths paths,
+    EngineConfigSource config,
   ) async {
     var integration = _guardianBootstrap;
     if (integration != null) return integration;
@@ -2220,6 +2221,9 @@ class PlatformEngineAdapter implements EngineAdapter {
         return auth;
       },
       userWalkActive: () => _userAetherWalkActive,
+      chainProtocolProvider: () => AetherArguments.legProtocolId(
+        (_config ?? config).coreSettings.psiphonLegProtocol,
+      ),
       onAuthRefreshed: (refreshed) => unawaited(vault.save(refreshed)),
       onLog: _debugLog,
     );
@@ -2516,7 +2520,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     final paths = await _paths();
     if (_stale(gen)) return false;
     var apiProxy = '';
-    final guardianBootstrap = await _ensureGuardianBootstrap(paths);
+    final guardianBootstrap = await _ensureGuardianBootstrap(paths, config);
     if (await guardianBootstrap.manager.fastPathEligible()) {
       _debugLog('guardian bootstrap: fast path — skipping the doomed '
           'direct attempt');
@@ -2615,16 +2619,30 @@ class PlatformEngineAdapter implements EngineAdapter {
       // classified evidence (a real direct Guardian request already
       // happened; no duplicate probe), builds a verified route, and
       // the same engine walk is retried through it.
+      final guardianRegionBlock =
+          o?.failCode == FirefoxEngineFailure.guardianRegionUnavailable &&
+          o?.failureStage == 'guardianPass';
+      final directControlPlaneTransportFailure =
+          o != null &&
+          o.httpStatus == 0 &&
+          (o.failureStage == 'remoteSettingsDiscovery' ||
+              o.failureStage == 'guardianPass') &&
+          (o.failCode == FirefoxTransportError.timeout ||
+              o.failCode == FirefoxTransportError.dnsError ||
+              o.failCode == FirefoxTransportError.networkUnavailable);
       if (o != null &&
           o.state == FirefoxEngineState.failed &&
-          o.failCode == FirefoxEngineFailure.guardianRegionUnavailable &&
+          (guardianRegionBlock || directControlPlaneTransportFailure) &&
           apiProxy.isEmpty &&
           attempt == 0) {
         _debugLog('firefox guardian 451 — activating the bootstrap '
             'manager with the walk\'s own direct evidence');
-        guardianBootstrap.directEvidence.forward(const GuardianDirectResult(
-          outcome: GuardianDirectOutcome.regionUnavailable,
-          errorCode: FirefoxEngineFailure.guardianRegionUnavailable,
+        guardianBootstrap.directEvidence.forward(GuardianDirectResult(
+          outcome: guardianRegionBlock
+              ? GuardianDirectOutcome.regionUnavailable
+              : GuardianDirectOutcome.transportUnavailable,
+          errorCode: o.failCode,
+          message: o.message,
         ));
         GuardianBootstrapSession? session;
         try {
@@ -2634,11 +2652,13 @@ class PlatformEngineAdapter implements EngineAdapter {
           _debugLog('guardian bootstrap: all routes failed (${error.code})');
           fail(
             'firefoxTransport:'
-            '${FirefoxEngineFailure.guardianRegionUnavailable}',
-            FirefoxErrors.diagnostic(FirefoxErrors.classify(
-              FirefoxEngineFailure.guardianRegionUnavailable,
-              httpStatus: 451,
-            )),
+            '${guardianRegionBlock ? FirefoxEngineFailure.guardianRegionUnavailable : o.failCode}',
+            guardianRegionBlock
+                ? FirefoxErrors.diagnostic(FirefoxErrors.classify(
+                    FirefoxEngineFailure.guardianRegionUnavailable,
+                    httpStatus: 451,
+                  ))
+                : 'the direct control-plane route failed and both Psiphon bootstrap routes failed',
           );
           return false;
         }
