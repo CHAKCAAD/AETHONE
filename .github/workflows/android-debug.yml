@@ -51,6 +51,7 @@ on:
     branches:
       - integration/firefox-vpn-debug
       - update/firefox-vpn-core
+      - feature/firefox-vpn-relay
 
 permissions:
   contents: read

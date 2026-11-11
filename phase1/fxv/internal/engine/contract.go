@@ -36,7 +36,13 @@ const LoginConfigVersion = 1
 //
 //      classes + optional httpStatus / retryable) and the OAuth pair
 //      guard. Additive only; the 1.1.0 field names stay valid forever.
-const EngineVersion = "1.2.0-phaseb"
+// 1.3.0 — the relay block: an OPTIONAL `relay` object on both the
+//
+//      tunnel and the login config lines (personal relay URL + switch,
+//      the shared Guardian relay pool switch, the ECH mode/config).
+//      A host that sends no `relay` keeps the exact 1.2.0 behavior;
+//      the free doubled-path Guardian 451 bypass needs no configuration.
+const EngineVersion = "1.3.0-relay"
 
 // Event names (mirrored by FirefoxEngineEvents on the Dart side).
 const (
@@ -99,6 +105,9 @@ const (
         detailConfigNotJSON         = "configNotJSON"
         detailUpstreamOverrideBad   = "upstreamOverrideInvalid"
         detailMaxConnsNegative      = "maxConnsNegative"
+        detailRelayURLInvalid       = "relayURLInvalid"
+        detailRelayECHModeUnknown   = "relayECHModeUnknown"
+        detailRelayECHConfigBad     = "relayECHConfigInvalid"
 )
 
 // Event is one stdout JSON line. Only authRefreshed and loginCompleted

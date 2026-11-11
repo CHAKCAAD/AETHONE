@@ -44,6 +44,7 @@ import (
         "aethone/fxv/internal/engine"
         "aethone/fxv/internal/fferr"
         "aethone/fxv/internal/redact"
+        "aethone/fxv/internal/relay"
 )
 
 // FxA application errnos (the upstream's observed semantics).
@@ -107,6 +108,21 @@ func runLogin() int {
         logf := func(format string, args ...any) {
                 fmt.Fprintf(os.Stderr, "%s", "login: "+redact.Line(fmt.Sprintf(format, args...), cfg.SessionToken)+"\n")
         }
+
+        // 1b. the control-plane relay stack (contract 1.3.0-relay) — the
+        // login walk's control-plane host is Firefox Accounts, so this
+        // is the PERSONAL layer's unreachability coverage (the
+        // Guardian-scoped layers stay dormant during a login).
+        // Installed before the first exchange request.
+        restoreRelay := relay.Install(relay.Options{
+                PersonalRelay:   cfg.Relay.PersonalURL,
+                PersonalEnabled: cfg.Relay.PersonalEnabled,
+                SharedEnabled:   cfg.Relay.SharedEnabled,
+                ECHMode:         cfg.Relay.ECHMode,
+                ECHConfig:       cfg.Relay.ECHConfig,
+                Logf:            logf,
+        })
+        defer restoreRelay()
 
         // 2. the exchange walk with the verify budget + the clean cancel.
         ctx, cancel := context.WithCancel(context.Background())

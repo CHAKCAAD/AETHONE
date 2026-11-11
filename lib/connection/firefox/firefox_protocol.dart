@@ -49,6 +49,7 @@ class FirefoxEngineConfig {
     this.transport = 'h2',
     this.upstreamOverride = '',
     this.logLevel = 'normal',
+    this.relay = const FirefoxRelaySettings(),
   });
 
   /// Loopback listener ONLY (the engine refuses anything else).
@@ -72,6 +73,10 @@ class FirefoxEngineConfig {
 
   final String logLevel;
 
+  /// v1.3.0-relay — the control-plane relay block (the engine's
+  /// additive `relay` object; absent on older engines harmlessly).
+  final FirefoxRelaySettings relay;
+
   Map<String, dynamic> toJson() => {
         'version': 1,
         'socksListen': socksListen,
@@ -80,12 +85,52 @@ class FirefoxEngineConfig {
         'transport': transport,
         if (upstreamOverride.isNotEmpty) 'upstreamOverride': upstreamOverride,
         'logLevel': logLevel,
+        'relay': relay.toJson(),
         'auth': {
           'accessToken': auth.accessToken,
           'refreshToken': auth.refreshToken,
           if (auth.expiresAt != null)
             'expiresAt': auth.expiresAt!.toIso8601String(),
         },
+      };
+}
+
+/// v1.3.0-relay — the control-plane relay settings, carried on BOTH the
+/// tunnel and the login config lines (the engine's optional `relay`
+/// block). Defaults mirror the app's posture: the shared Guardian pool
+/// ON (recovery without configuration, the v1.0.17 reference posture),
+/// no personal relay, ECH best-effort.
+class FirefoxRelaySettings {
+  const FirefoxRelaySettings({
+    this.personalUrl = '',
+    this.personalEnabled = false,
+    this.sharedEnabled = true,
+    this.echMode = '',
+    this.echConfig = '',
+  });
+
+  /// The user's own relay URL, complete with its query (the secret).
+  /// Stored in the app settings even while [personalEnabled] is off.
+  final String personalUrl;
+
+  /// The personal relay's master switch.
+  final bool personalEnabled;
+
+  /// The shared Guardian-only relay pool (HTTP 451 recovery).
+  final bool sharedEnabled;
+
+  /// '' (engine default: on), 'off', 'on', 'require'.
+  final String echMode;
+
+  /// '' (the relay's own DNS record), 'name', or 'name:base64key'.
+  final String echConfig;
+
+  Map<String, dynamic> toJson() => {
+        'personal_url': personalUrl,
+        'personal_enabled': personalEnabled,
+        'shared_enabled': sharedEnabled,
+        if (echMode.isNotEmpty) 'ech_mode': echMode,
+        if (echConfig.isNotEmpty) 'ech_config': echConfig,
       };
 }
 

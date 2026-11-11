@@ -189,6 +189,27 @@ abstract class EngineConfigSource {
   /// TLS 1.3) or 'h3' (QUIC). Fed verbatim to the engine config.
   String get firefoxTransport;
 
+  /// v1.3.0-relay — the firefox control-plane relay settings (the
+  /// Guardian HTTP 451 recovery). Concrete defaults keep the test
+  /// fakes and the preview adapters compiling: no personal relay, the
+  /// shared pool ON (the reference posture — recovery without
+  /// configuration), ECH best-effort.
+  String get firefoxRelayPersonalUrl => '';
+  bool get firefoxRelayPersonalEnabled => false;
+  bool get firefoxRelaySharedEnabled => true;
+  String get firefoxRelayEchMode => '';
+  String get firefoxRelayEchConfig => '';
+
+  /// The relay block the engine config lines carry (aggregated; the
+  /// login walk sends the same block).
+  FirefoxRelaySettings get firefoxRelaySettings => FirefoxRelaySettings(
+        personalUrl: firefoxRelayPersonalUrl,
+        personalEnabled: firefoxRelayPersonalEnabled,
+        sharedEnabled: firefoxRelaySharedEnabled,
+        echMode: firefoxRelayEchMode,
+        echConfig: firefoxRelayEchConfig,
+      );
+
   /// «سرعت اسکن» 1..5 (protocol sheet; feeds the core scan profile).
   int get scanSpeed;
 

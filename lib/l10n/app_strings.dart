@@ -341,6 +341,18 @@ class AppStrings {
   String get firefoxTransportH2 => _v['firefoxTransportH2']!;
   String get firefoxTransportH3 => _v['firefoxTransportH3']!;
   String get firefoxTransportDesc => _v['firefoxTransportDesc']!;
+  String get secFirefoxRelay => _v['secFirefoxRelay']!;
+  String get firefoxRelaySharedLabel => _v['firefoxRelaySharedLabel']!;
+  String get firefoxRelaySharedDesc => _v['firefoxRelaySharedDesc']!;
+  String get firefoxRelayPersonalLabel => _v['firefoxRelayPersonalLabel']!;
+  String get firefoxRelayUrlLabel => _v['firefoxRelayUrlLabel']!;
+  String get firefoxRelayPersonalHint => _v['firefoxRelayPersonalHint']!;
+  String get firefoxRelayPersonalDesc => _v['firefoxRelayPersonalDesc']!;
+  String get firefoxRelayEchLabel => _v['firefoxRelayEchLabel']!;
+  String get firefoxRelayEchAuto => _v['firefoxRelayEchAuto']!;
+  String get firefoxRelayEchOff => _v['firefoxRelayEchOff']!;
+  String get firefoxRelayEchRequire => _v['firefoxRelayEchRequire']!;
+  String get firefoxRelayEchDesc => _v['firefoxRelayEchDesc']!;
   String get firefoxLoginTitle => _v['firefoxLoginTitle']!;
   String get firefoxLoginSubtitle => _v['firefoxLoginSubtitle']!;
   String get firefoxLoginWaiting => _v['firefoxLoginWaiting']!;
@@ -601,6 +613,18 @@ class AppStrings {
       'firefoxTransportH2': 'H2 (پیش‌فرض)',
       'firefoxTransportH3': 'H3 (کوئیک)',
       'firefoxTransportDesc': 'H2 روی TCP+TLS و H3 روی QUIC کار می‌کند. اگر مطمئن نیستید همان H2 بماند.',
+      'secFirefoxRelay': 'سرور رله',
+      'firefoxRelaySharedLabel': 'رله اشتراکی',
+      'firefoxRelaySharedDesc': 'اگر سرویس مجوز Guardian خطای 451 (تحریم منطقه) بدهد، برنامه خودش از رله‌های عمومی برای گرفتن مجوز استفاده می‌کند؛ ترافیک اصلی همچنان از تونل موزیلا می‌گذرد.',
+      'firefoxRelayPersonalLabel': 'رله شخصی',
+      'firefoxRelayUrlLabel': 'آدرس رله',
+      'firefoxRelayPersonalHint': 'https://… با ?secret= در انتها',
+      'firefoxRelayPersonalDesc': 'رلهٔ خودتان (ورکر کلادفلر یا PHP) وقتی مستقیم جواب نمی‌گیرد؛ راهنمای ساخت در مستندات برنامه.',
+      'firefoxRelayEchLabel': 'حالت ECH',
+      'firefoxRelayEchAuto': 'خودکار',
+      'firefoxRelayEchOff': 'خاموش',
+      'firefoxRelayEchRequire': 'اجباری',
+      'firefoxRelayEchDesc': 'ECH نام سرور رله را از شبکه پنهان می‌کند. «خودکار» یعنی در صورت امکان؛ «اجباری» بدون ECH وصل نمی‌شود.',
       'firefoxLoginTitle': 'ورود به فایرفاکس',
       'firefoxLoginSubtitle': 'ورود در صفحهٔ رسمی موزیلا انجام می‌شود',
       'firefoxLoginWaiting': 'در انتظار ورود شما در صفحهٔ موزیلا…',
@@ -935,6 +959,18 @@ class AppStrings {
       'firefoxTransportH2': 'H2 (default)',
       'firefoxTransportH3': 'H3 (QUIC)',
       'firefoxTransportDesc': 'H2 runs over TCP+TLS; H3 runs over QUIC. Keep H2 if unsure.',
+      'secFirefoxRelay': 'Relay server',
+      'firefoxRelaySharedLabel': 'Shared relay',
+      'firefoxRelaySharedDesc': 'When the Guardian authorization service answers HTTP 451 (region blocked), the app automatically fetches the pass through public community relays; your VPN traffic keeps using Mozilla's tunnel.',
+      'firefoxRelayPersonalLabel': 'Personal relay',
+      'firefoxRelayUrlLabel': 'Relay URL',
+      'firefoxRelayPersonalHint': 'https://… ending with ?secret=…',
+      'firefoxRelayPersonalDesc': 'Your own relay (a Cloudflare Worker or PHP endpoint) for when the direct route fails; the setup guide is in the app documentation.',
+      'firefoxRelayEchLabel': 'ECH mode',
+      'firefoxRelayEchAuto': 'Auto',
+      'firefoxRelayEchOff': 'Off',
+      'firefoxRelayEchRequire': 'Require',
+      'firefoxRelayEchDesc': 'ECH hides the relay's name from the local network. Auto = when available; Require = never connect without it.',
       'firefoxLoginTitle': 'Sign in to Firefox',
       'firefoxLoginSubtitle': 'Sign-in happens on Mozilla\'s official page',
       'firefoxLoginWaiting': 'Waiting for you to sign in on Mozilla\'s page…',
@@ -1267,6 +1303,18 @@ class AppStrings {
       'firefoxTransportH2': 'H2 (по умолчанию)',
       'firefoxTransportH3': 'H3 (QUIC)',
       'firefoxTransportDesc': 'H2 работает поверх TCP+TLS; H3 — поверх QUIC. Если сомневаетесь, оставьте H2.',
+      'secFirefoxRelay': 'Релей-сервер',
+      'firefoxRelaySharedLabel': 'Общий релей',
+      'firefoxRelaySharedDesc': 'Если служба авторизации Guardian отвечает HTTP 451 (регион заблокирован), приложение автоматически получает пропуск через публичные релеи; основной трафик идёт через туннель Mozilla.',
+      'firefoxRelayPersonalLabel': 'Личный релей',
+      'firefoxRelayUrlLabel': 'Адрес релея',
+      'firefoxRelayPersonalHint': 'https://… с ?secret= в конце',
+      'firefoxRelayPersonalDesc': 'Собственный релей (Cloudflare Worker или PHP) для случаев, когда прямой маршрут не работает; инструкция — в документации приложения.',
+      'firefoxRelayEchLabel': 'Режим ECH',
+      'firefoxRelayEchAuto': 'Авто',
+      'firefoxRelayEchOff': 'Выкл.',
+      'firefoxRelayEchRequire': 'Только',
+      'firefoxRelayEchDesc': 'ECH скрывает имя релея от локальной сети. Авто — при возможности; «Только» — без ECH подключения нет.',
       'firefoxLoginTitle': 'Вход в Firefox',
       'firefoxLoginSubtitle': 'Вход выполняется на официальной странице Mozilla',
       'firefoxLoginWaiting': 'Ожидание входа на странице Mozilla…',
@@ -1597,6 +1645,18 @@ class AppStrings {
       'firefoxTransportH2': 'H2（默认）',
       'firefoxTransportH3': 'H3（QUIC）',
       'firefoxTransportDesc': 'H2 基于 TCP+TLS；H3 基于 QUIC。不确定时保持 H2。',
+      'secFirefoxRelay': '中继服务器',
+      'firefoxRelaySharedLabel': '共享中继',
+      'firefoxRelaySharedDesc': '当 Guardian 授权服务返回 HTTP 451（区域被封）时，应用会自动通过公共社区中继获取通行凭证；VPN 流量仍走 Mozilla 隧道。',
+      'firefoxRelayPersonalLabel': '个人中继',
+      'firefoxRelayUrlLabel': '中继地址',
+      'firefoxRelayPersonalHint': 'https://… 以 ?secret= 结尾',
+      'firefoxRelayPersonalDesc': '你自己的中继（Cloudflare Worker 或 PHP），直连失败时使用；搭建指南见应用文档。',
+      'firefoxRelayEchLabel': 'ECH 模式',
+      'firefoxRelayEchAuto': '自动',
+      'firefoxRelayEchOff': '关闭',
+      'firefoxRelayEchRequire': '强制',
+      'firefoxRelayEchDesc': 'ECH 对本地网络隐藏中继域名。自动 = 尽量使用；强制 = 没有 ECH 就不连接。',
       'firefoxLoginTitle': '登录 Firefox',
       'firefoxLoginSubtitle': '登录在 Mozilla 官方页面进行',
       'firefoxLoginWaiting': '等待您在 Mozilla 页面完成登录…',
@@ -1933,6 +1993,18 @@ class AppStrings {
       'firefoxTransportH2': 'H2 (adaty)',
       'firefoxTransportH3': 'H3 (QUIC)',
       'firefoxTransportDesc': 'H2 TCP+TLS üstünde, H3 QUIC üstünde işleýär. Ynamyňyz ýok bolsa H2 galsyn.',
+      'secFirefoxRelay': 'Relý sunujysy',
+      'firefoxRelaySharedLabel': 'Umumy relý',
+      'firefoxRelaySharedDesc': 'Guardian rugyat hyzmaty HTTP 451 (sebit blokirlenen) berende, programma jemagat relýlary arkaly geçeligini awtomatik alyp gider; esasy trafigik Mozilla tuneli arkaly galýar.',
+      'firefoxRelayPersonalLabel': 'Şahsy relý',
+      'firefoxRelayUrlLabel': 'Relý salgysy',
+      'firefoxRelayPersonalHint': 'https://… soňunda ?secret= bilen',
+      'firefoxRelayPersonalDesc': 'Öz relýyňyz (Cloudflare Worker ýa-da PHP) göni ýol işlemeýän wagty üçin; gurnama gollanmasy resminamada.',
+      'firefoxRelayEchLabel': 'ECH tertibi',
+      'firefoxRelayEchAuto': 'Awtomatik',
+      'firefoxRelayEchOff': 'Öçürilen',
+      'firefoxRelayEchRequire': 'Hökümly',
+      'firefoxRelayEchDesc': 'ECH relýyň adyny ýerli tora gizleýär. Awtomatik = mümkin bolsa; Hökümly = ECH-siz birikmez.',
       'firefoxLoginTitle': 'Firefox-a gir',
       'firefoxLoginSubtitle': 'Giriş Mozillanyň resmi sahyponda geçýär',
       'firefoxLoginWaiting': 'Mozillanyň sahyponda girişiňizi garaşýarys…',

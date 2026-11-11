@@ -274,6 +274,21 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   @override
   String firefoxTransport = 'h2';
 
+  /// v1.3.0-relay — the control-plane relay surface (the Guardian 451
+  /// recovery). The personal URL is stored even while its switch is
+  /// off; the shared pool defaults ON (the v1.0.17 reference posture:
+  /// automatic recovery, zero configuration).
+  @override
+  String firefoxRelayPersonalUrl = '';
+  @override
+  bool firefoxRelayPersonalEnabled = false;
+  @override
+  bool firefoxRelaySharedEnabled = true;
+  @override
+  String firefoxRelayEchMode = '';
+  @override
+  String firefoxRelayEchConfig = '';
+
   /// The LIVE firefox country set (the engine's --discover role; null
   /// until the first refresh — the wheel falls back to the standing
   /// seed, firefoxCountrySnapshot). Engine truth, never a preference.
@@ -377,6 +392,49 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         : LocationWheelPolicy.autoCode;
     if (firefoxLocation == pick) return;
     firefoxLocation = pick;
+    notifyListeners();
+  }
+
+  /// v1.3.0-relay — the personal relay URL (trimmed; the engine's own
+  /// validation is the refusal gate — a bad URL fails the connect walk
+  /// honestly rather than silently ignoring the setting).
+  void setFirefoxRelayPersonalUrl(String url) {
+    final pick = url.trim();
+    if (firefoxRelayPersonalUrl == pick) return;
+    firefoxRelayPersonalUrl = pick;
+    notifyListeners();
+  }
+
+  /// v1.3.0-relay — the personal relay's master switch.
+  void setFirefoxRelayPersonalEnabled(bool enabled) {
+    if (firefoxRelayPersonalEnabled == enabled) return;
+    firefoxRelayPersonalEnabled = enabled;
+    notifyListeners();
+  }
+
+  /// v1.3.0-relay — the shared Guardian relay pool switch.
+  void setFirefoxRelaySharedEnabled(bool enabled) {
+    if (firefoxRelaySharedEnabled == enabled) return;
+    firefoxRelaySharedEnabled = enabled;
+    notifyListeners();
+  }
+
+  /// v1.3.0-relay — the ECH mode ('' | 'off' | 'on' | 'require';
+  /// anything else → '').
+  void setFirefoxRelayEchMode(String mode) {
+    const allowed = {'off', 'on', 'require'};
+    final pick = allowed.contains(mode) ? mode : '';
+    if (firefoxRelayEchMode == pick) return;
+    firefoxRelayEchMode = pick;
+    notifyListeners();
+  }
+
+  /// v1.3.0-relay — the ECH key source (free-form: '', 'name', or
+  /// 'name:base64key'; the engine validates the shape).
+  void setFirefoxRelayEchConfig(String config) {
+    final pick = config.trim();
+    if (firefoxRelayEchConfig == pick) return;
+    firefoxRelayEchConfig = pick;
     notifyListeners();
   }
 

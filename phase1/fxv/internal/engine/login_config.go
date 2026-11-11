@@ -35,6 +35,12 @@ type LoginConfig struct {
         SessionToken    string `json:"sessionToken"`
         VerifyTimeoutMs int64  `json:"verifyTimeoutMs"`
         RetryDelayMs    int64  `json:"retryDelayMs"`
+        // Relay (contract 1.3.0-relay, ADDITIVE): the same relay block
+        // the tunnel role carries. The login walk's control-plane host
+        // is Firefox Accounts; the personal relay covers its
+        // unreachability, while the Guardian-scoped layers (the shared
+        // pool, the doubled path) simply stay dormant during a login.
+        Relay RelayConfig `json:"relay"`
 }
 
 // ParseLoginConfig validates the decoded login config. The token is
@@ -71,6 +77,9 @@ func ParseLoginConfig(raw []byte) (LoginConfig, error) {
         }
         if cfg.RetryDelayMs == 0 {
                 cfg.RetryDelayMs = DefaultRetryDelayMs
+        }
+        if err := validateRelayConfig(&cfg.Relay); err != nil {
+                return cfg, err
         }
         return cfg, nil
 }

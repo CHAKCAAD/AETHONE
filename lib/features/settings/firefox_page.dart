@@ -177,6 +177,64 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
             ],
           ),
         ),
+
+        // ---- Section: the relay server (v1.3.0-relay — the Guardian
+        // 451 / « Mozilla is blocked » recovery) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSwap1,
+          title: strings.secFirefoxRelay,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // The shared pool first: the zero-configuration recovery
+              // (ON by default — the v1.0.17 reference posture).
+              SettingToggleRow(
+                keyId: 'firefox-relay-shared',
+                title: strings.firefoxRelaySharedLabel,
+                description: strings.firefoxRelaySharedDesc,
+                value: store.firefoxRelaySharedEnabled,
+                onChanged: store.setFirefoxRelaySharedEnabled,
+              ),
+              const SubSectionDivider(),
+              // The personal relay: master switch + URL (the address
+              // stays stored while off).
+              SettingToggleRow(
+                keyId: 'firefox-relay-personal-enabled',
+                title: strings.firefoxRelayPersonalLabel,
+                value: store.firefoxRelayPersonalEnabled,
+                onChanged: store.setFirefoxRelayPersonalEnabled,
+              ),
+              SettingField(
+                keyId: 'firefox-relay-personal-url',
+                label: strings.firefoxRelayUrlLabel,
+                hint: strings.firefoxRelayPersonalHint,
+                initial: store.firefoxRelayPersonalUrl,
+                onChanged: store.setFirefoxRelayPersonalUrl,
+              ),
+              SettingInfoText(strings.firefoxRelayPersonalDesc),
+              const SubSectionDivider(),
+              // ECH: hide the relay's name from the local network.
+              SettingLabel(strings.firefoxRelayEchLabel),
+              const SizedBox(height: 10),
+              SettingPills<String>(
+                keyId: 'firefox-relay-ech',
+                options: [
+                  ('', strings.firefoxRelayEchAuto),
+                  ('off', strings.firefoxRelayEchOff),
+                  ('require', strings.firefoxRelayEchRequire),
+                ],
+                selected: store.firefoxRelayEchMode,
+                onSelect: store.setFirefoxRelayEchMode,
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.firefoxRelayEchDesc),
+            ],
+          ),
+        ),
         SizedBox(height: 16 * s),
         SettingInfoText(strings.appliesNextConnect),
       ],

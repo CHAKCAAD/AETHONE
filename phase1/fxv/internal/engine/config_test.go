@@ -161,3 +161,65 @@ func TestConfigLineBound(t *testing.T) {
 		t.Fatal("oversized config line must fail")
 	}
 }
+
+func TestRelayBlockValidAndAbsent(t *testing.T) {
+	// No relay block at all: the zero value passes (the 1.2.0 behavior).
+	c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"a"}}`)
+	v, err := c.Validate()
+	if err != nil {
+		t.Fatalf("a config without a relay block must pass: %v", err)
+	}
+	if v.Relay != (RelayConfig{}) {
+		t.Fatalf("the absent block must parse to the zero value, got %+v", v.Relay)
+	}
+
+	// A full, valid block.
+	c = cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"a"},"relay":{"personal_url":"https://r.example/?secret=s","personal_enabled":true,"shared_enabled":true,"ech_mode":"require","ech_config":"cloudflare-ech.com"}}`)
+	if _, err := c.Validate(); err != nil {
+		t.Fatalf("a valid relay block must pass: %v", err)
+	}
+}
+
+func TestRelayBlockURLShape(t *testing.T) {
+	for _, bad := range []string{
+		`http://r.example/`,              // not https
+		`https://u:p@r.example/`,         // credentials
+		`https://r.example/#frag`,        // fragment
+		`https://r.example/?url=https:x`, // the wire protocol's own parameter
+	} {
+		c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"a"},"relay":{"personal_url":"`+bad+`"}}`)
+		_, err := c.Validate()
+		if err == nil || !strings.Contains(err.Error(), detailRelayURLInvalid) {
+			t.Fatalf("%q must be refused as relayURLInvalid, got %v", bad, err)
+		}
+	}
+
+	// Disabled-but-stored garbage is still refused (a stored address
+	// should be a storable one).
+	c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"a"},"relay":{"personal_url":"http://r.example/","personal_enabled":false}}`)
+	if _, err := c.Validate(); err == nil || !strings.Contains(err.Error(), detailRelayURLInvalid) {
+		t.Fatalf("a disabled garbage URL must still be refused, got %v", err)
+	}
+}
+
+func TestRelayBlockECH(t *testing.T) {
+	c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"a"},"relay":{"ech_mode":"sometimes"}}`)
+	if _, err := c.Validate(); err == nil || !strings.Contains(err.Error(), detailRelayECHModeUnknown) {
+		t.Fatalf("an unknown ECH mode must be refused, got %v", err)
+	}
+
+	for _, bad := range []string{"bad name", "x:!!!not-base64!!!"} {
+		c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"a"},"relay":{"ech_config":"`+bad+`"}}`)
+		if _, err := c.Validate(); err == nil || !strings.Contains(err.Error(), detailRelayECHConfigBad) {
+			t.Fatalf("bad ECH config %q must be refused, got %v", bad, err)
+		}
+	}
+
+	// The three legal shapes pass.
+	for _, ok := range []string{"", "cloudflare-ech.com", "cloudflare-ech.com:AAEAAQ=="} {
+		c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"a"},"relay":{"ech_config":"`+ok+`"}}`)
+		if _, err := c.Validate(); err != nil {
+			t.Fatalf("ECH config %q must pass, got %v", ok, err)
+		}
+	}
+}

@@ -2190,7 +2190,12 @@ class PlatformEngineAdapter implements EngineAdapter {
       onLog: onLog ?? _debugLog,
     );
     try {
-      final result = await client.runWebChannel(sessionToken: sessionToken);
+      // v1.3.0-relay — the bound config's relay block rides the login
+      // line too (FxA unreachability coverage).
+      final result = await client.runWebChannel(
+        sessionToken: sessionToken,
+        relay: _config?.firefoxRelaySettings,
+      );
       if (result.isCompleted && result.auth != null) {
         final vault = await _firefoxVault();
         await vault.save(result.auth!);
@@ -2446,6 +2451,9 @@ class PlatformEngineAdapter implements EngineAdapter {
         // wheel + the firefox settings page.
         country: _firefoxCountryForEngine(config),
         transport: _firefoxTransportForEngine(config),
+        // v1.3.0-relay — the control-plane relay block (the engine's
+        // additive `relay` object; Guardian 451 recovery).
+        relay: config.firefoxRelaySettings,
       ),
       onAuthRefreshed: (refreshed) {
         // The private channel: straight back into the Keystore vault,

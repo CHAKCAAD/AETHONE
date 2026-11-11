@@ -51,6 +51,7 @@ libfirefoxvpn.so (Go child process, one per session)
 | `internal/upstream` | one MASQUE session + its controller: `h2.go`/`h3.go` (ADAPTED from newH2ProxySession/newH3ProxySession), `tunnel.go` (ADAPTED from tunnelWriteBuffer/tunnelConn), `controller.go` (ADAPTED from proxyController — single session, **pool removed**), `exitprobe.go` (ADAPTED from verifyExit/parseExitProbeResponse), `session.go` | mixed, see file headers |
 | `internal/discovery` | selection policy on the live list (REC, CatchAll exclusion, quarantine exclusion, deterministic country match) | NEW policy on upstream `vpnclient.FetchServerList` |
 | `internal/redact` | scrub secrets from error strings before they reach logs/events | NEW |
+| `internal/relay` | the control-plane relay system (contract 1.3.0-relay): the free doubled-path Guardian 451 bypass, the shared community relay pool, the personal relay, ECH — installed via the upstream's `SetControlPlaneTransport` seam | NEW (architectural reference: Arman VPN v1.0.17, GPL-3.0 — protocol reimplemented, no code copied; `ORIGIN.md` § relay) |
 
 Deliberately NOT carried over from `cmd/proxy-demo` (policy, see
 `ORIGIN.md`): the interactive login/credential prompt (Phase 2 account
@@ -107,6 +108,12 @@ additive `--login` role — the tunnel contract is unchanged).
 | `upstreamTimeoutMs` / `handshakeTimeoutMs` / `idleTimeoutMs` / `maxConns` | 0 → upstream defaults (20 s / 10 s / unlimited / 256) |
 | `exitCheckUrl` / `exitTimeoutMs` | engine-side exit probe; default `https://www.cloudflare.com/cdn-cgi/trace`, 10 s |
 | `logLevel` | `quiet` / `normal` / `verbose` (stderr) |
+| `relay` | OPTIONAL object (1.3.0-relay, additive; absent = the zero value below) — the control-plane relay system (`docs/firefox-vpn/relay.md`) |
+| `relay.personal_url` | the user's own relay URL (https, a host, no credentials/fragment, no `url` param — `relayURLInvalid` otherwise); validated even while `personal_enabled` is false |
+| `relay.personal_enabled` | the personal relay's master switch (the URL stays stored in the app while off) |
+| `relay.shared_enabled` | arms the shared Guardian-only relay pool (the community manifest; the app defaults this ON) |
+| `relay.ech_mode` | `""` (engine default: on) / `off` / `on` / `require` (`relayECHModeUnknown` otherwise) |
+| `relay.ech_config` | `""` (the relay's own DNS HTTPS record) / `name` / `name:base64key` (`relayECHConfigInvalid` otherwise) |
 | `auth.accessToken` | required (`authAccessTokenMissing`) |
 | `auth.refreshToken` | optional but expected for renewal |
 
@@ -129,6 +136,15 @@ Failure codes: `badConfig`, `discoveryFailed`, `noMatchForCountry`,
 `passFetchFailed`, `quotaExhausted`, `upstreamSessionFailed` (h2/h3
 negotiation included), `socksListenFailed`, `renewalTimeout`,
 `internalError`.
+
+1.3.0-relay (2026-11-12) — the OPTIONAL `relay` object on BOTH the
+tunnel and the login config lines (personal relay URL + switch, the
+shared Guardian relay pool switch, ECH mode/config). A host that sends
+no `relay` keeps the exact 1.2.0 behavior; the free doubled-path
+Guardian 451 bypass needs no configuration. The relay system is
+implemented in `internal/relay/` (install seam:
+`vpnclient.SetControlPlaneTransport` — the pinned upstream is never
+modified); design + provenance: `docs/firefox-vpn/relay-2026-11-12.md`.
 
 PHASE B (Part 2, 2026-11-09) — the `failed` event additionally carries
 OPTIONAL `httpStatus` (int, the REAL status code on HTTP-level

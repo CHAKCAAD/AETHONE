@@ -54,6 +54,17 @@ abstract final class SettingsKeys {
   // PHASE-2 (firefox-vpn): the firefox family's own picks.
   static const firefoxLocation = 'aethone.settings.firefoxLocation';
   static const firefoxTransport = 'aethone.settings.firefoxTransport';
+  // v1.3.0-relay — the control-plane relay surface.
+  static const firefoxRelayPersonalUrl =
+      'aethone.settings.firefoxRelayPersonalUrl';
+  static const firefoxRelayPersonalEnabled =
+      'aethone.settings.firefoxRelayPersonalEnabled';
+  static const firefoxRelaySharedEnabled =
+      'aethone.settings.firefoxRelaySharedEnabled';
+  static const firefoxRelayEchMode =
+      'aethone.settings.firefoxRelayEchMode';
+  static const firefoxRelayEchConfig =
+      'aethone.settings.firefoxRelayEchConfig';
   static const protocolModeSmart = 'aethone.settings.protocolModeSmart';
   static const routingRegion = 'aethone.settings.routingRegion';
 
@@ -175,6 +186,32 @@ class SettingsPersistence {
         store.firefoxTransport = 'h3';
       } else {
         store.firefoxTransport = 'h2';
+      }
+      // v1.3.0-relay — the relay surface (absent keys keep the store
+      // defaults: shared ON, no personal relay).
+      final relayUrl =
+          prefs.getString(SettingsKeys.firefoxRelayPersonalUrl);
+      if (relayUrl != null) {
+        store.firefoxRelayPersonalUrl = relayUrl;
+      }
+      if (prefs.containsKey(SettingsKeys.firefoxRelayPersonalEnabled)) {
+        store.firefoxRelayPersonalEnabled =
+            prefs.getBool(SettingsKeys.firefoxRelayPersonalEnabled)!;
+      }
+      if (prefs.containsKey(SettingsKeys.firefoxRelaySharedEnabled)) {
+        store.firefoxRelaySharedEnabled =
+            prefs.getBool(SettingsKeys.firefoxRelaySharedEnabled)!;
+      }
+      final relayEchMode =
+          prefs.getString(SettingsKeys.firefoxRelayEchMode);
+      if (relayEchMode != null &&
+          const {'off', 'on', 'require'}.contains(relayEchMode)) {
+        store.firefoxRelayEchMode = relayEchMode;
+      }
+      final relayEchConfig =
+          prefs.getString(SettingsKeys.firefoxRelayEchConfig);
+      if (relayEchConfig != null) {
+        store.firefoxRelayEchConfig = relayEchConfig;
       }
       if (prefs.containsKey(SettingsKeys.protocolModeSmart)) {
         store.protocolModeSmart = prefs.getBool(SettingsKeys.protocolModeSmart)!;
@@ -382,6 +419,27 @@ class SettingsPersistence {
       await prefs.setString(SettingsKeys.torLocation, store.torLocation);
       await prefs.setString(SettingsKeys.firefoxLocation, store.firefoxLocation);
       await prefs.setString(SettingsKeys.firefoxTransport, store.firefoxTransport);
+      // v1.3.0-relay — the relay surface.
+      await prefs.setString(
+        SettingsKeys.firefoxRelayPersonalUrl,
+        store.firefoxRelayPersonalUrl,
+      );
+      await prefs.setBool(
+        SettingsKeys.firefoxRelayPersonalEnabled,
+        store.firefoxRelayPersonalEnabled,
+      );
+      await prefs.setBool(
+        SettingsKeys.firefoxRelaySharedEnabled,
+        store.firefoxRelaySharedEnabled,
+      );
+      await prefs.setString(
+        SettingsKeys.firefoxRelayEchMode,
+        store.firefoxRelayEchMode,
+      );
+      await prefs.setString(
+        SettingsKeys.firefoxRelayEchConfig,
+        store.firefoxRelayEchConfig,
+      );
       await prefs.setBool(
         SettingsKeys.protocolModeSmart,
         store.protocolModeSmart,

@@ -75,6 +75,7 @@ prohibition).
 | The discovery selection policy (REC/CatchAll/quarantine/country) | `internal/discovery/` |
 | The entry point, orchestration, park loop, `--discover`, `--login`, `--dns-probe` roles | `cmd/libfirefoxvpn/` |
 | The 60s runtime-stats evidence line (Stage 6; not upstream — the demo has no such loop) | `cmd/libfirefoxvpn/main.go` (`runtimeStatsLoop`, `formatRuntimeStats`) |
+| The control-plane relay system (Guardian 451 recovery: doubled-path bypass, shared community pool, personal relay, ECH) — see § relay below | `internal/relay/` |
 | The build/fetch scripts and this provenance record | `../scripts/`, this file |
 
 ## What is ADAPTED from the upstream (per-file provenance)
@@ -171,3 +172,49 @@ What changed, and what did NOT:
   remains BLOCKED until the owner resolves it — written permission
   from the upstream author, a licensed alternative, or indefinite
   private containment.
+
+
+## 2026-11-12 amendment — § relay (the Arman VPN architectural reference)
+
+The control-plane relay system (`internal/relay/`, contract 1.3.0-relay)
+implements the Guardian HTTP 451 (`unavailable_in_region`) recovery the
+owner ordered on 2026-11-12, modeled on the Arman VPN client's relay
+system as documented in its v1.0.17 release
+(github.com/armanlife/arman-vpn-client — "Mozilla has blocked access
+from Iran to Guardian ... The app now automatically uses shared relays
+when this error occurs. Your main VPN traffic continues through
+Mozilla's tunnel").
+
+PROVENANCE POSTURE — reference-only, the same posture the FoxyVPN (MIT)
+consultation used:
+
+* Arman's core is GPL-3.0. **NO Arman code is included in AETHONE.**
+  `internal/relay/` is an original implementation of the documented
+  BEHAVIOR and WIRE PROTOCOL (the `?url=` forwarding shape, the
+  `X-Relay-Error` refusal header, the shared-pool `?health=1` JSON and
+  `X-Arman-Relay: 1` forwarded marker, the TLS 1.2 / edge-route leg
+  fallbacks, the ECH mode triad), written for AETHONE's engine contract
+  (the stdin config seam and the pinned upstream's
+  `SetControlPlaneTransport` export — the upstream pin itself is
+  untouched, as always).
+* The shared relay pool consumes the PUBLIC arman-org community
+  manifest (raw.githubusercontent.com/arman-org/update-manifests —
+  public JSON data, fetched read-only; its curation is that project's).
+  AETHONE's health check accepts both community identities
+  ("arman-vpn" and "aethone") so relays deployed from either guide
+  serve either client.
+* The reference server implementations shipped in
+  `docs/firefox-vpn/relay/` (`worker.js`, `relay.php`) are likewise
+  ORIGINAL code for the same protocol, written for this repository; the
+  user-facing guide (`docs/firefox-vpn/relay.md`) is original Persian
+  documentation.
+* Honest deltas vs. the reference: (1) the reference bounds the first
+  direct attempt with a 4s quick dial — the pinned upstream exports no
+  dial-injection seam, so AETHONE keeps the upstream's own dial budget
+  and relies on the 10-minute relay-first window to amortize it;
+  (2) the reference resets relay state on network-change events —
+  AETHONE relies on the window's expiry plus the relay-failure→direct
+  retry; (3) the reference's shared pool carries Guardian requests with
+  replayable bodies only, exactly as AETHONE's does — no divergence.
+
+Design record: `docs/firefox-vpn/relay-2026-11-12.md`.

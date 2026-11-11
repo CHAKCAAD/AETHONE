@@ -112,3 +112,23 @@ func asErr(err error, target **ConfigError) bool {
 	}
 	return false
 }
+
+func TestLoginConfigRelayBlock(t *testing.T) {
+	// A valid relay block parses through (and validates).
+	cfg, err := ParseLoginConfig([]byte(`{"version":1,"mode":"webchannel","sessionToken":"` + hex64() + `","relay":{"personal_url":"https://r.example/?secret=s","personal_enabled":true}}`))
+	if err != nil {
+		t.Fatalf("a valid relay block must parse: %v", err)
+	}
+	if cfg.Relay.PersonalURL != "https://r.example/?secret=s" || !cfg.Relay.PersonalEnabled {
+		t.Fatalf("the relay block must ride through, got %+v", cfg.Relay)
+	}
+
+	_, err = ParseLoginConfig([]byte(`{"version":1,"mode":"webchannel","sessionToken":"` + hex64() + `","relay":{"personal_url":"http://r.example/"}}`))
+	if err == nil {
+		t.Fatal("a bad relay URL must be refused on the login line too")
+	}
+	var cfgErr *ConfigError
+	if as := asErr(err, &cfgErr); as && cfgErr.Detail != "relayURLInvalid" {
+		t.Fatalf("detail = %q", cfgErr.Detail)
+	}
+}

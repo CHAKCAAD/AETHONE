@@ -36,6 +36,7 @@ import (
         "aethone/fxv/internal/engine"
         "aethone/fxv/internal/fferr"
         "aethone/fxv/internal/redact"
+        "aethone/fxv/internal/relay"
         "aethone/fxv/internal/socks"
         "aethone/fxv/internal/upstream"
 )
@@ -108,6 +109,26 @@ func runTunnel() int {
         quiet := cfg.LogLevel == "quiet"
         log.enabled = !quiet
         log.verbose = cfg.LogLevel == "verbose" // the -verbose flag parity (stdin JSON, not env)
+
+        // 1b. the control-plane relay stack (contract 1.3.0-relay),
+        // installed BEFORE the first control-plane request (the
+        // server-list fetch below). The stack layers the FREE
+        // doubled-path Guardian 451 bypass first, then the shared
+        // Guardian-only pool, then the personal relay; a config with
+        // no relay block installs the bypass-only stack — harmless
+        // where Mozilla answers, recovery where the CDN edge refuses
+        // the region. The restore matters only to tests that link
+        // this walk; the process exits here otherwise.
+        restoreRelay := relay.Install(relay.Options{
+                PersonalRelay:   cfg.Relay.PersonalURL,
+                PersonalEnabled: cfg.Relay.PersonalEnabled,
+                SharedEnabled:   cfg.Relay.SharedEnabled,
+                ECHMode:         cfg.Relay.ECHMode,
+                ECHConfig:       cfg.Relay.ECHConfig,
+                GuardianHost:    guardianHostOf(cfg.Guardian),
+                Logf:            log.Infof,
+        })
+        defer restoreRelay()
 
         _ = emit.Emit(engine.Event{
                 Name: engine.EvStarted,
@@ -499,6 +520,18 @@ func classifyUpstream(err error, cfg engine.Config) fferr.Classified {
                 class.Message = "the proxy did not negotiate the requested transport"
         }
         return class
+}
+
+// guardianHostOf extracts the host the relay layers scope themselves
+// to (the shared pool and the doubled-path bypass match Guardian
+// requests by this host). "" falls back to the production default
+// inside relay.Options.Normalize.
+func guardianHostOf(endpoint string) string {
+        u, err := url.Parse(endpoint)
+        if err != nil || u.Hostname() == "" {
+                return ""
+        }
+        return u.Hostname()
 }
 
 // hostOf / portOf split a host:port override.

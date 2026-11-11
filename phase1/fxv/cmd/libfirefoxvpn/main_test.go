@@ -197,6 +197,45 @@ func TestTunnelTransportUnknown(t *testing.T) {
         s.waitExit(t, 5*time.Second)
 }
 
+func TestTunnelRelayURLInvalid(t *testing.T) {
+	s := startEngine(t)
+	defer s.kill()
+	s.send(`{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"x"},"relay":{"personal_url":"http://relay.example/"}}`)
+	ev := s.waitEvent(t, "failed", 5*time.Second)
+	if ev["message"] != "relayURLInvalid" {
+		t.Fatalf("event = %v", ev)
+	}
+	s.waitExit(t, 5*time.Second)
+}
+
+func TestTunnelRelayBlockAccepted(t *testing.T) {
+	// A valid relay block must sail through validation into the walk:
+	// the next failure after it is the (honest) discovery one, never a
+	// badConfig. The engine is killed mid-walk; the config shape is
+	// what this test asserts.
+	s := startEngine(t)
+	defer s.kill()
+	s.send(`{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"x"},"relay":{"personal_url":"https://relay.example/?secret=s","personal_enabled":true,"shared_enabled":true,"ech_mode":"on","ech_config":"cloudflare-ech.com"}}`)
+	ev := s.waitEvent(t, "started", 5*time.Second)
+	if ev["message"] != "1.3.0-relay" {
+		t.Fatalf("started = %v", ev)
+	}
+	// The walk proceeds (discovery); a failure there is fine — the
+	// badConfig shape would NOT be. Drain a couple of events looking
+	// only for the badConfig shape.
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case ev := <-s.events:
+			if ev["failCode"] == "badConfig" {
+				t.Fatalf("a valid relay block must not fail as badConfig: %v", ev)
+			}
+		case <-deadline:
+			return
+		}
+	}
+}
+
 func TestTunnelAuthAccessTokenMissing(t *testing.T) {
         s := startEngine(t)
         defer s.kill()
@@ -256,7 +295,7 @@ func TestStartedEventShape(t *testing.T) {
         defer s.kill()
         s.send(`{"version":1,"socksListen":"127.0.0.1:1822","upstreamOverride":"127.0.0.1:1","guardian":"https://127.0.0.1:1","auth":{"accessToken":"x"}}`)
         ev := s.waitEvent(t, "started", 5*time.Second)
-        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "1.2.0-phaseb") {
+        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "1.3.0-relay") {
                 t.Fatalf("engine version = %v", ev["message"])
         }
         if pid, _ := ev["pid"].(float64); pid <= 0 {

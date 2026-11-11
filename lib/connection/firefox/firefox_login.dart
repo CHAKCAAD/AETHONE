@@ -63,6 +63,7 @@ class FirefoxLoginClient {
   Future<FirefoxLoginResult> runWebChannel({
     required String sessionToken,
     Duration timeout = const Duration(minutes: 7),
+    FirefoxRelaySettings? relay,
   }) async {
     if (isRunning) {
       throw StateError('a login attempt is already running');
@@ -180,6 +181,10 @@ class FirefoxLoginClient {
       'version': 1,
       'mode': 'webchannel',
       'sessionToken': sessionToken,
+      // v1.3.0-relay — the same relay block the tunnel line carries
+      // (the login walk's control-plane host is Firefox Accounts: the
+      // personal relay covers its unreachability).
+      'relay': (relay ?? const FirefoxRelaySettings()).toJson(),
     }));
 
     unawaited(process.exitCode.then((code) {
