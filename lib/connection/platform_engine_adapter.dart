@@ -2184,6 +2184,10 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
     String sessionToken, {
     void Function(String line)? onLog,
   }) async {
+    final source = _config;
+    if (source is FirefoxDnsSettingsLoader) {
+      await source.loadFirefoxDnsSettings();
+    }
     final paths = await _paths();
     final client = _firefoxLogin = FirefoxLoginClient(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
@@ -2236,6 +2240,10 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
   /// wheel list + honesty labels follow (the phase-2 location picker
   /// binds to the store's copy).
   Future<FirefoxLocationList?> firefoxLocations() async {
+    final source = _config;
+    if (source is FirefoxDnsSettingsLoader) {
+      await source.loadFirefoxDnsSettings();
+    }
     final paths = await _paths();
     final discovery = _firefoxDiscovery ??= FirefoxDiscovery(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
@@ -2339,6 +2347,9 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
   /// The firefox walk (the aether skeleton, engine swapped in).
   Future<bool> _connectFirefox(int gen, EngineConfigSource config) async {
     void fail(String code, String msg) => _emitFail(code, msg);
+    if (config is FirefoxDnsSettingsLoader) {
+      await config.loadFirefoxDnsSettings();
+    }
 
     // Stale-state hygiene: never start a second engine over a live one.
     await _hardCleanup();
