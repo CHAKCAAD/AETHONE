@@ -34,7 +34,10 @@ func TestDNSProbeRealResolution(t *testing.T) {
 	}
 	s := startEngine(t, "--dns-probe")
 	defer s.kill()
-	// no stdin needed; the role runs to completion
+	// The DNS probe accepts an optional JSON config on stdin. Close the
+	// empty pipe explicitly so it observes EOF and selects System DNS;
+	// otherwise the child waits forever for input and emits no summary.
+	s.closeStdin()
 	var summary map[string]any
 	deadline := time.After(30 * time.Second)
 	sawDomains := 0
@@ -84,9 +87,13 @@ func TestDNSProbeEventsParseAsJSON(t *testing.T) {
 
 func TestReadOptionalDNSConfig(t *testing.T) {
 	defaultConfig, err := readOptionalDNSConfig(strings.NewReader(""))
-	if err != nil || defaultConfig.Mode != "system" { t.Fatalf("empty stdin default: %+v, %v", defaultConfig, err) }
+	if err != nil || defaultConfig.Mode != "system" {
+		t.Fatalf("empty stdin default: %+v, %v", defaultConfig, err)
+	}
 	doh, err := readOptionalDNSConfig(strings.NewReader(`{"dns":{"mode":"doh","provider":"google"}}`))
-	if err != nil || doh.Mode != "doh" || doh.Provider != "google" { t.Fatalf("DoH envelope: %+v, %v", doh, err) }
+	if err != nil || doh.Mode != "doh" || doh.Provider != "google" {
+		t.Fatalf("DoH envelope: %+v, %v", doh, err)
+	}
 	if _, err := readOptionalDNSConfig(strings.NewReader(`{"dns":{"mode":"doh","provider":"custom"}}`)); err == nil {
 		t.Fatal("malformed custom DoH config must fail")
 	}
