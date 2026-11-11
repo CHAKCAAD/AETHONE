@@ -2255,6 +2255,49 @@ class PlatformEngineAdapter implements EngineAdapter {
     return list;
   }
 
+  /// Runs the same process-local resolver used by login, discovery and
+  /// the tunnel. The probe has no account data and never validates traffic.
+  @override
+  Future<List<Map<String, dynamic>>?> firefoxDnsProbe(
+    Map<String, dynamic> dnsConfig,
+  ) async {
+    final paths = await _paths();
+    final process = await Process.start(
+      '${paths.nativeLibraryDir}/libfirefoxvpn.so',
+      const ['--dns-probe'],
+      environment: const {},
+      includeParentEnvironment: false,
+    );
+    process.stdin.writeln(jsonEncode({'dns': dnsConfig}));
+    await process.stdin.close();
+    final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+    final stderrFuture = process.stderr.transform(utf8.decoder).join();
+    final code = await process.exitCode.timeout(
+      const Duration(seconds: 35),
+      onTimeout: () {
+        process.kill();
+        throw TimeoutException('Firefox DNS probe timed out');
+      },
+    );
+    final stdout = await stdoutFuture;
+    await stderrFuture;
+    final events = <Map<String, dynamic>>[];
+    for (final line in const LineSplitter().convert(stdout)) {
+      try {
+        final decoded = jsonDecode(line);
+        if (decoded is Map<String, dynamic>) events.add(decoded);
+      } catch (_) {
+        // Ignore non-JSON diagnostic noise; the summary remains authoritative.
+      }
+    }
+    if (events.isEmpty) return null;
+    if (code != 0) {
+      // Preserve per-domain evidence on failure; the summary carries ok=false.
+      return events;
+    }
+    return events;
+  }
+
   /// PHASE-2 — the EngineAdapter surface: one --discover round per call
   /// (the store fire-and-forgets this at app start + on the firefox
   /// settings page).
