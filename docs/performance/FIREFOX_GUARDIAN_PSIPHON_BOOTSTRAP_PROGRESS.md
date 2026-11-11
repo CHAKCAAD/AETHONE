@@ -809,17 +809,17 @@ FxA و سایر endpointهای Guardian/Remote Settings همچنان مستقی�
 ### گیت تأیید — هنوز انجام نشده
 
 - Commit کد `1759bac32b3535e2e0d15ca02dced8404c8aea95` ثبت شده است.
-- **CI برای این commit هنوز تأیید نشده است.** تست‌های جدید به سورس اضافه شده‌اند اما این محیط Flutter/Go test runner اجرا نکرده است؛ سبز بودن تست‌ها ادعا نمی‌شود.
-- **APK جدید هنوز از این commit ساخته نشده است.** آخرین run قبلی (#6، SHA `218f42c`) قدیمی است و برای تست این منطق استفاده نشود.
+- **CI هنوز در حال اجراست.** GitHub Actions run `43028323588` (run #7) روی commit `b25e61a` با رویداد push ایجاد شد و در آخرین مشاهده queued بود؛ تست‌های Go/Flutter یا APK هنوز PASS اعلام نمی‌شوند.
+- **APK جدید هنوز آماده نیست.** run #7 شامل build همین کد است؛ فقط پس از conclusion=success و موجودشدن Artifact می‌توان آن را نصب کرد. run قبلی #6 با SHA `218f42c` قدیمی است.
 - نصب، اتصال واقعی و بررسی خروجی روی POCO X3 انجام نشده است؛ تا آن زمان عملکرد شبکه‌ای نهایی NOT VERIFIED باقی می‌ماند.
 
 ---
 ## دستور دقیق ادامه کار (پس از Stage 9.2)
 
-1. HEAD شاخه `feature/firefox-guardian-psiphon-bootstrap` را بررسی کن؛ کد مرحله 9.2 باید در تاریخچهٔ آن باشد.
-2. GitHub Actions workflow شمارهٔ 412045413 را با `workflow_dispatch` روی همین feature branch اجرا کن؛ workflow فعلی push روی این شاخه را trigger نمی‌کند.
-3. run باید دقیقاً از SHA `1759bac` یا commit مستنداتِ فرزند آن ساخته شود؛ تست‌های Go و Flutter و ساخت APK باید همگی سبز باشند.
-4. فقط Artifact همان run را نصب کن؛ APK اجرای شمارهٔ 6 (`218f42c`) قدیمی است.
+1. HEAD شاخه `feature/firefox-guardian-psiphon-bootstrap` را بررسی کن؛ آخرین HEAD مستند این مرحله `b25e61a` است.
+2. push روی همین feature branch اکنون workflow شمارهٔ 412045413 را خودکار اجرا می‌کند؛ آخرین اجرا #7 با شناسهٔ `43028323588` است.
+3. نتیجهٔ run باید success باشد و Artifact ساخته شود؛ SHA اجرای #7 باید `b25e61a` باشد، یعنی commit کد `1759bac` به‌علاوهٔ مستندات و فعال‌سازی trigger.
+4. فقط Artifact run #7 را نصب کن؛ APK اجرای شمارهٔ 6 (`218f42c`) قدیمی است.
 5. روی POCO X3 لاگ کامل بگیر و بررسی کن: Direct start، علت escalation، آماده‌شدن یا timeout مسیر Standalone، انتخاب chain، `passAcquired` و SOCKS readiness.
 6. تا دریافت شواهد دستگاه، اتصال واقعی و عبور ترافیک را PASS اعلام نکن. به default branch، شاخه integration یا Release دست نزن.
 
@@ -847,5 +847,6 @@ FxA و سایر endpointهای Guardian/Remote Settings همچنان مستقی�
 | 9.1 — کد + تست + گزارش | `21cc5ad` | feat(firefox): add optional failureStage diagnostics for Remote Settings, Guardian pass and upstream session; no routing/timeout behavior changed |
 | 9.1 — اصلاح جزئی + پین | `218f42c` | fix(test): wait for the child stdout pipe to flush; tag config failures; pin the Stage 9.1 implementation SHA |
 | 9.2 — کد + تست سخت‌سازی | `1759bac` | test(firefox): harden direct-timeout and selected Psiphon fallback (transport escalation, Standalone→selected chain, route Fast Path, settings→protocol mapping, HTTP non-trigger tests) |
+| CI feature branch | `b25e61a` | ci(android): include the Guardian/Psiphon feature branch in push builds; Actions run #7 queued (`43028323588`) |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
