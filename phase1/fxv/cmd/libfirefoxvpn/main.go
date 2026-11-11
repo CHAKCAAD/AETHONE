@@ -158,15 +158,13 @@ func runTunnel() int {
                 }
         }
 
-        // Direct Remote Settings discovery + Guardian authorization share
-        // the four-second bootstrap decision window. A local bootstrap
-        // proxy gets a separate bounded window for the same requests.
-        controlPlaneBudget := 4 * time.Second
-        if cfg.ApiProxy != "" {
-                controlPlaneBudget = 55 * time.Second
-        }
-        controlCtx, cancelControl := context.WithTimeout(ctx, controlPlaneBudget)
-        defer cancelControl()
+        // Direct gets a fresh four-second deadline for EACH serial
+        // control-plane request: discovery cannot consume Guardian's
+        // authorization budget. A proxied bootstrap walk deliberately
+        // shares one bounded 55-second window so the host's 60-second
+        // authorization deadline remains the outer guard.
+        controlBudget := newControlPlaneBudget(ctx, cfg.ApiProxy)
+        defer controlBudget.close()
 
         var (
                 proxyURL *url.URL
@@ -182,7 +180,9 @@ func runTunnel() int {
                 log.Infof("upstream override: %s", cfg.UpstreamOverride)
         } else {
                 started := time.Now()
-                fetched, err := vpnclient.FetchServerList(controlCtx)
+                discoveryCtx, cancelDiscovery := controlBudget.requestContext()
+                fetched, err := vpnclient.FetchServerList(discoveryCtx)
+                cancelDiscovery()
                 if err != nil {
                         if code, stop := cleanStopIfRequested(); stop {
                                 return code
@@ -267,8 +267,9 @@ func runTunnel() int {
         })
         defer controller.Close()
 
-        pass, err := controller.AcquireInitialPass(controlCtx)
-        cancelControl()
+        guardianCtx, cancelGuardian := controlBudget.requestContext()
+        pass, err := controller.AcquireInitialPass(guardianCtx)
+        cancelGuardian()
         if err != nil {
                 if code, stop := cleanStopIfRequested(); stop {
                         return code

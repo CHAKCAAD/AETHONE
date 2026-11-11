@@ -163,6 +163,51 @@ func TestGuardianProbeRemoteSettingsTimeoutHasItsOwnStage(t *testing.T) {
 	}
 }
 
+func TestGuardianProbeDirectGuardianGetsFreshFourSecondBudgetAfterDiscovery(t *testing.T) {
+	installTestControlPlane(t)
+
+	oldFetch := fetchRemoteSettings
+	fetchRemoteSettings = func(ctx context.Context) error {
+		timer := time.NewTimer(2 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	t.Cleanup(func() { fetchRemoteSettings = oldFetch })
+
+	guardianElapsed := make(chan time.Duration, 1)
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		<-r.Context().Done()
+		guardianElapsed <- time.Since(started)
+	}))
+	defer srv.Close()
+
+	events, code := captureProbe(t, probeConfigLine(srv.URL, ""))
+	if code != engine.ExitStartup {
+		t.Fatalf("exit = %d (want startup timeout)", code)
+	}
+	failed := eventNamed(events, "failed")
+	if failed == nil {
+		t.Fatalf("no failed event: %v", events)
+	}
+	if failed["failureStage"] != "guardianPass" || failed["failCode"] != "timeout" {
+		t.Fatalf("failure = %v (want Guardian timeout after independent budget)", failed)
+	}
+	select {
+	case elapsed := <-guardianElapsed:
+		if elapsed < 3500*time.Millisecond {
+			t.Fatalf("Guardian received only %s after discovery; want a fresh ~4s budget", elapsed)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Guardian test server did not observe the bounded request cancellation")
+	}
+}
+
 func TestGuardianProbeClassifiesReal451(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/fpn/token" {

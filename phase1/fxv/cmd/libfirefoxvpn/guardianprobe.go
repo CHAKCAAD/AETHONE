@@ -178,17 +178,17 @@ func runGuardianProbeReader(r io.Reader) int {
 		<-watcherSettled
 	}()
 
-	// 4. Match the tunnel's control-plane order and deadline. Remote
-	// Settings and Guardian together get four seconds on Direct. A
-	// verified bootstrap proxy gets a separate bounded window.
-	controlPlaneBudget := 4 * time.Second
-	if cfg.ApiProxy != "" {
-		controlPlaneBudget = 55 * time.Second
-	}
-	controlCtx, cancelControl := context.WithTimeout(ctx, controlPlaneBudget)
-	defer cancelControl()
+	// 4. Match the tunnel's control-plane order. Direct gets a fresh
+	// four-second context for discovery AND another fresh four seconds
+	// for Guardian authorization. Bootstrap proxy requests share one
+	// bounded 55-second context to fit inside the host's 60-second cap.
+	controlBudget := newControlPlaneBudget(ctx, cfg.ApiProxy)
+	defer controlBudget.close()
 	if cfg.UpstreamOverride == "" {
-		if err := fetchRemoteSettings(controlCtx); err != nil {
+		discoveryCtx, cancelDiscovery := controlBudget.requestContext()
+		err := fetchRemoteSettings(discoveryCtx)
+		cancelDiscovery()
+		if err != nil {
 			select {
 			case <-stdinDone:
 				_ = emit.Emit(engine.Event{Name: engine.EvStopped, Reason: "stdinClosed"})
@@ -202,7 +202,8 @@ func runGuardianProbeReader(r io.Reader) int {
 	}
 
 	// 5. The REAL initial-pass walk — same-account FxA recovery remains
-	// intact. The same deadline also covers Guardian authorization.
+	// intact. Direct receives its own four-second Guardian budget; a
+	// proxied walk remains under the one shared control-plane deadline.
 	controller := upstream.NewController(upstream.ControllerConfig{
 		Guardian:     cfg.Guardian,
 		AccessToken:  cfg.Auth.AccessToken,
@@ -225,8 +226,9 @@ func runGuardianProbeReader(r io.Reader) int {
 	})
 	defer controller.Close()
 
-	pass, err := controller.AcquireInitialPass(controlCtx)
-	cancelControl()
+	guardianCtx, cancelGuardian := controlBudget.requestContext()
+	pass, err := controller.AcquireInitialPass(guardianCtx)
+	cancelGuardian()
 	if err != nil {
 		select {
 		case <-stdinDone:
