@@ -270,6 +270,12 @@ abstract class EngineAdapter {
 
   /// Cancels an in-flight login exchange. Default: no-op.
   Future<void> firefoxLoginCancel() async {}
+
+  /// Runs the engine's DNS-only diagnostic role. Null means this platform
+  /// has no Firefox engine process available.
+  Future<List<Map<String, dynamic>>?> firefoxDnsProbe(
+    Map<String, dynamic> dnsConfig,
+  ) async => null;
 }
 
 /// Default adapter until the native service lands (M2): fails honestly.
