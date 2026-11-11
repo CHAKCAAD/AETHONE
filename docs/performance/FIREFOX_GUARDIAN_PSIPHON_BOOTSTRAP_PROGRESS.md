@@ -12,9 +12,9 @@
 | Repository | `CHAKCAAD/AETHONE` (تنها مخزن مجاز) |
 | Branch کاری | `feature/firefox-guardian-psiphon-bootstrap` |
 | Base Commit | `ce852ea` (= tip شاخه `performance/firefox-vpn-optimization`؛ شامل تمام اصلاحات Performance مراحل ۰–۸) |
-| آخرین Commit | (انتهای فایل — «گیت مراحل») |
-| مرحله فعلی | **Stage 9.1 — افزودن failureStage تشخیصی؛ بدون تغییر رفتار اتصال؛ منتظر CI** |
-| مرحله تکمیل‌شده آخر | **Stage 9 — اجرای میدانی ۱ (PARTIAL)؛ اکنون Stage 9.1 کدنویسی و تست افزوده شده و CI باید آن را تأیید کند** |
+| آخرین Commit کد | `1759bac32b3535e2e0d15ca02dced8404c8aea95` |
+| مرحله فعلی | **Stage 9.2 — Direct → Psiphon Standalone → Aether-selected-protocol + Psiphon؛ کد و تست‌های هدفمند ثبت شده، CI و دستگاه هنوز pending** |
+| مرحله تکمیل‌شده آخر | **Stage 9.2 — منطق fallback حمل‌ونقل و انتخاب پروتکل در شاخه feature پیاده‌سازی شده؛ اثبات نهایی با CI و اجرای POCO X3 باقی است** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### وضعیت Git در شروع مأموریت (تأییدشده)
@@ -762,13 +762,66 @@ adb uninstall com.chakcaad.aethone.da
 ---
 
 
-## دستور دقیق ادامه کار (پس از Stage 9.1)
+## Stage 9.2 — Direct timeout escalation + selected Aether/Psiphon chain (2026-11-11)
 
-1. آخرین HEAD شاخه `feature/firefox-guardian-psiphon-bootstrap` و وضعیت CI همین commit را تأیید کن.
-2. اگر تست‌ها سبز بودند، build آزمایشی را فقط از GitHub Actions اجرا کن و روی دستگاه لاگ جدیدی بگیر که مقدار `failureStage` را نشان دهد.
-3. اگر stage برابر `remoteSettingsDiscovery` بود، قبل از هر تغییر باید سیاست عبور همان GET از bootstrap یا راهکار کش server-list به‌صورت مستقل مشخص شود؛ قید Guardian-only را بی‌صدا نقض نکن.
-4. اگر stage برابر `guardianPass` بود، مرحله بعد تریگر direct-timeout با مهلت ۳ ثانیه را فقط برای همین درخواست Guardian پیاده‌سازی می‌کند.
-5. پس از هر مرحله فقط همان مرحله را commit و گزارش کن؛ به default branch، شاخه integration یا Release دست نزن.
+### تصمیم اجرایی و وضعیت کد
+
+این مرحله برای پوشش رفتار واقعی مشاهده‌شده در POCO X3 انجام شد: کنترل‌پلن مستقیم به‌جای پاسخ HTTP 451، در سطح transport بدون پاسخ می‌ماند. بنابراین علاوه بر 451 واقعی Guardian، فقط خطاهای transport بدون پاسخ در دو مرحله مشخص نیز واجد شرایط Bootstrap هستند.
+
+### ترتیب اتصال نهایی
+
+1. **Direct first:** موتور Firefox ابتدا بدون Psiphon اجرا می‌شود. در Go، Remote Settings server-list discovery و دریافت مجوز اولیه Guardian از یک context مستقیم با بودجهٔ حداکثر ۴ ثانیه عبور می‌کنند. این deadline واقعی HTTP است، نه صرفاً تایمر UI.
+2. **Psiphon Standalone:** در صورت Guardian HTTP 451 معتبر یا خطای transport بدون پاسخ در `remoteSettingsDiscovery` یا `guardianPass`، موتور مستقیم متوقف می‌شود و شاهد خطای همان تلاش فقط یک‌بار به manager داده می‌شود. مسیر Standalone با بودجهٔ readiness سی‌ثانیه‌ای شروع می‌شود. Ready فقط با probe کامل SOCKS5، CONNECT دامنه‌ای (DNS از داخل تونل) و HTTPS/TLS با اعتبارسنجی گواهی پذیرفته می‌شود؛ بازبودن پورت به‌تنهایی کافی نیست. سپس همان مجوز واقعی Guardian از مسیر پراکسی درخواست می‌شود.
+3. **Aether → Psiphon:** اگر Standalone در بودجه آماده نشود یا مجوز واقعی Guardian از آن مسیر دریافت نشود، پراکسی Standalone پاک‌سازی می‌شود و manager ترکیب موجود هسته Aether → Psiphon را راه می‌اندازد. این ترکیب پیاده‌سازی پروتکل جدید نیست؛ همان mode و argument builder هسته اصلی استفاده می‌شود. بودجهٔ پیش‌فرض readiness ترکیب ۳۳۰ ثانیه است و مسیر خروجی همان listener زنجیره است.
+
+### حفظ پروتکل انتخاب‌شده کاربر
+
+- provider در `PlatformEngineAdapter` مقدار فعلی `coreSettings.psiphonLegProtocol` را از config فعال می‌خواند؛ بنابراین مقدار ذخیره‌شده در تنظیمات Psiphon به سازندهٔ chain می‌رسد.
+- نگاشت از `AetherArguments.legProtocolId` و `PsiphonBootstrapProxy.warpProtocolArgs` استفاده می‌کند و با `AetherArguments.protocolArgs(..., ProtocolId.psiphonChain)` هم‌ارز است.
+- نمونه: انتخاب MASQUE به `--protocol masque` در leg اول Aether تبدیل می‌شود؛ سپس Psiphon روی SOCKS همان leg سوار می‌شود. WireGuard/GOOL/GOOL Classic/MIM نیز از نگاشت واقعی هسته عبور می‌کنند. مقدار کاربر به WireGuard یا مقدار دیگری بازنویسی نمی‌شود.
+- در صورت نبود provider در یک integration آزمایشی، fallback پیش‌فرض سازنده هنوز WireGuard است؛ در production provider تنظیمات فعال را تزریق می‌کند. تست جدید mapping همه گزینه‌های ذخیره‌شده را پوشش می‌دهد.
+
+### دامنهٔ پراکسی و خطاهای مجاز
+
+در درخواست‌های Bootstrap، allowlist فقط این دو GET را از پراکسی محلی عبور می‌دهد:
+- Guardian: `GET /api/v1/fpn/token` روی host واقعی Guardian پیکربندی‌شده.
+- Remote Settings: فقط GET مجموعهٔ `main/vpn-serverlist/records` روی origin ثابت Mozilla.
+
+FxA و سایر endpointهای Guardian/Remote Settings همچنان مستقیم می‌مانند. خطاهای HTTP دارای پاسخ از جمله 401/403، 429، validation و سایر پاسخ‌های application/server trigger این fallback نیستند. شرط transport trigger مستلزم `httpStatus == 0`، stage برابر `remoteSettingsDiscovery` یا `guardianPass` و کد timeout/DNS/networkUnavailable است.
+
+### حافظهٔ مسیر و چرخهٔ عمر
+
+- فقط routeای که readiness کامل و دریافت مجوز واقعی Guardian را با موفقیت طی کرده باشد، می‌تواند Fast Path شود.
+- برای دور بعد، Fast Path فقط با route معتبر در همان network context و شاهد تازهٔ Direct 451 یا transport-blackhole فعال می‌شود؛ شواهد به‌تنهایی کافی نیستند و TTL/cooldown همچنان اعمال می‌شوند.
+- اگر Fast Path واجد شرایط نباشد، Direct دوباره اولویت دارد.
+- شکست readiness یا authorization باعث teardown route جاری و رفتن به route بعدی می‌شود؛ stop/cancel و محدودیت هم‌زمانی user Aether walk همچنان رعایت می‌شوند.
+- توکن‌ها همچنان فقط از stdin خصوصی موتور عبور می‌کنند و در لاگ/argv/environment قرار نمی‌گیرند.
+
+### تغییرات این commit کد (`1759bac`)
+
+- پیام log علت escalation را بین Guardian HTTP 451 و transport-unavailable تفکیک می‌کند.
+- توضیحات manager و engine seams با رفتار واقعی transport fallback و Remote Settings allowlist همگام شده‌اند.
+- تست manager: transport blackhole → شکست readiness در Standalone → موفقیت Aether/Psiphon chain → ذخیرهٔ route → Fast Path زنجیره در تلاش بعدی.
+- تست route memory: transport evidence به‌تنهایی Fast Path نمی‌سازد؛ route باید قبلاً کاملاً تأیید شده باشد و TTL معتبر بماند.
+- تست protocol: هر مقدار `AetherLegProtocol` از تنظیمات به argumentهای chain نگاشت می‌شود؛ MASQUE به‌طور مشخص `--protocol masque` را می‌دهد.
+- تست engine seam: timeout در Remote Settings و Guardian با status صفر eligible است؛ HTTP 401 با وجود stage Guardian eligible نیست.
+
+### گیت تأیید — هنوز انجام نشده
+
+- Commit کد `1759bac32b3535e2e0d15ca02dced8404c8aea95` ثبت شده است.
+- **CI برای این commit هنوز تأیید نشده است.** تست‌های جدید به سورس اضافه شده‌اند اما این محیط Flutter/Go test runner اجرا نکرده است؛ سبز بودن تست‌ها ادعا نمی‌شود.
+- **APK جدید هنوز از این commit ساخته نشده است.** آخرین run قبلی (#6، SHA `218f42c`) قدیمی است و برای تست این منطق استفاده نشود.
+- نصب، اتصال واقعی و بررسی خروجی روی POCO X3 انجام نشده است؛ تا آن زمان عملکرد شبکه‌ای نهایی NOT VERIFIED باقی می‌ماند.
+
+---
+## دستور دقیق ادامه کار (پس از Stage 9.2)
+
+1. HEAD شاخه `feature/firefox-guardian-psiphon-bootstrap` را بررسی کن؛ کد مرحله 9.2 باید در تاریخچهٔ آن باشد.
+2. GitHub Actions workflow شمارهٔ 412045413 را با `workflow_dispatch` روی همین feature branch اجرا کن؛ workflow فعلی push روی این شاخه را trigger نمی‌کند.
+3. run باید دقیقاً از SHA `1759bac` یا commit مستنداتِ فرزند آن ساخته شود؛ تست‌های Go و Flutter و ساخت APK باید همگی سبز باشند.
+4. فقط Artifact همان run را نصب کن؛ APK اجرای شمارهٔ 6 (`218f42c`) قدیمی است.
+5. روی POCO X3 لاگ کامل بگیر و بررسی کن: Direct start، علت escalation، آماده‌شدن یا timeout مسیر Standalone، انتخاب chain، `passAcquired` و SOCKS readiness.
+6. تا دریافت شواهد دستگاه، اتصال واقعی و عبور ترافیک را PASS اعلام نکن. به default branch، شاخه integration یا Release دست نزن.
 
 ## گیت مراحل
 
@@ -792,6 +845,7 @@ adb uninstall com.chakcaad.aethone.da
 | 8 — مستندات | `278b1a1` | docs(guardian-bootstrap): stage 8 — trial build report via Actions run 42869865882 (sha256 verified, package id .da, engines 12/12, install commands) |
 | 9 — اجرای میدانی ۱ (تحلیل لاگ) | `3bcf278` | docs(guardian-bootstrap): field run 1 — mechanism present, but the 451-only trigger did not fire because the network blackholed the direct control-plane dial |
 | 9.1 — کد + تست + گزارش | `21cc5ad` | feat(firefox): add optional failureStage diagnostics for Remote Settings, Guardian pass and upstream session; no routing/timeout behavior changed |
-| 9.1 — اصلاح جزئی + پین | (این commit) | fix(test): wait for the child stdout pipe to flush; tag config failures; pin the Stage 9.1 implementation SHA |
+| 9.1 — اصلاح جزئی + پین | `218f42c` | fix(test): wait for the child stdout pipe to flush; tag config failures; pin the Stage 9.1 implementation SHA |
+| 9.2 — کد + تست سخت‌سازی | `1759bac` | test(firefox): harden direct-timeout and selected Psiphon fallback (transport escalation, Standalone→selected chain, route Fast Path, settings→protocol mapping, HTTP non-trigger tests) |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*
