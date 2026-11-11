@@ -606,3 +606,53 @@ func TestGuardian451ThroughRealUpstreamClient(t *testing.T) {
                 t.Fatalf("502 class = %+v (want retryable serverRejection)", class)
         }
 }
+
+
+// TestFailedFromStageWireField (Stage 9.1): failureStage identifies the
+// failing control-plane leg without changing the stable failure class.
+func TestFailedFromStageWireField(t *testing.T) {
+        stages := []string{
+                engine.FailureStageRemoteSettingsDiscovery,
+                engine.FailureStageGuardianPass,
+                engine.FailureStageUpstreamSession,
+        }
+        for _, stage := range stages {
+                ev := failedFromStage(engine.ErrDiscoveryFailed, fferr.Classified{
+                        Code:      fferr.CodeTimeout,
+                        Message:   "The server took too long to respond",
+                        Retryable: true,
+                }, engine.ExitStartup, stage)
+                blob, err := json.Marshal(ev)
+                if err != nil {
+                        t.Fatalf("%s: marshal failed: %v", stage, err)
+                }
+                var wire map[string]any
+                if err := json.Unmarshal(blob, &wire); err != nil {
+                        t.Fatalf("%s: unmarshal failed: %v", stage, err)
+                }
+                if got := wire["failureStage"]; got != stage {
+                        t.Fatalf("%s: failureStage = %v", stage, got)
+                }
+                if got := wire["failCode"]; got != string(fferr.CodeTimeout) {
+                        t.Fatalf("%s: failCode = %v", stage, got)
+                }
+                if got := wire["message"]; got != "The server took too long to respond" {
+                        t.Fatalf("%s: message changed: %v", stage, got)
+                }
+        }
+
+        // Old/other events that do not know about failureStage remain
+        // byte-compatible: omitempty keeps the new field absent.
+        legacy := engine.Event{Name: engine.EvFailed, FailCode: engine.ErrInternal}
+        blob, err := json.Marshal(legacy)
+        if err != nil {
+                t.Fatal(err)
+        }
+        var wire map[string]any
+        if err := json.Unmarshal(blob, &wire); err != nil {
+                t.Fatal(err)
+        }
+        if _, ok := wire["failureStage"]; ok {
+                t.Fatalf("empty failureStage must be omitted: %s", blob)
+        }
+}

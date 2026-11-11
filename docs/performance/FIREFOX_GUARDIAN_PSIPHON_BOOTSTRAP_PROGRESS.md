@@ -13,8 +13,8 @@
 | Branch کاری | `feature/firefox-guardian-psiphon-bootstrap` |
 | Base Commit | `ce852ea` (= tip شاخه `performance/firefox-vpn-optimization`؛ شامل تمام اصلاحات Performance مراحل ۰–۸) |
 | آخرین Commit | (انتهای فایل — «گیت مراحل») |
-| مرحله فعلی | **Stage 9 — اجرای میدانی ۱ ثبت شد (PARTIAL)؛ اصلاح تریگر در انتظار تصویب مالک (بخش ۴ اجرای میدانی ۱)** |
-| مرحله تکمیل‌شده آخر | **Stage 8 — PASS (Build آزمایشی APK دیباگ از Actions run `42869865882`؛ SHA256 مستقل تأیید؛ جزئیات بخش Stage 8)** — سپس اجرای میدانی ۱ Stage 9: مکانیزم روی گوشی حاضر تأیید شد اما تریگر 451 با رفتار واقعی شبکه (blackhole) هرگز نشد |
+| مرحله فعلی | **Stage 9.1 — افزودن failureStage تشخیصی؛ بدون تغییر رفتار اتصال؛ منتظر CI** |
+| مرحله تکمیل‌شده آخر | **Stage 9 — اجرای میدانی ۱ (PARTIAL)؛ اکنون Stage 9.1 کدنویسی و تست افزوده شده و CI باید آن را تأیید کند** |
 | مخزن خصوصی | کاملاً خارج از محدوده — ممنوع |
 
 ### وضعیت Git در شروع مأموریت (تأییدشده)
@@ -722,14 +722,53 @@ adb uninstall com.chakcaad.aethone.da
 
 ---
 
-## دستور دقیق ادامه کار (جلسه بعدی — اصلاح تریگر، پس از تصویب مالک)
 
-1. همین فایل را بخوان؛ **ابتدا `git fetch` + `git ls-remote` ریموت را بررسی کن** (درس Stage 8)؛ HEAD باید commit همین اجرا باشد و working tree پاک.
-2. **پیش‌نیاز تصمیم مالک** (بند ۴ اجرای میدانی ۱): (۱) آیا timeout مستقیم هم تریگر شود؟ (۲) آیا server-list (Remote Settings) هم در allowlist مسیر bootstrap بیاید؟ (۳) افزودن لاگ تشخیصی پا.
-3. اگر تصویب شد: **فقط همان یک مرحلهٔ اصلاح** را اجرا کن (کد+تست+کامیت مستقل): تریگر در Dart/مدیر + (در صورت تصویب) مدخل allowlist در Go + لاگ تشخیصی پا؛ تست‌ها سبز؛ push؛ سپس بیلد آزمایشی جدید **فقط از Actions** (رویهٔ Stage 8؛ بدون build محلی) برای اجرای میدانی دوم.
-4. قانون توقف: بعد از همان یک مرحله متوقف شو و گزارش بده.
+## Stage 9.1 — failure-stage instrumentation (2026-11-11; owner approved)
+
+### تصمیم و محدوده
+
+مالک معماری ترکیبی Guardian + Firefox Account را تأیید کرد. طبق قاعده توقف مرحله‌ای، این commit فقط مرحله تشخیصی را انجام می‌دهد تا پیش از تغییر تریگر یا routing، محل دقیق Timeout در موتور قابل مشاهده شود.
+
+- فیلد اختیاری و additive با نام `failureStage` به رویداد `failed` افزوده شد؛ این فیلد فقط نام ثابت مرحله را حمل می‌کند و هیچ URL، متن خطای خام، توکن یا داده حسابی ندارد.
+- مقدارهای ثبت‌شده در walk اصلی:
+  - `remoteSettingsDiscovery`: شکست `FetchServerList` از Remote Settings.
+  - `guardianPass`: شکست `AcquireInitialPass` / درخواست دریافت مجوز Guardian.
+  - `upstreamSession`: شکست ایجاد نشست بالادستی پس از دریافت مجوز.
+  - همچنین شکست‌های داخلی تنظیم transport، انتخاب سرور، SOCKS و renewal نیز stage ثابت خود را دارند.
+- parser دارت مقدار را به‌صورت tolerant می‌خواند؛ مقدار غایب در نسخه‌های قدیمی و مقدار با نوع اشتباه به رشته خالی تبدیل می‌شود.
+- `FirefoxEngineOutcome` مقدار را حفظ می‌کند تا مرحله بعد بتواند بدون تجزیه متن خطا درباره escalation تصمیم بگیرد.
+- تست Go قرارداد JSON و حذف فیلد خالی را بررسی می‌کند؛ تست Flutter هم parse، عبور از outcome پردازش فرزند و سازگاری با پیام قدیمی را پوشش می‌دهد.
+
+### چیزهایی که عمداً تغییر نکردند
+
+- **هیچ timeout سه‌ثانیه‌ای اضافه نشد.**
+- هیچ خطای transport هنوز باعث شروع Psiphon نمی‌شود.
+- allowlist فعلی Guardian دست‌نخورده است؛ Remote Settings هنوز مستقیم می‌رود.
+- WebView و `--login` هنوز به Psiphon متصل نشده‌اند.
+- ترتیب routeها، حافظه مسیر، UI، token handling و native core تغییر نکردند.
+- نه APK ساخته شد و نه تست دستگاه انجام شد؛ تأیید build/test به اجرای CI روی همین commit وابسته است.
+
+### معیار پذیرش
+
+1. Go: `go vet ./...` و `go test ./...` سبز.
+2. Flutter: `flutter analyze` و `flutter test` سبز.
+3. در خروجی جدید، failure ناشی از Remote Settings باید `failureStage=remoteSettingsDiscovery` و شکست Guardian باید `failureStage=guardianPass` داشته باشد.
+4. نبود فیلد در event قدیمی نباید crash یا تغییر رفتار ایجاد کند.
+
+### مرحله بعد
+
+پس از عبور CI، APK آزمایشی جدید فقط برای جمع‌آوری لاگ stage روی دستگاه استفاده می‌شود. سپس بر اساس شواهد واقعی تصمیم نهایی درباره فعال‌کردن fallback برای Timeout و نیاز یا عدم نیاز به عبور Remote Settings از bootstrap گرفته می‌شود. تا پیش از آن هیچ‌کدام از این دو رفتار تغییر نمی‌کند.
 
 ---
+
+
+## دستور دقیق ادامه کار (پس از Stage 9.1)
+
+1. آخرین HEAD شاخه `feature/firefox-guardian-psiphon-bootstrap` و وضعیت CI همین commit را تأیید کن.
+2. اگر تست‌ها سبز بودند، build آزمایشی را فقط از GitHub Actions اجرا کن و روی دستگاه لاگ جدیدی بگیر که مقدار `failureStage` را نشان دهد.
+3. اگر stage برابر `remoteSettingsDiscovery` بود، قبل از هر تغییر باید سیاست عبور همان GET از bootstrap یا راهکار کش server-list به‌صورت مستقل مشخص شود؛ قید Guardian-only را بی‌صدا نقض نکن.
+4. اگر stage برابر `guardianPass` بود، مرحله بعد تریگر direct-timeout با مهلت ۳ ثانیه را فقط برای همین درخواست Guardian پیاده‌سازی می‌کند.
+5. پس از هر مرحله فقط همان مرحله را commit و گزارش کن؛ به default branch، شاخه integration یا Release دست نزن.
 
 ## گیت مراحل
 
@@ -751,6 +790,7 @@ adb uninstall com.chakcaad.aethone.da
 | 7 — کد+مستندات | `efe707a` | test(guardian): comprehensive coverage + data-plane separation proof (stage 7) — تست تفکیک Data Plane در Go، تستهای UI/l10n در Flutter، تکمیل l10n کلاسهای Stage 6، جدول پوشش رسمی این فایل |
 | 7 — پین هش | `332ff03` | docs(guardian-bootstrap): pin the stage-7 commit hash in the progress table |
 | 8 — مستندات | `278b1a1` | docs(guardian-bootstrap): stage 8 — trial build report via Actions run 42869865882 (sha256 verified, package id .da, engines 12/12, install commands) |
-| 9 — اجرای میدانی ۱ (تحلیل لاگ) | (tip شاخه پس از همین commit) | docs(guardian-bootstrap): stage 9 field run 1 — on-device log analysis: mechanism verified present & running (stage-6 supervisor logs on device), but the 451-only trigger never fired — the region block manifested as a 15s transport blackhole (controlPlaneDialTimeout), failCode=timeout ≠ guardianRegionUnavailable; fix proposal (timeout trigger + optional RS allowlist entry + leg-identification log) awaiting owner ratification |
+| 9 — اجرای میدانی ۱ (تحلیل لاگ) | `3bcf278` | docs(guardian-bootstrap): field run 1 — mechanism present, but the 451-only trigger did not fire because the network blackholed the direct control-plane dial |
+| 9.1 — کد + تست + گزارش | (همین commit؛ SHA پس از ثبت پین می‌شود) | feat(firefox): add optional failureStage diagnostics for Remote Settings, Guardian pass and upstream session; no routing/timeout behavior changed |
 
 *(Token دسترسی در متن مأموریت مالک تأمین می‌شود؛ در این فایل ذخیره نشده است.)*

@@ -173,10 +173,12 @@ void main() {
         'failCode': 'dnsError',
         'httpStatus': '503',
         'retryable': 'yes',
+        'failureStage': 42,
         'message': 'x',
       });
       expect(event.httpStatus, 0);
       expect(event.retryable, isNull); // wrong type → no hint
+      expect(event.failureStage, isEmpty); // wrong stage type → no hint
 
       final completed = FirefoxEngineEvent.fromJson({
         'event': 'loginCompleted',
@@ -199,6 +201,7 @@ void main() {
       expect(event.failCode, FirefoxEngineFailure.exchangeFailed);
       expect(event.httpStatus, 0);
       expect(event.retryable, isNull);
+      expect(event.failureStage, isEmpty);
     });
   });
 

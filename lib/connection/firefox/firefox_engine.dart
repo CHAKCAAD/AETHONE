@@ -57,6 +57,7 @@ class FirefoxEngineOutcome {
     this.message = '',
     this.httpStatus = 0,
     this.retryable,
+    this.failureStage = '',
   });
 
   final FirefoxEngineState state;
@@ -72,6 +73,9 @@ class FirefoxEngineOutcome {
   /// null retryable means "the engine did not say").
   final int httpStatus;
   final bool? retryable;
+
+  /// Stage 9.1 — the named startup leg that failed (empty on legacy engines).
+  final String failureStage;
 
   bool get cleanStop =>
       (state == FirefoxEngineState.stopped && exitCode == 0) ||
@@ -204,6 +208,7 @@ class FirefoxVpnEngine {
               message: event.message,
               httpStatus: event.httpStatus,
               retryable: event.retryable,
+              failureStage: event.failureStage,
             ));
           case FirefoxEngineEvents.quotaExhausted:
             // GUARDIAN-BOOTSTRAP STAGE 6 (renewal & lifecycle): the

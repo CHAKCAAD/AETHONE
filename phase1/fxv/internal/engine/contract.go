@@ -79,6 +79,21 @@ const (
         ErrExchangeFailed      = "exchangeFailed"
 )
 
+// Failure stages are optional diagnostic metadata on failed events. They
+// identify the walk leg that produced the failure without exposing URLs,
+// credentials, or raw transport details. Empty/absent remains valid for
+// older callers and non-walk roles.
+const (
+        FailureStageConfiguration            = "configuration"
+        FailureStageControlPlaneRouting     = "controlPlaneRouting"
+        FailureStageRemoteSettingsDiscovery = "remoteSettingsDiscovery"
+        FailureStageDiscoverySelection      = "discoverySelection"
+        FailureStageGuardianPass            = "guardianPass"
+        FailureStageUpstreamSession         = "upstreamSession"
+        FailureStageSocksListener           = "socksListener"
+        FailureStageGuardianRenewal         = "guardianRenewal"
+)
+
 // Exit codes (mirrored by FirefoxEngineExitCode on the Dart side).
 const (
         ExitClean    = 0 // stdin closed / drained
@@ -122,6 +137,9 @@ type Event struct {
         Code       int    `json:"code,omitempty"` // the exit code the engine will use
         HTTPStatus int    `json:"httpStatus,omitempty"`
         Retryable  *bool  `json:"retryable,omitempty"`
+
+        // failed — optional, non-secret name of the engine walk leg that failed.
+        FailureStage string `json:"failureStage,omitempty"`
 
         // stopping / stopped
         Reason string `json:"reason,omitempty"`

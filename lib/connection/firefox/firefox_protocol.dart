@@ -140,6 +140,9 @@ class FirefoxEngineEvent {
       : name = raw['event'] as String? ?? '',
         message = raw['message'] as String? ?? '',
         failCode = raw['failCode'] as String? ?? '',
+        // Stage 9.1: optional diagnostic stage; older engines and
+        // wrong-typed values degrade to empty string.
+        failureStage = _tolerantString(raw['failureStage']),
         reason = raw['reason'] as String? ?? '',
         exitCode = (raw['code'] as num?)?.toInt() ?? 0,
         addr = raw['addr'] as String? ?? '',
@@ -188,6 +191,7 @@ class FirefoxEngineEvent {
   final String name;
   final String message;
   final String failCode;
+  final String failureStage;
   final String reason;
   final int exitCode;
   final String addr;
@@ -253,7 +257,8 @@ class FirefoxEngineEvent {
         return 'login: session not confirmed yet '
             '(attempt $attempt, retrying)';
       case 'failed':
-        return 'engine failed ($failCode): $message';
+        final stage = failureStage.isEmpty ? '' : ' stage=$failureStage';
+        return 'engine failed ($failCode)$stage: $message';
       default:
         return 'engine: $name${message.isEmpty ? '' : ' — $message'}';
     }

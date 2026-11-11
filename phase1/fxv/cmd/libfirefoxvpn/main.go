@@ -131,6 +131,7 @@ func runTunnel() int {
                 _ = emit.Emit(engine.Event{
                         Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
                         Message: "apiProxyTransport", Code: engine.ExitStartup,
+                        FailureStage: engine.FailureStageControlPlaneRouting,
                 })
                 return engine.ExitStartup
         }
@@ -173,7 +174,7 @@ func runTunnel() int {
                         if code, stop := cleanStopIfRequested(); stop {
                                 return code
                         }
-                        _ = emit.Emit(failedFrom(engine.ErrDiscoveryFailed, fferr.ClassifyTransport(err).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken), engine.ExitStartup))
+                        _ = emit.Emit(failedFromStage(engine.ErrDiscoveryFailed, fferr.ClassifyTransport(err).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken), engine.ExitStartup, engine.FailureStageRemoteSettingsDiscovery))
                         return engine.ExitStartup
                 }
                 if code, stop := cleanStopIfRequested(); stop {
@@ -192,10 +193,11 @@ func runTunnel() int {
                                 _ = emit.Emit(engine.Event{
                                         Name: engine.EvFailed, FailCode: engine.ErrNoMatchForCountry,
                                         Message: noMatch.Error(), Code: engine.ExitStartup,
+                                        FailureStage: engine.FailureStageDiscoverySelection,
                                 })
                                 return engine.ExitStartup
                         }
-                        _ = emit.Emit(failedFrom(engine.ErrInternal, fferr.ClassifyTransport(err).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken), engine.ExitInternal))
+                        _ = emit.Emit(failedFromStage(engine.ErrInternal, fferr.ClassifyTransport(err).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken), engine.ExitInternal, engine.FailureStageDiscoverySelection))
                         return engine.ExitInternal
                 }
                 sel = picked
@@ -265,7 +267,7 @@ func runTunnel() int {
                         return engine.ExitQuota
                 }
                 class := classifyGuardian(err, cfg)
-                _ = emit.Emit(failedFrom(engine.ErrPassFetchFailed, class, engine.ExitStartup))
+                _ = emit.Emit(failedFromStage(engine.ErrPassFetchFailed, class, engine.ExitStartup, engine.FailureStageGuardianPass))
                 return engine.ExitStartup
         }
         _ = emit.Emit(engine.Event{
@@ -279,7 +281,7 @@ func runTunnel() int {
         latency, err := controller.Start(ctx, pass)
         if err != nil {
                 class := classifyUpstream(err, cfg)
-                _ = emit.Emit(failedFrom(engine.ErrUpstreamSession, class, engine.ExitStartup))
+                _ = emit.Emit(failedFromStage(engine.ErrUpstreamSession, class, engine.ExitStartup, engine.FailureStageUpstreamSession))
                 return engine.ExitStartup
         }
         host, _ := controller.SessionHost()
@@ -300,6 +302,7 @@ func runTunnel() int {
                 _ = emit.Emit(engine.Event{
                         Name: engine.EvFailed, FailCode: engine.ErrSocksListenFailed,
                         Message: "the SOCKS listener could not be bound", Code: engine.ExitStartup,
+                        FailureStage: engine.FailureStageSocksListener,
                 })
                 return engine.ExitStartup
         }
@@ -365,6 +368,7 @@ func runTunnel() int {
                 _ = emit.Emit(engine.Event{
                         Name: engine.EvFailed, FailCode: engine.ErrRenewalTimeout,
                         Message: "the proxy pass could not be renewed in time", Code: engine.ExitRenewal,
+                        FailureStage: engine.FailureStageGuardianRenewal,
                 })
                 return engine.ExitRenewal
         }
@@ -482,6 +486,13 @@ func failedFrom(failCode string, class fferr.Classified, exit int) engine.Event 
                 retryable := false
                 ev.Retryable = &retryable
         }
+        return ev
+}
+
+// failedFromStage adds the optional, non-secret walk-leg diagnostic.
+func failedFromStage(failCode string, class fferr.Classified, exit int, stage string) engine.Event {
+        ev := failedFrom(failCode, class, exit)
+        ev.FailureStage = stage
         return ev
 }
 
