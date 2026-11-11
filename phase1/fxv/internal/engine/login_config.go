@@ -4,8 +4,6 @@ import (
         "encoding/hex"
         "encoding/json"
         "strings"
-
-        "aethone/fxv/internal/dnsresolver"
 )
 
 // Login mode values. `webchannel` is the only implemented mode; the
@@ -37,7 +35,6 @@ type LoginConfig struct {
         SessionToken    string `json:"sessionToken"`
         VerifyTimeoutMs int64  `json:"verifyTimeoutMs"`
         RetryDelayMs    int64  `json:"retryDelayMs"`
-        DNS             dnsresolver.Config `json:"dns"`
 }
 
 // ParseLoginConfig validates the decoded login config. The token is
@@ -62,11 +59,6 @@ func ParseLoginConfig(raw []byte) (LoginConfig, error) {
         }
         if !isValidSessionToken(cfg.SessionToken) {
                 return cfg, &ConfigError{Detail: "sessionTokenInvalid"}
-        }
-        var dnsErr error
-        cfg.DNS, dnsErr = cfg.DNS.Validate()
-        if dnsErr != nil {
-                return cfg, &ConfigError{Detail: "dnsConfigInvalid"}
         }
         if cfg.VerifyTimeoutMs == 0 {
                 cfg.VerifyTimeoutMs = DefaultVerifyTimeoutMs

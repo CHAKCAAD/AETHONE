@@ -8,7 +8,6 @@ package main
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 )
@@ -79,15 +78,5 @@ func TestDNSProbeEventsParseAsJSON(t *testing.T) {
 	}
 	if ev["domain"] != "example.com" {
 		t.Fatalf("domain = %v", ev["domain"])
-	}
-}
-
-func TestReadOptionalDNSConfig(t *testing.T) {
-	defaultConfig, err := readOptionalDNSConfig(strings.NewReader(""))
-	if err != nil || defaultConfig.Mode != "system" { t.Fatalf("empty stdin default: %+v, %v", defaultConfig, err) }
-	doh, err := readOptionalDNSConfig(strings.NewReader(`{"dns":{"mode":"doh","provider":"google"}}`))
-	if err != nil || doh.Mode != "doh" || doh.Provider != "google" { t.Fatalf("DoH envelope: %+v, %v", doh, err) }
-	if _, err := readOptionalDNSConfig(strings.NewReader(`{"dns":{"mode":"doh","provider":"custom"}}`)); err == nil {
-		t.Fatal("malformed custom DoH config must fail")
 	}
 }

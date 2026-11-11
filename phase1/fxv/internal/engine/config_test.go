@@ -161,15 +161,3 @@ func TestConfigLineBound(t *testing.T) {
 		t.Fatal("oversized config line must fail")
 	}
 }
-
-func TestConfigDNSDefaultAndValidation(t *testing.T) {
-	c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"a"}}`)
-	v, err := c.Validate()
-	if err != nil { t.Fatalf("default DNS config must remain compatible: %v", err) }
-	if v.DNS.Mode != "system" { t.Fatalf("DNS default = %q, want system", v.DNS.Mode) }
-
-	bad := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","dns":{"mode":"doh","provider":"custom","endpoint":"http://dns.example/dns-query"},"auth":{"accessToken":"a"}}`)
-	if _, err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "dnsConfigInvalid") {
-		t.Fatalf("invalid DoH endpoint must be rejected as dnsConfigInvalid, got %v", err)
-	}
-}

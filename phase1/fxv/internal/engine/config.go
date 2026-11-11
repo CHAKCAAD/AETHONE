@@ -7,8 +7,6 @@ import (
 	"net"
 	"net/url"
 	"strings"
-
-	"aethone/fxv/internal/dnsresolver"
 )
 
 // maxConfigLine bounds the single stdin JSON line (1 MiB, the phase-1
@@ -40,7 +38,6 @@ type Config struct {
 	ExitTimeoutMs      int64      `json:"exitTimeoutMs"`
 	LogLevel           string     `json:"logLevel"`
 	Auth               AuthConfig `json:"auth"`
-	DNS                dnsresolver.Config `json:"dns"`
 
 	// cfgLine is the raw buffer reference, dropped (nil-ed) after the
 	// parse so the tokens do not linger in a second copy.
@@ -144,11 +141,6 @@ func (c Config) Validate() (Config, error) {
 	}
 	if c.LogLevel == "" {
 		c.LogLevel = "normal"
-	}
-	var dnsErr error
-	c.DNS, dnsErr = c.DNS.Validate()
-	if dnsErr != nil {
-		return c, &ConfigError{Detail: "dnsConfigInvalid"}
 	}
 	return c, nil
 }
