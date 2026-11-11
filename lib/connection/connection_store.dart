@@ -348,7 +348,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
 
   void setFirefoxDnsCustom(String endpoint, String bootstrapIps) {
     final nextIps = bootstrapIps
-        .split(RegExp(r'[\\s,;]+'))
+        .split(RegExp(r'[\s,;]+'))
         .map((v) => v.trim())
         .where((v) => v.isNotEmpty)
         .take(8)
