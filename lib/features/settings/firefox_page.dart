@@ -150,6 +150,17 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
           ),
         ),
 
+        // ---- Section: process-scoped Firefox DNS ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSwap1,
+          title: strings.secFirefoxDns,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: _FirefoxDnsCard(store: store),
+        ),
+
         // ---- Section: the data-plane transport ----
         SizedBox(height: 24 * s),
         SubSectionHeading(
@@ -190,5 +201,106 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
     // Locale-agnostic HH:mm — the label is informational only.
     return '${two(d.hour)}:${two(d.minute)}'
         '${loc.languageCode == 'fa' ? '، ' : ' '}${d.year}-${two(d.month)}-${two(d.day)}';
+  }
+}
+
+
+/// Firefox-only DNS preferences. The Go engine consumes these settings;
+/// the embedded WebView login remains on Android WebView networking until
+/// its app-scoped proxy bridge is implemented and verified.
+class _FirefoxDnsCard extends StatefulWidget {
+  const _FirefoxDnsCard({required this.store});
+
+  final ConnectionStore store;
+
+  @override
+  State<_FirefoxDnsCard> createState() => _FirefoxDnsCardState();
+}
+
+class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
+  late final TextEditingController _endpoint = TextEditingController(
+    text: widget.store.firefoxDnsEndpoint,
+  );
+  late final TextEditingController _bootstrap = TextEditingController(
+    text: widget.store.firefoxDnsBootstrapIps.join(', '),
+  );
+
+  @override
+  void dispose() {
+    _endpoint.dispose();
+    _bootstrap.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final store = widget.store;
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final doh = store.firefoxDnsMode == 'doh';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SettingLabel(strings.firefoxDnsMode),
+        SizedBox(height: 10 * s),
+        SettingPills<String>(
+          keyId: 'firefox-dns-mode',
+          options: [
+            ('system', strings.firefoxDnsSystem),
+            ('doh', strings.firefoxDnsDoH),
+          ],
+          selected: store.firefoxDnsMode,
+          onSelect: store.setFirefoxDnsMode,
+        ),
+        if (doh) ...[
+          SizedBox(height: 16 * s),
+          SettingLabel(strings.firefoxDnsProvider),
+          SizedBox(height: 10 * s),
+          SettingPills<String>(
+            keyId: 'firefox-dns-provider',
+            options: const [
+              ('cloudflare', 'Cloudflare'),
+              ('google', 'Google'),
+              ('quad9', 'Quad9'),
+              ('custom', 'Custom'),
+            ],
+            selected: store.firefoxDnsProvider,
+            onSelect: store.setFirefoxDnsProvider,
+          ),
+          if (store.firefoxDnsProvider == 'custom') ...[
+            SizedBox(height: 16 * s),
+            SettingField(
+              keyId: 'firefox-dns-endpoint',
+              label: strings.firefoxDnsEndpoint,
+              hint: 'https://dns.example/dns-query',
+              initial: _endpoint.text,
+              onChanged: (value) => _endpoint.text = value,
+            ),
+            SizedBox(height: 12 * s),
+            SettingField(
+              keyId: 'firefox-dns-bootstrap',
+              label: strings.firefoxDnsBootstrap,
+              hint: '203.0.113.10, 2001:db8::10',
+              initial: _bootstrap.text,
+              onChanged: (value) => _bootstrap.text = value,
+            ),
+            SizedBox(height: 12 * s),
+            SettingActionButton(
+              keyId: 'firefox-dns-save',
+              label: strings.firefoxDnsSave,
+              onTap: () {
+                store.setFirefoxDnsCustom(_endpoint.text, _bootstrap.text);
+                FocusScope.of(context).unfocus();
+              },
+            ),
+          ],
+        ],
+        const SubSectionDivider(),
+        SettingInfoText(strings.firefoxDnsDesc),
+        const SubSectionDivider(),
+        SettingInfoText(strings.firefoxDnsWebViewNote),
+      ],
+    );
   }
 }
