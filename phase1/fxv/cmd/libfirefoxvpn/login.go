@@ -42,6 +42,7 @@ import (
         vpnclient "firefox-vpn-client"
 
         "aethone/fxv/internal/engine"
+        "aethone/fxv/internal/dnsresolver"
         "aethone/fxv/internal/fferr"
         "aethone/fxv/internal/redact"
 )
@@ -93,6 +94,14 @@ func runLogin() int {
                 _ = emit.Emit(engine.Event{
                         Name: engine.EvFailed, FailCode: failCode,
                         Message: message, Code: engine.ExitStartup,
+                })
+                return engine.ExitStartup
+        }
+
+        if _, dnsErr := dnsresolver.Install(cfg.DNS); dnsErr != nil {
+                _ = emit.Emit(engine.Event{
+                        Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
+                        Message: "dnsConfigInvalid", Code: engine.ExitStartup,
                 })
                 return engine.ExitStartup
         }
