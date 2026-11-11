@@ -10,24 +10,34 @@ workspace.
 
 ```
 repository : https://github.com/UjuiUjuMandan/firefox-vpn-client
-commit     : 55ad91a2ccea1c93e69c82a08a7681e279884db5
-subject    : fix(fxa): present Firefox ClientHello on the control plane
-date       : 2026-11-06
+commit     : c1c5d895a2c52c69a9e06e672eae5074c9cc3fa1
+subject    : chore: update pinned Firefox identity (#7)
+date       : 2026-11-10
 ```
+
+### Re-pin history
+
+| Date | Pin | Delta vs. previous pin |
+|---|---|---|
+| 2026-11-06 | `55ad91a2ccea1c93e69c82a08a7681e279884db5` | the original provenance base (uTLS Firefox ClientHello fix) |
+| 2026-11-11 | `c1c5d895a2c52c69a9e06e672eae5074c9cc3fa1` | `firefox_identity.go` only: `defaultFirefoxVersion` "159.0" → "160.0"; upstream `README.md` added and upstream `.gitignore` extended (docs only). Verified by full-tree `git diff 55ad91a..c1c5d89` — **zero** other Go-code changes; the library surface used below (`FxaOAuthToken`, `FxaRefreshToken`, `FetchProxyPass`, `FetchServerList`, `NewControlPlaneTransport`, the Guardian sentinels) is byte-identical. Owner-ordered update, analysis in `docs/firefox-vpn/core-update-2026-11-11.md`. |
 
 The pristine upstream copy is FETCHED, never committed
 (`phase1/scripts/fetch_upstream.sh` verifies `git rev-parse HEAD` against
 the pin and writes `phase1/firefox-vpn-client.SHA256SUMS`; the directory
 itself is gitignored). `go.mod`'s `replace` directive binds the module to
 that local copy. **Re-fetching with a different commit is forbidden** —
-the pin is the provenance base of every adapted piece below.
+the pin is the provenance base of every adapted piece below. Changing
+the pin itself is an owner decision recorded in the re-pin history above.
 
 ## LICENSE STATUS — UNRESOLVED (read this before distributing anything)
 
 The upstream repository at the pinned commit contains **NO license
 file, NO COPYING, NO NOTICE, and NO copyright/license headers in any
 source file** (verified 2026-11-09 by direct inspection of the full
-tree at the pin). Absent a license, no redistribution, modification or
+tree at the pin, and re-verified 2026-11-11 at `c1c5d89` — the delta
+since `55ad91a` added only a README, a .gitignore entry and a version
+constant, still no license). Absent a license, no redistribution, modification or
 relicensing rights exist by default ("all rights reserved" is the
 default copyright posture).
 

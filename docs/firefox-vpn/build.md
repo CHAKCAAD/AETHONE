@@ -14,7 +14,7 @@
 | Go | 1.25.0 (asserted by the script) |
 | Android NDK | **28.2.13676358 (r28c)** — `source.properties` verified |
 | Compilers (API 34) | `aarch64-linux-android34-clang` · `armv7a-linux-androideabi34-clang` (GOARM=7) · `x86_64-linux-android34-clang` |
-| Upstream core | `55ad91a2ccea1c93e69c82a08a7681e279884db5` |
+| Upstream core | `c1c5d895a2c52c69a9e06e672eae5074c9cc3fa1` (re-pinned 2026-11-11, see [core-update-2026-11-11.md](core-update-2026-11-11.md)) |
 
 The NDK is located via `ANDROID_NDK_HOME` / `NDK_HOME` /
 `ANDROID_HOME/ndk/<pin>` / `ANDROID_SDK_ROOT/ndk/<pin>`. A missing
@@ -27,13 +27,16 @@ phase1/scripts/fetch_upstream.sh
 ```
 
 * clones `https://github.com/UjuiUjuMandan/firefox-vpn-client`
-* checks out `55ad91a2ccea1c93e69c82a08a7681e279884db5`
+* checks out `c1c5d895a2c52c69a9e06e672eae5074c9cc3fa1`
 * asserts `git rev-parse HEAD` equals the pin
 * writes `phase1/firefox-vpn-client.SHA256SUMS` (the tracked manifest)
 * the vendored copy itself is **gitignored** — license UNRESOLVED
   (`phase1/fxv/ORIGIN.md`), so upstream code never enters git.
 
-Re-fetching with a different commit is forbidden.
+Re-fetching with a different commit is forbidden. Changing the pin
+itself is an owner decision recorded in `fxv/ORIGIN.md`'s re-pin
+history (last: 2026-11-11, `55ad91a2` -> `c1c5d89`,
+`docs/firefox-vpn/core-update-2026-11-11.md`).
 
 ## 3. Build the engine
 
@@ -108,3 +111,9 @@ the owner performs it in the device-acceptance phase.
 `go test ./...` / `go vet ./...` — recorded green (85/85) on
 2026-11-09 in the prior session. Corrective session status:
 **NOT RUN — OWNER REQUEST**.
+
+Re-run 2026-11-11 on `update/firefox-vpn-core` (upstream re-pinned to
+`c1c5d89`, Firefox identity 160.0): `go vet` PASS, `go test` **98/98
+PASS** (7 packages), `go build` PASS, and the pinned upstream module's
+own tests PASS — evidence table in
+[core-update-2026-11-11.md](core-update-2026-11-11.md) §4.

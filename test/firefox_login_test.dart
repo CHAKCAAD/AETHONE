@@ -145,8 +145,8 @@ void main() {
       expect(ua, startsWith('Mozilla/5.0 (Android 16; Mobile;'));
       // The pinned identity (the same major the engine's control plane
       // presents — one identity everywhere).
-      expect(ua, contains('rv:159.0'));
-      expect(ua, contains('Firefox/159.0'));
+      expect(ua, contains('rv:160.0'));
+      expect(ua, contains('Firefox/160.0'));
     });
   });
 

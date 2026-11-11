@@ -22,7 +22,7 @@ Firefox Login Manager (WebView + WebChannel)
 Go Child Process (libfirefoxvpn.so)
            |
            v
-Pinned Firefox VPN Core (upstream 55ad91a2…)
+Pinned Firefox VPN Core (upstream c1c5d895…)
            |
            v
 Firefox / Mozilla Control Plane (api.accounts.firefox.com,

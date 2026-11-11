@@ -3,10 +3,15 @@
 # Firefox VPN engine (phase1/fxv) and verify it bit-exactly.
 #
 #   upstream : https://github.com/UjuiUjuMandan/firefox-vpn-client
-#   pin      : 55ad91a2ccea1c93e69c82a08a7681e279884db5
-#               ("fix(fxa): present Firefox ClientHello on the control
-#                plane", 2026-11-06) — the provenance base recorded in
-#               fxv/ORIGIN.md and docs/FIREFOX_VPN_ENGINE.md.
+#   pin      : c1c5d895a2c52c69a9e06e672eae5074c9cc3fa1
+#               ("chore: update pinned Firefox identity (#7)",
+#                2026-11-10) — the provenance base recorded in
+#                fxv/ORIGIN.md and docs/FIREFOX_VPN_ENGINE.md.
+#
+#               Re-pinned 2026-11-11 by the owner's order from
+#                55ad91a2ccea1c93e69c82a08a7681e279884db5 — the delta
+#                analysis and verification live in
+#                docs/firefox-vpn/core-update-2026-11-11.md.
 #
 # The pristine copy lands at phase1/firefox-vpn-client/ (GITIGNORED —
 # the upstream declares NO license, so its code is never committed to
@@ -21,7 +26,7 @@
 set -euo pipefail
 
 UPSTREAM_URL="https://github.com/UjuiUjuMandan/firefox-vpn-client.git"
-UPSTREAM_PIN="55ad91a2ccea1c93e69c82a08a7681e279884db5"
+UPSTREAM_PIN="c1c5d895a2c52c69a9e06e672eae5074c9cc3fa1"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PHASE1_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"

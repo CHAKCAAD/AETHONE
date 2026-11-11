@@ -19,8 +19,9 @@ build matrix exactly; the pins are the phase-0 evidence values:
 | host `linux-amd64` | pure Go — NOT a deliverable; it exists so the Dart integration/lifecycle tests run the REAL engine binary on the host | Go 1.25.0 |
 
 Every build uses `-trimpath`. Upstream source pinned to
-`55ad91a2ccea1c93e69c82a08a7681e279884db5` (`replace` directive; the
-script asserts it before building).
+`c1c5d895a2c52c69a9e06e672eae5074c9cc3fa1` (`replace` directive; the
+script asserts it before building; owner-ordered re-pin 2026-11-11, see
+`docs/firefox-vpn/core-update-2026-11-11.md`).
 
 ### Verified build outputs (SHA256, from `build/SHA256SUMS.txt`)
 

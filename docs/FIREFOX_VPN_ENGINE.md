@@ -17,8 +17,10 @@ Dart host runs it with `dart:io Process.start` (on Android the same
 fork/exec `ProcessBuilder` uses), argv bare, environment empty.
 
 Module: `aethone/fxv` (Go 1.25.0). Upstream core pinned to
-`55ad91a2ccea1c93e69c82a08a7681e279884db5` (2026-11-06, "fix(fxa):
-present Firefox ClientHello on the control plane") via a `replace`
+`c1c5d895a2c52c69a9e06e672eae5074c9cc3fa1` (2026-11-10, "chore:
+update pinned Firefox identity (#7)"; owner-ordered re-pin 2026-11-11
+from `55ad91a2ccea1c93e69c82a08a7681e279884db5` — delta analysis in
+`docs/firefox-vpn/core-update-2026-11-11.md`) via a `replace`
 directive to the vendored pristine copy at `phase1/firefox-vpn-client/`.
 Provenance of every adapted piece: `fxv/ORIGIN.md`.
 

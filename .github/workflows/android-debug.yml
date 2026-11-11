@@ -25,7 +25,9 @@
 #     scope (the owner did not request it).
 #
 # Containment (upstream license UNRESOLVED — phase1/fxv/ORIGIN.md): this
-# workflow lives on integration/firefox-vpn-debug, delivers expiring
+# workflow lives on integration/firefox-vpn-debug and
+#     update/firefox-vpn-core (the 2026-11-11 owner-ordered core re-pin
+#     branch, same containment rules), delivers expiring
 # Actions artifacts only (14 days), and creates nothing public.
 #
 # Pins mirror .github/workflows/native-ci.yml (the project's frozen
@@ -48,6 +50,7 @@ on:
   push:
     branches:
       - integration/firefox-vpn-debug
+      - update/firefox-vpn-core
 
 permissions:
   contents: read
