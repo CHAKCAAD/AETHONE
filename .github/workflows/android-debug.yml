@@ -35,18 +35,16 @@
 # =============================================================================
 name: AETHONE DA — Firefox Debug APK
 
-# Trigger note (recorded 2026-11-09): GitHub indexes workflow_dispatch
-# targets from the DEFAULT branch only (ci-bootstrap/v4.4), where this
-# file deliberately does NOT live (the phase-2 containment keeps the
-# default branch untouched). The runnable path on THIS branch is the
-# push trigger below — scoped to exactly integration/firefox-vpn-debug
-# so nothing else can fire it. workflow_dispatch stays declared for
-# manual runs once this branch is promoted (owner decision, after the
-# device test) or the file reaches the default branch.
+# Branch-scoped debug builds. Pushes to the dedicated Firefox
+# Guardian/Psiphon feature branch and the existing integration branch
+# may build this DA debug APK. The workflow_dispatch declaration is kept
+# for installations where this workflow is exposed from the default
+# branch; no default-branch change is required for feature-branch CI.
 on:
   workflow_dispatch:
   push:
     branches:
+      - feature/firefox-guardian-psiphon-bootstrap
       - integration/firefox-vpn-debug
 
 permissions:
