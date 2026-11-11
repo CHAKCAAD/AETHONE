@@ -38,7 +38,9 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
     super.initState();
     // The honesty-first refreshes: the live country set (labeled live vs
     // cached) and the vault-backed signed-in state.
-    widget.store.refreshFirefoxLocations();
+    widget.store.loadFirefoxDnsSettings().then((_) {
+      if (mounted) widget.store.refreshFirefoxLocations();
+    });
     widget.store.refreshFirefoxAccount();
   }
 
@@ -285,6 +287,7 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
           if (store.firefoxDnsProvider == 'custom') ...[
             SizedBox(height: 16 * s),
             SettingField(
+              key: ValueKey('firefox-dns-endpoint-${_endpoint.text}'),
               keyId: 'firefox-dns-endpoint',
               label: strings.firefoxDnsEndpoint,
               hint: 'https://dns.example/dns-query',
@@ -293,9 +296,10 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
             ),
             SizedBox(height: 12 * s),
             SettingField(
+              key: ValueKey('firefox-dns-bootstrap-${_bootstrap.text}'),
               keyId: 'firefox-dns-bootstrap',
               label: strings.firefoxDnsBootstrap,
-              hint: '203.0.113.10, 2001:db8::10',
+              hint: 'Optional IP addresses',
               initial: _bootstrap.text,
               onChanged: (value) => _bootstrap.text = value,
             ),
