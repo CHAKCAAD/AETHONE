@@ -1,9 +1,11 @@
 # Firefox DNS — process-scoped resolver
 
-Status: Go resolver backend is being integrated on the dedicated
-Firefox feature branch. Flutter settings/persistence and the Android
-WebView proxy bridge are separate follow-up steps; until those land,
-the UI does not claim that WebView login follows the selected DoH mode.
+Status: process-scoped Go DoH backend + Flutter DNS settings/persistence
+are wired on `feature/firefox-guardian-psiphon-bootstrap`. The embedded
+Android WebView login is NOT covered yet: it still uses WebView's own
+network stack. The settings UI states this limitation explicitly.
+The app does not claim end-to-end DoH coverage until an app-scoped
+WebView proxy bridge is implemented and device-tested.
 
 ## Scope
 
@@ -65,6 +67,9 @@ at one hour). Negative answers and zero-TTL answers are not cached.
   engine and reports A/AAAA results for FxA, Remote Settings and Guardian.
 - Host tests are not evidence that every Android ABI resolves over the
   actual mobile network. Per-ABI runtime evidence still requires a device.
+- Flutter settings persist the mode, provider, custom HTTPS endpoint and
+  optional bootstrap IPs in SharedPreferences. The selected config is sent
+  to the tunnel, login, discovery and DNS-probe Go roles over stdin.
 - The login WebView is NOT yet covered by this Go resolver. Its next step
   uses an app-scoped AndroidX WebView proxy override plus a loopback
   CONNECT proxy; it must await proxy activation and clear the override
