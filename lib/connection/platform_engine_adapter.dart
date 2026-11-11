@@ -533,7 +533,7 @@ fake_ip = true
 /// MethodChannel (see MainActivity.kt / AethoneVpnService.kt) and to Aether
 /// over dart:ffi. One active connection at a time; disconnect always cleans
 /// BOTH engines even if connect failed halfway.
-class PlatformEngineAdapter implements EngineAdapter {
+class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
   PlatformEngineAdapter({
     Duration? statsInterval,
     this._coreFactory,
