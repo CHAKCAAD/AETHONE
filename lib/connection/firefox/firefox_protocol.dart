@@ -49,6 +49,7 @@ class FirefoxEngineConfig {
     this.transport = 'h2',
     this.upstreamOverride = '',
     this.logLevel = 'normal',
+    this.dns = const {'mode': 'system'},
   });
 
   /// Loopback listener ONLY (the engine refuses anything else).
@@ -72,6 +73,9 @@ class FirefoxEngineConfig {
 
   final String logLevel;
 
+  /// Process-scoped DNS policy; defaults to Android System DNS.
+  final Map<String, dynamic> dns;
+
   Map<String, dynamic> toJson() => {
         'version': 1,
         'socksListen': socksListen,
@@ -80,6 +84,7 @@ class FirefoxEngineConfig {
         'transport': transport,
         if (upstreamOverride.isNotEmpty) 'upstreamOverride': upstreamOverride,
         'logLevel': logLevel,
+        'dns': dns,
         'auth': {
           'accessToken': auth.accessToken,
           'refreshToken': auth.refreshToken,
