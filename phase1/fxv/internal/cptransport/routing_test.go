@@ -126,6 +126,36 @@ func TestAllowlistRoutesOnlyTheExactGuardianEntry(t *testing.T) {
 	}
 }
 
+func TestBootstrapAllowlistRoutesOnlyPinnedRemoteSettingsAndGuardian(t *testing.T) {
+	direct := &recordingRoundTripper{name: "direct"}
+	proxied := &recordingRoundTripper{name: "proxied"}
+	allow, err := NewBootstrapAllowlist(
+		"https://vpn.mozilla.org",
+		"https://firefox.settings.services.mozilla.com",
+	)
+	if err != nil {
+		t.Fatalf("bootstrap allowlist: %v", err)
+	}
+	rt := NewRoutingRoundTripper(direct, proxied, allow)
+	cases := []struct {
+		name, method, target, want string
+	}{
+		{"Guardian token", http.MethodGet, "https://vpn.mozilla.org/api/v1/fpn/token", "proxied"},
+		{"Remote Settings server list", http.MethodGet, "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records", "proxied"},
+		{"other Remote Settings collection", http.MethodGet, "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/whats-new/records", "direct"},
+		{"Remote Settings wrong method", http.MethodPost, "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records", "direct"},
+		{"FxA remains direct", http.MethodGet, "https://api.accounts.firefox.com/v1/account/keys", "direct"},
+		{"non-allowlisted Guardian path", http.MethodGet, "https://vpn.mozilla.org/api/v1/fpn/status", "direct"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := legOf(t, rt, mustRequest(t, tc.method, tc.target)); got != tc.want {
+				t.Fatalf("%s %s rode %q (want %q)", tc.method, tc.target, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestBootstrapUnavailableMeansEverythingDirect(t *testing.T) {
 	direct := &recordingRoundTripper{name: "direct"}
 	allow, err := NewGuardianAllowlist("https://vpn.mozilla.org",

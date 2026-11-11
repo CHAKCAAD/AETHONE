@@ -18,13 +18,11 @@
 //	         +-- bootstrap unavailable (proxied == nil): Direct
 //	         +-- bootstrap ready: the local proxy
 //
-// Allowlist precision (mission §5-3): the host is the REAL host of the
-// engine's Guardian base URL (never a guessed name), and the method +
-// path are matched too — never the host alone. The initial execution
-// path carries exactly ONE entry, GET /api/v1/fpn/token (the pinned
-// client's FetchProxyPass — the initial authorization AND the renewal
-// walk; /api/v1/fpn/status and /api/v1/fpn/activate are NOT called by
-// the engine and stay OUT of the allowlist until they really are).
+// Allowlist precision: only Guardian GET /api/v1/fpn/token on the
+// configured Guardian host and Remote Settings GET
+// /v1/buckets/main/collections/vpn-serverlist/records on the pinned
+// Mozilla origin are admitted. FxA, other Remote Settings collections,
+// and all other Guardian paths remain DIRECT.
 //
 // The doubled-leading-slash form of the allowed path is matched as
 // well: the Arman reference's CDN-edge evasion rewrites /api/v1/fpn/
@@ -74,14 +72,19 @@ type AllowedRequest struct {
 }
 
 // GuardianAllowlist is the allowlisted set for the Guardian base URL.
-type GuardianAllowlist struct {
-	// host is the Guardian base URL's hostname (lower-cased at build).
-	host string
-	// port is the base URL's explicit port, or "" for the scheme
-	// default (an https base with no port matches the https default).
-	port string
-	// allowed carries the method+path entries (never empty).
+type allowlistRule struct {
+	host    string
+	port    string
 	allowed []AllowedRequest
+}
+
+// GuardianAllowlist contains only explicitly approved control-plane
+// endpoints for one bootstrap attempt.
+type GuardianAllowlist struct {
+	host       string
+	port       string
+	allowed    []AllowedRequest
+	additional []allowlistRule
 }
 
 // NewGuardianAllowlist derives the allowlist from the engine's REAL
@@ -103,33 +106,71 @@ func NewGuardianAllowlist(guardianBase string, allowed ...AllowedRequest) (Guard
 	}, nil
 }
 
-// Redacted renders the allowlist for logs/diagnostics — host + entries
-// only, never credentials or query strings.
+// NewBootstrapAllowlist adds only the pinned public Remote Settings
+// server-list endpoint to the exact Guardian token allowlist.
+func NewBootstrapAllowlist(guardianBase, remoteSettingsBase string) (GuardianAllowlist, error) {
+	allow, err := NewGuardianAllowlist(guardianBase,
+		AllowedRequest{Method: http.MethodGet, Path: "/api/v1/fpn/token"})
+	if err != nil {
+		return GuardianAllowlist{}, err
+	}
+	parsed, err := url.Parse(strings.TrimSpace(remoteSettingsBase))
+	if err != nil || parsed.Host == "" || !strings.EqualFold(parsed.Scheme, "https") {
+		return GuardianAllowlist{}, fmt.Errorf("remote settings base must be an https origin")
+	}
+	allow.additional = append(allow.additional, allowlistRule{
+		host: strings.ToLower(parsed.Hostname()),
+		port: parsed.Port(),
+		allowed: []AllowedRequest{{
+			Method: http.MethodGet,
+			Path: "/v1/buckets/main/collections/vpn-serverlist/records",
+		}},
+	})
+	return allow, nil
+}
+
+// Redacted renders approved hosts and paths only — never credentials
+// or query strings.
 func (a GuardianAllowlist) Redacted() string {
-	entries := make([]string, len(a.allowed))
-	for i, r := range a.allowed {
-		entries[i] = r.Method + " " + r.Path
+	format := func(host, port string, entries []AllowedRequest) string {
+		parts := make([]string, len(entries))
+		for i, r := range entries {
+			parts[i] = r.Method + " " + r.Path
+		}
+		if port != "" {
+			host += ":" + port
+		}
+		return host + "=[" + strings.Join(parts, ", ") + "]"
 	}
-	host := a.host
-	if a.port != "" {
-		host += ":" + a.port
+	parts := []string{format("guardian="+a.host, a.port, a.allowed)}
+	for _, rule := range a.additional {
+		parts = append(parts, format("control="+rule.host, rule.port, rule.allowed))
 	}
-	return fmt.Sprintf("guardian=%s allowlist=[%s]", host, strings.Join(entries, ", "))
+	return strings.Join(parts, " ")
 }
 
 // matches reports whether req targets the allowlisted Guardian host
 // with an allowlisted method+path.
 func (a GuardianAllowlist) matches(req *http.Request) bool {
-	if req == nil || req.URL == nil {
-		return false
+	if matchesAllowlistRule(req, allowlistRule{
+		host: a.host, port: a.port, allowed: a.allowed,
+	}) {
+		return true
 	}
-	if !strings.EqualFold(req.URL.Hostname(), a.host) {
+	for _, rule := range a.additional {
+		if matchesAllowlistRule(req, rule) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesAllowlistRule(req *http.Request, rule allowlistRule) bool {
+	if req == nil || req.URL == nil || !strings.EqualFold(req.URL.Hostname(), rule.host) {
 		return false
 	}
 	reqPort := req.URL.Port()
 	if reqPort == "" {
-		// Scheme default: https targets carry no explicit port and
-		// match an https base's default; http targets an http base's.
 		switch strings.ToLower(req.URL.Scheme) {
 		case "https":
 			reqPort = "443"
@@ -137,9 +178,9 @@ func (a GuardianAllowlist) matches(req *http.Request) bool {
 			reqPort = "80"
 		}
 	}
-	wantPort := a.port
+	wantPort := rule.port
 	if wantPort == "" {
-		wantPort = "443" // the engine's Guardian base is https-only (config validation)
+		wantPort = "443"
 	}
 	if reqPort != wantPort {
 		return false
@@ -148,12 +189,11 @@ func (a GuardianAllowlist) matches(req *http.Request) bool {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	// The doubled-leading-slash tolerance (see the package comment).
 	if strings.HasPrefix(path, "//") {
 		path = path[1:]
 	}
-	for _, r := range a.allowed {
-		if req.Method == r.Method && path == r.Path {
+	for _, allowed := range rule.allowed {
+		if req.Method == allowed.Method && path == allowed.Path {
 			return true
 		}
 	}
@@ -176,10 +216,9 @@ func NewRoutingRoundTripper(direct, proxied http.RoundTripper, allowlist Guardia
 	return &RoutingRoundTripper{direct: direct, proxied: proxied, allowlist: allowlist}
 }
 
-// RoundTrip routes per the allowlist: allowlisted Guardian requests
-// ride the proxied leg when one is configured; everything else — FxA,
-// Remote Settings, non-allowlisted paths on the Guardian host, and
-// every redirect hop that leaves the allowlist — rides the direct leg.
+// RoundTrip routes only the explicitly allowlisted Guardian token and
+// Remote Settings server-list requests through the local proxy. FxA and
+// every other request remain direct; redirects are re-evaluated per hop.
 func (t *RoutingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if t.proxied != nil && t.allowlist.matches(req) {
 		return t.proxied.RoundTrip(req)

@@ -127,8 +127,8 @@ func runTunnel() int {
 
         // guardian-bootstrap Stage 5: the selective control-plane routing.
         // MUST precede the FIRST control-plane request (discovery below is
-        // Remote Settings — it stays DIRECT either way; only the allowlisted
-        // Guardian requests would ride the bootstrap leg). Empty apiProxy =
+        // Remote Settings and Guardian use the exact bootstrap allowlist
+        // when apiProxy is supplied. Empty apiProxy =
         // no change at all (the pinned default direct uTLS transport).
         if err := installGuardianRouting(cfg, log); err != nil {
                 _ = emit.Emit(engine.Event{
@@ -158,6 +158,16 @@ func runTunnel() int {
                 }
         }
 
+        // Direct Remote Settings discovery + Guardian authorization share
+        // the four-second bootstrap decision window. A local bootstrap
+        // proxy gets a separate bounded window for the same requests.
+        controlPlaneBudget := 4 * time.Second
+        if cfg.ApiProxy != "" {
+                controlPlaneBudget = 55 * time.Second
+        }
+        controlCtx, cancelControl := context.WithTimeout(ctx, controlPlaneBudget)
+        defer cancelControl()
+
         var (
                 proxyURL *url.URL
                 sel      discovery.Selection
@@ -172,7 +182,7 @@ func runTunnel() int {
                 log.Infof("upstream override: %s", cfg.UpstreamOverride)
         } else {
                 started := time.Now()
-                fetched, err := vpnclient.FetchServerList(ctx)
+                fetched, err := vpnclient.FetchServerList(controlCtx)
                 if err != nil {
                         if code, stop := cleanStopIfRequested(); stop {
                                 return code
@@ -257,7 +267,8 @@ func runTunnel() int {
         })
         defer controller.Close()
 
-        pass, err := controller.AcquireInitialPass(ctx)
+        pass, err := controller.AcquireInitialPass(controlCtx)
+        cancelControl()
         if err != nil {
                 if code, stop := cleanStopIfRequested(); stop {
                         return code

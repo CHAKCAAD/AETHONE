@@ -17,6 +17,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -126,9 +127,40 @@ func installTestControlPlane(t *testing.T) {
 	vpnclient.SetControlPlaneTransport(&http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	})
+	oldFetch := fetchRemoteSettings
+	fetchRemoteSettings = func(context.Context) error { return nil }
 	t.Cleanup(func() {
+		fetchRemoteSettings = oldFetch
 		vpnclient.SetControlPlaneTransport(vpnclient.NewControlPlaneTransport())
 	})
+}
+
+func TestGuardianProbeRemoteSettingsTimeoutHasItsOwnStage(t *testing.T) {
+	installTestControlPlane(t)
+	oldFetch := fetchRemoteSettings
+	fetchRemoteSettings = func(ctx context.Context) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	t.Cleanup(func() { fetchRemoteSettings = oldFetch })
+
+	events, code := captureProbe(t, probeConfigLine("https://vpn.mozilla.org", ""))
+	if code != engine.ExitStartup {
+		t.Fatalf("exit = %d (want startup failure)", code)
+	}
+	failed := eventNamed(events, "failed")
+	if failed == nil {
+		t.Fatalf("no failed event: %v", events)
+	}
+	if failed["failureStage"] != "remoteSettingsDiscovery" {
+		t.Fatalf("failureStage = %v (want remoteSettingsDiscovery)", failed["failureStage"])
+	}
+	if failed["failCode"] != "timeout" {
+		t.Fatalf("failCode = %v (want timeout)", failed["failCode"])
+	}
+	if eventNamed(events, "passAcquired") != nil {
+		t.Fatal("Guardian must not be attempted after Remote Settings failed")
+	}
 }
 
 func TestGuardianProbeClassifiesReal451(t *testing.T) {
@@ -294,6 +326,7 @@ func (cr *connectRecorder) saw(target string) bool {
 }
 
 func TestGuardianProbeRoutesThroughTheLocalProxyWithVerifiedTLS(t *testing.T) {
+	installTestControlPlane(t) // Stub Remote Settings; the Guardian request is still proxied below.
 	// The full Stage-5 wiring proof at the engine level: the probe's
 	// FetchProxyPass traverses the local proxy (CONNECT recorded) and
 	// the TLS handshake against the Guardian double is VERIFIED through

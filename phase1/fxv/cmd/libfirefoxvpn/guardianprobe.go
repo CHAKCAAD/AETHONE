@@ -1,9 +1,8 @@
-// The --guardian-probe role (guardian-bootstrap Stage 5): a LIGHTWEIGHT
-// engine run that performs EXACTLY the initial Guardian authorization
-// walk of the tunnel role — FxA same-account recovery + FetchProxyPass
-// (GET /api/v1/fpn/token) — and reports the classified outcome, with
-// no Remote-Settings discovery, no upstream session, and no SOCKS
-// listener. It is the real-request vehicle for the Dart host's two
+// The --guardian-probe role performs Remote Settings server-list
+// discovery followed by Guardian FetchProxyPass (including same-account
+// recovery). Both share one Direct budget; with apiProxy set, those exact
+// two control-plane requests use the local bootstrap proxy. No upstream
+// session or SOCKS listener is created. It is the real-request vehicle for the Dart host's two
 // Stage-4 seams:
 //
 //	GuardianDirectAttempt          --guardian-probe, NO apiProxy — the
@@ -39,7 +38,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"time"
@@ -51,14 +49,12 @@ import (
 	"aethone/fxv/internal/upstream"
 )
 
-// guardianTokenPath is the ONE endpoint the engine's execution path
-// really calls on the Guardian host (Stage 1's source-verified table):
-// the pinned client's FetchProxyPass — the initial authorization AND
-// the renewal walk. /api/v1/fpn/status and /api/v1/fpn/activate are
-// NOT called by this engine and stay out of the allowlist (mission
-// §5-3: only endpoints confirmed in the real execution path).
-var guardianAllowlistEntries = []cptransport.AllowedRequest{
-	{Method: http.MethodGet, Path: "/api/v1/fpn/token"},
+const remoteSettingsBaseURL = "https://firefox.settings.services.mozilla.com"
+
+// Replaceable only to keep probe tests deterministic and offline.
+var fetchRemoteSettings = func(ctx context.Context) error {
+	_, err := vpnclient.FetchServerList(ctx)
+	return err
 }
 
 // installGuardianRouting installs the Stage-5 selective control-plane
@@ -77,7 +73,7 @@ func installGuardianRouting(cfg engine.Config, log *stderrLogger) error {
 		// anyway (validation already parsed the same value).
 		return errors.New("the api proxy transport could not be built")
 	}
-	allow, err := cptransport.NewGuardianAllowlist(cfg.Guardian, guardianAllowlistEntries...)
+	allow, err := cptransport.NewBootstrapAllowlist(cfg.Guardian, remoteSettingsBaseURL)
 	if err != nil {
 		return errors.New("the guardian allowlist could not be built")
 	}
@@ -181,10 +177,31 @@ func runGuardianProbeReader(r io.Reader) int {
 		<-watcherSettled
 	}()
 
-	// 4. The REAL initial-pass walk — the same controller the tunnel
-	// role uses (AcquireInitialPass: FetchProxyPass, with the
-	// same-account FxA recovery when the access token is rejected as
-	// stale). No Start() — no session, no renewal loop, no listener.
+	// 4. Match the tunnel's control-plane order and deadline. Remote
+	// Settings and Guardian together get four seconds on Direct. A
+	// verified bootstrap proxy gets a separate bounded window.
+	controlPlaneBudget := 4 * time.Second
+	if cfg.ApiProxy != "" {
+		controlPlaneBudget = 55 * time.Second
+	}
+	controlCtx, cancelControl := context.WithTimeout(ctx, controlPlaneBudget)
+	defer cancelControl()
+	if cfg.UpstreamOverride == "" {
+		if err := fetchRemoteSettings(controlCtx); err != nil {
+			select {
+			case <-stdinDone:
+				_ = emit.Emit(engine.Event{Name: engine.EvStopped, Reason: "stdinClosed"})
+				return engine.ExitClean
+			default:
+			}
+			class := fferr.ClassifyTransport(err).Redact(cfg.Auth.AccessToken, cfg.Auth.RefreshToken)
+			_ = emit.Emit(failedFromStage(engine.ErrDiscoveryFailed, class, engine.ExitStartup, engine.FailureStageRemoteSettingsDiscovery))
+			return engine.ExitStartup
+		}
+	}
+
+	// 5. The REAL initial-pass walk — same-account FxA recovery remains
+	// intact. The same deadline also covers Guardian authorization.
 	controller := upstream.NewController(upstream.ControllerConfig{
 		Guardian:     cfg.Guardian,
 		AccessToken:  cfg.Auth.AccessToken,
@@ -207,7 +224,8 @@ func runGuardianProbeReader(r io.Reader) int {
 	})
 	defer controller.Close()
 
-	pass, err := controller.AcquireInitialPass(ctx)
+	pass, err := controller.AcquireInitialPass(controlCtx)
+	cancelControl()
 	if err != nil {
 		select {
 		case <-stdinDone:
@@ -223,7 +241,7 @@ func runGuardianProbeReader(r io.Reader) int {
 			return engine.ExitQuota
 		}
 		class := classifyGuardian(err, cfg)
-		_ = emit.Emit(failedFrom(engine.ErrPassFetchFailed, class, engine.ExitStartup))
+		_ = emit.Emit(failedFromStage(engine.ErrPassFetchFailed, class, engine.ExitStartup, engine.FailureStageGuardianPass))
 		return engine.ExitStartup
 	}
 	_ = emit.Emit(engine.Event{
