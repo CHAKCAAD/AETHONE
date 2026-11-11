@@ -15,6 +15,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/app_assets.dart';
 import '../core/app_theme.dart';
@@ -52,6 +53,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     // read-only view (M2 seam — see [EngineConfigSource]).
     _engine.bind(this);
     _subscription = _engine.events.listen(_onEvent);
+    unawaited(loadFirefoxDnsSettings());
   }
 
   /// v4.32 — the SMART scorecard the adapter orders its candidates by
@@ -273,6 +275,91 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   /// The firefox data-plane transport ('h2' default / 'h3' optional).
   @override
   String firefoxTransport = 'h2';
+
+  /// Firefox DNS preferences. They are deliberately process-scoped: they
+  /// never modify Android Private DNS or the other AETHONE engines.
+  String firefoxDnsMode = 'system';
+  String firefoxDnsProvider = 'cloudflare';
+  String firefoxDnsEndpoint = '';
+  List<String> firefoxDnsBootstrapIps = const [];
+
+  @override
+  Map<String, dynamic> get firefoxDnsConfig => {
+        'mode': firefoxDnsMode,
+        if (firefoxDnsMode == 'doh') ...{
+          'provider': firefoxDnsProvider,
+          if (firefoxDnsProvider == 'custom' && firefoxDnsEndpoint.trim().isNotEmpty)
+            'endpoint': firefoxDnsEndpoint.trim(),
+          if (firefoxDnsBootstrapIps.isNotEmpty)
+            'bootstrapIps': firefoxDnsBootstrapIps,
+          'systemForLocalDomains': true,
+        },
+      };
+
+  Future<void> loadFirefoxDnsSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final mode = prefs.getString('firefox.dns.mode') ?? 'system';
+      final provider = prefs.getString('firefox.dns.provider') ?? 'cloudflare';
+      firefoxDnsMode = mode == 'doh' ? 'doh' : 'system';
+      firefoxDnsProvider = const {'cloudflare', 'google', 'quad9', 'custom'}
+              .contains(provider)
+          ? provider
+          : 'cloudflare';
+      firefoxDnsEndpoint = prefs.getString('firefox.dns.endpoint') ?? '';
+      firefoxDnsBootstrapIps =
+          prefs.getStringList('firefox.dns.bootstrap_ips') ?? const [];
+      notifyListeners();
+    } catch (_) {
+      // Preferences unavailable (e.g. a pure unit-test host): System DNS
+      // remains the safe, backward-compatible default.
+    }
+  }
+
+  Future<void> _persistFirefoxDnsSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('firefox.dns.mode', firefoxDnsMode);
+      await prefs.setString('firefox.dns.provider', firefoxDnsProvider);
+      await prefs.setString('firefox.dns.endpoint', firefoxDnsEndpoint);
+      await prefs.setStringList(
+          'firefox.dns.bootstrap_ips', firefoxDnsBootstrapIps);
+    } catch (_) {
+      // A persistence failure must not silently change the active resolver.
+    }
+  }
+
+  void setFirefoxDnsMode(String mode) {
+    final pick = mode == 'doh' ? 'doh' : 'system';
+    if (firefoxDnsMode == pick) return;
+    firefoxDnsMode = pick;
+    unawaited(_persistFirefoxDnsSettings());
+    notifyListeners();
+  }
+
+  void setFirefoxDnsProvider(String provider) {
+    const allowed = {'cloudflare', 'google', 'quad9', 'custom'};
+    final pick = allowed.contains(provider) ? provider : 'cloudflare';
+    if (firefoxDnsProvider == pick) return;
+    firefoxDnsProvider = pick;
+    unawaited(_persistFirefoxDnsSettings());
+    notifyListeners();
+  }
+
+  void setFirefoxDnsCustom(String endpoint, String bootstrapIps) {
+    final nextIps = bootstrapIps
+        .split(RegExp(r'[\\s,;]+'))
+        .map((v) => v.trim())
+        .where((v) => v.isNotEmpty)
+        .take(8)
+        .toList(growable: false);
+    if (firefoxDnsEndpoint == endpoint.trim() &&
+        listEquals(firefoxDnsBootstrapIps, nextIps)) return;
+    firefoxDnsEndpoint = endpoint.trim();
+    firefoxDnsBootstrapIps = nextIps;
+    unawaited(_persistFirefoxDnsSettings());
+    notifyListeners();
+  }
 
   /// The LIVE firefox country set (the engine's --discover role; null
   /// until the first refresh — the wheel falls back to the standing
