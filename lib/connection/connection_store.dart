@@ -39,7 +39,7 @@ enum HomeLook { one, two }
 /// then signedIn / signedOut; nothing simulated).
 enum FirefoxAccountStatus { unknown, signedIn, signedOut }
 
-class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
+class ConnectionStore extends ChangeNotifier implements EngineConfigSource, FirefoxDnsSettingsLoader {
   /// v4.32 — [scorecard] defaults ONCE (the redirecting constructor) so the
   /// store and its platform adapter always share the SAME live instance —
   /// the async disk restore later merges into it in place.
@@ -282,6 +282,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   String firefoxDnsProvider = 'cloudflare';
   String firefoxDnsEndpoint = '';
   List<String> firefoxDnsBootstrapIps = const [];
+  Future<void>? _firefoxDnsLoadFuture;
 
   @override
   Map<String, dynamic> get firefoxDnsConfig => {
@@ -296,7 +297,10 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         },
       };
 
-  Future<void> loadFirefoxDnsSettings() async {
+  Future<void> loadFirefoxDnsSettings() =>
+      _firefoxDnsLoadFuture ??= _loadFirefoxDnsSettings();
+
+  Future<void> _loadFirefoxDnsSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final mode = prefs.getString('firefox.dns.mode') ?? 'system';
