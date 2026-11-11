@@ -226,6 +226,20 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    _restoreFields();
+  }
+
+  Future<void> _restoreFields() async {
+    await widget.store.loadFirefoxDnsSettings();
+    if (!mounted) return;
+    _endpoint.text = widget.store.firefoxDnsEndpoint;
+    _bootstrap.text = widget.store.firefoxDnsBootstrapIps.join(', ');
+    setState(() {});
+  }
+
+  @override
   void dispose() {
     _endpoint.dispose();
     _bootstrap.dispose();
