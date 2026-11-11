@@ -621,6 +621,8 @@ class _Cfg implements EngineConfigSource {
   String get firefoxLocation => 'auto';
   @override
   String get firefoxTransport => 'h2';
+  @override
+  Map<String, dynamic> get firefoxDnsConfig => const {'mode': 'system'};
   /// v4.41 — the seam's new members (routing profile + per-app pick).
   @override
   String? get routingRegion => null;
