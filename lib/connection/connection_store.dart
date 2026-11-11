@@ -430,6 +430,11 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   /// dispose path): stdin close → grace → kill; no orphan survives.
   Future<void> firefoxLoginCancel() => _engine.firefoxLoginCancel();
 
+  /// Tests the selected Firefox resolver against the control-plane domains.
+  /// This is DNS evidence only, not an OAuth or VPN-connectivity test.
+  Future<List<Map<String, dynamic>>?> firefoxDnsProbe() =>
+      _engine.firefoxDnsProbe(firefoxDnsConfig);
+
   /// v4.22 — direct setters for the SETTINGS pages (the Psiphon/Tor pages
   /// write their own family field regardless of the currently selected
   /// protocol; [selectLocation] stays the home-wheel path).
