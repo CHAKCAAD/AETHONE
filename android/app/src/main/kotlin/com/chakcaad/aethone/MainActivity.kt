@@ -448,6 +448,9 @@ class MainActivity : FlutterActivity() {
         try {
             val config = ProxyConfig.Builder()
                 .addProxyRule("$host:$port")
+                // Do not let WebView implicitly bypass localhost/link-local
+                // targets; the loopback Go proxy blocks those destinations.
+                .removeImplicitRules()
                 .build()
             // Mark before scheduling the asynchronous application so an
             // Activity teardown racing this callback still clears the proxy.
