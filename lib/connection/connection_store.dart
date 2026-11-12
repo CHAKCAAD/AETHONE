@@ -297,6 +297,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
         },
       };
 
+  @override
   Future<void> loadFirefoxDnsSettings() =>
       _firefoxDnsLoadFuture ??= _loadFirefoxDnsSettings();
 
