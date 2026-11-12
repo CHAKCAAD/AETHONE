@@ -56,6 +56,8 @@ func run() int {
                         return runLogin()
                 case "--dns-probe":
                         return runDNSProbe()
+                case "--webview-proxy":
+                        return runWebViewProxy()
                 case "--help", "-h":
                         fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe|--webview-proxy]\n")
                         return 0
