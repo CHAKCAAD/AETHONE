@@ -27,6 +27,7 @@ class FirefoxWebViewDnsProxy {
 
   bool _stopRequested = false;
   bool _proxyOverrideActive = false;
+  bool _proxySetAttempted = false;
   String? resolver;
 
   Future<void> start(Map<String, dynamic> dnsConfig) {
@@ -120,22 +121,17 @@ class FirefoxWebViewDnsProxy {
     }
 
     try {
-      // This native call completes only after AndroidX confirms that the
-      // ProxyController override has been applied. The caller loads the
-      // first page only after this method returns.
+      // Record the attempt before the asynchronous call: a timeout can
+      // race AndroidX applying the override and its callback.
+      _proxySetAttempted = true;
       await _channel.invokeMethod<void>(
         'setFirefoxWebViewProxy',
         {'host': proxy.host, 'port': proxy.port},
       ).timeout(const Duration(seconds: 10));
       _proxyOverrideActive = true;
     } catch (_) {
-      // A channel error/timeout can race the native callback. Clear
-      // defensively before allowing the child listener to be stopped.
-      try {
-        await _channel
-            .invokeMethod<void>('clearFirefoxWebViewProxy')
-            .timeout(const Duration(seconds: 5));
-      } catch (_) {}
+      // Clear defensively before allowing the Go listener to be stopped.
+      await _clearProxyOverrideWithRetry();
       rethrow;
     }
 
@@ -152,6 +148,24 @@ class FirefoxWebViewDnsProxy {
     return _stopFuture ??= _stopInternal();
   }
 
+  Future<bool> _clearProxyOverrideWithRetry() async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        await _channel
+            .invokeMethod<void>('clearFirefoxWebViewProxy')
+            .timeout(const Duration(seconds: 8));
+        _proxyOverrideActive = false;
+        _proxySetAttempted = false;
+        return true;
+      } catch (_) {
+        if (attempt < 2) {
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+        }
+      }
+    }
+    return false;
+  }
+
   Future<void> _stopInternal() async {
     try {
       await _startFuture?.timeout(_startupTimeout + const Duration(seconds: 12));
@@ -159,16 +173,13 @@ class FirefoxWebViewDnsProxy {
       // Startup may have failed; cleanup below is still mandatory.
     }
 
-    if (_proxyOverrideActive) {
-      try {
-        await _channel
-            .invokeMethod<void>('clearFirefoxWebViewProxy')
-            .timeout(const Duration(seconds: 8));
-      } catch (_) {
-        // The Go process is still stopped below. MainActivity also performs
-        // a final clear on Activity teardown as a second cleanup boundary.
-      } finally {
-        _proxyOverrideActive = false;
+    if (_proxySetAttempted || _proxyOverrideActive) {
+      final cleared = await _clearProxyOverrideWithRetry();
+      if (!cleared) {
+        // Fail closed: do not kill the local listener while AndroidX may
+        // still be routing WebView traffic to it. MainActivity has a second
+        // clear boundary on Activity teardown.
+        return;
       }
     }
 
