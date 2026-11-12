@@ -164,3 +164,18 @@ func TestWebViewProxyRejectsPrivateDestinations(t *testing.T) {
 		t.Fatal("public address should remain eligible")
 	}
 }
+
+
+func TestWebViewProxyRoleInstallsSelectedDoHResolver(t *testing.T) {
+	s := startEngine(t, "--webview-proxy")
+	defer s.kill()
+	s.send(`{"dns":{"mode":"doh","provider":"google"}}`)
+	ev := s.waitEvent(t, "webViewProxyReady", 5*time.Second)
+	if got := ev["resolver"]; got != "DoH (google)" {
+		t.Fatalf("resolver = %v, want DoH (google)", got)
+	}
+	s.closeStdin()
+	if code := s.waitExit(t, 5*time.Second); code != 0 {
+		t.Fatalf("proxy process exit = %d, want 0", code)
+	}
+}
