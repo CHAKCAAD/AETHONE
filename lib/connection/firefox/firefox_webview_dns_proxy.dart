@@ -11,8 +11,8 @@ import 'package:flutter/services.dart';
 
 class FirefoxWebViewDnsProxy {
   FirefoxWebViewDnsProxy({
-    MethodChannel channel = const MethodChannel('aethone/engine'),
-  }) : _channel = channel;
+    this._channel = const MethodChannel('aethone/engine'),
+  });
 
   static const Duration _startupTimeout = Duration(seconds: 20);
   static const Duration _shutdownGrace = Duration(seconds: 3);
