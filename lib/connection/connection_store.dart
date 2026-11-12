@@ -359,7 +359,9 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
         .take(8)
         .toList(growable: false);
     if (firefoxDnsEndpoint == endpoint.trim() &&
-        listEquals(firefoxDnsBootstrapIps, nextIps)) return;
+        listEquals(firefoxDnsBootstrapIps, nextIps)) {
+      return;
+    }
     firefoxDnsEndpoint = endpoint.trim();
     firefoxDnsBootstrapIps = nextIps;
     unawaited(_persistFirefoxDnsSettings());
