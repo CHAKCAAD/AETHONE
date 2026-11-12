@@ -207,9 +207,9 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
 }
 
 
-/// Firefox-only DNS preferences. The Go engine consumes these settings;
-/// the embedded WebView login remains on Android WebView networking until
-/// its app-scoped proxy bridge is implemented and verified.
+/// Firefox-only DNS preferences. The Go engine and the embedded sign-in
+/// WebView's actual HTTPS requests use this selection through separate,
+/// scoped processes. Chromium speculative DNS prefetch may still use system DNS.
 class _FirefoxDnsCard extends StatefulWidget {
   const _FirefoxDnsCard({required this.store});
 
