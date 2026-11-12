@@ -2242,8 +2242,9 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
   /// binds to the store's copy).
   Future<FirefoxLocationList?> firefoxLocations() async {
     final source = _config;
-    if (source is FirefoxDnsSettingsLoader) {
-      await source.loadFirefoxDnsSettings();
+    final dnsLoader = source as FirefoxDnsSettingsLoader?;
+    if (dnsLoader != null) {
+      await dnsLoader.loadFirefoxDnsSettings();
     }
     final paths = await _paths();
     final discovery = _firefoxDiscovery ??= FirefoxDiscovery(
