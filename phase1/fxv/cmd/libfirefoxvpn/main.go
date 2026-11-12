@@ -57,7 +57,7 @@ func run() int {
                 case "--dns-probe":
                         return runDNSProbe()
                 case "--help", "-h":
-                        fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe]\n")
+                        fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe|--webview-proxy]\n")
                         return 0
                 default:
                         fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--dns-probe])\n", arg)
