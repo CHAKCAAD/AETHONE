@@ -2185,8 +2185,9 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
     void Function(String line)? onLog,
   }) async {
     final source = _config;
-    if (source is FirefoxDnsSettingsLoader) {
-      await source.loadFirefoxDnsSettings();
+    final dnsLoader = source as FirefoxDnsSettingsLoader?;
+    if (dnsLoader != null) {
+      await dnsLoader.loadFirefoxDnsSettings();
     }
     final paths = await _paths();
     final client = _firefoxLogin = FirefoxLoginClient(
@@ -2347,8 +2348,9 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
   /// The firefox walk (the aether skeleton, engine swapped in).
   Future<bool> _connectFirefox(int gen, EngineConfigSource config) async {
     void fail(String code, String msg) => _emitFail(code, msg);
-    if (config is FirefoxDnsSettingsLoader) {
-      await config.loadFirefoxDnsSettings();
+    final dnsLoader = config as FirefoxDnsSettingsLoader?;
+    if (dnsLoader != null) {
+      await dnsLoader.loadFirefoxDnsSettings();
     }
 
     // Stale-state hygiene: never start a second engine over a live one.
