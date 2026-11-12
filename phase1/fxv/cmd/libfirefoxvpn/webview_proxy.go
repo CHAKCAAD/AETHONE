@@ -95,6 +95,10 @@ func runWebViewProxy() int {
 			break
 		}
 
+		if ctx.Err() != nil {
+			_ = client.Close()
+			continue
+		}
 		if !server.register(client) {
 			_ = client.Close()
 			continue
