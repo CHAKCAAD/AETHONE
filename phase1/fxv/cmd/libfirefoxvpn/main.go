@@ -13,6 +13,9 @@
 //      libfirefoxvpn --dns-probe     resolve the control-plane domains
 //                                    through THIS process (the multi-arch
 //                                    DNS evidence role — no secrets)
+//      libfirefoxvpn --webview-proxy loopback HTTP CONNECT proxy for the
+//                                    Firefox login WebView; destination DNS
+//                                    uses the selected process-local resolver
 //
 // Spawn discipline (the Dart host): bare argv, EMPTY environment —
 // every secret travels on the stdin pipe only.
@@ -62,7 +65,7 @@ func run() int {
                         fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe|--webview-proxy]\n")
                         return 0
                 default:
-                        fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--dns-probe])\n", arg)
+                        fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--dns-probe|--webview-proxy])\n", arg)
                         return engine.ExitStartup
                 }
         }
