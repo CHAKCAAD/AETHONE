@@ -352,10 +352,10 @@ class AppStrings {
   String get firefoxDnsSave => _v['firefoxDnsSave']!;
   String get firefoxDnsDesc => _v['firefoxDnsDesc']!;
   String get firefoxDnsWebViewNote => _v['firefoxDnsWebViewNote']!;
-  String get 0 => _v['0']!;
-  String get 1 => _v['1']!;
-  String get 2 => _v['2']!;
-  String get 3 => _v['3']!;
+  String get firefoxDnsTesting => _v['firefoxDnsTesting']!;
+  String get firefoxDnsTestButton => _v['firefoxDnsTestButton']!;
+  String get firefoxDnsTestSuccess => _v['firefoxDnsTestSuccess']!;
+  String get firefoxDnsTestFailed => _v['firefoxDnsTestFailed']!;
   String get firefoxLoginTitle => _v['firefoxLoginTitle']!;
   String get firefoxLoginSubtitle => _v['firefoxLoginSubtitle']!;
   String get firefoxLoginWaiting => _v['firefoxLoginWaiting']!;
