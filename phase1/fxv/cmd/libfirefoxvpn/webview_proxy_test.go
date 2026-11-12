@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 )
@@ -154,16 +153,14 @@ func TestWebViewProxyRoleStartsAndStopsOnStdinEOF(t *testing.T) {
 	}
 }
 
-func TestWebViewProxyReturnsBadGatewayWhenResolverCannotResolve(t *testing.T) {
-	// A literal reserved test address passes hostname parsing but the
-	// production dialer must never be used for private/local destinations.
-	if !isUnsafeWebViewProxyIP(net.ParseIP("192.0.2.1")) {
-		t.Fatal("documentation-only address should be blocked")
+func TestWebViewProxyRejectsPrivateDestinations(t *testing.T) {
+	if !isUnsafeWebViewProxyIP(net.ParseIP("10.0.0.1")) {
+		t.Fatal("RFC1918 address should be blocked")
+	}
+	if !isUnsafeWebViewProxyIP(net.ParseIP("127.0.0.1")) {
+		t.Fatal("loopback address should be blocked")
 	}
 	if isUnsafeWebViewProxyIP(net.ParseIP("1.1.1.1")) {
 		t.Fatal("public address should remain eligible")
-	}
-	if strings.TrimSpace(" accounts.firefox.com ") == "" {
-		t.Fatal("unreachable")
 	}
 }
