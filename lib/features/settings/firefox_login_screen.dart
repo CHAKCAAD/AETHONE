@@ -28,6 +28,7 @@ import '../../../connection/connection_store.dart';
 import '../../../connection/firefox/firefox_errors.dart';
 import '../../../connection/firefox/firefox_protocol.dart';
 import '../../../connection/firefox/firefox_web_channel.dart';
+import '../../../connection/firefox/firefox_webview_dns_proxy.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 
@@ -46,16 +47,23 @@ class FirefoxLoginScreen extends StatefulWidget {
 class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
   final FirefoxWebChannelBridge _bridge = FirefoxWebChannelBridge();
   WebViewController? _controller;
+  FirefoxWebViewDnsProxy? _webViewDnsProxy;
+  bool _webViewInitializing = true;
   _LoginPhase _phase = _LoginPhase.browsing;
   String? _errorText;
   String _currentUrl = kFirefoxLoginUrl;
 
   @override
   void dispose() {
-    // A dismissal mid-exchange cancels the engine child (stdin close →
-    // grace → kill) — no orphan survives the dismissed page.
-    unawaited(widget.store.firefoxLoginCancel());
+    // Clear the app-WebView proxy override first, then stop its loopback
+    // Go child. The login exchange is cancelled as part of the same teardown.
+    unawaited(_teardownLoginNetwork());
     super.dispose();
+  }
+
+  Future<void> _teardownLoginNetwork() async {
+    await widget.store.firefoxLoginCancel();
+    await _webViewDnsProxy?.stop();
   }
 
   void _onSessionToken(String token) async {
@@ -232,11 +240,14 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
     // Honest: no WebView platform here (desktop builds, tests, web) —
     // never a fake page. Desktop keeps the phase-1 controlled-injection
     // path for the owner's real session pair.
+    if (_webViewInitializing && Platform.isAndroid) {
+      return const Center(child: CircularProgressIndicator());
+    }
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Text(
-          strings.firefoxLoginUnavailable,
+          _errorText ?? strings.firefoxLoginUnavailable,
           textAlign: TextAlign.center,
           style: TextStyle(
             fontFamily: 'IRANYekanX',
@@ -252,17 +263,35 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
   @override
   void initState() {
     super.initState();
-    // The WebView exists on Android (the shipping surface). Desktop
-    // builds and the test host render the honest unavailable pane — the
-    // login engine itself would also honestly fail (engineNotWired
-    // default) on hosts without the firefox engine.
     if (!Platform.isAndroid) {
+      _webViewInitializing = false;
       return;
     }
-    final controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent(firefoxLoginUserAgent(Platform.operatingSystemVersion))
-      ..addJavaScriptChannel(
+    final proxy = _webViewDnsProxy = FirefoxWebViewDnsProxy();
+    unawaited(_initializeLoginWebView(proxy));
+  }
+
+  /// Bring up the selected DNS resolver and the loopback CONNECT proxy
+  /// BEFORE creating/loading Chromium's WebView. The AndroidX callback is
+  /// awaited by [FirefoxWebViewDnsProxy.start], so the first navigation
+  /// cannot race the process-scoped WebView proxy installation.
+  Future<void> _initializeLoginWebView(FirefoxWebViewDnsProxy proxy) async {
+    try {
+      await widget.store.loadFirefoxDnsSettings();
+      await proxy.start(
+        Map<String, dynamic>.from(widget.store.firefoxDnsConfig),
+      );
+      if (!mounted) {
+        await proxy.stop();
+        return;
+      }
+
+      final controller = WebViewController();
+      await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+      await controller.setUserAgent(
+        firefoxLoginUserAgent(Platform.operatingSystemVersion),
+      );
+      await controller.addJavaScriptChannel(
         'aethoneFxChannel',
         onMessageReceived: (message) {
           final result = _bridge.handle(message.message, _currentUrl);
@@ -275,8 +304,8 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
             _onSessionToken(token);
           }
         },
-      )
-      ..setNavigationDelegate(
+      );
+      await controller.setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (request) async {
             final uri = Uri.tryParse(request.url);
@@ -304,9 +333,26 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
             _controller?.runJavaScript(FirefoxWebChannelBridge.hookScript);
           },
         ),
-      )
-      ..loadRequest(Uri.parse(kFirefoxLoginUrl));
-    _controller = controller;
+      );
+
+      if (!mounted) {
+        await proxy.stop();
+        return;
+      }
+      setState(() {
+        _controller = controller;
+        _webViewInitializing = false;
+      });
+      await controller.loadRequest(Uri.parse(kFirefoxLoginUrl));
+    } catch (_) {
+      await proxy.stop();
+      if (!mounted) return;
+      setState(() {
+        _webViewInitializing = false;
+        _phase = _LoginPhase.failed;
+        _errorText = AppStrings.of(context).firefoxLoginUnavailable;
+      });
+    }
   }
 
   Future<bool> _launchExternal(String url) async {
