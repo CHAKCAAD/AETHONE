@@ -1103,13 +1103,13 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
       return false;
     }
 
-    // PHASE-1 (firefox-vpn) — the DEDICATED engine branch: Firefox VPN
-    // runs its own Go child process (libfirefoxvpn.so, SOCKS5 on
-    // 127.0.0.1:1822) and NEVER starts the aether core. The walk mirrors
-    // the aether skeleton (permission → TUN → engine → listener →
-    // end-to-end probe → Connected) so the store's state machine needs
-    // no changes. SMART never routes here (smartCandidates excludes the
-    // mode; a manual firefoxOnly tile is never rewritten).
+    // Firefox over WARP is a two-engine chain: Aether starts first on
+    // SOCKS5 :1819 using coreSettings.firefoxLegProtocol; the Go Firefox
+    // VPN child then dials its Mozilla/Fastly control and data planes
+    // through that carrier and exposes its own SOCKS5 :1822 listener.
+    // The device TUN targets :1822, so Connected requires both the
+    // verified Aether carrier and the independent Firefox end-to-end probe.
+    // SMART never rewrites a manual firefoxOnly tile.
     if (config.selectedProtocol == ProtocolId.firefoxOnly) {
       return _connectFirefox(gen, config);
     }
