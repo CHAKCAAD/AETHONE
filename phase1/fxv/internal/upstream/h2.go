@@ -100,21 +100,46 @@ func (e *tunnelOpenTimeoutError) Error() string {
 func (e *tunnelOpenTimeoutError) Timeout() bool   { return true }
 func (e *tunnelOpenTimeoutError) Temporary() bool { return true }
 
-// NewH2ProxySession dials the MASQUE proxy with TLS 1.2+ and the h2
-// ALPN (ADAPTED from newH2ProxySession; keepalive retained).
+// ContextDialer is implemented by net.Dialer and SOCKS5Dialer.
+type ContextDialer interface {
+	DialContext(context.Context, string, string) (net.Conn, error)
+}
+
+// NewH2ProxySession dials the MASQUE proxy directly with TLS 1.2+ and h2.
 func NewH2ProxySession(proxyURL *url.URL, token string, timeout time.Duration) (*H2ProxySession, error) {
+	return newH2ProxySession(proxyURL, token, timeout, &net.Dialer{Timeout: timeout})
+}
+
+// NewH2ProxySessionThroughSOCKS carries the Fastly MASQUE TCP session through
+// the selected Aether SOCKS5 listener. The hostname is sent to SOCKS5 intact,
+// so Aether performs the destination lookup inside the outer WARP tunnel.
+func NewH2ProxySessionThroughSOCKS(proxyURL *url.URL, token string, timeout time.Duration, socksAddr string) (*H2ProxySession, error) {
+	return newH2ProxySession(proxyURL, token, timeout, &SOCKS5Dialer{ProxyAddr: socksAddr})
+}
+
+func newH2ProxySession(proxyURL *url.URL, token string, timeout time.Duration, dialer ContextDialer) (*H2ProxySession, error) {
 	proxyHost := proxyURL.Host
 	if proxyURL.Port() == "" {
-		proxyHost = proxyURL.Hostname() + ":443"
+		proxyHost = net.JoinHostPort(proxyURL.Hostname(), "443")
 	}
+	ctx := context.Background()
+	cancel := func() {}
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	}
+	defer cancel()
 
-	dialer := &net.Dialer{Timeout: timeout}
-	proxyTLS, err := tls.DialWithDialer(dialer, "tcp", proxyHost, &tls.Config{
+	raw, err := dialer.DialContext(ctx, "tcp", proxyHost)
+	if err != nil {
+		return nil, err
+	}
+	proxyTLS := tls.Client(raw, &tls.Config{
 		ServerName: proxyURL.Hostname(),
 		MinVersion: tls.VersionTLS12,
 		NextProtos: []string{"h2"},
 	})
-	if err != nil {
+	if err := proxyTLS.HandshakeContext(ctx); err != nil {
+		_ = raw.Close()
 		return nil, err
 	}
 
