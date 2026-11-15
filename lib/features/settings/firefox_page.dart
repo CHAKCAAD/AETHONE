@@ -246,9 +246,11 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
 }
 
 
-/// Firefox-only DNS preferences. The Go engine and the embedded sign-in
-/// WebView's actual HTTPS requests use this selection through separate,
-/// scoped processes. Chromium speculative DNS prefetch may still use system DNS.
+/// DNS for Firefox's separate pre-connect roles (WebChannel sign-in,
+/// initial discovery and the explicit DNS probe). Once Firefox over WARP
+/// is active, tunnel-server hostnames are resolved by the Aether carrier's
+/// DNS because the Go engine sends them through Aether SOCKS without local
+/// resolution. Chromium speculative DNS prefetch may still use system DNS.
 class _FirefoxDnsCard extends StatefulWidget {
   const _FirefoxDnsCard({required this.store});
 
