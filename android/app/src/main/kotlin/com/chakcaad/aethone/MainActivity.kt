@@ -415,7 +415,7 @@ class MainActivity : FlutterActivity() {
                         val command = runCatching {
                             File("/proc/$pid/cmdline").readBytes()
                                 .toString(Charsets.UTF_8)
-                                .substringBefore('\\u0000')
+                                .substringBefore(0.toChar())
                         }.getOrDefault("")
                         if (command == binary) {
                             signalled = runCatching {
