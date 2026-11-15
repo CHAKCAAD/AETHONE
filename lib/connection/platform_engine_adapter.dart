@@ -2297,6 +2297,13 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable, Fi
   /// aether-backed family), it is probed and reused — never replaced.
   @override
   Future<String?> firefoxLoginCarrierUp() async {
+    // v1.5.0 — the DIRECT mode never boots a login carrier: the screen's
+    // webview proxy runs the direct DNS-aware path (arman's sign-in
+    // posture). The over-WARP mode carries it below.
+    if (_config?.coreSettings.firefoxCarrierMode ==
+        FirefoxCarrierMode.direct) {
+      return null;
+    }
     final warpPort = TransportModes.masque.socksEndpoint.port + portOffset;
     // The walks' OWN generation snapshot: a connect started while the
     // login screen is open bumps it and our waits abort honestly (the
@@ -2509,12 +2516,27 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable, Fi
     final tunnel = config.connectionMode == ConnectionMode.tunnel;
     _activeMode = config.connectionMode;
 
-    // The Windows desktop limit is LIFTED (the firefox-over-warp decree):
-    // the engine no longer dials the internet directly at all — its whole
-    // conversation (control plane + MASQUE data plane) goes to the loopback
-    // WARP carrier listener, and the in-process aether core rides the same
-    // plain-WARP path that tunnels fine on every desktop (the -only
-    // family's direct-dial problem does not apply to a chain leg).
+    // v1.5.0 (the owner's round 3) — the carrier-mode pick: overWARP
+    // (the standing default) boots the Aether carrier below; DIRECT runs
+    // the engine's own 1.2.0 path — no Aether core, no TUN leg, the
+    // process-local DNS policy + the direct uTLS control plane and h2/h3
+    // data plane (arman-vpn-client's direct posture).
+    final overWarp =
+        config.coreSettings.firefoxCarrierMode != FirefoxCarrierMode.direct;
+
+    // The Windows desktop limit is LIFTED for the over-WARP mode (the
+    // engine dials the loopback carrier only — the -only family's
+    // direct-dial problem does not apply to a chain leg) but STANDS for
+    // the DIRECT mode: the engine's own outbound dials would loop through
+    // zeptun's whole-device TUN there.
+    if (tunnel && !overWarp && Platform.isWindows) {
+      fail(
+        'platformLimit',
+        'the DIRECT Firefox mode cannot whole-device-tunnel on Windows '
+        '(the engine dials the internet itself); pick Firefox over WARP',
+      );
+      return false;
+    }
 
     // Port-conflict proof at runtime (prove no clash with 1819/1820/1821
     // in code AND at runtime — the map is asserted by transport_modes_test;
@@ -2526,7 +2548,9 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable, Fi
       );
       return false;
     }
-    if (await TunnelProbe.isListenerReady(warpPort)) {
+    // (over-WARP only — in DIRECT mode 1819 belongs to nobody we own;
+    // an unrelated listener there must not block a direct connection.)
+    if (overWarp && await TunnelProbe.isListenerReady(warpPort)) {
       fail(
         'firefoxCarrierPortBusy',
         '127.0.0.1:$warpPort is already occupied — refusing to replace the Aether carrier',
@@ -2613,9 +2637,16 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable, Fi
     }
 
     // --- 2. Start the Aether outer carrier using the protocol selected in
-    // Firefox settings. Its settings are independent of the Firefox VPN
-    // engine's own H2/H3 transport choice.
+    // Firefox settings (over-WARP mode only — the DIRECT mode skips the
+    // whole leg: no Aether core, no listener wait, no probe). Its
+    // settings are independent of the Firefox VPN engine's own H2/H3
+    // transport choice.
     _emitState(VpnState.connecting);
+    // The engine child's own paths (nativeLibraryDir etc.) are needed in
+    // BOTH modes — fetched once, above the mode branch.
+    final paths = await _paths();
+    if (_stale(gen)) return false;
+    if (overWarp) {
     // v4.21 bind-race guard, the aether walk's own: a freed-but-still-
     // aborting previous core held the listener for a few scheduler
     // turns. A no-op when the port is already free.
@@ -2625,7 +2656,6 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable, Fi
     _coreFailureDuringStart = null;
     final core = _core =
         _coreFactory == null ? AetherCore.open() : _coreFactory();
-    final paths = await _paths();
     if (_stale(gen)) return false;
     final outerProtocol =
         AetherArguments.legProtocolId(config.coreSettings.firefoxLegProtocol);
@@ -2643,22 +2673,6 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable, Fi
     );
     await _recordCoreJob();
     if (_stale(gen)) return false;
-
-    // Keep the app process alive in proxy mode. In tunnel mode the
-    // AethoneVpnService already owns the foreground lifetime.
-    if (!tunnel) {
-      try {
-        await _channel.invokeMethod<void>(
-          'startCoreHold',
-          {'port': _activePort},
-        );
-      } on PlatformException {
-        // Proxy mode still works while the app is foregrounded.
-      } on MissingPluginException {
-        // Test / unsupported platform.
-      }
-      if (_stale(gen)) return false;
-    }
 
     // --- 3b. The WARP carrier leg (the firefox-over-warp decree,
     // mirroring the psiphon/tor chain families): the in-process aether
@@ -2717,13 +2731,36 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable, Fi
     }
     _debugLog('warp carrier leg up on 127.0.0.1:$warpPort '
         '(leg: ${outerProtocol.name}, ping ${warpProbe.pingMs} ms)');
+    } else {
+      _debugLog('firefox DIRECT mode: no WARP carrier leg '
+          '(the engine dials out itself, resolver policy applied)');
+    }
+
+    // Keep the app process alive in proxy mode (BOTH modes — the engine
+    // child serves 1822 either way). In tunnel mode the AethoneVpnService
+    // already owns the foreground lifetime.
+    if (!tunnel) {
+      try {
+        await _channel.invokeMethod<void>(
+          'startCoreHold',
+          {'port': _activePort},
+        );
+      } on PlatformException {
+        // Proxy mode still works while the app is foregrounded.
+      } on MissingPluginException {
+        // Test / unsupported platform.
+      }
+      if (_stale(gen)) return false;
+    }
 
     // --- 4. Start the Firefox tunnel engine. Tokens travel ONLY on the
-    // stdin pipe; argv is bare; environment is empty by design. All
-    // control/session dials and its Fastly MASQUE data plane use the
-    // Aether SOCKS carrier (h2 via CONNECT, h3 via UDP ASSOCIATE). The
-    // child fails closed if this carrier cannot be reached — it never
-    // retries the same endpoint directly.
+    // stdin pipe; argv is bare; environment is empty by design. In the
+    // over-WARP mode every dial (control plane + the Fastly MASQUE data
+    // plane, h2 via CONNECT / h3 via UDP ASSOCIATE) rides the Aether
+    // SOCKS carrier and fails closed — never a direct retry. In the
+    // DIRECT mode the engine dials out itself: the uTLS control plane,
+    // the h2/h3 data plane and the process-local DNS policy (arman's
+    // direct posture, engine contract 1.2.0).
     final engine = FirefoxVpnEngine(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
       onLog: _debugLog,
@@ -2739,9 +2776,11 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable, Fi
         // The h2/h3 pick (the Aether carrier carries both: h2 via TCP
         // CONNECT, h3 via UDP ASSOCIATE).
         transport: _firefoxTransportForEngine(config),
-        // The WARP carrier seam — the whole point of the mode: the
-        // engine's whole conversation rides the in-process aether core.
-        upstreamSocks: 'socks5://127.0.0.1:$warpPort',
+        // The WARP carrier seam — set only in the over-WARP mode (the
+        // whole point of that mode); the DIRECT mode sends NOTHING and
+        // the engine keeps its exact direct-path behavior.
+        upstreamSocks:
+            overWarp ? 'socks5://127.0.0.1:$warpPort' : '',
         // The process-local resolver policy for the engine's own
         // pre-carrier lookups (bootstrap of the DoH endpoint itself).
         dns: config.firefoxDnsConfig,

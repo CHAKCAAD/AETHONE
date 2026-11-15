@@ -143,3 +143,77 @@ is persisted (`firefox.quota`) so the cards survive a restart.
 * The `--login` exchange riding the carrier is engine-contract tested
   (the SOCKS transport is the tunnel's own audited path) but has no
   device evidence yet; the direct fallback covers a dead carrier.
+
+
+## 5. Round 3 — the CI fix + the DIRECT mode (same day, evening)
+
+Owner decrees: «اکشن شکست خورد بررسی کن. یک حالت اتصال مستقیم هسته
+فایرفاکس هم باید اضافه کنی اما باید از پروژه آرمان وی پی ان ببینی توی
+حالت مستقیم چطوری اتصال برقرار میشه و اگه از رله استفاده میشه باید
+ببینی چطوری میشه هسته ایتر رو جایگزین رله کنی».
+
+### 5.1 The CI failure (run 43698888528)
+
+321 tests passed, 2 failed — both the new quota tests: the byte
+formatter's `toStringAsFixed(1)` rendered «5.0 GB» where the tests (and
+the frame's decimal-free number grammar) expect «5 GB». Fixed by
+trimming the trailing `.0` in both formatters (settings pill + protocol
+card). Run 43697410574's earlier failure was the union round's
+duplicate `firefoxLegDesc` (equal_keys/duplicate_definition) — fixed
+before that; this run is the remaining fallout only.
+
+### 5.2 The arman study (the owner's named reference)
+
+arman-vpn-client's core answers the same question with a two-posture
+design (`core/internal/config/config.go`, Network block):
+
+* **DIRECT** — the core dials everything itself: the control plane
+  (FxA / Guardian / RemoteSettings) with its own resolver (system or
+  DoH), the desktop-Firefox uTLS ClientHello and an optional
+  ClientHello split; the Fastly MASQUE data plane direct (h2 or h3).
+* **RELAYS (the blocked-region fallbacks)** — `upstream_proxy`: the
+  user's OWN SOCKS5 proxy (e.g. a v2ray client on the device); every
+  connection to Mozilla and the control plane goes through it, the
+  names resolved there, h3 off (TCP only). `network.api_relay`: a
+  personal HTTPS relay (Cloudflare Worker / PHP) for control-plane
+  requests only, tried after a direct 451 retry
+  (`core/internal/controlplane`, `docs/relay`).
+
+**The mapping the owner asked for**: AETHONE's relay seat is the
+in-process AETHER core — its loopback SOCKS listener is exactly
+arman's `upstream_proxy`, except it is OUR core (no external v2ray,
+WARP egress, UDP ASSOCIATE included). That is the over-WARP mode the
+owner decreed as the default; what was missing was arman's OTHER
+posture — the direct one.
+
+### 5.3 The DIRECT mode (engine contract unchanged, 1.5.0)
+
+* `CoreSettings.firefoxCarrierMode` (overWarp default — the standing
+  «دیفالت اور وارپ» decree stands; legacy blobs migrate to it) |
+  `direct`.
+* The Firefox settings page gains the «نوع اتصال» section: over-WARP
+  / DIRECT pills with the honest per-mode description; the Aether
+  leg-protocol section renders only in over-WARP (a dead picker is
+  never shown); the transport note names the direct reality; the DNS
+  section stands in BOTH modes (it is the direct mode's own tool).
+* The adapter walk: DIRECT skips the whole carrier leg (no Aether
+  core, no listener wait, no probe, no 1819 busy check — an unrelated
+  listener there must not block a direct connection) and sends NO
+  `upstreamSocks` — the engine keeps its exact 1.2.0 direct behavior.
+  The Windows whole-device-tunnel limit RETURNS for DIRECT + tunnel
+  (the engine dials the internet itself; its own outbound would loop
+  through zeptun's TUN) — over-WARP keeps the lifted limit.
+* The login screen follows the mode: DIRECT never boots a login
+  carrier — the direct DNS-aware webview proxy carries the page
+  (arman's sign-in posture), and the `--login` exchange dials direct.
+* Over-WARP is unchanged: the Aether core keeps the relay's seat
+  (control plane + data plane + the login carrier + the exchange).
+
+### 5.4 Verification
+
+* Dart sanity (balanced literals) clean on every edited file; the
+  quota arithmetic verified by script (5 GiB → «5 GB», 2 GiB →
+  «2 GB», 5.5 GiB → «5.5 GB», 256 MiB → «256 MB»).
+* New tests: the mode pick's default/persist/migration roundtrip, the
+  direct config's omitted seam, and the mode strings in all 5 locales
+  (test/firefox_over_warp_test.dart).

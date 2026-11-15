@@ -350,6 +350,13 @@ class AppStrings {
   String get firefoxTransportH2 => _v['firefoxTransportH2']!;
   String get firefoxTransportH3 => _v['firefoxTransportH3']!;
   String get firefoxTransportDesc => _v['firefoxTransportDesc']!;
+  String get secFirefoxMode => _v['secFirefoxMode']!;
+  String get firefoxModeOverWarp => _v['firefoxModeOverWarp']!;
+  String get firefoxModeDirect => _v['firefoxModeDirect']!;
+  String get firefoxModeOverWarpDesc => _v['firefoxModeOverWarpDesc']!;
+  String get firefoxModeDirectDesc => _v['firefoxModeDirectDesc']!;
+  String get firefoxTransportDirectDesc =>
+      _v['firefoxTransportDirectDesc']!;
   String get secFirefoxDns => _v['secFirefoxDns']!;
   String get firefoxDnsMode => _v['firefoxDnsMode']!;
   String get firefoxDnsSystem => _v['firefoxDnsSystem']!;
@@ -647,6 +654,12 @@ class AppStrings {
       'firefoxDnsTestFailed': 'برخی درخواست‌های DNS ناموفق بودند.',
       'firefoxQuotaLabel': 'حجم باقی‌مانده',
       'firefoxQuotaUnlimited': 'نامحدود',
+      'secFirefoxMode': 'نوع اتصال',
+      'firefoxModeOverWarp': 'اور وارپ (پیش‌فرض)',
+      'firefoxModeDirect': 'مستقیم',
+      'firefoxModeOverWarpDesc': 'ابتدا تونل وارپ با هستهٔ ایتر برقرار می‌شود و بعد فایرفاکس از درون همان تونل، تونل خودش را می‌سازد (مثل سایفون اُور وارپ). مناسب شبکه‌های فیلترشده.',
+      'firefoxModeDirectDesc': 'هستهٔ فایرفاکس خودش مستقیماً به سرورهای موزیلا وصل می‌شود، بدون هستهٔ ایتر. برای شبکه‌هایی که سرورهای فایرفاکس را مسدود نکرده‌اند؛ DNS این بخش روی حالت مستقیم اهمیت بیشتری دارد.',
+      'firefoxTransportDirectDesc': 'در حالت مستقیم، H2 روی TCP+TLS و H3 روی QUIC مستقیماً از اینترنت خود دستگاه عبور می‌کنند.',
       'firefoxLoginTitle': 'ورود به فایرفاکس',
       'firefoxLoginSubtitle': 'ورود در صفحهٔ رسمی موزیلا انجام می‌شود',
       'firefoxLoginWaiting': 'در انتظار ورود شما در صفحهٔ موزیلا…',
@@ -1003,6 +1016,12 @@ class AppStrings {
       'firefoxDnsTestFailed': 'Some DNS lookups failed.',
       'firefoxQuotaLabel': 'Remaining data',
       'firefoxQuotaUnlimited': 'Unlimited',
+      'secFirefoxMode': 'Connection mode',
+      'firefoxModeOverWarp': 'Over WARP (default)',
+      'firefoxModeDirect': 'Direct',
+      'firefoxModeOverWarpDesc': 'The WARP tunnel comes up on the Aether core first, then Firefox builds its own tunnel inside it (like Psiphon over Warp). For filtered networks.',
+      'firefoxModeDirectDesc': 'The Firefox engine connects to Mozilla\'s servers directly, with no Aether core. For networks that have not blocked Firefox\'s servers; the DNS section matters more in this mode.',
+      'firefoxTransportDirectDesc': 'In Direct mode, H2 (TCP+TLS) and H3 (QUIC) ride your device\'s own internet directly.',
       'firefoxLoginTitle': 'Sign in to Firefox',
       'firefoxLoginSubtitle': 'Sign-in happens on Mozilla\'s official page',
       'firefoxLoginWaiting': 'Waiting for you to sign in on Mozilla\'s page…',
@@ -1357,6 +1376,12 @@ class AppStrings {
       'firefoxDnsTestFailed': 'Некоторые DNS-запросы завершились ошибкой.',
       'firefoxQuotaLabel': 'Остаток трафика',
       'firefoxQuotaUnlimited': 'Без ограничений',
+      'secFirefoxMode': 'Режим подключения',
+      'firefoxModeOverWarp': 'Через WARP (по умолчанию)',
+      'firefoxModeDirect': 'Напрямую',
+      'firefoxModeOverWarpDesc': 'Сначала поднимается WARP-туннель на ядре Aether, затем Firefox строит свой туннель внутри него (как Psiphon over Warp). Для фильтруемых сетей.',
+      'firefoxModeDirectDesc': 'Ядро Firefox подключается к серверам Mozilla напрямую, без ядра Aether. Для сетей, где серверы Firefox не заблокированы; раздел DNS важнее в этом режиме.',
+      'firefoxTransportDirectDesc': 'В режиме «Напрямую» H2 (TCP+TLS) и H3 (QUIC) идут напрямую через интернет устройства.',
       'firefoxLoginTitle': 'Вход в Firefox',
       'firefoxLoginSubtitle': 'Вход выполняется на официальной странице Mozilla',
       'firefoxLoginWaiting': 'Ожидание входа на странице Mozilla…',
@@ -1709,6 +1734,12 @@ class AppStrings {
       'firefoxDnsTestFailed': '部分 DNS 查询失败。',
       'firefoxQuotaLabel': '剩余流量',
       'firefoxQuotaUnlimited': '不限量',
+      'secFirefoxMode': '连接模式',
+      'firefoxModeOverWarp': '经 WARP（默认）',
+      'firefoxModeDirect': '直连',
+      'firefoxModeOverWarpDesc': '先由 Aether 核心建立 WARP 隧道，然后 Firefox 在其中建立自己的隧道（类似 Psiphon over Warp）。适合被过滤的网络。',
+      'firefoxModeDirectDesc': 'Firefox 引擎直接连接 Mozilla 服务器，不经过 Aether 核心。适用于未封锁 Firefox 服务器的网络；此模式下 DNS 设置更重要。',
+      'firefoxTransportDirectDesc': '直连模式下，H2（TCP+TLS）与 H3（QUIC）直接通过设备自身的网络传输。',
       'firefoxLoginTitle': '登录 Firefox',
       'firefoxLoginSubtitle': '登录在 Mozilla 官方页面进行',
       'firefoxLoginWaiting': '等待您在 Mozilla 页面完成登录…',
@@ -2067,6 +2098,12 @@ class AppStrings {
       'firefoxDnsTestFailed': 'Käbir DNS gözlegleri şowsuz boldy.',
       'firefoxQuotaLabel': 'Galan möçber',
       'firefoxQuotaUnlimited': 'Çäksiz',
+      'secFirefoxMode': 'Birikme tertibi',
+      'firefoxModeOverWarp': 'WARP arkaly (adaty)',
+      'firefoxModeDirect': 'Göni',
+      'firefoxModeOverWarpDesc': 'Ilki Aether öňdebaryjynda WARP tuneli dikeldilýär, soň Firefox öz tuneliiniňi şol tuneliň içinde gurnaýar (Psiphon over Warp ýaly). Süzlenen torlar üçin.',
+      'firefoxModeDirectDesc': 'Firefox öňdebaryjy Mozilla serwerlerine göni birikýär, Aether öňdebaryjysyz. Firefox serwerleriniň baglanmadyk torlary üçin; bu tertipte DNS bölegi has möhüm.',
+      'firefoxTransportDirectDesc': 'Göni tertipte H2 (TCP+TLS) we H3 (QUIC) enjamyň öz interneti arkaly göni geçýär.',
       'firefoxLoginTitle': 'Firefox-a gir',
       'firefoxLoginSubtitle': 'Giriş Mozillanyň resmi sahyponda geçýär',
       'firefoxLoginWaiting': 'Mozillanyň sahyponda girişiňizi garaşýarys…',

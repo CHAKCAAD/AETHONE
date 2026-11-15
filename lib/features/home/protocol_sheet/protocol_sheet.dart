@@ -1287,7 +1287,9 @@ class _FirefoxAccountCardState extends State<_FirefoxAccountCard>
     const gb = 1024 * 1024 * 1024;
     const mb = 1024 * 1024;
     if (bytes >= gb) {
-      final v = (bytes / gb).toStringAsFixed(bytes >= gb * 10 ? 0 : 1);
+      final v = (bytes / gb)
+          .toStringAsFixed(bytes >= gb * 10 ? 0 : 1)
+          .replaceFirst(RegExp(r'\.0$'), '');
       return '$v GB';
     }
     return '${bytes ~/ mb} MB';

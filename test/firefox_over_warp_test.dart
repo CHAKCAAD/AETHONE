@@ -53,6 +53,47 @@ void main() {
       expect(config.toJson()['upstreamSocks'], 'socks5://127.0.0.1:1819');
     });
 
+    test('v1.5.0: the carrier-mode pick defaults to over-WARP, '
+        'persists and migrates (the direct mode)', () {
+      // The standing «دیفالت اور وارپ» decree survives the round trip.
+      final defaults = CoreSettings();
+      expect(defaults.firefoxCarrierMode, FirefoxCarrierMode.overWarp);
+
+      defaults.firefoxCarrierMode = FirefoxCarrierMode.direct;
+      final restored = CoreSettings.fromJson(defaults.toJson());
+      expect(restored.firefoxCarrierMode, FirefoxCarrierMode.direct);
+
+      // A legacy blob with no field migrates to the over-WARP default.
+      final legacy = CoreSettings.fromJson({
+        'firefoxLegProtocol': 'masque',
+      });
+      expect(legacy.firefoxCarrierMode, FirefoxCarrierMode.overWarp);
+      expect(legacy.firefoxLegProtocol, AetherLegProtocol.masque);
+    });
+
+    test('v1.5.0: the direct mode omits the carrier seam entirely '
+        '(the engine keeps its exact 1.2.0 direct behavior)', () {
+      const config = FirefoxEngineConfig(
+        socksListen: '127.0.0.1:1822',
+        auth: FirefoxSessionAuth(accessToken: 'access'),
+      );
+      final blob = config.toJson();
+      expect(blob.containsKey('upstreamSocks'), isFalse);
+      expect(blob['dns'], {'mode': 'system'});
+    });
+
+    test('v1.5.0: the mode strings exist in each supported locale', () {
+      for (final locale in ['fa', 'en', 'ru', 'zh', 'tk']) {
+        final strings = AppStrings.forLocale(locale);
+        expect(strings.secFirefoxMode, isNotEmpty);
+        expect(strings.firefoxModeOverWarp, isNotEmpty);
+        expect(strings.firefoxModeDirect, isNotEmpty);
+        expect(strings.firefoxModeOverWarpDesc, isNotEmpty);
+        expect(strings.firefoxModeDirectDesc, isNotEmpty);
+        expect(strings.firefoxTransportDirectDesc, isNotEmpty);
+      }
+    });
+
     test('provides the carrier description in each supported locale', () {
       for (final locale in ['fa', 'en', 'ru', 'zh', 'tk']) {
         final strings = AppStrings.forLocale(locale);

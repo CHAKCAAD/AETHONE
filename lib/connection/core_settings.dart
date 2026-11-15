@@ -66,6 +66,14 @@ enum TorBridgePolicy { auto, off, custom }
 /// [CoreSettings.firefoxLegProtocol] selection; fresh and migrated settings
 /// default it to WireGuard. Reverse Tor/Psiphon modes still map UDP-needing
 /// legs to MASQUE because their carrier only supports TCP.
+/// v1.5.0 (the owner's round 3) — HOW the Firefox VPN engine reaches the
+/// internet: over the in-process Aether core's WARP carrier (the owner's
+/// standing default — arman-vpn-client's relay/upstream-proxy posture,
+/// with the Aether core in the relay's seat), or DIRECT (arman's direct
+/// posture: the engine's own 1.2.0 path — uTLS control plane, h2/h3 data
+/// plane, the process-local DNS policy; no Aether core, no TUN leg).
+enum FirefoxCarrierMode { overWarp, direct }
+
 enum AetherLegProtocol { wireguard, masque, gool, goolClassic, mim }
 
 /// v4.31 — the IP version the core dials with (`-4` default / `-6` /
@@ -148,6 +156,7 @@ class CoreSettings {
     this.torLegProtocol = AetherLegProtocol.wireguard,
     this.psiphonLegProtocol = AetherLegProtocol.wireguard,
     this.firefoxLegProtocol = AetherLegProtocol.wireguard,
+    this.firefoxCarrierMode = FirefoxCarrierMode.overWarp,
     this.ipVersion = IpVersion.v4,
     this.upstreamProxy = '',
     this.echMode = EchMode.off,
@@ -255,6 +264,11 @@ class CoreSettings {
   /// existing Psiphon/Tor combined modes.
   AetherLegProtocol firefoxLegProtocol;
 
+  /// v1.5.0 — the direct/over-WARP pick (the owner's round 3). Default
+  /// overWarp (the standing «دیفالت اور وارپ» decree); legacy blobs with
+  /// no field migrate to it.
+  FirefoxCarrierMode firefoxCarrierMode;
+
   /// The IP version of the dial (`-4`/`-6`/`--dual`); default = the
   /// core's own v4.
   IpVersion ipVersion;
@@ -349,6 +363,7 @@ class CoreSettings {
         'torLegProtocol': torLegProtocol.name,
         'psiphonLegProtocol': psiphonLegProtocol.name,
         'firefoxLegProtocol': firefoxLegProtocol.name,
+        'firefoxCarrierMode': firefoxCarrierMode.name,
         'ipVersion': ipVersion.name,
         'upstreamProxy': upstreamProxy,
         'echMode': echMode.name,
@@ -441,6 +456,9 @@ class CoreSettings {
         pickEnum(AetherLegProtocol.values, m['firefoxLegProtocol']) ??
         legacyLeg ??
         s.firefoxLegProtocol;
+    s.firefoxCarrierMode =
+        pickEnum(FirefoxCarrierMode.values, m['firefoxCarrierMode']) ??
+            s.firefoxCarrierMode;
     s.ipVersion = pickEnum(IpVersion.values, m['ipVersion']) ?? s.ipVersion;
     if (m['upstreamProxy'] is String) s.upstreamProxy = m['upstreamProxy'];
     s.echMode = pickEnum(EchMode.values, m['echMode']) ?? s.echMode;
