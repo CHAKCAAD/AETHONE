@@ -536,3 +536,34 @@ malformed-endpoint shapes (schemeless / http / garbage), the junk
 bootstrap filtering, the save-time sanitization, and the end-to-end
 regression shape (DoH + custom + schemeless endpoint + junk bootstrap →
 a system line the engine accepts). The build pin lands in §8.4.
+
+### 8.4 Build — PASS (GitHub Actions, طبق قاعده مالک)
+
+- **Run**: `43728500150` (run_number 128) — branch `fix/owner-round-2`،
+  commit `759f413` (= کد نهایی دور ۶)، **conclusion: success** در همان
+  یک پوش.
+- **جاب‌ها**: Firefox engine (go_vet=PASS، go_test=PASS) / Native cores
+  هر ۳ ABI success / DA debug APK (flutter_analyze=PASS «No issues
+  found»، flutter_test=PASS — **۳۵۰ تست گذشت**؛ zipalign + apksigner
+  PASS).
+- **APK**: `AETHONE-DA-Firefox-Debug.apk` — ۱۸۷,۴۰۲,۵۷۴ بایت؛
+  universal (۳ ABI)؛ package_id=`com.chakcaad.aethone.da`.
+- **SHA256 APK**: `e70b6e5d2a5cf8e6f29237d824bad3e59fe71a6429c7bcaee695e0408448b2f0`
+  — توسط CI ثبت و مستقل در sandbox بازمحاسبه و تطبیق یافت.
+- **_byte-identity مستقل موتور درون APK_** (manifest جابِ engine در
+  برابر استخراج از APK، در sandbox): arm64-v8a `7a113229…`
+  (۱۴,۶۶۰,۴۴۰ بایت) / armeabi-v7a `e79bbe7f…` (۱۴,۴۶۸,۹۱۲ بایت) /
+  x86_64 `e1a94941…` (۱۵,۶۳۷,۹۳۶ بایت) — هر سه مطابق.
+- **نسخه محلی برای مالک**: کپی APK + build-report.txt +
+  SHA256SUMS.txt در پوشه download/owner-round-6 ایجنت؛ artifact
+  Actions (ID 14167753103، انقضا ۱۴ روز). NOT TESTED روی دستگاه —
+  پذیرش on-device با مالک است.
+
+**نکتهٔ مهم برای تست دستگاه**: پس از نصب این نسخه، اگر صفحهٔ تنظیمات
+فایرفاکس هنوز نشان می‌دهد «نشانی DoH سفارشی معتبر نیست»، یعنی همان
+تنظیم ذخیره‌شدهٔ قبلی (سفارشی + نشانی ناقص) در جای خود است — یا
+نشانیِ معتبر (مثل `https://1.2.3.4/dns-query`) را ذخیره کنید یا
+ارائه‌دهندهٔ آماده (Cloudflare/Google/Quad9) را برگزینید؛ در هر دو حالت
+خطا رفع می‌شود و اتصال/ورود باید کار کند. اگر تنظیم DNS روی «سیستم»،
+یا DoH با ارائه‌دهندهٔ آماده است و مشکل باقی ماند، لاگ هسته
+(تنظیمات → لاگ هسته) و `adb logcat` مدرک لازم را فراهم می‌کنند.
