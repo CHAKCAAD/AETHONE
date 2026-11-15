@@ -20,6 +20,7 @@ package engine
 import (
         "encoding/json"
         "fmt"
+        "io"
         "os"
         "sync"
 )
@@ -63,7 +64,17 @@ const LoginConfigVersion = 1
 //      h2/h3 data session dials the Fastly edge DIRECTLY. The flag
 //      requires upstreamSocks (fail-fast: dataPlaneDirectWithoutCarrier);
 //      a host that sends no flag keeps the exact 1.5.0 behavior.
-const EngineVersion = "1.6.0"
+// 1.7.0 — the remaining-data round (2026-11-15, the owner's round 5):
+//
+//      the `--usage` role (the account's Guardian quota WITHOUT minting
+//      a pass — arman's fetchProxyUsage model: HEAD then GET on the token
+//      endpoint, riding upstreamSocks when set, X-Quota-Unlimited read);
+//      the usage event carries `quotaUnlimited` beside the quota trio;
+//      the DoH provider defaults become IP-LITERAL endpoints (no poisoned
+//      bootstrap lookup); and a failed h3 session build falls back to h2
+//      ONCE, honestly logged (a dead h3 serves nobody — the pick is a
+//      preference, not a death sentence). Additive only.
+const EngineVersion = "1.7.0"
 
 // Event names (mirrored by FirefoxEngineEvents on the Dart side).
 const (
@@ -82,6 +93,8 @@ const (
         EvLoginStarted     = "loginStarted"
         EvLoginRetry       = "loginRetry"
         EvLoginCompleted   = "loginCompleted"
+        EvUsage            = "usage"      // 1.7.0 — the --usage role's success
+        EvUsageFailed      = "usageFailed" // 1.7.0 — the --usage role's failure
         EvStopping         = "stopping"
         EvStopped          = "stopped"
         EvFailed           = "failed"
@@ -173,11 +186,12 @@ type Event struct {
         SelectionSource  string `json:"selectionSource,omitempty"`
         Recommended      bool   `json:"recommended"`
 
-        // passAcquired / renewed / quotaExhausted
-        PassExpiresAt string `json:"passExpiresAt,omitempty"`
-        QuotaMax      string `json:"quotaMax,omitempty"`
-        QuotaLeft     string `json:"quotaLeft,omitempty"`
-        QuotaReset    string `json:"quotaReset,omitempty"`
+        // passAcquired / renewed / quotaExhausted / usage
+        PassExpiresAt  string `json:"passExpiresAt,omitempty"`
+        QuotaMax       string `json:"quotaMax,omitempty"`
+        QuotaLeft      string `json:"quotaLeft,omitempty"`
+        QuotaReset     string `json:"quotaReset,omitempty"`
+        QuotaUnlimited bool   `json:"quotaUnlimited,omitempty"` // 1.7.0 — X-Quota-Unlimited (the usage role)
 
         // exitVerified / exitVerifyFailed
         ExitIP             string `json:"exitIp,omitempty"`
@@ -231,6 +245,12 @@ func NewEmitter() *Emitter {
 
 // NewEmitterTo wires the emitter to an arbitrary writer (tests).
 func NewEmitterTo(w *os.File) *Emitter {
+        return &Emitter{out: json.NewEncoder(w)}
+}
+
+// NewEmitterToWriter wires the emitter to any io.Writer (the child roles'
+// test seams; production uses NewEmitter/NewEmitterTo).
+func NewEmitterToWriter(w io.Writer) *Emitter {
         return &Emitter{out: json.NewEncoder(w)}
 }
 

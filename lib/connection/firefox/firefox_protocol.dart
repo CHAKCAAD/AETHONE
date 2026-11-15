@@ -162,6 +162,9 @@ class FirefoxEngineEvent {
         quotaMax = raw['quotaMax'] as String? ?? '',
         quotaLeft = raw['quotaLeft'] as String? ?? '',
         quotaReset = raw['quotaReset'] as String? ?? '',
+        // 1.7.0 — the usage role's explicit X-Quota-Unlimited flag
+        // (wrong-typed values degrade to false, never throw).
+        quotaUnlimited = raw['quotaUnlimited'] == true,
         exitIp = raw['exitIp'] as String? ?? '',
         exitCountry = raw['exitCountry'] as String? ?? '',
         configuredCountry = raw['configuredCountry'] as String? ?? '',
@@ -208,9 +211,14 @@ class FirefoxEngineEvent {
   /// `quotaMax`/`quotaLeft` are byte counts as strings (empty when the
   /// account carries no metered quota — the unlimited case),
   /// `quotaReset` is the period reset (RFC3339 or Unix seconds).
+  ///
+  /// 1.7.0 — the usage event's explicit unlimited flag (X-Quota-
+  /// Unlimited: true from the `--usage` role; always false on the pass
+  /// events, which infer unlimited from the empty pair instead).
   final String quotaMax;
   final String quotaLeft;
   final String quotaReset;
+  final bool quotaUnlimited;
   final String exitIp;
   final String exitCountry;
   final String configuredCountry;

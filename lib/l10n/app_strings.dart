@@ -372,6 +372,17 @@ class AppStrings {
   String get firefoxDnsTestButton => _v['firefoxDnsTestButton']!;
   String get firefoxDnsTestSuccess => _v['firefoxDnsTestSuccess']!;
   String get firefoxDnsTestFailed => _v['firefoxDnsTestFailed']!;
+  /// 1.7.0 — the DNS role never produced events (a setup failure or a
+  /// timeout): its own message, distinct from the per-domain one.
+  String get firefoxDnsSetupFailed => _v['firefoxDnsSetupFailed']!;
+  /// 1.7.0 — DoH + custom with no endpoint saved: the effective mode
+  /// falls back to system until one is.
+  String get firefoxDnsCustomIncomplete =>
+      _v['firefoxDnsCustomIncomplete']!;
+  /// 1.7.0 — the on-demand quota refresh (the `--usage` role).
+  String get firefoxQuotaRefresh => _v['firefoxQuotaRefresh']!;
+  String get firefoxQuotaRefreshing => _v['firefoxQuotaRefreshing']!;
+  String get firefoxQuotaResetLabel => _v['firefoxQuotaResetLabel']!;
   String get firefoxLoginTitle => _v['firefoxLoginTitle']!;
   String get firefoxLoginSubtitle => _v['firefoxLoginSubtitle']!;
   String get firefoxLoginWaiting => _v['firefoxLoginWaiting']!;
@@ -652,8 +663,13 @@ class AppStrings {
       'firefoxDnsTesting': 'در حال آزمایش DNS…',
       'firefoxDnsTestSuccess': 'DNS برای همه دامنه‌های آزمایش‌شده پاسخ داد.',
       'firefoxDnsTestFailed': 'برخی درخواست‌های DNS ناموفق بودند.',
+      'firefoxDnsSetupFailed': 'راه‌اندازی DNS انتخاب‌شده ناموفق بود؛ تنظیمات را بررسی کنید.',
+      'firefoxDnsCustomIncomplete': 'نشانی DoH سفارشی خالی است؛ تا ذخیرهٔ نشانی، DNS سیستم اعمال می‌شود.',
       'firefoxQuotaLabel': 'حجم باقی‌مانده',
       'firefoxQuotaUnlimited': 'نامحدود',
+      'firefoxQuotaRefresh': 'به‌روزرسانی حجم',
+      'firefoxQuotaRefreshing': 'در حال به‌روزرسانی حجم…',
+      'firefoxQuotaResetLabel': 'تجدید دوره',
       'secFirefoxMode': 'نوع اتصال',
       'firefoxModeOverWarp': 'اور وارپ (پیش‌فرض)',
       'firefoxModeDirect': 'مستقیم',
@@ -1014,8 +1030,13 @@ class AppStrings {
       'firefoxDnsTesting': 'Testing DNS…',
       'firefoxDnsTestSuccess': 'DNS answered for every tested domain.',
       'firefoxDnsTestFailed': 'Some DNS lookups failed.',
+      'firefoxDnsSetupFailed': 'The selected DNS failed to start; check the settings.',
+      'firefoxDnsCustomIncomplete': 'The custom DoH endpoint is empty; system DNS applies until one is saved.',
       'firefoxQuotaLabel': 'Remaining data',
       'firefoxQuotaUnlimited': 'Unlimited',
+      'firefoxQuotaRefresh': 'Refresh data',
+      'firefoxQuotaRefreshing': 'Refreshing data…',
+      'firefoxQuotaResetLabel': 'Renews',
       'secFirefoxMode': 'Connection mode',
       'firefoxModeOverWarp': 'Over WARP (default)',
       'firefoxModeDirect': 'Direct',
@@ -1374,8 +1395,13 @@ class AppStrings {
       'firefoxDnsTesting': 'Проверка DNS…',
       'firefoxDnsTestSuccess': 'DNS ответил для всех проверенных доменов.',
       'firefoxDnsTestFailed': 'Некоторые DNS-запросы завершились ошибкой.',
+      'firefoxDnsSetupFailed': 'Не удалось запустить выбранный DNS; проверьте настройки.',
+      'firefoxDnsCustomIncomplete': 'Пользовательский DoH-адрес пуст; до сохранения адреса применяется системный DNS.',
       'firefoxQuotaLabel': 'Остаток трафика',
       'firefoxQuotaUnlimited': 'Без ограничений',
+      'firefoxQuotaRefresh': 'Обновить данные о трафике',
+      'firefoxQuotaRefreshing': 'Обновление данных о трафике…',
+      'firefoxQuotaResetLabel': 'Обновление периода',
       'secFirefoxMode': 'Режим подключения',
       'firefoxModeOverWarp': 'Через WARP (по умолчанию)',
       'firefoxModeDirect': 'Напрямую',
@@ -1732,8 +1758,13 @@ class AppStrings {
       'firefoxDnsTesting': '正在测试 DNS…',
       'firefoxDnsTestSuccess': '所有测试域名均获得 DNS 响应。',
       'firefoxDnsTestFailed': '部分 DNS 查询失败。',
+      'firefoxDnsSetupFailed': '所选 DNS 启动失败；请检查设置。',
+      'firefoxDnsCustomIncomplete': '自定义 DoH 地址为空；保存地址前将使用系统 DNS。',
       'firefoxQuotaLabel': '剩余流量',
       'firefoxQuotaUnlimited': '不限量',
+      'firefoxQuotaRefresh': '刷新流量',
+      'firefoxQuotaRefreshing': '正在刷新流量…',
+      'firefoxQuotaResetLabel': '周期更新',
       'secFirefoxMode': '连接模式',
       'firefoxModeOverWarp': '经 WARP（默认）',
       'firefoxModeDirect': '直连',
@@ -2096,8 +2127,13 @@ class AppStrings {
       'firefoxDnsTesting': 'DNS barlanýar…',
       'firefoxDnsTestSuccess': 'Synag edilen ähli domenler üçin DNS jogap berdi.',
       'firefoxDnsTestFailed': 'Käbir DNS gözlegleri şowsuz boldy.',
+      'firefoxDnsSetupFailed': 'Saýlanan DNS başlanmady; sazlamalary barlaň.',
+      'firefoxDnsCustomIncomplete': 'Ýörite DoH salgysy boş; salgy ýatda saklanýança ulgam DNS ulanylýar.',
       'firefoxQuotaLabel': 'Galan möçber',
       'firefoxQuotaUnlimited': 'Çäksiz',
+      'firefoxQuotaRefresh': 'Möçberi täzele',
+      'firefoxQuotaRefreshing': 'Möçber täzelenýär…',
+      'firefoxQuotaResetLabel': 'Döwür täzelenmesi',
       'secFirefoxMode': 'Birikme tertibi',
       'firefoxModeOverWarp': 'WARP arkaly (adaty)',
       'firefoxModeDirect': 'Göni',

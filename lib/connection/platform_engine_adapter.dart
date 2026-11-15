@@ -533,7 +533,12 @@ fake_ip = true
 /// MethodChannel (see MainActivity.kt / AethoneVpnService.kt) and to Aether
 /// over dart:ffi. One active connection at a time; disconnect always cleans
 /// BOTH engines even if connect failed halfway.
-class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable, FirefoxLoginCarrierCapable {
+class PlatformEngineAdapter
+    implements
+        EngineAdapter,
+        FirefoxDnsProbeCapable,
+        FirefoxLoginCarrierCapable,
+        FirefoxQuotaRefreshCapable {
   PlatformEngineAdapter({
     Duration? statsInterval,
     this._coreFactory,
@@ -2453,6 +2458,118 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable, Fi
       return events;
     }
     return events;
+  }
+
+  /// 1.7.0 (the owner's round 5) — the on-demand quota refresh: the
+  /// engine's `--usage` role (the account's Guardian quota WITHOUT
+  /// minting a pass — arman's fetchProxyUsage model). The request rides
+  /// a WARP carrier: a LIVE one (a connected session, or the login
+  /// screen's leg during the post-sign-in refresh) is probed and
+  /// reused; otherwise the plain login carrier is booted for the fetch
+  /// and taken down after it. A signed-out vault is an honest false —
+  /// never a fake quota.
+  @override
+  Future<bool> refreshFirefoxQuota() async {
+    final vault = await _firefoxVault();
+    final auth = await vault.load();
+    if (auth == null || auth.accessToken.isEmpty) return false;
+
+    // A live carrier (the connected tunnel's 1819 leg, or the login
+    // screen's) is probed and reused — never replaced.
+    final warpPort = TransportModes.masque.socksEndpoint.port + portOffset;
+    String? carrier;
+    var ownedCarrier = false;
+    if (await TunnelProbe.isListenerReady(warpPort)) {
+      try {
+        await TunnelProbe().trace(port: warpPort, timeout: _probeTimeout);
+        carrier = 'socks5://127.0.0.1:$warpPort';
+      } catch (_) {
+        carrier = null; // a half-dead listener — refuse to stack on it
+      }
+    }
+    if (carrier == null) {
+      try {
+        carrier = await firefoxLoginCarrierUp();
+        ownedCarrier = carrier != null;
+      } catch (_) {
+        carrier = null;
+      }
+    }
+
+    try {
+      return await _firefoxUsage(auth, carrier);
+    } finally {
+      if (ownedCarrier) {
+        await firefoxLoginCarrierDown();
+      }
+    }
+  }
+
+  /// Spawns the engine's `--usage` role and routes its `usage` event
+  /// into the adapter's event stream (the store's quota slots). Returns
+  /// false when the role failed (its classified event is logged only).
+  Future<bool> _firefoxUsage(
+    FirefoxSessionAuth auth,
+    String? upstreamSocks,
+  ) async {
+    final paths = await _paths();
+    final process = await Process.start(
+      '${paths.nativeLibraryDir}/libfirefoxvpn.so',
+      const ['--usage'],
+      environment: const {},
+      includeParentEnvironment: false,
+    );
+    // Tokens travel ONLY on the stdin pipe (the spawn discipline).
+    process.stdin.writeln(jsonEncode({
+      'version': 1,
+      'auth': {
+        'accessToken': auth.accessToken,
+        'refreshToken': auth.refreshToken,
+      },
+      if (upstreamSocks != null && upstreamSocks.isNotEmpty)
+        'upstreamSocks': upstreamSocks,
+      'dns': _config?.firefoxDnsConfig ?? const {'mode': 'system'},
+    }));
+    await process.stdin.close();
+    final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+    final stderrFuture = process.stderr.transform(utf8.decoder).join();
+    final code = await process.exitCode.timeout(
+      const Duration(seconds: 40),
+      onTimeout: () {
+        process.kill();
+        throw TimeoutException('Firefox usage fetch timed out');
+      },
+    );
+    final stdout = await stdoutFuture;
+    await stderrFuture;
+    for (final line in const LineSplitter().convert(stdout)) {
+      if (line.isEmpty || !line.startsWith('{')) continue;
+      try {
+        final decoded = jsonDecode(line);
+        if (decoded is! Map<String, dynamic>) continue;
+        final name = decoded['event'];
+        if (name == 'usage') {
+          _emit(EngineFirefoxQuota(
+            decoded['quotaMax']?.toString() ?? '',
+            decoded['quotaLeft']?.toString() ?? '',
+            decoded['quotaReset']?.toString() ?? '',
+            quotaUnlimited: decoded['quotaUnlimited'] == true,
+          ));
+          return true;
+        }
+        if (name == 'usageFailed') {
+          _debugLog('firefox usage failed: '
+              '${decoded['failCode'] ?? ''} '
+              '(httpStatus: ${decoded['httpStatus'] ?? 0})');
+        }
+      } catch (_) {
+        // Non-JSON noise — the exit code decides below.
+      }
+    }
+    if (code != 0) {
+      _debugLog('firefox usage role exited with code $code');
+    }
+    return false;
   }
 
   /// PHASE-2 — the EngineAdapter surface: one --discover round per call

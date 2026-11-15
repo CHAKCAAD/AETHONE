@@ -62,15 +62,18 @@ the Android-Keystore vault on the Dart side).
 ## 3. Process contract
 
 Fixed and versioned by `engine.ConfigVersion = 1` / `EngineVersion
-"1.6.0"` (bump both on breaking change; every bump since 1.1.0 is
+"1.7.0"` (bump both on breaking change; every bump since 1.1.0 is
 ADDITIVE — the 1.2.0 classified `failed` event, the 1.4.0 WARP carrier
 seams, the 1.5.0 guardian-line merge (the single `upstreamSocks`
 seam replacing 1.4.0's apiProxy/upstreamProxy pair, the process-local
 `dns` block, the `--webview-proxy` role and `quotaMax` on the quota
-events), and the 1.6.0 direct data plane (the `dataPlaneDirect` flag
+events), the 1.6.0 direct data plane (the `dataPlaneDirect` flag
 — arman's relay posture: the initial stages ride the carrier, the
-data connection dials the Fastly edge itself); a host that sends none
-of the new fields keeps the exact pre-1.4.0 direct behavior).
+data connection dials the Fastly edge itself), and the 1.7.0
+remaining-data round (the `--usage` role + `quotaUnlimited` on the
+event, the IP-literal DoH provider defaults, the h3→h2 fallback);
+a host that sends none of the new fields keeps the exact pre-1.4.0
+direct behavior).
 
 * **stdin** — exactly ONE JSON line (`engine.Config`), written by the host
   right after spawn. The line is bounded to 1 MiB (`readConfigLine`);
@@ -110,6 +113,24 @@ of the new fields keeps the exact pre-1.4.0 direct behavior).
   retrying unverified sessions inside a 300 s budget and emitting the
   pair on the secret-carrying `loginCompleted` event. Short-lived
   child; stdin EOF = clean cancel (exit 0).
+* **`--usage` role** (1.7.0, the owner's round 5 — the remaining-data
+  fix, arman's `fetchProxyUsage` model) — `libfirefoxvpn.so --usage`
+  reads ONE JSON line on stdin (`engine.UsageConfig` v1: `auth`
+  (access token required), optional `guardian`, optional
+  `upstreamSocks`, the same `dns` block) and asks the Guardian TOKEN
+  ENDPOINT for its `X-Quota-*` headers WITHOUT minting a pass: HEAD
+  first, GET fallback when HEAD is refused, a 429 read as a
+  usage-carrying answer (a spent quota still reports its headers).
+  Success prints the `usage` event (`quotaMax`/`quotaLeft`/`quotaReset`
+  + the explicit `quotaUnlimited` flag from `X-Quota-Unlimited`) and
+  exits 0; failure prints `usageFailed` (classified like the login:
+  401/403 → `sessionRejected`, 429 → `quotaExhausted`, other 4xx/5xx →
+  `serverRejection`, transport → `networkUnavailable`; `httpStatus`
+  rides along) and exits 1. With `upstreamSocks` set the request rides
+  the WARP carrier (the control-plane transport seam — the uTLS
+  Firefox ClientHello kept); the host runs it right after sign-in
+  (before the login carrier teardown), when the Firefox settings page
+  opens, and from the remaining-data refresh button.
 
 ### Config (stdin line; `engine.Config`)
 
@@ -119,10 +140,10 @@ of the new fields keeps the exact pre-1.4.0 direct behavior).
 | `socksListen` | MUST be loopback (`socksListenNotLoopback` otherwise); default `127.0.0.1:1822` |
 | `guardian` | default `https://vpn.mozilla.org`; must be https (`guardianNotHttps`) |
 | `country` | `""`/`"REC"` = AUTO (recommended anycast); ISO-3166-1 alpha-2 or country name, case-insensitive; no match → `noMatchForCountry` with the available list |
-| `transport` | `h2` (default) or `h3` (`transportUnknown` otherwise). Over the `upstreamSocks` carrier both ride: h2 via TCP CONNECT, h3 via UDP ASSOCIATE (1.5.0 — the 1.4.0 h3-over-carrier refusal is retired with the two-seam carrier it gated) |
+| `transport` | `h2` (default) or `h3` (`transportUnknown` otherwise). Over the `upstreamSocks` carrier both ride: h2 via TCP CONNECT, h3 via UDP ASSOCIATE (1.5.0 — the 1.4.0 h3-over-carrier refusal is retired with the two-seam carrier it gated). 1.7.0: a FAILED h3 session build falls back to h2 ONCE through the same dial path, honestly logged (`h3 session failed (…) — falling back to h2`) and mirrored in the live transport label — a network that drops UDP (QUIC throttling, a carrier refusing UDP ASSOCIATE) must not kill the whole connect while h2 rides fine; a double failure reports the h3 chain (the user's pick) |
 | `upstreamSocks` | 1.5.0 — the single WARP-carrier seam (replaces 1.4.0's `apiProxy` + `upstreamProxy` pair): `socks5://127.0.0.1:port`, loopback host only, no userinfo/path/query (`upstreamSocksInvalid` otherwise). Routes the CONTROL plane (FxA / Guardian / RemoteSettings, the uTLS Firefox ClientHello kept) AND the MASQUE data plane through the in-process Aether carrier; empty = the direct path. The HOST's mode pick decides (CoreSettings.firefoxCarrierMode): over-WARP sets it and never falls back; DIRECT (1.6.0 semantics) sets it TOO — the initial connection stages ride the carrier in both modes — and adds `dataPlaneDirect` so only the data plane leaves it. |
 | `dataPlaneDirect` | 1.6.0 — the DIRECT data plane (the owner's round 4, arman's relay posture): `true` asks the engine to keep ONLY the control plane on the `upstreamSocks` carrier while the h2/h3 data session dials the Fastly edge directly (h2 over TCP+TLS, h3 over QUIC; the process-local `dns` policy resolves the edge). Requires `upstreamSocks` (fail-fast `dataPlaneDirectWithoutCarrier` otherwise); absent = the 1.5.0 carried behavior. |
-| `dns` | 1.5.0 — the process-local resolver policy (system \| DoH; see `internal/dnsresolver`), applied BEFORE any network work in the tunnel, `--login`, `--discover` and `--webview-proxy` roles (`dnsConfigInvalid` otherwise; absent = system) |
+| `dns` | 1.5.0 — the process-local resolver policy (system \| DoH; see `internal/dnsresolver`), applied BEFORE any network work in the tunnel, `--login`, `--discover` and `--webview-proxy` roles (`dnsConfigInvalid` otherwise; absent = system). 1.7.0: the DoH PROVIDER DEFAULTS are IP-LITERAL endpoints (Cloudflare `https://1.1.1.1/dns-query`, Google `https://8.8.8.8/dns-query`, Quad9 `https://9.9.9.9/dns-query` — arman's ThroughServers model): a hostname endpoint's own bootstrap lookup is answered by the poisoner on a DNS-poisoned network, which failed every provider identically; the IP forms need no lookup and carry no SNI |
 | `upstreamOverride` | `host:port` — skip discovery, dial that MASQUE proxy (the `selected` event reports `selectionSource:"override"`); test/lifecycle harness use |
 | `upstreamTimeoutMs` / `handshakeTimeoutMs` / `idleTimeoutMs` / `maxConns` | 0 → upstream defaults (20 s / 10 s / unlimited / 256) |
 | `exitCheckUrl` / `exitTimeoutMs` | engine-side exit probe; default `https://www.cloudflare.com/cdn-cgi/trace`, 10 s |
@@ -136,7 +157,10 @@ of the new fields keeps the exact pre-1.4.0 direct behavior).
 (country/name, city code/name, hostname, port, selectionSource
 `autoRec|country|override`, recommended) — **the configured country and
 the city/hostname are distinct fields, never conflated** · `passAcquired`
-/ `renewed` (passExpiresAt, quota) · `upstreamReady` (transport, proxy
+/ `renewed` (passExpiresAt, quota) · `usage` (1.7.0 — quotaMax,
+quotaLeft, quotaReset, quotaUnlimited; the `--usage` role's answer) /
+`usageFailed` (1.7.0 — failCode, httpStatus; classified like the login) ·
+`upstreamReady` (transport, proxy
 host, latency) · `socksReady` (addr — the listener is really bound) ·
 `exitVerified` (exitIp, exitCountry, configuredCountry, exitCountryMatches,
 latency) / `exitVerifyFailed` — **the exit country is reported separately

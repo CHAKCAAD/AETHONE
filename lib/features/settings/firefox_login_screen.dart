@@ -87,8 +87,17 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
       await widget.store.refreshFirefoxAccount();
       if (!mounted) return;
       setState(() => _phase = _LoginPhase.success);
-      // A beat of success, then back to the settings page.
-      Timer(const Duration(milliseconds: 1400), () {
+      // 1.7.0 — the remaining-data value lands BEFORE the page closes:
+      // the login carrier is still up (its teardown rides this page's
+      // dispose), so the `--usage` fetch rides it; a bounded wait keeps
+      // a slow network from holding the success pane hostage.
+      final quotaLanded = widget.store
+          .refreshFirefoxQuota()
+          .timeout(const Duration(seconds: 12), onTimeout: () => false);
+      // A beat of success, then back to the settings page (after the
+      // quota walk — its carrier teardown must not race the fetch).
+      Timer(const Duration(milliseconds: 1400), () async {
+        await quotaLanded;
         if (mounted) Navigator.of(context).maybePop();
       });
     } else if (result.state == FirefoxLoginState.cancelled) {

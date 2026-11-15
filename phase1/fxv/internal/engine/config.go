@@ -176,6 +176,20 @@ func (c Config) Validate() (Config, error) {
         return c, nil
 }
 
+// validateHTTPSURL gates an optional HTTPS endpoint override: empty (the
+// default) or an absolute https:// URL with a host and no user-info (the
+// tunnel config's Guardian rule, shared with the usage config).
+func validateHTTPSURL(raw string) error {
+        raw = strings.TrimSpace(raw)
+        if raw == "" {
+                return nil
+        }
+        if u, err := url.Parse(raw); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+                return fmt.Errorf("guardianNotHttps")
+        }
+        return nil
+}
+
 // validateLoopbackSocksURL gates a carrier URL: empty (the direct dial)
 // or a loopback socks5:// host:port with no userinfo/path/query/fragment.
 // Shared by the tunnel config's UpstreamSocks and the login config's.

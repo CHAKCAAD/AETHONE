@@ -191,3 +191,34 @@ What changed, and what did NOT:
   remains BLOCKED until the owner resolves it — written permission
   from the upstream author, a licensed alternative, or indefinite
   private containment.
+
+## 2026-11-15 amendment — the 1.7.0 remaining-data round (owner round 5)
+
+The owner's device test of the round-4 build reported four functional
+defects; the diagnosis and fix live in
+`../../docs/firefox-vpn/owner-round-2-2026-11-15.md` §7. The engine
+changes (all ADDITIVE, contract 1.7.0 — every one traced to the
+arman-vpn-client reference where a seam already existed there):
+
+* `--usage` (cmd/libfirefoxvpn/usage.go) — the account's Guardian quota
+  WITHOUT minting a pass: HEAD then GET on `/api/v1/fpn/token`, the
+  X-Quota-* headers parsed with arman's ProxyUsage semantics
+  (X-Quota-Unlimited wins alone; a 429 still carries its usage
+  headers). Rides `upstreamSocks` through the control-plane seam. NEW
+  AETHONE code (the pinned upstream has no quota-read role); the
+  endpoint/headers/UA discipline mirrors its `guardian.go`.
+* The quota events gain `quotaUnlimited` (contract.go) — the Dart
+  parse keeps the inferred empty-pair rule, the flag wins alone.
+* The DoH provider defaults became IP-LITERAL endpoints
+  (dnsresolver/config.go — arman's `ThroughServers`):
+  1.1.1.1/8.8.8.8/9.9.9.9. A hostname endpoint's bootstrap lookup is
+  answered by the poisoner on a DNS-poisoned network — the defect
+  behind "برای همه DNS ها ارور" — and the IP forms need no lookup at
+  all. The DoH transport dials an IP-literal endpoint directly
+  (resolver.go).
+* The h3→h2 fallback (upstream/controller.go): one h2 retry through
+  the same dial path when the h3 session build fails, honestly logged;
+  the double failure reports the h3 chain.
+
+No upstream file was touched (the pin and the manifest are unchanged);
+everything above is fxv-side or app-side code.

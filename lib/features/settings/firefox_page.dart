@@ -20,6 +20,7 @@ import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 import '../../../l10n/app_strings.dart';
+import '../home/widgets/hero_logo.dart' show ScanRings;
 import 'firefox_login_screen.dart';
 import 'settings_controls.dart';
 import 'subpage_frame.dart';
@@ -42,7 +43,15 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
     widget.store.loadFirefoxDnsSettings().then((_) {
       if (mounted) widget.store.refreshFirefoxLocations();
     });
-    widget.store.refreshFirefoxAccount();
+    widget.store.refreshFirefoxAccount().then((_) {
+      // 1.7.0 — the remaining-data value lands on page open (the
+      // `--usage` role through a WARP carrier; a signed-out vault is
+      // an honest no-op).
+      if (mounted &&
+          widget.store.firefoxAccount == FirefoxAccountStatus.signedIn) {
+        widget.store.refreshFirefoxQuota();
+      }
+    });
   }
 
   void _openLogin(BuildContext context) {
@@ -94,6 +103,14 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
               SettingLabel(accountStatus),
               const SizedBox(height: 10),
               if (store.firefoxAccount == FirefoxAccountStatus.signedIn) ...[
+                // v1.7.0 — the remaining-data card (the owner's round 5:
+                // «بخش حجم باقی‌مانده رو اصلاح کن چون ظاهراً کار نمیکنه»):
+                // the live value + the on-demand refresh (the `--usage`
+                // role — no pass minted, the WARP carrier ridden like
+                // the sign-in). The same block feeds the settings pill
+                // and the protocol card.
+                _FirefoxQuotaCard(store: store),
+                const SizedBox(height: 10),
                 // Sign-out: the logout-grade vault wipe (the store
                 // disconnects a live firefox session first).
                 SettingActionButton(
@@ -144,11 +161,31 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
               const SubSectionDivider(),
               SettingInfoText(strings.firefoxLocationDesc),
               const SubSectionDivider(),
-              // The honesty label (live / cached + the fetch time).
-              SettingInfoText(
-                fetchedAt == null
-                    ? listLabel
-                    : '$listLabel — ${_formatTime(context, fetchedAt)}',
+              // The honesty label (live / cached + the fetch time) — with
+              // the scan-loading rings while the refresh walk runs (the
+              // owner's round 5: a backend operation must show its
+              // loading the moment it starts).
+              Row(
+                children: [
+                  if (store.firefoxLocationsRefreshing)
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: ScanRings(
+                        color: AethColors.textSecondary,
+                        size: 14,
+                      ),
+                    ),
+                  if (store.firefoxLocationsRefreshing)
+                    const SizedBox(width: 8),
+                  Expanded(
+                    child: SettingInfoText(
+                      fetchedAt == null
+                          ? listLabel
+                          : '$listLabel — ${_formatTime(context, fetchedAt)}',
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -303,6 +340,128 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
   }
 }
 
+/// v1.7.0 (the owner's round 5) — the remaining-data card on the Firefox
+/// settings page: the LIVE value (the `--usage` role — fetched at page
+/// open, after sign-in, on connect, and from this refresh button), the
+/// honest «نامحدود» / «—» placeholders, the reset stamp when Guardian
+/// reports one, and the refresh walk's scan-loading rings — the user
+/// SEES the backend operation the moment they press.
+class _FirefoxQuotaCard extends StatelessWidget {
+  const _FirefoxQuotaCard({required this.store});
+
+  final ConnectionStore store;
+
+  /// The app's own bytes format (the settings pill's precedent: Latin
+  /// digits + MB/GB, LTR-locked by the value row).
+  static String _formatBytes(int bytes) {
+    const gb = 1024 * 1024 * 1024;
+    const mb = 1024 * 1024;
+    if (bytes >= gb) {
+      final v = (bytes / gb)
+          .toStringAsFixed(bytes >= gb * 10 ? 0 : 1)
+          .replaceFirst(RegExp(r'\.0$'), '');
+      return '$v GB';
+    }
+    return '${bytes ~/ mb} MB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final quota = store.firefoxQuota;
+    final String value;
+    if (quota == null) {
+      value = '—'; // never known — the honest placeholder
+    } else if (quota.unlimited) {
+      value = strings.firefoxQuotaUnlimited;
+    } else {
+      value = _formatBytes(quota.remainingBytes ?? 0);
+    }
+    final reset = quota?.resetAt;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    strings.firefoxQuotaLabel,
+                    style: TextStyle(
+                      fontFamily: 'IRANYekanX',
+                      fontWeight: FontWeight.w400,
+                      fontSize: 11 * s,
+                      color: AethColors.textSecondary,
+                    ),
+                  ),
+                  SizedBox(height: 3 * s),
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Text(
+                      value,
+                      style: TextStyle(
+                        fontFamily: 'IRANYekanX',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16 * s,
+                        color: AethColors.accentConnected,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (reset != null && !quota!.unlimited)
+              Padding(
+                padding: EdgeInsets.only(left: 12 * s),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      strings.firefoxQuotaResetLabel,
+                      style: TextStyle(
+                        fontFamily: 'IRANYekanX',
+                        fontWeight: FontWeight.w400,
+                        fontSize: 11 * s,
+                        color: AethColors.textSecondary,
+                      ),
+                    ),
+                    SizedBox(height: 3 * s),
+                    Text(
+                      _formatReset(context, reset),
+                      style: TextStyle(
+                        fontFamily: 'IRANYekanX',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12 * s,
+                        color: AethColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        SizedBox(height: 8 * s),
+        SettingActionButton(
+          keyId: 'firefox-quota-refresh',
+          label: strings.firefoxQuotaRefresh,
+          busy: store.firefoxQuotaRefreshing,
+          busyLabel: strings.firefoxQuotaRefreshing,
+          onTap: () => store.refreshFirefoxQuota(),
+        ),
+      ],
+    );
+  }
+
+  String _formatReset(BuildContext context, DateTime t) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    final d = t.toLocal();
+    return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
+  }
+}
+
 
 /// DNS for Firefox's separate pre-connect roles (WebChannel sign-in,
 /// initial discovery and the explicit DNS probe). Once Firefox over WARP
@@ -322,6 +481,7 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
   String _endpoint = '';
   String _bootstrap = '';
   bool _testing = false;
+  bool _setupFailed = false;
   List<Map<String, dynamic>>? _probeEvents;
 
   @override
@@ -335,13 +495,24 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
   Future<void> _runDnsProbe() async {
     setState(() {
       _testing = true;
+      _setupFailed = false;
       _probeEvents = null;
     });
     try {
       final events = await widget.store.firefoxDnsProbe();
-      if (mounted) setState(() => _probeEvents = events ?? const []);
+      if (!mounted) return;
+      setState(() {
+        // null = the role never produced events (a setup failure or a
+        // timeout) — its own message, never the per-domain one.
+        _setupFailed = events == null;
+        _probeEvents = events ?? const [];
+      });
     } catch (_) {
-      if (mounted) setState(() => _probeEvents = const []);
+      if (!mounted) return;
+      setState(() {
+        _setupFailed = true;
+        _probeEvents = const [];
+      });
     } finally {
       if (mounted) setState(() => _testing = false);
     }
@@ -403,10 +574,15 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
               key: ValueKey('firefox-dns-endpoint-$_endpoint'),
               keyId: 'firefox-dns-endpoint',
               label: strings.firefoxDnsEndpoint,
-              hint: 'https://dns.example/dns-query',
+              hint: 'https://1.2.3.4/dns-query',
               initial: _endpoint,
               onChanged: (value) => _endpoint = value,
             ),
+            // 1.7.0 — the honest incomplete hint: an empty custom
+            // endpoint degrades the EFFECTIVE mode to system (never an
+            // invalid engine line) — the user must know why.
+            if (store.firefoxDnsCustomIncomplete)
+              SettingInfoText(strings.firefoxDnsCustomIncomplete),
           ],
           SizedBox(height: 12 * s),
           SettingField(
@@ -429,14 +605,16 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
           ),
         ],
         SizedBox(height: 14 * s),
-        if (_testing)
-          SettingInfoText(strings.firefoxDnsTesting)
-        else
-          SettingActionButton(
-            keyId: 'firefox-dns-test',
-            label: strings.firefoxDnsTestButton,
-            onTap: _runDnsProbe,
-          ),
+        // 1.7.0 — the test button itself carries the scan-loading rings
+        // while the probe runs (the owner's round 5: the user SEES the
+        // backend operation the moment they press).
+        SettingActionButton(
+          keyId: 'firefox-dns-test',
+          label: strings.firefoxDnsTestButton,
+          busy: _testing,
+          busyLabel: strings.firefoxDnsTesting,
+          onTap: _runDnsProbe,
+        ),
         if (_probeEvents != null) ...[
           SizedBox(height: 10 * s),
           Builder(builder: (context) {
@@ -452,13 +630,20 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SettingInfoText(
-                  ok ? strings.firefoxDnsTestSuccess : strings.firefoxDnsTestFailed,
+                  // The role never produced events (setup failure or
+                  // timeout) — its own message, distinct from the
+                  // per-domain "some requests failed".
+                  _setupFailed
+                      ? strings.firefoxDnsSetupFailed
+                      : ok
+                          ? strings.firefoxDnsTestSuccess
+                          : strings.firefoxDnsTestFailed,
                 ),
                 for (final event in _probeEvents!)
                   if (event['event'] == 'dnsProbe')
                     SettingInfoText(
                       "${event['domain']?.toString() ?? '—'} · "
-                          "${(event['addresses'] as List?)?.join(', ') ?? '—'} · "
+                          "${(event['addresses'] as List?)?.join(', ') ?? (event['error'] as String? ?? '—')} · "
                           "${event['elapsedMs']?.toString() ?? '0'} ms",
                     ),
               ],

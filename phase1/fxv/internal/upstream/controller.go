@@ -75,6 +75,12 @@ type ControllerConfig struct {
 type Controller struct {
         cfg ControllerConfig
 
+        // The session builders (1.7.0's fallback seam): the real dialers
+        // by default; same-package tests may swap them to drive the
+        // h3→h2 fallback without a live Fastly edge.
+        h2Builder func(*vpnclient.ProxyPassInfo) (*H2ProxySession, error)
+        h3Builder func(*vpnclient.ProxyPassInfo) (*H3ProxySession, error)
+
         mu          sync.Mutex
         session     Session
         rawToken    string
@@ -93,11 +99,14 @@ func NewController(cfg ControllerConfig) *Controller {
         if cfg.Logf == nil {
                 cfg.Logf = func(string, ...any) {}
         }
-        return &Controller{
+        c := &Controller{
                 cfg:         cfg,
                 sessionDown: make(chan struct{}),
                 terminalCh:  make(chan TerminalKind, 1),
         }
+        c.h2Builder = c.dialH2Session
+        c.h3Builder = c.dialH3Session
+        return c
 }
 
 // Terminal yields the renewal loop's terminal outcome (quota /
@@ -145,33 +154,22 @@ func (c *Controller) AcquireInitialPass(ctx context.Context) (*vpnclient.ProxyPa
 // Start builds the single upstream session with the acquired pass and
 // starts the renewal loop. The returned latency is the session build
 // time (the upstreamReady event).
+//
+// 1.7.0 — the h3→h2 fallback: a FAILED h3 session build retries ONCE
+// as h2 through the same dial path (direct or the carrier), honestly
+// logged through cfg.Logf and mirrored in the live transport label —
+// the pick is a preference, and a dead h3 session serves nobody (a
+// network that drops UDP — QUIC throttling, a carrier whose UDP
+// ASSOCIATE is refused — would otherwise kill the whole connect while
+// h2 rides fine on the same path).
 func (c *Controller) Start(ctx context.Context, pass *vpnclient.ProxyPassInfo) (latency time.Duration, err error) {
         started := time.Now()
-        switch c.cfg.Transport {
-        case "h3":
-                var s *H3ProxySession
-                if c.cfg.UpstreamSocks != "" {
-                        s, err = NewH3ProxySessionThroughSOCKS(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout, c.cfg.UpstreamSocks)
-                } else {
-                        s, err = NewH3ProxySession(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout)
-                }
-                if err == nil {
-                        c.setSession(s, pass)
-                }
-        default:
-                var s *H2ProxySession
-                if c.cfg.UpstreamSocks != "" {
-                        s, err = NewH2ProxySessionThroughSOCKS(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout, c.cfg.UpstreamSocks)
-                } else {
-                        s, err = NewH2ProxySession(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout)
-                }
-                if err == nil {
-                        c.setSession(s, pass)
-                }
-        }
+        session, transport, err := c.buildSession(pass)
         if err != nil {
                 return 0, err
         }
+        c.setSession(session, pass)
+        c.cfg.Transport = transport
         // Stage 3 (performance mission): mirror the pinned upstream's
         // session-established logging ("upstream HTTP/2 session established
         // proxy=…", "upstream HTTP/3 session established proxy=…",
@@ -186,10 +184,60 @@ func (c *Controller) Start(ctx context.Context, pass *vpnclient.ProxyPassInfo) (
         // behavioral change.
         if host, ok := c.SessionHost(); ok {
                 remote, _ := c.SessionRemote()
-                c.cfg.Logf("%s", sessionEstablishedLog(c.cfg.Transport, host, remote, time.Since(started)))
+                c.cfg.Logf("%s", sessionEstablishedLog(transport, host, remote, time.Since(started)))
         }
         go c.runRenewalLoop(ctx)
         return time.Since(started), nil
+}
+
+// buildSession dials the configured h2/h3 session, applying the one-shot
+// h3→h2 fallback. The returned transport string is the LIVE one ("h2"
+// after a fallback) — the upstreamReady event must never claim h3 while
+// an h2 session carries the traffic.
+func (c *Controller) buildSession(pass *vpnclient.ProxyPassInfo) (Session, string, error) {
+        if c.cfg.Transport != "h3" {
+                h2, err := c.newH2Session(pass)
+                if err != nil {
+                        return nil, "", err
+                }
+                return h2, "h2", nil
+        }
+        h3, h3Err := c.newH3Session(pass)
+        if h3Err == nil {
+                return h3, "h3", nil
+        }
+        // The honest fallback: h3 could not be established (the carrier's
+        // UDP ASSOCIATE refused, QUIC blocked on the path, the edge did not
+        // negotiate h3). One h2 attempt through the SAME dial path; on a
+        // double failure the h3 chain is reported (the user's pick).
+        c.cfg.Logf("h3 session failed (%v) — falling back to h2", h3Err)
+        h2, h2Err := c.newH2Session(pass)
+        if h2Err != nil {
+                return nil, "", h3Err
+        }
+        return h2, "h2", nil
+}
+
+func (c *Controller) newH2Session(pass *vpnclient.ProxyPassInfo) (*H2ProxySession, error) {
+        return c.h2Builder(pass)
+}
+
+func (c *Controller) newH3Session(pass *vpnclient.ProxyPassInfo) (*H3ProxySession, error) {
+        return c.h3Builder(pass)
+}
+
+func (c *Controller) dialH2Session(pass *vpnclient.ProxyPassInfo) (*H2ProxySession, error) {
+        if c.cfg.UpstreamSocks != "" {
+                return NewH2ProxySessionThroughSOCKS(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout, c.cfg.UpstreamSocks)
+        }
+        return NewH2ProxySession(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout)
+}
+
+func (c *Controller) dialH3Session(pass *vpnclient.ProxyPassInfo) (*H3ProxySession, error) {
+        if c.cfg.UpstreamSocks != "" {
+                return NewH3ProxySessionThroughSOCKS(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout, c.cfg.UpstreamSocks)
+        }
+        return NewH3ProxySession(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout)
 }
 
 // sessionEstablishedLog renders the upstream session-established log

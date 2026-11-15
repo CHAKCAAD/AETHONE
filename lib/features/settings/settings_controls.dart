@@ -16,6 +16,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
+import '../home/widgets/hero_logo.dart' show ScanRings;
 
 /// A small secondary caption (option descriptions, section notes).
 class SettingInfoText extends StatelessWidget {
@@ -701,12 +702,21 @@ class FlagPickStrip extends StatelessWidget {
 /// PHASE-2 (firefox-vpn) — a full-width action button in the sub-page
 /// card language (the sign-in / sign-out rows): the accent-green pill
 /// fill of a SELECTED SettingPill entry, stretched to the card width.
+///
+/// 1.7.0 (the owner's round 5: «وقتی روی دکمه‌ای کلیک میشه که یک عملیات
+/// بک‌اند بعدش انجام میگیره … باید لودینگ نمایش داده بشه») — the optional
+/// [busy] state swaps the label for the SCAN LOADING (the same ScanRings
+/// the app's main entry pages use — «لودینگ آخر صفحات ورود اصلی اپ») at
+/// button height and blocks further taps: the user SEES the operation is
+/// running the moment they press.
 class SettingActionButton extends StatelessWidget {
   const SettingActionButton({
     super.key,
     required this.label,
     required this.onTap,
     this.keyId,
+    this.busy = false,
+    this.busyLabel,
   });
 
   final String label;
@@ -715,6 +725,15 @@ class SettingActionButton extends StatelessWidget {
   /// Optional [ValueKey] id prefix for widget tests.
   final String? keyId;
 
+  /// While true the button shows the scan-loading rings (and ignores
+  /// taps) instead of the label — for operations that run a backend
+  /// walk (the DNS test, the quota refresh).
+  final bool busy;
+
+  /// Optional text shown beside the rings while busy (e.g. «در حال
+  /// آزمایش DNS…»); null = the rings alone.
+  final String? busyLabel;
+
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
@@ -722,7 +741,7 @@ class SettingActionButton extends StatelessWidget {
     return GestureDetector(
       key: keyId == null ? null : ValueKey('action-$keyId'),
       behavior: HitTestBehavior.opaque,
-      onTap: onTap,
+      onTap: busy ? null : onTap,
       child: AnimatedContainer(
         duration: Duration(milliseconds: recipe.controlMs),
         curve: recipe.controlCurve,
@@ -732,16 +751,46 @@ class SettingActionButton extends StatelessWidget {
           color: AethColors.accentConnected,
           borderRadius: BorderRadius.circular(14 * s),
         ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'IRANYekanX',
-            fontWeight: FontWeight.w700,
-            fontSize: 13 * s,
-            color: AethColors.textPrimary,
-          ),
-        ),
+        child: busy
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 20 * s,
+                    height: 20 * s,
+                    child: ScanRings(
+                      color: AethColors.textPrimary,
+                      size: 20 * s,
+                    ),
+                  ),
+                  if (busyLabel != null) ...[
+                    SizedBox(width: 10 * s),
+                    Flexible(
+                      child: Text(
+                        busyLabel!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'IRANYekanX',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12 * s,
+                          color: AethColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              )
+            : Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'IRANYekanX',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13 * s,
+                  color: AethColors.textPrimary,
+                ),
+              ),
       ),
     );
   }

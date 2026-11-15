@@ -109,11 +109,22 @@ class EngineFirefoxLocations extends EngineEvent {
 /// protocol page's Firefox card). The strings are the engine's own (byte
 /// counts as ASCII strings; empty = no metered quota — the unlimited
 /// case; the reset stamp is RFC3339 or Unix seconds).
+///
+/// 1.7.0 (the owner's round 5): the `--usage` role also emits this event
+/// on demand (right after sign-in, from the settings page's refresh) —
+/// and [quotaUnlimited] carries the explicit X-Quota-Unlimited flag the
+/// pass-minting path never surfaces.
 class EngineFirefoxQuota extends EngineEvent {
-  const EngineFirefoxQuota(this.quotaMax, this.quotaLeft, this.quotaReset);
+  const EngineFirefoxQuota(this.quotaMax, this.quotaLeft, this.quotaReset,
+      {this.quotaUnlimited = false});
   final String quotaMax;
   final String quotaLeft;
   final String quotaReset;
+
+  /// 1.7.0 — the explicit Guardian unlimited flag (the `--usage` role);
+  /// false on the pass events (which infer unlimited from the empty
+  /// pair instead).
+  final bool quotaUnlimited;
 }
 
 /// v4.31 — the REAL exit country of a pseudo-country exit, resolved
@@ -322,6 +333,17 @@ abstract interface class FirefoxLoginCarrierCapable {
   Future<void> firefoxLoginCarrierDown();
 }
 
+/// 1.7.0 (the owner's round 5) — the on-demand quota refresh capability:
+/// the engine's `--usage` role (the account's Guardian quota without
+/// minting a pass), riding a live or freshly-booted WARP carrier.
+/// Implemented only by the real Firefox platform adapter.
+abstract interface class FirefoxQuotaRefreshCapable {
+  /// Fetches the signed-in account's quota; emits [EngineFirefoxQuota]
+  /// through the event stream on success. Returns whether the fetch
+  /// completed (false = no session / the carrier could not come up).
+  Future<bool> refreshFirefoxQuota();
+}
+
 /// Safe extension: adapters without the capability report no carrier —
 /// the login screen then degrades to the direct DNS-aware proxy.
 extension EngineAdapterLoginCarrier on EngineAdapter {
@@ -338,6 +360,18 @@ extension EngineAdapterLoginCarrier on EngineAdapter {
     if (adapter is FirefoxLoginCarrierCapable) {
       await adapter.firefoxLoginCarrierDown();
     }
+  }
+}
+
+/// Safe extension: adapters without the capability report no refresh —
+/// the quota slots keep their last known values.
+extension EngineAdapterQuotaRefresh on EngineAdapter {
+  Future<bool> refreshFirefoxQuota() async {
+    final adapter = this;
+    if (adapter is FirefoxQuotaRefreshCapable) {
+      return adapter.refreshFirefoxQuota();
+    }
+    return false;
   }
 }
 

@@ -358,3 +358,111 @@ one outcome:
   SHA256SUMS.txt در پوشه download/owner-round-4 ایجنت؛ artifact
   Actions (ID 14160627577، انقضا ۱۴ روز). NOT TESTED روی دستگاه —
   پذیرش on-device با مالک است.
+
+---
+
+## 7. Round 5 (2026-11-15, after the owner's device test of the round-4 build)
+
+The owner's report (verbatim diagnoses, each traced to a root cause):
+
+> «بخش حجم باقی مانده رو اصلاح کن چون ظاهرا کار نمیکنه. ورود به حساب
+> کاربری فایرفاکس هنوز مشکل داره. اتصال مستقیم و از طریق اور وارپ
+> فایرفاکس انجام نمیشه در صورتی که تو نسخه قبلی حالت اور وارپ به خوبی
+> متصل میشد. توی تست DNS برای همه DNS ها ارور برخی درخواست های DNS
+> ناموفق بودند میده. برنامه هم هی متوقف میشه پشت سر هم. وقتی روی دکمه
+> ای تو صفحه کلیک میشه که یک عملیات بک اند بعدش انجام میگیره مثل اسکن
+> کردن باید لودینگ یا چیزی نمایش داده بشه … برای لودینگ هم میتونی از
+> لودینگ آخر صفحات ورود اصلی اپ استفاده کنی»
+
+### 7.1 The root causes found (the code walk)
+
+1. **The remaining-data section** — the quota surfaced ONLY on
+   `passAcquired`/`renewed`, i.e. only after a fully-connected tunnel.
+   With the connect defects below, no quota event ever fired, and an
+   account whose Guardian answers `X-Quota-Unlimited: true` (the flag
+   arman's ProxyUsage reads) was indistinguishable from "no data yet".
+2. **The DNS test failing for EVERY provider** — the DoH provider
+   defaults were HOSTNAME endpoints (`cloudflare-dns.com`, …), and the
+   DoH bootstrap resolved that hostname through the ANDROID SYSTEM
+   resolver — which the network's DNS poisoner answers. Every provider
+   failed identically before its first query; system mode failed the
+   Mozilla domains for the same poisoning. Arman's reference uses
+   IP-LITERAL endpoints (`https://1.1.1.1/dns-query`,
+   `https://8.8.8.8/dns-query` — core/internal/resolver/through.go):
+   no bootstrap lookup at all, no SNI to key on.
+3. **Both connect modes dying** — TWO independent defects:
+   a. An INVALID DNS line killed the engine at startup
+      (`dnsConfigInvalid`): picking DoH + «سفارشی» without saving an
+      endpoint produced exactly that, and the app sent it verbatim —
+      both modes, instantly dead.
+   b. The h3 data plane had no fallback: a network that drops UDP
+      (QUIC throttling) or a carrier refusing UDP ASSOCIATE left the
+      walk dead even though h2 rides the same path fine — the 1.4.0
+      build the owner compared against simply REFUSED h3+carrier, so
+      its over-WARP always ran h2.
+4. **The loading absence** — the backend-op buttons (the DNS test, the
+   location refresh, …) gave no feedback while their walks ran, which
+   the owner experienced as "the app stops".
+
+### 7.2 The fixes (contract **1.7.0**, additive)
+
+* **`--usage` (the remaining-data fix)** — the engine's new role
+  (arman's `fetchProxyUsage` model): HEAD then GET on the Guardian
+  token endpoint, NO pass minted, the `X-Quota-*` headers parsed with
+  arman's ProxyUsage semantics — including the explicit
+  `X-Quota-Unlimited` flag the pass-minting path never surfaces, and
+  the 429-carries-usage rule. It rides the WARP carrier
+  (`upstreamSocks` → the control-plane seam, the uTLS Firefox
+  ClientHello kept). The app runs it: right after sign-in (the login
+  screen awaits it BEFORE its carrier teardown), when the Firefox
+  settings page opens, on every connect (the standing
+  passAcquired path), and from a new refresh button. The quota slots
+  (the settings pill, the protocol card, and a new card on the
+  Firefox settings page with the reset stamp) all read the same store.
+* **The DoH provider defaults are now IP-LITERAL** (arman's
+  ThroughServers): Cloudflare `https://1.1.1.1/dns-query`, Google
+  `https://8.8.8.8/dns-query`, Quad9 `https://9.9.9.9/dns-query` — no
+  bootstrap lookup, no SNI. The DoH transport dials an IP-literal
+  endpoint directly; the DNS test's setup failure gets its own message
+  (distinct from «برخی درخواست‌ها ناموفق بودند»).
+* **The app never sends an invalid DNS line**: a custom provider
+  without a saved endpoint degrades to system (surfaced by an inline
+  hint, «نشانی DoH سفارشی خالی است…»), and switching providers resets
+  the endpoint fields so a stale custom endpoint never rides a
+  built-in provider.
+* **The h3→h2 fallback**: a failed h3 session build retries ONCE as h2
+  through the same dial path (direct or carrier), honestly logged
+  (`h3 session failed (…) — falling back to h2`) and mirrored in the
+  live transport label; a double failure reports the h3 chain. The
+  user's pick is a preference, not a death sentence.
+* **The scan-loading affordances** (the owner's named precedent: the
+  onboarding/home scan rings): `SettingActionButton` gained a `busy`
+  state — the ScanRings animation at button height + the running
+  operation's label — applied to the DNS test, the quota refresh, and
+  the location refresh (rings beside the live/cached label).
+
+### 7.3 The crashes («برنامه هی متوقف میشه»)
+
+No deterministic crash reproduced from the code walk: every new native
+path (the WebView `ProxyController` override, the child-PID
+registration, the engine spawn discipline) is try/catch-guarded on
+both sides, and the startup path's new loads are all
+failure-swallowing by design. The most probable reading given the
+loading absence is the perceived freeze/kill of backend-op presses —
+which the affordances above address directly. If a real crash
+persists on the device, the app's OWN core diagnostics page
+(تنظیمات → «لاگ هسته» — filesDir/logs/core-log.txt) carries the
+engine + core stderr; `adb logcat` carries the Dart/native stack. The
+owner's report of either would pin it in one round.
+
+### 7.4 Verification (the CI gates, per the standing rule)
+
+Go 1.25.0 + Flutter 3.47.9 (the CI pins). New tests: the usage role
+suite (the unlimited flag, the trio parse, the HEAD→GET fallback, the
+429-carries-usage rule, the rejected-token classification, the
+fail-closed config) · the IP-literal endpoint defaults + the
+no-resolver dial · the h3→h2 fallback suite (one retry, honest log,
+h2-pick-never-touches-h3, the double-failure chain) · the Dart round-5
+suite (the quota flag parse, the never-invalid DNS line, the provider
+switch reset, the usage event parse, the page affordances). The build
+pin lands in §7.5 below after the run goes green.

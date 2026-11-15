@@ -65,12 +65,19 @@ class FirefoxQuota {
   final DateTime checkedAt;
 
   /// Parses the engine's event strings; null when they carry no usable
-  /// quota (the unknown case — never a guess).
+  /// quota (the unknown case — never a guess). The 1.7.0 [quotaUnlimited]
+  /// flag (the `--usage` role's X-Quota-Unlimited) wins alone; otherwise
+  /// both counts present and non-negative → metered, both empty → the
+  /// account carries no metered quota (unlimited).
   static FirefoxQuota? parse(
     String quotaMax,
     String quotaLeft,
-    String quotaReset,
-  ) {
+    String quotaReset, {
+    bool quotaUnlimited = false,
+  }) {
+    if (quotaUnlimited) {
+      return FirefoxQuota(unlimited: true, checkedAt: DateTime.now());
+    }
     final max = int.tryParse(quotaMax.trim());
     final left = int.tryParse(quotaLeft.trim());
     if (max == null && left == null) {
@@ -368,17 +375,35 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   Future<void>? _firefoxDnsLoadFuture;
 
   @override
-  Map<String, dynamic> get firefoxDnsConfig => {
-        'mode': firefoxDnsMode,
-        if (firefoxDnsMode == 'doh') ...{
-          'provider': firefoxDnsProvider,
-          if (firefoxDnsProvider == 'custom' && firefoxDnsEndpoint.trim().isNotEmpty)
-            'endpoint': firefoxDnsEndpoint.trim(),
-          if (firefoxDnsBootstrapIps.isNotEmpty)
-            'bootstrapIps': firefoxDnsBootstrapIps,
-          'systemForLocalDomains': true,
-        },
-      };
+  Map<String, dynamic> get firefoxDnsConfig {
+    // 1.7.0 — NEVER an invalid line: a custom provider with an empty
+    // endpoint would make the engine fail dnsConfigInvalid (killing
+    // BOTH carrier modes at startup) and the DNS probe report a setup
+    // failure. The half-configured pick degrades to system until the
+    // user saves a real endpoint.
+    final doh = firefoxDnsMode == 'doh' &&
+        !(firefoxDnsProvider == 'custom' &&
+            firefoxDnsEndpoint.trim().isEmpty);
+    return {
+      'mode': doh ? 'doh' : 'system',
+      if (doh) ...{
+        'provider': firefoxDnsProvider,
+        if (firefoxDnsProvider == 'custom')
+          'endpoint': firefoxDnsEndpoint.trim(),
+        if (firefoxDnsBootstrapIps.isNotEmpty)
+          'bootstrapIps': firefoxDnsBootstrapIps,
+        'systemForLocalDomains': true,
+      },
+    };
+  }
+
+  /// 1.7.0 — true when the user picked DoH + custom but has not saved
+  /// an endpoint yet (the settings page surfaces WHY the effective mode
+  /// fell back to system instead of silently ignoring the pick).
+  bool get firefoxDnsCustomIncomplete =>
+      firefoxDnsMode == 'doh' &&
+      firefoxDnsProvider == 'custom' &&
+      firefoxDnsEndpoint.trim().isEmpty;
 
   @override
   Future<void> loadFirefoxDnsSettings() =>
@@ -429,7 +454,16 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
     const allowed = {'cloudflare', 'google', 'quad9', 'custom'};
     final pick = allowed.contains(provider) ? provider : 'cloudflare';
     if (firefoxDnsProvider == pick) return;
+    // 1.7.0 — switching providers RESETS the endpoint/bootstrap fields:
+    // a stale custom endpoint must never ride the newly picked provider
+    // (the built-in providers' IP-literal defaults apply instead).
+    final switchToBuiltin =
+        pick != 'custom' && firefoxDnsProvider == 'custom';
     firefoxDnsProvider = pick;
+    if (switchToBuiltin) {
+      firefoxDnsEndpoint = '';
+      firefoxDnsBootstrapIps = const [];
+    }
     unawaited(_persistFirefoxDnsSettings());
     notifyListeners();
   }
@@ -475,8 +509,13 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   /// Consumes the adapter's [EngineFirefoxQuota] event: parses the
   /// engine's strings, keeps the last usable value and persists it.
   void applyFirefoxQuota(
-      String quotaMax, String quotaLeft, String quotaReset) {
-    final next = FirefoxQuota.parse(quotaMax, quotaLeft, quotaReset);
+    String quotaMax,
+    String quotaLeft,
+    String quotaReset, {
+    bool quotaUnlimited = false,
+  }) {
+    final next = FirefoxQuota.parse(quotaMax, quotaLeft, quotaReset,
+        quotaUnlimited: quotaUnlimited);
     if (next == null) return; // garbage is not a quota — keep the last one
     final old = firefoxQuota;
     final changed = old == null ||
@@ -486,6 +525,44 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
     firefoxQuota = next;
     unawaited(_persistFirefoxQuota(next));
     if (changed) notifyListeners();
+  }
+
+  /// 1.7.0 (the owner's round 5) — whether a quota refresh is in flight
+  /// (the settings page's refresh button shows the scan-loading rings
+  /// while this is true).
+  bool firefoxQuotaRefreshing = false;
+  Future<void>? _firefoxQuotaRefreshInFlight;
+
+  /// 1.7.0 — fetches the signed-in account's quota NOW (the engine's
+  /// `--usage` role through a WARP carrier; no pass minted). Called
+  /// after a successful sign-in, when the Firefox settings page opens,
+  /// and from the refresh button. Single-flight: a second call while
+  /// one runs awaits the same walk.
+  Future<bool> refreshFirefoxQuota() {
+    final existing = _firefoxQuotaRefreshInFlight;
+    if (existing != null) {
+      // Best-effort join: the caller learns nothing new from a joined
+      // walk (the event stream carries the result either way).
+      return existing.then((_) => false);
+    }
+    final future = _runFirefoxQuotaRefresh();
+    _firefoxQuotaRefreshInFlight = future;
+    return future;
+  }
+
+  Future<bool> _runFirefoxQuotaRefresh() async {
+    if (firefoxQuotaRefreshing) return false;
+    firefoxQuotaRefreshing = true;
+    notifyListeners();
+    try {
+      return await _engine.refreshFirefoxQuota();
+    } catch (_) {
+      return false; // honest: no quota facts, the slots keep the last known
+    } finally {
+      firefoxQuotaRefreshing = false;
+      _firefoxQuotaRefreshInFlight = null;
+      notifyListeners();
+    }
   }
 
   Future<void> _persistFirefoxQuota(FirefoxQuota quota) async {
@@ -528,9 +605,19 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   /// PHASE-2 — asks the adapter for the live Firefox location list (the
   /// engine's --discover role; the result arrives as an event — see
   /// [applyFirefoxLocations]). Fire-and-forget: the picker renders the
-  /// standing seed until the refresh lands.
+  /// standing seed until the refresh lands. 1.7.0 — [firefoxLocationsRefreshing]
+  /// rides along so the settings page can show its scan-loading rings.
+  bool firefoxLocationsRefreshing = false;
   void refreshFirefoxLocations() {
-    unawaited(_engine.refreshFirefoxLocations());
+    if (firefoxLocationsRefreshing) return;
+    firefoxLocationsRefreshing = true;
+    notifyListeners();
+    unawaited(_engine.refreshFirefoxLocations().whenComplete(() {
+      // The event lands through the stream; the flag clears when the
+      // walk ends (success or failure alike — no event, no spin).
+      firefoxLocationsRefreshing = false;
+      notifyListeners();
+    }));
   }
 
   /// PHASE-2 — refreshes the signed-in state from the vault. Called at
@@ -1075,8 +1162,12 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
       case EngineFirefoxLocations(:final countries, :final live, :final fetchedAt):
         applyFirefoxLocations(countries, live, fetchedAt);
       case EngineFirefoxQuota(
-          :final quotaMax, :final quotaLeft, :final quotaReset):
-        applyFirefoxQuota(quotaMax, quotaLeft, quotaReset);
+          :final quotaMax,
+          :final quotaLeft,
+          :final quotaReset,
+          :final quotaUnlimited):
+        applyFirefoxQuota(quotaMax, quotaLeft, quotaReset,
+            quotaUnlimited: quotaUnlimited);
       case EngineExitCountryResolved(:final code):
         // v4.31 — the REAL country behind a Tor exit (the trace only says
         // T1): apply it while — and only while — a session is actually

@@ -16,6 +16,9 @@
 //      libfirefoxvpn --webview-proxy loopback HTTP CONNECT proxy for the
 //                                    Firefox login WebView; destination DNS
 //                                    uses the selected process-local resolver
+//      libfirefoxvpn --usage         the account's Guardian quota WITHOUT
+//                                    minting a pass (the remaining-data
+//                                    round, contract 1.7.0)
 //
 // Spawn discipline (the Dart host): bare argv, EMPTY environment —
 // every secret travels on the stdin pipe only.
@@ -61,11 +64,13 @@ func run() int {
                         return runDNSProbe()
                 case "--webview-proxy":
                         return runWebViewProxy()
+                case "--usage":
+                        return runUsage()
                 case "--help", "-h":
-                        fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe|--webview-proxy]\n")
+                        fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe|--webview-proxy|--usage]\n")
                         return 0
                 default:
-                        fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--dns-probe|--webview-proxy])\n", arg)
+                        fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--dns-probe|--webview-proxy|--usage])\n", arg)
                         return engine.ExitStartup
                 }
         }
