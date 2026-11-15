@@ -2563,6 +2563,18 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
       onAuthRefreshed: (refreshed) {
         unawaited(vault.save(refreshed));
       },
+      onProcessStarted: (pid) {
+        // The Kotlin companion outlives a Flutter isolate. If the isolate
+        // is recreated, disconnect can still terminate this exact child.
+        unawaited(
+          _channel.invokeMethod<void>('setFirefoxPid', {
+            'pid': pid,
+            'binaryPath': '${paths.nativeLibraryDir}/libfirefoxvpn.so',
+          }).catchError((Object error) {
+            _debugLog('firefox pid registration failed: $error');
+          }),
+        );
+      },
     );
 
     unawaited(outcome.then((o) {
@@ -2693,6 +2705,24 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
     _firefox = null;
     if (firefox != null) {
       await firefox.stop();
+      try {
+        await _channel.invokeMethod<void>('clearFirefoxPid');
+      } on PlatformException {
+        // The child has already been reaped by its owning Process handle.
+      } on MissingPluginException {
+        // Pure-Dart test host.
+      }
+    } else {
+      // A Flutter-engine recreation loses the Dart Process handle while
+      // the child can still be alive in the same Android app process.
+      // MainActivity validates its exact executable path before SIGTERM.
+      try {
+        await _channel.invokeMethod<void>('stopFirefoxProcess');
+      } on PlatformException {
+        // Process may already have exited.
+      } on MissingPluginException {
+        // Pure-Dart test host.
+      }
     }
     _ticker?.cancel();
     _ticker = null;
