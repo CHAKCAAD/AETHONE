@@ -63,8 +63,10 @@ void main() {
       final restored = CoreSettings.fromJson(defaults.toJson());
       expect(restored.firefoxCarrierMode, FirefoxCarrierMode.direct);
 
-      // A legacy blob with no field migrates to the over-WARP default.
+      // A legacy blob (versioned, pre-round-3: no carrierMode field)
+      // migrates to the over-WARP default; its own leg pick survives.
       final legacy = CoreSettings.fromJson({
+        'v': 1,
         'firefoxLegProtocol': 'masque',
       });
       expect(legacy.firefoxCarrierMode, FirefoxCarrierMode.overWarp);
