@@ -2,9 +2,10 @@
 
 Status: **Phase 1, private branch `phase1/firefox-vpn` only.**
 
-Two machines run side by side and never conflate responsibilities:
+Three cooperating layers run in one session and never conflate responsibilities:
 
-* the **Dart-side engine supervisor**
+* the **Aether carrier** (Rust core, embedded through Dart FFI) — establishes the outer WARP tunnel and owns SOCKS5 `127.0.0.1:1819`;
+* the **Dart-side Firefox engine supervisor**
   (`lib/connection/firefox/firefox_engine.dart`,
   `FirefoxVpnEngine`) — owns the child process;
 * the **connection walk**
@@ -37,43 +38,69 @@ Rules: `isAlive` covers `processStarted..connected`; `start()` throws
 `StateError` if a previous engine is still alive (exactly one process —
 no pool, by decree); `stop()` is idempotent and safe when never started.
 
-## 2. The connection walk (`_connectFirefox`)
+## 2. The connection walk (`_connectFirefox`) — Firefox over WARP
 
-The walk mirrors the aether skeleton with the engine swapped in, so the
-store's state machine needed no changes:
+Firefox VPN is no longer a direct/standalone protocol. It always runs as
+an inner tunnel over an Aether/WARP carrier:
 
-1. **stale-state hygiene** — `_hardCleanup()` first (never start a
-   second engine over a live one); `_stale(gen)` guards every step.
-2. **platform guard** — Windows tunnel mode fails honestly
-   (`platformLimit`, see the Android doc).
-3. **port-conflict proof** — `1822` must be free (`firefoxPortBusy`).
-4. **VPN permission** (tunnel mode only) BEFORE any engine work
-   (`vpnPermissionDenied`).
-5. **session** — load from the Keystore vault; no session → honest
-   `firefoxNoSession` (never fake credentials).
-6. **tunnel bring-up** (tunnel mode): `startVpn` + zeptun TUN first,
-   `tcpOnly: true`, `socksStrict: false` (the Go SOCKS server reads its
-   handshake strictly sequentially with `io.ReadFull`, so zeptun's
-   pipelined greeting+request is safe — verified by the lifecycle
-   tests); proxy mode takes the `startCoreHold` foreground hold instead.
-7. **spawn** — bare argv, empty env; the config line goes on the stdin
-   pipe; `authRefreshed` returns to the vault, never logged.
-8. **wait for the engine's own `socksReady`** (bounded by
-   `_firefoxStartBudget` 60 s; the live tests clock the whole sequence
-   well under 2 s). NOT reached → `firefoxEngineStartTimeout`, or the
-   engine's own words via `firefoxEngineFailed`
-   (`firefoxQuotaExhausted` is its OWN error so the user picks another
-   engine — never a silent fallback).
-9. **end-to-end probe** — the SAME `TunnelProbe` as the aether family,
-   through 127.0.0.1:1822; retries inside `readyBudget(firefoxOnly)`
-   (90 s). The engine dying during the probe fails the walk with the
-   engine's own reason. Probe through + tunnel alive → `Connected`:
-   `markConnected()`, real stats only (`statsEvent(probe)`).
-10. **steady state** — the same 5 s ticker (port-based probe; with no
-    aether job id the core-liveness step is skipped by design). The
-    engine dying while connected surfaces as `EngineHealthProbeFailed`
-    → the store's reconnect logic owns the recovery (no fake
-    `Connected`).
+```text
+selected Aether carrier protocol (default: WireGuard)
+             |
+             v
+Aether WARP tunnel + SOCKS5 :1819
+             |
+     TCP CONNECT (H2) or UDP ASSOCIATE (H3)
+             |
+             v
+Firefox VPN control plane + Fastly MASQUE session
+             |
+             v
+Firefox SOCKS5 :1822
+             |
+             v
+Android VpnService / zeptun (tunnel mode only)
+```
+
+The Firefox settings page persists `CoreSettings.firefoxLegProtocol`.
+Supported choices are WireGuard (default), MASQUE, GOOL, GOOL Classic
+and MIM. The Firefox H2/H3 selector is independent: H2 uses SOCKS5 TCP
+CONNECT, while H3 carries QUIC datagrams through SOCKS5 UDP ASSOCIATE.
+
+The ordered walk is:
+
+1. **Stale-state cleanup and port checks** — stop the previous Firefox
+   child, TUN/hold service and Aether job; require both 1819 and 1822 to
+   be free.
+2. **Platform and permission checks** — whole-device mode requests VPN
+   permission and starts zeptun targeting 1822. The Android app UID is
+   exempt from its own TUN, so the Aether/Firefox child processes can
+   reach loopback. Proxy mode does not start a TUN.
+3. **Aether outer carrier** — clear stale `AETHER_*` variables, then
+   start the embedded core with the user's `firefoxLegProtocol` and
+   normal Aether core settings. The core's SOCKS listener remains
+   `127.0.0.1:1819`. Proxy mode starts the process-hold service.
+4. **Carrier verification** — follow the Aether job until the 1819
+   listener appears, then run the real end-to-end probe through 1819.
+   A listener alone is not enough. A core exit or probe failure aborts
+   the walk; Firefox is not allowed to fall back to direct internet.
+5. **Firefox account and child** — load the same-account OAuth pair
+   from the Keystore vault. Spawn the Go child with bare argv, empty
+   environment, and `upstreamSocks=socks5://127.0.0.1:1819`. Its
+   RemoteSettings/Guardian/token-refresh requests use the same carrier
+   through the pinned Firefox uTLS control-plane transport. Its Fastly
+   H2/H3 data-plane session uses the same SOCKS carrier too.
+6. **Firefox listener and verification** — wait for the child's real
+   `socksReady` event on 1822, then probe 1822 independently. Only this
+   Firefox probe, with the Aether carrier still alive, can produce
+   `Connected`.
+7. **Steady state** — the normal session ticker probes Firefox traffic
+   through 1822. Aether remains the outer carrier and is owned/cancelled
+   by the same adapter job.
+
+The separate account-login WebView (`--login`) and the pre-connect
+location discovery role (`--discover`) run before a Firefox VPN
+session exists; they retain their own process-scoped DNS path and are
+not evidence that an active Firefox-over-WARP session is connected.
 
 ## 3. Shutdown and orphans
 
@@ -85,7 +112,7 @@ survives a disconnect") → teardown streams → `stopped`. The adapter's
 `_hardCleanup` stops the engine child FIRST, and a `disconnect()` during
 the walk relies on the same path.
 
-Engine-side (`cmd/libfirefoxvpn`): shutdown watchers run for the WHOLE
+The adapter's `_hardCleanup` stops the Firefox child first, then stops the TUN/hold service, and finally cancels the Aether core job. Both listeners and both network layers are therefore torn down. Engine-side (`cmd/libfirefoxvpn`): shutdown watchers run for the WHOLE
 process lifetime — stdin EOF and SIGTERM/SIGINT both trigger the clean
 stop; a host cancel DURING STARTUP aborts the walk cleanly
 (`cancelledDuringStart`, exit 0 — a cancel is not a failure, so no
@@ -108,7 +135,7 @@ code (`engineExited:<code>`), so an unexpected death is never silent.
 
 * cancel during start (`TestLifecycleCancelDuringStart` — 22 s of
   adversarial cancelling),
-* port already busy (`TestLifecyclePortBusy`),
+* port already busy (`TestLifecyclePortBusy`); the outer Aether and inner Firefox listener are independently guarded,
 * malformed config: public listener / bad version / no access token
   (`TestLifecycleBadConfig`, subtests),
 * real Guardian + invalid token → honest failure, no token leak
