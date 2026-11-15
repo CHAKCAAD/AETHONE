@@ -49,8 +49,17 @@ void main() {
               as RenderRepaintBoundary;
       final image = await boundary.toImage(pixelRatio: 2.0);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      await File('/tmp/ui_shots/appearance_v425.png')
-          .writeAsBytes(bytes!.buffer.asUint8List());
+      try {
+        // The shot is a debug artifact; a filesystem hiccup (the
+        // directory not existing yet — the other shot tests create it
+        // too, but the parallel isolates' order is not guaranteed, the
+        // run-129 flake) must never fail the suite.
+        Directory('/tmp/ui_shots').createSync(recursive: true);
+        await File('/tmp/ui_shots/appearance_v425.png')
+            .writeAsBytes(bytes!.buffer.asUint8List());
+      } catch (_) {
+        // The assertions below are the test; the PNG is a bonus.
+      }
     });
     // ignore: avoid_print
     print('SAVED appearance_v425.png');

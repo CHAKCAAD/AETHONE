@@ -565,7 +565,9 @@ void main() {
 
       expect(store.selectedProtocol, ProtocolId.wireguard); // v4.19 default
       expect(store.connectionMode, ConnectionMode.proxy);
-      expect(store.scanSpeed, 5);
+      // v4.44 — the out-of-range value falls back to the constructor
+      // default, now 4 (balanced, the pinned core's own default).
+      expect(store.scanSpeed, 4);
       expect(store.selectedCountryCode, isNull);
       expect(store.homeLook, HomeLook.one);
     });

@@ -315,7 +315,9 @@ class SettingsPersistence {
           store.protocolModeSmart = true;
         }
         if (!prefs.containsKey(SettingsKeys.scanSpeed)) {
-          store.scanSpeed = 5;
+          // v4.44 — balanced, the pinned core's own default (the
+          // scan-deadline-aware ready budget follows it).
+          store.scanSpeed = 4;
         }
       }
       _restored = true;

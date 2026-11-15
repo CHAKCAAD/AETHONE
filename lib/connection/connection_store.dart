@@ -857,8 +857,18 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
 
   /// v4.16 — «سرعت اسکن» 1..5 (the sheet frame ships the widest pill = 5
   /// selected). The engine consumes it (M2 — scan profile).
+  ///
+  /// v4.44 (the owner's round 7, the WireGuard report) — the DEFAULT is
+  /// now 4 = «balanced», the pinned core's OWN non-interactive default
+  /// (select_scan_mode_str, lib.rs: the answer to the prompt the CLI
+  /// would give) — the posture the same core connects with in the other
+  /// app the owner compared against. The old default 5 (turbo) scans the
+  /// THINNEST (40 samples/CIDR, 1 port wave, first-success exit on WG)
+  /// and on a filtered network can find no endpoint where balanced
+  /// (120 samples, 3 waves) does. A persisted pick is untouched — only
+  /// fresh installs and resetToDefaults land here.
   @override
-  int scanSpeed = 5;
+  int scanSpeed = 4;
 
   void setScanSpeed(int level) {
     final clamped = level.clamp(1, 5);
@@ -1015,7 +1025,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
     themePick = AethThemePick.night;
     themeMode = AethThemeMode.night;
     closeBehavior = CloseBehavior.ask;
-    scanSpeed = 5;
+    scanSpeed = 4;
     selectedProtocol = ProtocolId.auto;
     protocolModeSmart = false;
     connectionMode = ConnectionMode.proxy;

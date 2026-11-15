@@ -146,8 +146,9 @@ void main() {
 
       // The section heading is here now (the protocol page lost it).
       expect(find.text('سرعت اسکن'), findsOneWidget);
-      // The frame default (5) survives the move.
-      expect(store.scanSpeed, 5);
+      // The default survives the move — v4.44: 4 (balanced, the pinned
+      // core's own default).
+      expect(store.scanSpeed, 4);
 
       // All five pills render inside the page's card.
       for (var level = 1; level <= 5; level++) {

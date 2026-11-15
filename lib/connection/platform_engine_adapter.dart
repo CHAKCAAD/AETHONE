@@ -684,7 +684,20 @@ class PlatformEngineAdapter
   /// + BRIDGE_PROBE 360 s; plain WARP = registration + scan ≈ listener
   /// budget). v4.31 — the family TIMEOUT settings widen their own budget
   /// (the app must never give up on a core it is still giving time to).
-  static Duration readyBudget(ProtocolId mode, {CoreSettings? core}) {
+  ///
+  /// v4.44 (the owner's round 7, the WireGuard report: «پروتکل وایرگارد
+  /// متصل نمیشه … همین هسته در اپ دیگه به راحتی وصل میشه») — the PLAIN
+  /// budget now follows the CHOSEN SCAN PROFILE's own deadline: the core's
+  /// scanners run to profile-dependent overall deadlines (prober.rs /
+  /// wg_prober.rs: turbo 45/30 s · balanced 120/80 s · verified 60/60 s ·
+  /// ironclad 180/180 s · thorough 300/250 s — MASQUE/WG), and the old
+  /// FIXED 120 s probe budget killed the walk WHILE THE CORE WAS STILL
+  /// SCANNING for every pick deeper than verified (balanced-MASQUE,
+  /// ironclad, thorough) — the walk failed, the retry restarted the scan
+  /// from zero, and the user saw «متصل نمیشه» + «برنامه هی متوقف میشه»
+  /// while the same core connected fine under its own defaults elsewhere.
+  static Duration readyBudget(ProtocolId mode,
+      {CoreSettings? core, int? scanSpeed}) {
     Duration atLeast(Duration base, int? userSecs) => userSecs == null
         ? base
         : base < Duration(seconds: userSecs + 30)
@@ -706,8 +719,27 @@ class PlatformEngineAdapter
       // Firefox-over-WARP: budget the Firefox child startup and its
       // second, independent end-to-end probe after the Aether carrier is up.
       ProtocolId.firefoxOnly => const Duration(seconds: 90),
-      _ => const Duration(seconds: 120),
+      _ => scanAwarePlainBudget(scanSpeed),
     };
+  }
+
+  /// v4.44 — the core's own scan deadlines per profile (the MAX of the
+  /// MASQUE (prober.rs) and WireGuard (wg_prober.rs) strategies — evidence
+  /// in each file's strategy() table) + 45 s of headroom for the WARP-API
+  /// registration, the tunnel handshake and the first serve; never below
+  /// the historical 120 s floor so nothing tightens.
+  static Duration scanAwarePlainBudget(int? scanSpeed) {
+    final deadline = switch (AetherArguments.scanProfile(scanSpeed ?? 5)) {
+      'turbo' => const Duration(seconds: 45),
+      'balanced' => const Duration(seconds: 120),
+      'verified' => const Duration(seconds: 60),
+      'thorough' => const Duration(seconds: 300),
+      _ => const Duration(seconds: 180), // ironclad
+    };
+    const headroom = Duration(seconds: 45);
+    const floor = Duration(seconds: 120);
+    final budget = deadline + headroom;
+    return budget < floor ? floor : budget;
   }
 
   final Duration _statsInterval;
@@ -1503,7 +1535,8 @@ class PlatformEngineAdapter
       gen,
       _activePort,
       budget: _remainingUntil(windowEnd) ??
-          readyBudget(modeId, core: config.coreSettings),
+          readyBudget(modeId,
+              core: config.coreSettings, scanSpeed: config.scanSpeed),
       deadline: windowEnd,
     );
     if (_stale(gen)) return false; // cancelled during the probe (#3)
@@ -1515,7 +1548,8 @@ class PlatformEngineAdapter
         fail(
           'endToEndProbeFailed',
           'the ${mode.label} data path did not answer through '
-          '127.0.0.1:$_activePort within ${readyBudget(modeId).inSeconds} s '
+          '127.0.0.1:$_activePort within '
+          '${readyBudget(modeId, scanSpeed: config.scanSpeed).inSeconds} s '
           '(the chained protocol can legitimately take tens of seconds to '
           'bootstrap)'
           '${_probeLastErrorKind == null ? '' : ' — last attempt: $_probeLastErrorKind'}',
@@ -2367,7 +2401,9 @@ class PlatformEngineAdapter
       final probe = await _probeUntilReadyFollowingCore(
         carrierGen,
         warpPort,
-        budget: readyBudget(leg, core: source?.coreSettings ?? CoreSettings()),
+        budget: readyBudget(leg,
+            core: source?.coreSettings ?? CoreSettings(),
+            scanSpeed: source?.scanSpeed ?? 3),
       );
       if (probe == null) {
         await firefoxLoginCarrierDown();
@@ -2825,7 +2861,8 @@ class PlatformEngineAdapter
     final warpProbe = await _probeUntilReadyFollowingCore(
       gen,
       warpPort,
-      budget: readyBudget(outerProtocol, core: config.coreSettings),
+      budget: readyBudget(outerProtocol,
+          core: config.coreSettings, scanSpeed: config.scanSpeed),
     );
     if (_stale(gen)) return false;
     if (warpProbe == null) {

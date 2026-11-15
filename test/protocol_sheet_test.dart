@@ -267,7 +267,8 @@ void main() {
     expect(store.connectionMode, ConnectionMode.proxy); // frame default
     // PHASE-2 REBUILD: the scan pills' default lives on — the VALUE is
     // untouched by the move (Connection Settings renders it now).
-    expect(store.scanSpeed, 5);
+    // v4.44 — the default is 4 (balanced, the pinned core's own default).
+    expect(store.scanSpeed, 4);
 
     await tester.tap(find.text('تونل'));
     await tester.pump();

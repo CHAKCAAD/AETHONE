@@ -567,3 +567,96 @@ a system line the engine accepts). The build pin lands in §8.4.
 خطا رفع می‌شود و اتصال/ورود باید کار کند. اگر تنظیم DNS روی «سیستم»،
 یا DoH با ارائه‌دهندهٔ آماده است و مشکل باقی ماند، لاگ هسته
 (تنظیمات → لاگ هسته) و `adb logcat` مدرک لازم را فراهم می‌کنند.
+
+---
+
+## 9. Round 7 (2026-11-15, the WireGuard report + the run-129 flake)
+
+> «اکشن شکست خورد بررسی کن علتشو. یک مشکلی که وجود داره اینه که
+> پروتکل وایرگارد متصل نمیشه در صورتی که توی اپ دیگه ای برام پروتکل
+> وایرگارد همین هسته به راحتی متصل میشه یک بررسی بکن کدهای هسته رو
+> ببین مشکل یا باگی وجود داره یا نه و اگه وجود داره اصلاحش کن، هسته:
+> github.com/CluvexStudio/Aether»
+
+### 9.1 The run-129 failure (the CI side)
+
+Run 128 (the round-6 code) was green; run 129 was the docs-only pin
+commit and failed in `zz_appearance_shot_test.dart` —
+`PathNotFoundException: /tmp/ui_shots/appearance_v425.png`: the test
+wrote its PNG without creating `/tmp/ui_shots` itself, relying on
+another shot-test file to have created it first — but `flutter test`
+runs files in PARALLEL isolates whose order is not guaranteed, so on
+that runner the appearance test ran first. Fixed: the test now creates
+its own directory and the PNG write is guarded (the shot is a debug
+artifact; the assertions are the test — a filesystem hiccup can never
+fail the suite again).
+
+### 9.2 The core audit (the requested check — no core bug found)
+
+The pinned core (`CluvexStudio/Aether` @ `d58f9d5`, verified in CI) was
+audited end-to-end on the WireGuard path, against the question "why
+would the same core connect in another app but not here":
+
+* **The pin is the latest release** (2.4.0): upstream `d58f9d5..HEAD`
+  holds only README/OPENWRT/tor-password doc merges — nothing after it
+  touches WireGuard. The vendored tree equals the export at the pin.
+* **The whole WG chain was read**: the WARP-API registration and edge
+  fallback (account.rs/api.rs — identity cached in warp.toml, reused,
+  never re-registered per connect) · `run_wireguard` (lib.rs — profile
+  candidates balanced→aggressive→light→off, the cached endpoint
+  verified before reuse, endpoint cooldowns) · `hunt_wg_endpoints`
+  (wg_prober.rs — CIDR sampling, port waves, honest deadlines) ·
+  `verify_endpoint_keep_session` (wireguard.rs — init/retransmit at
+  750 ms/2 s, decapsulation, TWO data-plane confirmations) · the run
+  loop (recv/send/timer/health tasks, stale detection at 10 s) · the
+  FFI harness (ffi.rs `aether_core_start` → `run_with(args)` — the
+  exact CLI path, so the other app's invocation and ours run the same
+  code). **No bug found.**
+* The app-side invocation matches the core's own defaults
+  (`--noize balanced` IS the core default; env cleared per start;
+  `--quick-reconnect` = the non-TTY default; listener binds before the
+  data path, probe retries — the walk is sound).
+
+### 9.3 What actually differed — the app killed the core's scan
+
+The audit's one real finding is an APP-vs-CORE CONTRACT bug, exactly
+the shape the owner's rule bans («اپ باید تابع هسته ایتر باشه …»,
+v4.31):
+
+* The core's scanners run to PROFILE-DEPENDENT overall deadlines —
+  prober.rs (MASQUE) / wg_prober.rs (WireGuard): turbo 45/30 s ·
+  **balanced 120/80 s** · verified 60/60 s · **ironclad 180/180 s** ·
+  **thorough 300/250 s**.
+* The app's plain-mode ready budget was a FIXED 120 s — so for every
+  scan pick deeper than verified (balanced-MASQUE, ironclad,
+  thorough), the walk FAILED while the core was still legitimately
+  scanning; every retry restarted the scan from zero. On the device
+  that reads as «پروتکل وایرگارد متصل نمیشه» + «برنامه هی متوقف
+  میشه» — while the same core under its own defaults (balanced,
+  no app deadline above it) connects in the other app.
+* The default scan pick made it worse: the app defaulted to 5 =
+  «turbo» — the THINNEST WG scan (40 samples/CIDR, 1 port wave,
+  first-success exit) where the core's own default is «balanced»
+  (120 samples/CIDR, 3 port waves).
+
+### 9.4 The fixes (app-side; the core stays at the pin, untouched)
+
+1. **The ready budget follows the scan profile** (`readyBudget` gains
+   `scanSpeed`, wired at every call site — the plain walk, the
+   Firefox WARP-leg probe, the login carrier): the core's per-profile
+   MAX deadline + 45 s of registration/handshake headroom, floored at
+   the historical 120 s so nothing tightens (turbo 120 · verified 120
+   · balanced 165 · ironclad 225 · thorough 345 s). The v4.31 rule —
+   never give up on a core you are still giving time to — now holds
+   for every scan depth.
+2. **The default scan is now 4 = «balanced»** — the pinned core's OWN
+   default (`select_scan_mode_str`, lib.rs), the posture the reference
+   app runs. A persisted pick is untouched; only fresh installs,
+   resetToDefaults and the persistence fallback land here.
+3. The run-129 flake fix (§9.1).
+
+If WireGuard still fails on the device after this, the evidence to
+send is the app's own «لاگ هسته» page (filesDir/logs/core-log.txt) —
+it carries the core's whole scan trail (profile lines, candidate
+counts, per-endpoint failures), which pins the remaining cause in one
+round.

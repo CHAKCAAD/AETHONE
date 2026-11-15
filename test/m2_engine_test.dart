@@ -1282,7 +1282,8 @@ void main() {
         PlatformEngineAdapter.readyBudget(ProtocolId.psiphonOnly),
         const Duration(seconds: 210),
       );
-      // Plain WARP = registration + scan ≈ the listener budget.
+      // Plain WARP = the scan-profile-aware budget (v4.44): without a
+      // scanSpeed the turbo default keeps the historical 120 s floor…
       expect(
         PlatformEngineAdapter.readyBudget(ProtocolId.masque),
         const Duration(seconds: 120),
@@ -1290,6 +1291,31 @@ void main() {
       expect(
         PlatformEngineAdapter.readyBudget(ProtocolId.wireguard),
         const Duration(seconds: 120),
+      );
+      // …while every deeper pick follows the CORE's own scan deadline
+      // (prober.rs / wg_prober.rs strategy() tables — the MASQUE/WG max
+      // + 45 s headroom, floored at 120 s). The fixed 120 s budget used
+      // to kill the walk WHILE the core was still scanning (the owner's
+      // round-7 WireGuard report).
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.wireguard, scanSpeed: 5),
+        const Duration(seconds: 120), // turbo: max(45 s) + 45 → floor
+      );
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.wireguard, scanSpeed: 4),
+        const Duration(seconds: 165), // balanced: 120 + 45
+      );
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.masque, scanSpeed: 3),
+        const Duration(seconds: 345), // thorough: 300 + 45
+      );
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.wireguard, scanSpeed: 2),
+        const Duration(seconds: 120), // verified: 60 + 45 → floor
+      );
+      expect(
+        PlatformEngineAdapter.readyBudget(ProtocolId.masque, scanSpeed: 1),
+        const Duration(seconds: 225), // ironclad: 180 + 45
       );
     });
 
