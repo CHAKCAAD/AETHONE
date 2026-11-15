@@ -126,12 +126,18 @@ class FirefoxVpnEngine {
   /// [onAuthRefreshed] receives the refreshed same-account OAuth pair
   /// (private channel — the caller persists it in the Keystore store).
   ///
+  /// [onQuota] receives the Guardian quota facts on every passAcquired /
+  /// renewed event (1.5.0): the byte-count strings as the engine reports
+  /// them (empty quotaMax/quotaLeft = the account carries no metered
+  /// quota) and the period reset stamp.
+  ///
   /// Returns the future of the process's terminal outcome (failed /
   /// stopped); the CALLER decides how to map it to the UI states.
   Future<FirefoxEngineOutcome> start(
     FirefoxEngineConfig config, {
     void Function(FirefoxSessionAuth refreshed)? onAuthRefreshed,
     void Function(int pid)? onProcessStarted,
+    void Function(String quotaMax, String quotaLeft, String quotaReset)? onQuota,
     Map<String, String> environment = const {},
   }) async {
     if (isAlive || _state == FirefoxEngineState.starting) {
@@ -186,6 +192,13 @@ class FirefoxVpnEngine {
           }
         } else {
           onLog?.call(FirefoxErrors.redactLine(event.logLine));
+        }
+        // 1.5.0 — the quota surfacing: every passAcquired / renewed
+        // event carries the Guardian quota facts to the host (the
+        // remaining-data cards on the settings + protocol pages).
+        if (event.name == FirefoxEngineEvents.passAcquired ||
+            event.name == FirefoxEngineEvents.renewed) {
+          onQuota?.call(event.quotaMax, event.quotaLeft, event.quotaReset);
         }
         switch (event.name) {
           case FirefoxEngineEvents.socksReady:

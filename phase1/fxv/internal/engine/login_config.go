@@ -38,6 +38,12 @@ type LoginConfig struct {
         VerifyTimeoutMs int64  `json:"verifyTimeoutMs"`
         RetryDelayMs    int64  `json:"retryDelayMs"`
         DNS             dnsresolver.Config `json:"dns"`
+        // UpstreamSocks (1.5.0, the owner's round 2): the OPTIONAL WARP
+        // carrier the login screen brought up — the token exchange rides
+        // it (the pinned Firefox uTLS ClientHello kept; the Fastly edge
+        // sees the WARP egress, not the blocked region's). Empty keeps
+        // the direct exchange.
+        UpstreamSocks   string `json:"upstreamSocks"`
 }
 
 // ParseLoginConfig validates the decoded login config. The token is
@@ -67,6 +73,9 @@ func ParseLoginConfig(raw []byte) (LoginConfig, error) {
         cfg.DNS, dnsErr = cfg.DNS.Validate()
         if dnsErr != nil {
                 return cfg, &ConfigError{Detail: detailDNSConfigInvalid}
+        }
+        if err := validateLoopbackSocksURL(cfg.UpstreamSocks); err != nil {
+                return cfg, &ConfigError{Detail: detailUpstreamSocksInvalid}
         }
         if cfg.VerifyTimeoutMs == 0 {
                 cfg.VerifyTimeoutMs = DefaultVerifyTimeoutMs

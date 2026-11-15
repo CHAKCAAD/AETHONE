@@ -337,6 +337,7 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 label: strings
                                     .protocolName(ProtocolId.firefoxOnly),
                                 account: widget.store.firefoxAccount,
+                                quota: widget.store.firefoxQuota,
                                 isSelected: widget.store.selectedProtocol ==
                                     ProtocolId.firefoxOnly,
                                 pulsing: _pulseId == ProtocolId.firefoxOnly,
@@ -1060,6 +1061,7 @@ class _FirefoxAccountCard extends StatefulWidget {
   const _FirefoxAccountCard({
     required this.label,
     required this.account,
+    required this.quota,
     required this.isSelected,
     required this.pulsing,
     required this.onSelect,
@@ -1067,6 +1069,10 @@ class _FirefoxAccountCard extends StatefulWidget {
 
   final String label;
   final FirefoxAccountStatus account;
+
+  /// v1.5.0 (the owner's round 2, fix 4) — the LAST KNOWN Guardian quota
+  /// of the signed-in account (null = never known — the honest dash).
+  final FirefoxQuota? quota;
   final bool isSelected;
   final bool pulsing;
   final void Function(ProtocolId) onSelect;
@@ -1104,6 +1110,20 @@ class _FirefoxAccountCardState extends State<_FirefoxAccountCard>
     final chipText = widget.account == FirefoxAccountStatus.signedIn
         ? strings.firefoxSignedIn
         : strings.firefoxSignedOut;
+
+    // v1.5.0 (fix 4) — the remaining-data value: «نامحدود» when the
+    // account carries no metered quota; the app's own bytes grammar
+    // (Latin digits + MB/GB, the bottom panel's precedent); «—» until
+    // the first connect reports it (never a made-up number).
+    final quota = widget.quota;
+    final String quotaValue;
+    if (quota == null) {
+      quotaValue = '—';
+    } else if (quota.unlimited) {
+      quotaValue = strings.firefoxQuotaUnlimited;
+    } else {
+      quotaValue = _formatQuotaBytes(quota.remainingBytes ?? 0);
+    }
 
     return SizedBox(
       key: const ValueKey('proto-card-firefox'),
@@ -1199,6 +1219,59 @@ class _FirefoxAccountCardState extends State<_FirefoxAccountCard>
                       ),
                     ),
                   ),
+                  // ---- v1.5.0 (fix 4): the remaining-data block at the
+                  // visual-RIGHT edge — the page's own subtile grammar
+                  // (the account chip's twin: sheetSubtile fill, r14),
+                  // the muted label over the value, theme-aware fill on
+                  // both the dark and the selected green card. ----
+                  SizedBox(width: 10 * s),
+                  Container(
+                    key: const ValueKey('proto-card-firefox-quota'),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 12 * s,
+                      vertical: 8 * s,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AethColors.sheetSubtile,
+                      borderRadius: BorderRadius.circular(
+                          AethGeometry.protoSubtileRadius * s),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          strings.firefoxQuotaLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textDirection: TextDirection.rtl,
+                          style: TextStyle(
+                            fontFamily: 'IRANYekanX',
+                            fontWeight: FontWeight.w400,
+                            fontSize: 9 * s,
+                            color: AethColors.textSecondary,
+                          ),
+                        ),
+                        SizedBox(height: 3 * s),
+                        Directionality(
+                          // The value (GB/MB / نامحدود) never bidi-flips.
+                          textDirection: TextDirection.ltr,
+                          child: Text(
+                            quotaValue,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'IRANYekanX',
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12 * s,
+                              color: AethColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(width: 12 * s),
                 ],
               ),
             ),
@@ -1206,5 +1279,17 @@ class _FirefoxAccountCardState extends State<_FirefoxAccountCard>
         ),
       ),
     );
+  }
+
+  /// The app's own bytes grammar (the bottom panel's precedent: Latin
+  /// digits + MB/GB; GB gets one decimal under 10).
+  static String _formatQuotaBytes(int bytes) {
+    const gb = 1024 * 1024 * 1024;
+    const mb = 1024 * 1024;
+    if (bytes >= gb) {
+      final v = (bytes / gb).toStringAsFixed(bytes >= gb * 10 ? 0 : 1);
+      return '$v GB';
+    }
+    return '${bytes ~/ mb} MB';
   }
 }

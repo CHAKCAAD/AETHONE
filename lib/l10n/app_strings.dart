@@ -336,6 +336,10 @@ class AppStrings {
   String get firefoxLocationDesc => _v['firefoxLocationDesc']!;
   String get firefoxLocationsLive => _v['firefoxLocationsLive']!;
   String get firefoxLocationsCached => _v['firefoxLocationsCached']!;
+  /// 1.5.0 — the remaining-data slots (the settings Firefox pill +
+  /// the protocol page's Firefox card).
+  String get firefoxQuotaLabel => _v['firefoxQuotaLabel']!;
+  String get firefoxQuotaUnlimited => _v['firefoxQuotaUnlimited']!;
   /// 1.4.0-warp — the firefox settings page's WARP-carrier leg
   /// section (the owner's per-family core-protocol pick).
   String get secFirefoxLeg => _v['secFirefoxLeg']!;
@@ -642,6 +646,8 @@ class AppStrings {
       'firefoxDnsTesting': 'در حال آزمایش DNS…',
       'firefoxDnsTestSuccess': 'DNS برای همه دامنه‌های آزمایش‌شده پاسخ داد.',
       'firefoxDnsTestFailed': 'برخی درخواست‌های DNS ناموفق بودند.',
+      'firefoxQuotaLabel': 'حجم باقی‌مانده',
+      'firefoxQuotaUnlimited': 'نامحدود',
       'firefoxLoginTitle': 'ورود به فایرفاکس',
       'firefoxLoginSubtitle': 'ورود در صفحهٔ رسمی موزیلا انجام می‌شود',
       'firefoxLoginWaiting': 'در انتظار ورود شما در صفحهٔ موزیلا…',
@@ -997,6 +1003,8 @@ class AppStrings {
       'firefoxDnsTesting': 'Testing DNS…',
       'firefoxDnsTestSuccess': 'DNS answered for every tested domain.',
       'firefoxDnsTestFailed': 'Some DNS lookups failed.',
+      'firefoxQuotaLabel': 'Remaining data',
+      'firefoxQuotaUnlimited': 'Unlimited',
       'firefoxLoginTitle': 'Sign in to Firefox',
       'firefoxLoginSubtitle': 'Sign-in happens on Mozilla\'s official page',
       'firefoxLoginWaiting': 'Waiting for you to sign in on Mozilla\'s page…',
@@ -1350,6 +1358,8 @@ class AppStrings {
       'firefoxDnsTesting': 'Проверка DNS…',
       'firefoxDnsTestSuccess': 'DNS ответил для всех проверенных доменов.',
       'firefoxDnsTestFailed': 'Некоторые DNS-запросы завершились ошибкой.',
+      'firefoxQuotaLabel': 'Остаток трафика',
+      'firefoxQuotaUnlimited': 'Без ограничений',
       'firefoxLoginTitle': 'Вход в Firefox',
       'firefoxLoginSubtitle': 'Вход выполняется на официальной странице Mozilla',
       'firefoxLoginWaiting': 'Ожидание входа на странице Mozilla…',
@@ -1701,6 +1711,8 @@ class AppStrings {
       'firefoxDnsTesting': '正在测试 DNS…',
       'firefoxDnsTestSuccess': '所有测试域名均获得 DNS 响应。',
       'firefoxDnsTestFailed': '部分 DNS 查询失败。',
+      'firefoxQuotaLabel': '剩余流量',
+      'firefoxQuotaUnlimited': '不限量',
       'firefoxLoginTitle': '登录 Firefox',
       'firefoxLoginSubtitle': '登录在 Mozilla 官方页面进行',
       'firefoxLoginWaiting': '等待您在 Mozilla 页面完成登录…',
@@ -2058,6 +2070,8 @@ class AppStrings {
       'firefoxDnsTesting': 'DNS barlanýar…',
       'firefoxDnsTestSuccess': 'Synag edilen ähli domenler üçin DNS jogap berdi.',
       'firefoxDnsTestFailed': 'Käbir DNS gözlegleri şowsuz boldy.',
+      'firefoxQuotaLabel': 'Galan möçber',
+      'firefoxQuotaUnlimited': 'Çäksiz',
       'firefoxLoginTitle': 'Firefox-a gir',
       'firefoxLoginSubtitle': 'Giriş Mozillanyň resmi sahyponda geçýär',
       'firefoxLoginWaiting': 'Mozillanyň sahyponda girişiňizi garaşýarys…',

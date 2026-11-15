@@ -6,6 +6,21 @@ the original workspace was lost; the engine source now lives IN THIS
 REPOSITORY so it can never again depend on an agent's temporary
 workspace.
 
+**2026-11-15 (the owner's round 2)** — the `feature/firefox-guardian-
+psiphon-bootstrap` line (131 commits, contract 1.5.0) MERGED into the
+firefox-over-warp base: the engine now carries the guardian line's
+`internal/dnsresolver` (the process-local system|DoH policy), the
+`--webview-proxy` role (the DNS-aware CONNECT proxy for the sign-in
+WebView — the login-page fix, the arman-vpn-client precedent adapted)
+and the single `upstreamSocks` seam (`internal/upstream/socks5.go` +
+`controlplane_socks.go`: TCP CONNECT carries h2, UDP ASSOCIATE carries
+h3 — both transports ride the Aether carrier). The 1.4.0-warp
+`internal/carrier` package (the apiProxy + upstreamProxy pair, h3
+refused) is RETIRED by this merge — superseded, not deleted
+unreviewed; its history stays reachable at tag-less commit `9a994da`.
+The quota events gained `quotaMax`. Analysis in
+`docs/firefox-vpn/owner-round-2-2026-11-15.md`.
+
 ## Upstream pin (exact)
 
 ```

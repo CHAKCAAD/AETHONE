@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"aethone/fxv/internal/dnsresolver"
+	"aethone/fxv/internal/upstream"
 )
 
 const (
@@ -28,7 +29,7 @@ const (
 // Closing stdin is its shutdown signal, matching the other Go child roles.
 func runWebViewProxy() int {
 	stdin := bufio.NewReader(io.LimitReader(os.Stdin, maxDNSConfigLine+1))
-	config, err := readOptionalDNSConfigBuffered(stdin)
+	config, err := readWebviewProxyConfigBuffered(stdin)
 	if err != nil {
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
 			"event": "webViewProxyFailed",
@@ -37,7 +38,7 @@ func runWebViewProxy() int {
 		return 1
 	}
 
-	resolverName, err := dnsresolver.Install(config)
+	resolverName, err := dnsresolver.Install(config.DNS)
 	if err != nil {
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
 			"event": "webViewProxyFailed",
@@ -45,8 +46,34 @@ func runWebViewProxy() int {
 		})
 		return 1
 	}
-	if config.Mode == dnsresolver.ModeSystem {
+	if config.DNS.Mode == dnsresolver.ModeSystem {
 		resolverName = resolverDescription()
+	}
+
+	// 1.5.0 (the owner's round 2) — the WARP-carried dial: with an
+	// upstreamSocks carrier the CONNECT targets dial through the
+	// in-process Aether core's SOCKS listener BY HOSTNAME (remote DNS
+	// through the WARP tunnel). Without it the historical direct dial
+	// (the installed resolver) keeps the wheel.
+	dial := dialWebViewHTTPS
+	if config.UpstreamSocks != "" {
+		carrierDial := &upstream.SOCKS5Dialer{
+			ProxyAddr: strings.TrimPrefix(config.UpstreamSocks, "socks5://"),
+			Dialer: net.Dialer{
+				Timeout:   webViewProxyConnectTimeout,
+				KeepAlive: 30 * time.Second,
+			},
+		}
+		dial = func(ctx context.Context, host, port string) (net.Conn, error) {
+			// The hostname rides the carrier; the WARP leg resolves it.
+			// The private/loopback guard still applies to any literal IP
+			// a page might name.
+			if ip := net.ParseIP(host); ip != nil && isUnsafeWebViewProxyIP(ip) {
+				return nil, fmt.Errorf("hostname resolved only to blocked addresses")
+			}
+			return carrierDial.DialContext(ctx, "tcp", net.JoinHostPort(host, port))
+		}
+		resolverName = resolverName + " over WARP"
 	}
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -68,6 +95,9 @@ func runWebViewProxy() int {
 		"event":    "webViewProxyReady",
 		"addr":     listener.Addr().String(),
 		"resolver": resolverName,
+	}
+	if config.UpstreamSocks != "" {
+		ready["carrier"] = config.UpstreamSocks
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(ready); err != nil {
 		_ = listener.Close()
@@ -107,7 +137,7 @@ func runWebViewProxy() int {
 		go func(conn net.Conn) {
 			defer server.wg.Done()
 			defer server.unregister(conn)
-			handleWebViewProxyConnection(ctx, conn, dialWebViewHTTPS)
+			handleWebViewProxyConnection(ctx, conn, dial)
 		}(client)
 	}
 

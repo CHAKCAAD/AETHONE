@@ -41,8 +41,9 @@ import (
 
         vpnclient "firefox-vpn-client"
 
-        "aethone/fxv/internal/engine"
         "aethone/fxv/internal/dnsresolver"
+        "aethone/fxv/internal/engine"
+        "aethone/fxv/internal/upstream"
         "aethone/fxv/internal/fferr"
         "aethone/fxv/internal/redact"
 )
@@ -104,6 +105,16 @@ func runLogin() int {
                         Message: "dnsConfigInvalid", Code: engine.ExitStartup,
                 })
                 return engine.ExitStartup
+        }
+
+        // 1.5.0 (the owner's round 2) — the WARP-carried exchange: with
+        // an upstreamSocks carrier the token exchange dials through the
+        // in-process Aether core's SOCKS listener (the pinned Firefox
+        // uTLS ClientHello kept; the Fastly edge sees the WARP egress,
+        // not the blocked region's). Fails closed; never falls back.
+        if cfg.UpstreamSocks != "" {
+                vpnclient.SetControlPlaneTransport(
+                        upstream.NewSOCKS5ControlPlaneTransport(cfg.UpstreamSocks))
         }
 
         _ = emit.Emit(engine.Event{

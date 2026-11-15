@@ -1,0 +1,145 @@
+# Owner round 2 — the visual fixes, the login fix, the guardian-line merge (2026-11-15)
+
+Owner decrees this mission answers:
+
+1. «در صفحه تنظیمات قسمت آدرس هسته ها رو به صغحه تنطیمات عمومی انتقال
+   بده و آدرس هسته هارو هم درونش قرار بده» — the core-addresses
+   section moves to the general settings page, the addresses inside it.
+2. «در صفحه تنظیمات آیکون فایرفاکس در حالت دارک مود باید سفید باشد
+   و در حالت لایت مود باید مشکی باشد» — the Firefox mark follows the
+   theme ink.
+3. «در صفحه تظیمات قسمت سمت چپ کارت فایرفاکس خالی هست … مقدار حجم
+   باقی مانده سرویس فایرفاکس را نشان دهد، اگر نامحدود بود باید
+   نامحدود نمایش داده شود» — the settings pill's left slot.
+4. «در صفحه انتخاب پروتکل قسمت سمت راست کارت فایرفاکس خالی هست …» —
+   the protocol page's Firefox card right slot.
+5. «همچنین صغحه ورود به حساب کاربری فایرفاکس مشکل داره و بالا
+   نمیاد در صورتی که وقتی یک فیلترشکن دیگه روشن میکنی به راحتی
+   بالا میاد … ممکنه مشکل از dns باشه یا سیستم تشخیص ربات فستلی» —
+   the login page must come up WITHOUT any other VPN (the arman-vpn-
+   client reference named by the owner).
+6. «این پروژه امکانات دیگه ای هم داره که قبلا در یکی از برنچ های
+   اپمون اضافشون کردیم باقی برنچ ها رو هم بررسی کن و اون امکانات
+   رو اضافه کن» — the other branches' features ported.
+
+Branch: `fix/owner-round-2`, cut from `feature/firefox-over-warp`
+(`9a994da`) with **feature/firefox-guardian-psiphon-bootstrap**
+(`d28dbbf`, 131 commits) merged in — the guardian line's engine is the
+converged implementation of the same owner decrees.
+
+## 1. The guardian-line merge (fix 6)
+
+The guardian branch ended in the SAME posture as the warp line —
+Firefox carried by the in-process Aether core — but with capabilities
+the warp line lacked. Merged (engine contract **1.5.0**):
+
+* `internal/dnsresolver` — the process-local resolver policy (system |
+  DoH: Cloudflare / Google / Quad9 / custom endpoint + bootstrap IPs),
+  installed by the tunnel, `--login`, `--discover` and `--webview-proxy`
+  roles before any network work. NEVER touches Android Private DNS or
+  the other cores.
+* `--webview-proxy` — the loopback CONNECT proxy for the sign-in WebView
+  (443-only, private/loopback destinations refused, 32-conn cap, stdin
+  EOF = shutdown).
+* the single `upstreamSocks` seam (`upstream/socks5.go` +
+  `controlplane_socks.go`) replacing 1.4.0's apiProxy + upstreamProxy
+  pair: TCP CONNECT carries h2, **UDP ASSOCIATE carries h3** — the h2/h3
+  transport picker is restored on the Firefox settings page.
+* the Android child-PID hardening (`setFirefoxPid` + /proc cmdline
+  verification before SIGTERM, no hidden APIs).
+* the Firefox settings page: the DNS section (mode, provider, custom
+  endpoint, bootstrap, the DNS probe test button), the carrier section
+  under its honest name, the transport section.
+
+Merge resolution (the record): the warp line's owner-round UI fixes
+(every launchable app in the picker, the section order, the Turkmen
+locale) and walk decisions (fail-fast session check, the Windows tunnel
+limit lifted, the bind-race guard, readyBudget probe) kept; the engine
+seams take the guardian side; `app_strings` unions both sets (the
+guardian branch's CI-breaking EN apostrophe syntax bug fixed — that was
+the only reason its build was red); the 1.4.0 `internal/carrier`
+package retired (superseded by the socks5 seam; history at `9a994da`).
+
+## 2. The login fix (fix 5) — the WARP-carried sign-in
+
+The owner's evidence: the page loads fine behind another VPN. The
+blocked-region failure modes are DNS poisoning, SNI/IP blocking and the
+Fastly edge's region-keyed bot defense — none of which a DIRECT
+WebView (or a direct DNS-aware proxy) survives. The fix applies the
+owner's own tunnel decree to the one-time sign-in («ابتدا به وارپ
+متصل بشه و بعد فایرفاکس»):
+
+1. The login screen boots the **login carrier** — the plain WARP leg
+   (the per-Firefox core-protocol pick), no TUN, no VPN permission, no
+   session: just the in-process Aether core's loopback SOCKS listener,
+   listener-waited AND end-to-end probed exactly like the tunnel walk.
+   A live session's core is probed and REUSED, never replaced.
+2. The `--webview-proxy` child gets the carrier on its stdin line
+   (`upstreamSocks`, loopback-only, fail-closed) — its CONNECT targets
+   dial through the carrier **BY HOSTNAME** (socks5h semantics: the
+   WARP leg resolves the name remotely and carries the traffic, so a
+   poisoned local resolver, an SNI/IP block and the region-keyed bot
+   defense are all bypassed at once).
+3. AndroidX `ProxyController` routes the app's WebView through the
+   loopback proxy (installed only after the listener is ready).
+4. The `--login` token exchange rides the SAME carrier
+   (`LoginConfig.upstreamSocks` → the SOCKS control-plane transport
+   with the uTLS Firefox ClientHello kept — the Fastly edge sees the
+   WARP egress, not the blocked region's).
+5. Honest degradation: if the carrier cannot come up (no network, WARP
+   itself blocked), the screen falls back to the guardian branch's
+   direct DNS-aware proxy — the page still loads wherever the block is
+   DNS-only. Never a fake page. The status strip says «در حال اتصال…»
+   while the carrier boots.
+
+## 3. The remaining-data slots (fixes 3 + 4)
+
+The source: Guardian's quota headers (X-Quota-Limit / -Remaining /
+-Reset) ride the upstream's ProxyPassInfo; the engine now emits them
+with `quotaMax` beside quotaLeft/quotaReset on every passAcquired /
+renewed event (1.5.0). The Dart side parses with ARMAN's ProxyUsage
+semantics adapted: both counts present → metered (remaining shown);
+BOTH empty → the account carries no metered quota → «نامحدود»;
+garbage → unknown («—», never a made-up number). The last known value
+is persisted (`firefox.quota`) so the cards survive a restart.
+
+* Settings page (fix 3): the Firefox pill's visual-LEFT slot — the
+  muted label over the accent-green value, the page's own card grammar,
+  theme-aware both modes (the pill's texts hug the logo at the right
+  edge; the left half was dead space on the full-width row).
+* Protocol page (fix 4): the Firefox card's visual-RIGHT block — the
+  account chip's twin (sheetSubtile fill, r14, the label over the
+  value), legible on the dark card AND the selected green tile.
+
+## 4. The visual fixes (fixes 1 + 2)
+
+* Fix 1: «آدرس هسته ها» moved from the settings main page into
+  «تنظیمات عمومی» — and the addresses now RIDE the rows: Zeptun Tunnel
+  → `Noisemux/zeptun`, Aether Core → `CluvexStudio/Aether`, each
+  opening its repository externally (the About-card link precedent).
+* Fix 2: the Firefox pill's monochrome mark renders with the theme ink
+  (`AethColors.textPrimary` — white at night, `#141C16` in light mode,
+  riding the 420 ms mode tween); the ProtocolGlyph rule, applied to the
+  one surface that still rendered the raw default-black file.
+
+## Verification
+
+* Go (phase1/fxv, Go 1.25.0): `go vet ./...` clean; `go test ./...` —
+  **all packages green**, including the new
+  `TestWebViewProxyConfigLine` (the carrier line's gates) and the
+  guardian line's own dnsresolver / webview-proxy / socks5 suites.
+* Dart: edited files pass the balanced-literal sanity gate (no SDK in
+  the sandbox — `flutter analyze` runs fatal in CI, as always).
+* Docs: FIREFOX_VPN_ENGINE.md at 1.5.0 (the upstreamSocks seam, the
+  dns block, the webview-proxy role, quotaMax); ORIGIN.md records the
+  merge and the retirement of the 1.4.0 carrier package.
+
+## Honest gaps
+
+* NOT TESTED on a real device — the debug APK comes from GitHub Actions
+  (the sandbox cannot build/sign it).
+* The carrier boot can take tens of seconds on a cold WARP registration
+  (first run); the strip says «در حال اتصال…» but the wait is real.
+* The `--login` exchange riding the carrier is engine-contract tested
+  (the SOCKS transport is the tunnel's own audited path) but has no
+  device evidence yet; the direct fallback covers a dead carrier.

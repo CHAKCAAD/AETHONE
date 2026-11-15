@@ -533,7 +533,7 @@ fake_ip = true
 /// MethodChannel (see MainActivity.kt / AethoneVpnService.kt) and to Aether
 /// over dart:ffi. One active connection at a time; disconnect always cleans
 /// BOTH engines even if connect failed halfway.
-class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
+class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable, FirefoxLoginCarrierCapable {
   PlatformEngineAdapter({
     Duration? statsInterval,
     this._coreFactory,
@@ -765,6 +765,16 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
   EngineConfigSource? _config;
   AetherCoreApi? _core;
   int? _jobId;
+
+  /// 1.5.0 — true while the LOGIN carrier (the sign-in WebView's plain
+  /// WARP leg) is a core THIS adapter booted; false when 1819 belongs to
+  /// a live session (reused, never owned) or nothing runs.
+  bool _loginCarrierOwned = false;
+
+  /// 1.5.0 — the carrier URL the login screen brought up; the --login
+  /// exchange rides it too (the Fastly edge sees the WARP egress, not
+  /// the local network's). Cleared when the login carrier goes down.
+  String? _loginCarrierUrl;
   Timer? _ticker;
   int _probeStrikes = 0;
   bool _connecting = false;
@@ -2190,10 +2200,15 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
       await dnsLoader.loadFirefoxDnsSettings();
     }
     final paths = await _paths();
+    final loginCarrier = _loginCarrierUrl;
     final client = _firefoxLogin = FirefoxLoginClient(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
       onLog: onLog ?? _debugLog,
       dnsConfig: _config?.firefoxDnsConfig ?? const {'mode': 'system'},
+      // 1.5.0 (fix 5) — when the login screen brought a WARP carrier up,
+      // the token EXCHANGE rides it too (the Fastly edge in front of the
+      // FxA token endpoint sees the WARP egress, not the blocked region).
+      upstreamSocks: loginCarrier,
     );
     try {
       final result = await client.runWebChannel(sessionToken: sessionToken);
@@ -2263,6 +2278,131 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
       ));
     }
     return list;
+  }
+
+  /// 1.5.0 (the owner's round 2, fix 5) — the LOGIN CARRIER: the plain
+  /// WARP leg for the sign-in WebView. Boots the in-process Aether core
+  /// (the per-Firefox leg protocol pick) WITHOUT any TUN, VPN permission
+  /// or Firefox session — its loopback SOCKS listener is all the login
+  /// page needs (the webview proxy child dials through it BY HOSTNAME:
+  /// remote DNS through the WARP tunnel, so neither a poisoned local
+  /// resolver nor an SNI/IP block on the local network can keep the
+  /// page from loading — the arman-vpn-client precedent, adapted to
+  /// the chain the owner decreed for the tunnel itself).
+  ///
+  /// Returns the carrier URL ('socks5://127.0.0.1:1819') when a
+  /// verified carrier is up, null when it could not come up (the login
+  /// screen then degrades honestly to the direct DNS-aware proxy).
+  /// When a carrier is ALREADY serving (a connected session of any
+  /// aether-backed family), it is probed and reused — never replaced.
+  @override
+  Future<String?> firefoxLoginCarrierUp() async {
+    final warpPort = TransportModes.masque.socksEndpoint.port + portOffset;
+    // The walks' OWN generation snapshot: a connect started while the
+    // login screen is open bumps it and our waits abort honestly (the
+    // walk's _hardCleanup tears our job down); with no walk running it
+    // simply never goes stale.
+    final carrierGen = _walkGeneration;
+    try {
+      // Someone else's live core: probe and reuse, own nothing.
+      if (await TunnelProbe.isListenerReady(warpPort)) {
+        try {
+          await TunnelProbe()
+              .trace(port: warpPort, timeout: _probeTimeout);
+          _loginCarrierUrl = 'socks5://127.0.0.1:$warpPort';
+          return _loginCarrierUrl;
+        } catch (_) {
+          return null; // a half-dead listener — refuse to stack on it
+        }
+      }
+
+      final source = _config;
+      final leg = AetherArguments.legProtocolId(
+        source?.coreSettings.firefoxLegProtocol ??
+            AetherLegProtocol.wireguard,
+      );
+      await _waitForPortFree(carrierGen, warpPort);
+      clearAetherEnvironment();
+      _coreFailureDuringStart = null;
+      final core = _core =
+          _coreFactory == null ? AetherCore.open() : _coreFactory();
+      final paths = await _paths();
+      _loginCarrierOwned = true;
+      _jobId = core.coreStart(
+        AetherArguments.build(
+          protocol: leg,
+          chain: null,
+          countryCode: null, // the carrier is never country-pinned
+          scanSpeed: source?.scanSpeed ?? 3,
+          core: source?.coreSettings ?? CoreSettings(),
+          filesDir: paths.filesDir,
+          nativeLibraryDir: paths.nativeLibraryDir,
+          lyrebirdPath: paths.lyrebirdPath,
+          psiphonPath: paths.psiphonPath,
+        ),
+      );
+      await _recordCoreJob();
+      final listenerUp = await _waitForListenerFollowingCore(
+        carrierGen,
+        warpPort,
+        timeout: _listenerBudget,
+      );
+      if (!listenerUp) {
+        await firefoxLoginCarrierDown();
+        return null;
+      }
+      _coreFailureDuringStart = null;
+      final probe = await _probeUntilReadyFollowingCore(
+        carrierGen,
+        warpPort,
+        budget: readyBudget(leg, core: source?.coreSettings ?? CoreSettings()),
+      );
+      if (probe == null) {
+        await firefoxLoginCarrierDown();
+        return null;
+      }
+      _debugLog('login carrier up on 127.0.0.1:$warpPort '
+          '(leg: ${leg.name}, ping ${probe.pingMs} ms)');
+      _loginCarrierUrl = 'socks5://127.0.0.1:$warpPort';
+      return _loginCarrierUrl;
+    } on AetherFfiException catch (e) {
+      _debugLog('login carrier failed: $e');
+      await firefoxLoginCarrierDown();
+      return null;
+    } catch (e) {
+      _debugLog('login carrier failed: $e');
+      await firefoxLoginCarrierDown();
+      return null;
+    }
+  }
+
+  /// Tears the login carrier down — ONLY the core THIS adapter booted
+  /// for the login screen ([_loginCarrierOwned]); a reused live session
+  /// core is never touched, and a walk that superseded us mid-login
+  /// (its _hardCleanup already cancelled the job) makes this a no-op.
+  @override
+  Future<void> firefoxLoginCarrierDown() async {
+    _loginCarrierUrl = null;
+    if (!_loginCarrierOwned) return;
+    _loginCarrierOwned = false;
+    final jobId = _jobId;
+    final core = _core;
+    _jobId = null;
+    _core = null;
+    if (jobId == null || core == null) return;
+    try {
+      core.jobCancel(jobId);
+      final deadline = DateTime.now().add(_cancelGrace);
+      while (DateTime.now().isBefore(deadline)) {
+        final poll = core.jobPoll(jobId);
+        if (poll.body['state'] == 'done') break;
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      core.jobFree(jobId);
+    } on AetherFfiException {
+      // job already gone
+    }
+    await _clearCoreJob();
   }
 
   /// Runs the same process-local resolver used by login, discovery and
@@ -2608,6 +2748,11 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
       ),
       onAuthRefreshed: (refreshed) {
         unawaited(vault.save(refreshed));
+      },
+      onQuota: (quotaMax, quotaLeft, quotaReset) {
+        // 1.5.0 — the Guardian quota facts ride the adapter's event
+        // stream to the store (the remaining-data cards).
+        _emit(EngineFirefoxQuota(quotaMax, quotaLeft, quotaReset));
       },
       onProcessStarted: (pid) {
         // The Kotlin companion outlives a Flutter isolate. If the isolate

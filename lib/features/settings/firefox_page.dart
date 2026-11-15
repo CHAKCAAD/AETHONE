@@ -61,7 +61,6 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
     final store = widget.store;
     final core = store.coreSettings;
 
-    final core = store.coreSettings;
     final accountStatus = switch (store.firefoxAccount) {
       FirefoxAccountStatus.signedIn => strings.firefoxSignedIn,
       FirefoxAccountStatus.signedOut => strings.firefoxSignedOut,

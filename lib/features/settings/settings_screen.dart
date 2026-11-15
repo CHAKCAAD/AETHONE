@@ -213,6 +213,7 @@ class SettingsScreen extends StatelessWidget {
                           SizedBox(height: AethGeometry.settingsPillGap * s),
                           _enter(context, style, 4, _FirefoxPillRow(
                             textDir: appDir,
+                            store: store,
                             onTap: () => _openSubPage(
                               context,
                               FirefoxSettingsPage(store: store),
@@ -244,22 +245,16 @@ class SettingsScreen extends StatelessWidget {
                             ),
                           )),
                           SizedBox(
-                            height: AethGeometry.settingsHeading2GapToServer * s,
+                            height:
+                                AethGeometry.settingsHeading2GapToServer * s,
                           ),
-                          _enter(context, style, 7, _SectionHeading(
-                            icon: AppAssets.iconSituation1,
-                            title: strings.settingsMainServer,
-                          )),
-                          SizedBox(
-                            height: AethGeometry.settingsHeadingGapToCards * s,
-                          ),
-                          _enter(context, style, 8, const _ServerPills()),
-                          SizedBox(height: 22 * s),
-                          // v4.21 — the core diagnostics entry (owner:
-                          // «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا
-                          // بهتر بتونیم دیباگ کنیم») — the full captured
-                          // stderr of the engines, tailed live.
-                          _enter(context, style, 9, _CoreLogCard(
+                          // v1.5.0 (the owner's round 2, fix 1) — the
+                          // «آدرس هسته ها» section MOVED to the general
+                          // settings page («قسمت آدرس هسته ها رو به صفحه
+                          // تنظیمات عمومی انتقال بده»); this page goes
+                          // straight from the status cards to the core-log
+                          // entry.
+                          _enter(context, style, 7, _CoreLogCard(
                             onTap: () => _openCoreLog(context),
                           )),
                           SizedBox(height: 30 * s),
@@ -628,12 +623,21 @@ class _ProtocolPills extends StatelessWidget {
 
 /// PHASE-2 (firefox-vpn) — the full-width Firefox VPN pill (the third
 /// protocol-settings row): the same wide-pill language as the
-/// psiphon/tor pair, stretched across, the placeholder shield glyph
-/// until the owner's own Firefox artwork lands.
+/// psiphon/tor pair, stretched across. v1.5.0 (the owner's round 2):
+/// the REAL Firefox artwork renders with the THEME INK (white in dark
+/// mode, black in light mode — the monochrome file cannot color itself,
+/// see ProtocolGlyph's firefoxOnly rule), and the pill's visual-LEFT
+/// slot carries the remaining-data block (the Guardian quota of the
+/// signed-in account — «نامحدود» when it carries no metered quota).
 class _FirefoxPillRow extends StatelessWidget {
-  const _FirefoxPillRow({required this.textDir, this.onTap});
+  const _FirefoxPillRow({
+    required this.textDir,
+    required this.store,
+    this.onTap,
+  });
 
   final TextDirection textDir;
+  final ConnectionStore store;
   final VoidCallback? onTap;
 
   @override
@@ -643,9 +647,20 @@ class _FirefoxPillRow extends StatelessWidget {
     return _WidePill(
       logo: AppAssets.protocolIcon(ProtocolId.firefoxOnly, light: false),
       logoBox: AethGeometry.settingsPillLogoTor * s,
+      // Fix 2 — the theme ink: white at night, #141C16 in light mode
+      // (AethColors.textPrimary rides the 420 ms mode tween with the
+      // rest of the palette).
+      logoInk: AethColors.textPrimary,
       title: strings.settingsFirefox,
       subtitle: strings.settingsPillSub,
       textDir: textDir,
+      // Fix 3 — the remaining-data slot in the visual-LEFT part of the
+      // full-width pill (the texts hug the logo at the right edge).
+      leading: _FirefoxQuotaSlot(
+        store: store,
+        strings: strings,
+        s: s,
+      ),
       onTap: onTap,
     );
   }
@@ -662,6 +677,8 @@ class _WidePill extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.textDir,
+    this.leading,
+    this.logoInk,
     this.onTap,
   });
 
@@ -673,6 +690,17 @@ class _WidePill extends StatelessWidget {
   final String title;
   final String subtitle;
   final TextDirection textDir;
+
+  /// v1.5.0 (fix 3) — an optional block at the pill's visual-LEFT edge
+  /// (the Firefox row's remaining-data slot; null on the half-width
+  /// psiphon/tor pills — their texts own the left half).
+  final Widget? leading;
+
+  /// v1.5.0 (fix 2) — an optional INK for a MONOCHROME logo (the Firefox
+  /// mark): tinted with this color through srcIn. Null keeps the file's
+  /// own colors (the colored psiphon/tor artwork is never tinted).
+  final Color? logoInk;
+
   final VoidCallback? onTap;
 
   @override
@@ -695,6 +723,12 @@ class _WidePill extends StatelessWidget {
         ),
         child: Row(
           children: [
+            // v1.5.0 (fix 3) — the optional visual-LEFT slot (the
+            // remaining-data block on the full-width Firefox pill).
+            if (leading != null) ...[
+              leading!,
+              SizedBox(width: 12 * s),
+            ],
             // LTR-locked parent: texts render at the visual LEFT (measured
             // x60–147), end-aligned toward the logo.
             Expanded(
@@ -737,12 +771,18 @@ class _WidePill extends StatelessWidget {
             // delivered (own colors; the v4.15 accent-green tint is retired
             // by the decree «رنگ و شکل آیکون ها باید دقیقا همین فایل هایی
             // باشه که برات ارسال شده»). The «هر دو حالت» files are pure
-            // vector SVGs — rendered through flutter_svg.
+            // vector SVGs — rendered through flutter_svg. v1.5.0 (fix 2):
+            // a MONOCHROME logo (the Firefox mark) takes the theme ink —
+            // white in dark mode, black in light mode (the file's own
+            // default-black ink would vanish on the night card).
             SvgPicture.asset(
               logo,
               width: logoBox,
               height: logoBox,
               fit: BoxFit.contain,
+              colorFilter: logoInk == null
+                  ? null
+                  : ColorFilter.mode(logoInk!, BlendMode.srcIn),
             ),
           ],
         ),
@@ -875,73 +915,85 @@ class _StatusCards extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Server pills (Zeptun Tunnel / Aether Core) — GitHub logos.
-// v4.15 #3 — corners r20 (owner CSS Rectangle 79 scaled 24 × 70/84),
-// replacing the v4.14 stadium (h/2 = 35).
+// v1.5.0 (the owner's round 2, fix 3) — the Firefox remaining-data slot:
+// the visual-LEFT block of the settings page's full-width Firefox pill.
+// The Guardian quota of the signed-in account, in the settings page's
+// own design language: IRANYekanX, the muted label + the accent-green
+// value (the status cards' value grammar), theme-aware both modes.
+// «نامحدود» when the account carries no metered quota; «—» until the
+// first connect reports it (the honest placeholder, never a guess).
 // ---------------------------------------------------------------------------
-class _ServerPills extends StatelessWidget {
-  const _ServerPills();
+class _FirefoxQuotaSlot extends StatelessWidget {
+  const _FirefoxQuotaSlot({
+    required this.store,
+    required this.strings,
+    required this.s,
+  });
+
+  final ConnectionStore store;
+  final AppStrings strings;
+  final double s;
+
+  /// The app's own bytes format (the bottom panel's precedent: Latin
+  /// digits + MB/GB, LTR-locked by the caller).
+  static String formatQuotaBytes(int bytes) {
+    const gb = 1024 * 1024 * 1024;
+    const mb = 1024 * 1024;
+    if (bytes >= gb) {
+      final v = (bytes / gb).toStringAsFixed(bytes >= gb * 10 ? 0 : 1);
+      return '$v GB';
+    }
+    return '${bytes ~/ mb} MB';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final h = AethGeometry.settingsServerPillH * s;
-    Widget pill(String title) => Expanded(
-          child: Container(
-            height: h,
-            decoration: BoxDecoration(
-              color: AethColors.cardDark,
-              borderRadius: BorderRadius.circular(
-                AethGeometry.settingsServerPillRadius * s,
-              ),
-            ),
-            padding: EdgeInsets.symmetric(
-              horizontal: AethGeometry.settingsServerInset * s,
-            ),
-            child: Row(
-              children: [
-                // GitHub logo at the TRAILING edge (visual left in the
-                // frame — pixel-verified: logo x50–83, text x94–174).
-                SvgPicture.asset(
-                  AppAssets.logoGithub,
-                  width: AethGeometry.settingsServerLogoSize * s,
-                  height: AethGeometry.settingsServerLogoSize * s,
-                  fit: BoxFit.contain,
-                  colorFilter: ColorFilter.mode(
-                    AethColors.textPrimary,
-                    BlendMode.srcIn,
-                  ),
-                ),
-                SizedBox(width: 10 * s),
-                Expanded(
-                  // FittedBox keeps the FULL title inside the pill at any
-                  // locale/font — never «Zeptun Tun…» (device-test lesson).
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontFamily: 'IRANYekanX',
-                        fontWeight: FontWeight.w600,
-                        fontSize: AethGeometry.settingsPillTitleSize * s,
-                        color: AethColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+    final quota = store.firefoxQuota;
+    final String value;
+    if (quota == null) {
+      value = '—'; // never known — the honest placeholder
+    } else if (quota.unlimited) {
+      value = strings.firefoxQuotaUnlimited;
+    } else {
+      value = formatQuotaBytes(quota.remainingBytes ?? 0);
+    }
+    return Directionality(
+      // The label is Persian; the value (GB/MB) stays LTR — the block
+      // reads label-over-value, both start-aligned like the pill texts.
+      textDirection: TextDirection.rtl,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            strings.firefoxQuotaLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'IRANYekanX',
+              fontWeight: FontWeight.w400,
+              fontSize: AethGeometry.settingsCardSubSize * s,
+              color: AethColors.textSecondary,
             ),
           ),
-        );
-    return Row(
-      children: [
-        // LTR-locked: visual LEFT = Zeptun Tunnel, RIGHT = Aether Core
-        // (the frame's measured positions).
-        pill('Zeptun Tunnel'),
-        SizedBox(width: AethGeometry.settingsPillGap * s),
-        pill('Aether Core'),
-      ],
+          SizedBox(height: 4 * s),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'IRANYekanX',
+                fontWeight: FontWeight.w600,
+                fontSize: AethGeometry.settingsCardTitleSize * s,
+                // The status cards' value grammar: accent green.
+                color: AethColors.accentConnected,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

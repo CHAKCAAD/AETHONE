@@ -30,16 +30,27 @@ class FirefoxWebViewDnsProxy {
   bool _proxySetAttempted = false;
   String? resolver;
 
-  Future<void> start(Map<String, dynamic> dnsConfig) {
+  /// The WARP carrier the proxy dials through ('socks5://127.0.0.1:1819'),
+  /// when the login screen brought one up; null = the direct dial.
+  String? carrier;
+
+  Future<void> start(
+    Map<String, dynamic> dnsConfig, {
+    String? upstreamSocks,
+  }) {
     if (_startFuture != null) {
       return _startFuture!;
     }
-    final future = _startInternal(dnsConfig);
+    carrier = upstreamSocks;
+    final future = _startInternal(dnsConfig, upstreamSocks);
     _startFuture = future;
     return future;
   }
 
-  Future<void> _startInternal(Map<String, dynamic> dnsConfig) async {
+  Future<void> _startInternal(
+    Map<String, dynamic> dnsConfig,
+    String? upstreamSocks,
+  ) async {
     final paths = await _channel.invokeMapMethod<String, dynamic>('paths');
     if (_stopRequested) {
       throw StateError('Firefox WebView DNS proxy start was cancelled');
@@ -104,7 +115,11 @@ class FirefoxWebViewDnsProxy {
       }
     }));
 
-    process.stdin.writeln(jsonEncode({'dns': dnsConfig}));
+    process.stdin.writeln(jsonEncode({
+      'dns': dnsConfig,
+      if (upstreamSocks != null && upstreamSocks.isNotEmpty)
+        'upstreamSocks': upstreamSocks,
+    }));
     await process.stdin.flush();
 
     final event = await ready.future.timeout(_startupTimeout);

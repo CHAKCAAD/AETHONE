@@ -10,6 +10,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert' show jsonDecode, jsonEncode;
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
@@ -39,6 +40,87 @@ enum HomeLook { one, two }
 /// then signedIn / signedOut; nothing simulated).
 enum FirefoxAccountStatus { unknown, signedIn, signedOut }
 
+/// 1.5.0 — the Guardian quota of the signed-in Firefox account (the
+/// owner's round 2: the remaining-data slots). Parsed from the engine's
+/// quotaMax/quotaLeft/quotaReset event strings with ARMAN's ProxyUsage
+/// semantics adapted (core/internal/guardian/usage.go): both byte counts
+/// present and non-negative → a METERED account (remaining = quotaLeft);
+/// BOTH empty → the account carries NO metered quota — the UNLIMITED
+/// case (Guardian sends the X-Quota-* trio only to metered accounts);
+/// anything else → unknown (null — the UI shows its honest placeholder,
+/// never a made-up number).
+class FirefoxQuota {
+  const FirefoxQuota({
+    required this.unlimited,
+    this.limitBytes,
+    this.remainingBytes,
+    this.resetAt,
+    required this.checkedAt,
+  });
+
+  final bool unlimited;
+  final int? limitBytes;
+  final int? remainingBytes;
+  final DateTime? resetAt;
+  final DateTime checkedAt;
+
+  /// Parses the engine's event strings; null when they carry no usable
+  /// quota (the unknown case — never a guess).
+  static FirefoxQuota? parse(
+    String quotaMax,
+    String quotaLeft,
+    String quotaReset,
+  ) {
+    final max = int.tryParse(quotaMax.trim());
+    final left = int.tryParse(quotaLeft.trim());
+    if (max == null && left == null) {
+      return FirefoxQuota(unlimited: true, checkedAt: DateTime.now());
+    }
+    if (max == null || left == null || max < 0 || left < 0 || left > max) {
+      return null;
+    }
+    DateTime? reset;
+    final raw = quotaReset.trim();
+    if (raw.isNotEmpty) {
+      final secs = int.tryParse(raw);
+      reset = DateTime.tryParse(raw) ??
+          (secs != null && secs > 0
+              ? DateTime.fromMillisecondsSinceEpoch(secs * 1000)
+              : null);
+    }
+    return FirefoxQuota(
+      unlimited: false,
+      limitBytes: max,
+      remainingBytes: left,
+      resetAt: reset,
+      checkedAt: DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'unlimited': unlimited,
+        if (limitBytes != null) 'limitBytes': limitBytes,
+        if (remainingBytes != null) 'remainingBytes': remainingBytes,
+        if (resetAt != null) 'resetAt': resetAt!.millisecondsSinceEpoch,
+        'checkedAt': checkedAt.millisecondsSinceEpoch,
+      };
+
+  static FirefoxQuota? fromJson(Map<String, dynamic> j) {
+    if (j['unlimited'] is! bool) return null;
+    return FirefoxQuota(
+      unlimited: j['unlimited'] as bool,
+      limitBytes: (j['limitBytes'] as num?)?.toInt(),
+      remainingBytes: (j['remainingBytes'] as num?)?.toInt(),
+      resetAt: j['resetAt'] is num
+          ? DateTime.fromMillisecondsSinceEpoch((j['resetAt'] as num).toInt())
+          : null,
+      checkedAt: j['checkedAt'] is num
+          ? DateTime.fromMillisecondsSinceEpoch((j['checkedAt'] as num).toInt())
+          : DateTime.now(),
+    );
+  }
+}
+
 class ConnectionStore extends ChangeNotifier implements EngineConfigSource, FirefoxDnsSettingsLoader {
   /// v4.32 — [scorecard] defaults ONCE (the redirecting constructor) so the
   /// store and its platform adapter always share the SAME live instance —
@@ -54,6 +136,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
     _engine.bind(this);
     _subscription = _engine.events.listen(_onEvent);
     unawaited(loadFirefoxDnsSettings());
+    unawaited(_loadFirefoxQuota());
   }
 
   /// v4.32 — the SMART scorecard the adapter orders its candidates by
@@ -383,6 +466,51 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   /// honest: no session = signedOut, nothing simulated).
   FirefoxAccountStatus firefoxAccount = FirefoxAccountStatus.unknown;
 
+  /// 1.5.0 — the LAST KNOWN Guardian quota of the signed-in Firefox
+  /// account (null = never known — the honest placeholder). Refreshed on
+  /// every passAcquired/renewed engine event and persisted beside the
+  /// DNS settings so the cards survive an app restart.
+  FirefoxQuota? firefoxQuota;
+
+  /// Consumes the adapter's [EngineFirefoxQuota] event: parses the
+  /// engine's strings, keeps the last usable value and persists it.
+  void applyFirefoxQuota(
+      String quotaMax, String quotaLeft, String quotaReset) {
+    final next = FirefoxQuota.parse(quotaMax, quotaLeft, quotaReset);
+    if (next == null) return; // garbage is not a quota — keep the last one
+    final old = firefoxQuota;
+    final changed = old == null ||
+        old.unlimited != next.unlimited ||
+        old.remainingBytes != next.remainingBytes ||
+        old.limitBytes != next.limitBytes;
+    firefoxQuota = next;
+    unawaited(_persistFirefoxQuota(next));
+    if (changed) notifyListeners();
+  }
+
+  Future<void> _persistFirefoxQuota(FirefoxQuota quota) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('firefox.quota', jsonEncode(quota.toJson()));
+    } catch (_) {
+      // Persistence is best-effort; the in-memory value stays.
+    }
+  }
+
+  Future<void> _loadFirefoxQuota() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('firefox.quota');
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        firefoxQuota = FirefoxQuota.fromJson(decoded);
+      }
+    } catch (_) {
+      // A corrupt record is absent.
+    }
+  }
+
   /// Consumes the adapter's [EngineFirefoxLocations] event: swaps in the
   /// sanitized live set + its honesty labels. A no-change swap does not
   /// wake the listeners.
@@ -441,6 +569,13 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   /// This is DNS evidence only, not an OAuth or VPN-connectivity test.
   Future<List<Map<String, dynamic>>?> firefoxDnsProbe() =>
       _engine.firefoxDnsProbe(firefoxDnsConfig);
+
+  /// 1.5.0 (fix 5) — brings the plain WARP login carrier up for the
+  /// sign-in WebView (null = it could not come up; the screen then uses
+  /// the direct DNS-aware proxy) and takes it down when the page closes.
+  Future<String?> firefoxLoginCarrierUp() => _engine.firefoxLoginCarrierUp();
+  Future<void> firefoxLoginCarrierDown() =>
+      _engine.firefoxLoginCarrierDown();
 
   /// v4.22 — direct setters for the SETTINGS pages (the Psiphon/Tor pages
   /// write their own family field regardless of the currently selected
@@ -939,6 +1074,9 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
         applyPsiphonEgressRegions(regions);
       case EngineFirefoxLocations(:final countries, :final live, :final fetchedAt):
         applyFirefoxLocations(countries, live, fetchedAt);
+      case EngineFirefoxQuota(
+          :final quotaMax, :final quotaLeft, :final quotaReset):
+        applyFirefoxQuota(quotaMax, quotaLeft, quotaReset);
       case EngineExitCountryResolved(:final code):
         // v4.31 — the REAL country behind a Tor exit (the trace only says
         // T1): apply it while — and only while — a session is actually

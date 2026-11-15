@@ -62,9 +62,12 @@ the Android-Keystore vault on the Dart side).
 ## 3. Process contract
 
 Fixed and versioned by `engine.ConfigVersion = 1` / `EngineVersion
-"1.4.0-warp"` (bump both on breaking change; every bump since 1.1.0 is
-ADDITIVE — the 1.2.0 classified `failed` event, and the 1.4.0 WARP
-carrier seams below; a host that sends no carrier URLs keeps the exact
+"1.5.0"` (bump both on breaking change; every bump since 1.1.0 is
+ADDITIVE — the 1.2.0 classified `failed` event, the 1.4.0 WARP carrier
+seams, and the 1.5.0 guardian-line merge: the single `upstreamSocks`
+seam replacing 1.4.0's apiProxy/upstreamProxy pair, the process-local
+`dns` block, the `--webview-proxy` role and `quotaMax` on the quota
+events; a host that sends none of the new fields keeps the exact
 pre-1.4.0 direct behavior).
 
 * **stdin** — exactly ONE JSON line (`engine.Config`), written by the host
@@ -86,9 +89,20 @@ pre-1.4.0 direct behavior).
   server list (upstream uTLS Firefox ClientHello) and prints the
   discovery JSON on stdout; no stdin, no secrets. The Dart-side
   `FirefoxDiscovery` uses it for the pre-connect location model.
+* **`--webview-proxy` role** (1.5.0, the login-page fix) —
+  `libfirefoxvpn.so --webview-proxy` reads ONE optional JSON line on
+  stdin (the same `dns` block), installs the selected process-local
+  resolver, binds an HTTP CONNECT proxy on `127.0.0.1:<free-port>` and
+  prints `webViewProxyReady {addr, resolver}` on stdout. HTTPS (443)
+  only; private/loopback/link-local destinations are refused (it can
+  never become a general local port forwarder); max 32 tunnels; stdin
+  EOF = shutdown (the listener closes and the open tunnels drop). The
+  Dart login screen routes the app's WebView through it via AndroidX
+  `ProxyController` — the page loads on DNS-poisoned networks without
+  any other VPN (the arman-vpn-client precedent, adapted).
 * **`--login` role** (PHASE 2, `docs/FIREFOX_VPN_LOGIN.md`) —
   `libfirefoxvpn.so --login` exchanges a WebChannel-captured FxA session
-  token (ONE JSON line on stdin, `engine.LoginConfig` v1) for the
+  token (ONE JSON line on stdin, `engine.LoginConfig` v1 — 1.5.0: it carries the same `dns` block, installed before the exchange) for the
   same-account OAuth pair through the pinned upstream's
   `vpnclient.FxaOAuthToken` (HAWK + uTLS + the anti-bot retry),
   retrying unverified sessions inside a 300 s budget and emitting the
@@ -103,11 +117,10 @@ pre-1.4.0 direct behavior).
 | `socksListen` | MUST be loopback (`socksListenNotLoopback` otherwise); default `127.0.0.1:1822` |
 | `guardian` | default `https://vpn.mozilla.org`; must be https (`guardianNotHttps`) |
 | `country` | `""`/`"REC"` = AUTO (recommended anycast); ISO-3166-1 alpha-2 or country name, case-insensitive; no match → `noMatchForCountry` with the available list |
-| `transport` | `h2` (default) or `h3` (`transportUnknown` otherwise); `h3` is REFUSED while `upstreamProxy` is set (`transportUnsupportedOverProxy` — QUIC/UDP cannot ride the TCP carrier) |
-| `apiProxy` | 1.4.0-warp — `socks5://host:port` (or `socks5h://`): route the CONTROL plane (FxA / Guardian / RemoteSettings) through the WARP carrier, keeping the uTLS Firefox ClientHello over the carrier socket (`apiProxyInvalid` otherwise; empty = direct) |
-| `upstreamProxy` | 1.4.0-warp — `socks5://host:port`: dial the h2 MASQUE data plane through the WARP carrier (`upstreamProxyInvalid` otherwise; empty = direct) |
+| `transport` | `h2` (default) or `h3` (`transportUnknown` otherwise). Over the `upstreamSocks` carrier both ride: h2 via TCP CONNECT, h3 via UDP ASSOCIATE (1.5.0 — the 1.4.0 h3-over-carrier refusal is retired with the two-seam carrier it gated) |
+| `upstreamSocks` | 1.5.0 — the single WARP-carrier seam (replaces 1.4.0's `apiProxy` + `upstreamProxy` pair): `socks5://127.0.0.1:port`, loopback host only, no userinfo/path/query (`upstreamSocksInvalid` otherwise). Routes the CONTROL plane (FxA / Guardian / RemoteSettings, the uTLS Firefox ClientHello kept) AND the MASQUE data plane through the in-process Aether carrier; empty = the direct path. In Firefox-over-WARP mode the host always sets it; no direct fallback is attempted. |
+| `dns` | 1.5.0 — the process-local resolver policy (system \| DoH; see `internal/dnsresolver`), applied BEFORE any network work in the tunnel, `--login`, `--discover` and `--webview-proxy` roles (`dnsConfigInvalid` otherwise; absent = system) |
 | `upstreamOverride` | `host:port` — skip discovery, dial that MASQUE proxy (the `selected` event reports `selectionSource:"override"`); test/lifecycle harness use |
-| `upstreamSocks` | optional `socks5://127.0.0.1:1819` — loopback-only Aether carrier. In Firefox-over-WARP mode this is required; no direct fallback is attempted. |
 | `upstreamTimeoutMs` / `handshakeTimeoutMs` / `idleTimeoutMs` / `maxConns` | 0 → upstream defaults (20 s / 10 s / unlimited / 256) |
 | `exitCheckUrl` / `exitTimeoutMs` | engine-side exit probe; default `https://www.cloudflare.com/cdn-cgi/trace`, 10 s |
 | `logLevel` | `quiet` / `normal` / `verbose` (stderr) |
@@ -126,7 +139,7 @@ host, latency) · `socksReady` (addr — the listener is really bound) ·
 latency) / `exitVerifyFailed` — **the exit country is reported separately
 from the configured country; a mismatch is recorded, never hidden** ·
 `authRefreshed` (PRIVATE pair) · `renewalFailed` (error redacted,
-retryInMs) · `quotaExhausted` (quotaLeft, quotaReset) · `stopping` /
+retryInMs) · `quotaExhausted` (quotaMax, quotaLeft, quotaReset — 1.5.0: the quota events carry the limit beside the remaining/reset) · `stopping` /
 `stopped` (reason) · `failed` (failCode, message, exit code) · `log`.
 
 Failure codes: `badConfig`, `discoveryFailed`, `noMatchForCountry`,

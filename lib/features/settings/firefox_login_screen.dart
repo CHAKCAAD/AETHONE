@@ -64,6 +64,9 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
   Future<void> _teardownLoginNetwork() async {
     await widget.store.firefoxLoginCancel();
     await _webViewDnsProxy?.stop();
+    // The login carrier (the plain WARP leg this screen booted) goes down
+    // with the page — a reused live-session core is never touched.
+    await widget.store.firefoxLoginCarrierDown();
   }
 
   void _onSessionToken(String token) async {
@@ -188,7 +191,11 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
 
   Widget _statusStrip(AppStrings strings, double s) {
     final (label, color) = switch (_phase) {
-      _LoginPhase.browsing => (strings.firefoxLoginWaiting, AethColors.textSecondary),
+      // While the WARP carrier + the loopback proxy come up (fix 5) the
+      // strip says what is really happening: connecting.
+      _LoginPhase.browsing => _webViewInitializing
+          ? (strings.statusConnecting, AethColors.accentConnected)
+          : (strings.firefoxLoginWaiting, AethColors.textSecondary),
       _LoginPhase.exchanging => (strings.firefoxLoginExchanging, AethColors.accentConnected),
       _LoginPhase.success => (strings.firefoxLoginSuccess, AethColors.accentConnected),
       _LoginPhase.failed => (_errorText ?? strings.firefoxLoginFailed, AethColors.statusDisconnected),
@@ -271,15 +278,37 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
     unawaited(_initializeLoginWebView(proxy));
   }
 
-  /// Bring up the selected DNS resolver and the loopback CONNECT proxy
-  /// BEFORE creating/loading Chromium's WebView. The AndroidX callback is
-  /// awaited by [FirefoxWebViewDnsProxy.start], so the first navigation
-  /// cannot race the process-scoped WebView proxy installation.
+  /// Bring up the LOGIN CARRIER (the plain WARP leg — the owner's chain
+  /// posture applied to the one-time sign-in), then the selected DNS
+  /// resolver and the loopback CONNECT proxy BEFORE creating/loading
+  /// Chromium's WebView. The AndroidX callback is awaited by
+  /// [FirefoxWebViewDnsProxy.start], so the first navigation cannot race
+  /// the process-scoped WebView proxy installation.
+  ///
+  /// The carrier is the fix for the blocked-region page load: with it,
+  /// the page's traffic dials through the WARP tunnel BY HOSTNAME
+  /// (remote DNS, foreign egress) — neither a poisoned local resolver
+  /// nor an SNI/IP block can stop it, exactly like another VPN would
+  /// (the owner's own evidence). Without it (carrier failed to boot),
+  /// the direct DNS-aware proxy still carries the page wherever the
+  /// block is DNS-only — the honest degradation, never a fake page.
   Future<void> _initializeLoginWebView(FirefoxWebViewDnsProxy proxy) async {
     try {
       await widget.store.loadFirefoxDnsSettings();
+      String? carrier;
+      try {
+        carrier = await widget.store.firefoxLoginCarrierUp();
+      } catch (_) {
+        carrier = null; // degrade honestly to the direct proxy
+      }
+      if (!mounted) {
+        await widget.store.firefoxLoginCarrierDown();
+        await proxy.stop();
+        return;
+      }
       await proxy.start(
         Map<String, dynamic>.from(widget.store.firefoxDnsConfig),
+        upstreamSocks: carrier,
       );
       if (!mounted) {
         await proxy.stop();

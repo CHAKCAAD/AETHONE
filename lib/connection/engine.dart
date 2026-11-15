@@ -103,6 +103,19 @@ class EngineFirefoxLocations extends EngineEvent {
   final DateTime fetchedAt;
 }
 
+/// 1.5.0 — the Guardian quota facts of the signed-in Firefox account,
+/// surfacing on every passAcquired / renewed engine event (the owner's
+/// round 2: the remaining-data slots on the settings Firefox pill and the
+/// protocol page's Firefox card). The strings are the engine's own (byte
+/// counts as ASCII strings; empty = no metered quota — the unlimited
+/// case; the reset stamp is RFC3339 or Unix seconds).
+class EngineFirefoxQuota extends EngineEvent {
+  const EngineFirefoxQuota(this.quotaMax, this.quotaLeft, this.quotaReset);
+  final String quotaMax;
+  final String quotaLeft;
+  final String quotaReset;
+}
+
 /// v4.31 — the REAL exit country of a pseudo-country exit, resolved
 /// post-connect (owner round 7: a Tor exit answers the trace with
 /// `loc=T1` — Cloudflare's GeoIP pseudo-country for the Tor network —
@@ -296,6 +309,35 @@ extension EngineAdapterDnsProbe on EngineAdapter {
       return adapter.firefoxDnsProbe(dnsConfig);
     }
     return null;
+  }
+}
+
+/// 1.5.0 (the owner's round 2, fix 5) — the login-carrier capability:
+/// the plain WARP leg the sign-in WebView's proxy dials through (the
+/// same chain posture the owner decreed for the tunnel, applied to the
+/// one-time sign-in). Implemented only by the real Firefox platform
+/// adapter.
+abstract interface class FirefoxLoginCarrierCapable {
+  Future<String?> firefoxLoginCarrierUp();
+  Future<void> firefoxLoginCarrierDown();
+}
+
+/// Safe extension: adapters without the capability report no carrier —
+/// the login screen then degrades to the direct DNS-aware proxy.
+extension EngineAdapterLoginCarrier on EngineAdapter {
+  Future<String?> firefoxLoginCarrierUp() async {
+    final adapter = this;
+    if (adapter is FirefoxLoginCarrierCapable) {
+      return adapter.firefoxLoginCarrierUp();
+    }
+    return null;
+  }
+
+  Future<void> firefoxLoginCarrierDown() async {
+    final adapter = this;
+    if (adapter is FirefoxLoginCarrierCapable) {
+      await adapter.firefoxLoginCarrierDown();
+    }
   }
 }
 

@@ -36,6 +36,7 @@ class FirefoxLoginClient {
     this.shutdownGrace = const Duration(seconds: 3),
     this.onLog,
     this.dnsConfig = const {'mode': 'system'},
+    this.upstreamSocks,
   });
 
   /// Absolute path of `libfirefoxvpn.so` (nativeLibraryDir) or a host
@@ -49,6 +50,12 @@ class FirefoxLoginClient {
 
   /// Same process-local resolver policy used by the Firefox engine.
   final Map<String, dynamic> dnsConfig;
+
+  /// 1.5.0 (fix 5) — the WARP carrier the login screen brought up
+  /// ('socks5://127.0.0.1:1819'): the token exchange rides it (the
+  /// Fastly edge sees the WARP egress). Null/empty keeps the direct
+  /// exchange — the field is validated loopback-only by the engine.
+  final String? upstreamSocks;
 
   Process? _process;
   StreamSubscription<String>? _stdoutSub;
@@ -185,6 +192,8 @@ class FirefoxLoginClient {
       'mode': 'webchannel',
       'sessionToken': sessionToken,
       'dns': dnsConfig,
+      if (upstreamSocks != null && upstreamSocks!.isNotEmpty)
+        'upstreamSocks': upstreamSocks,
     }));
 
     unawaited(process.exitCode.then((code) {

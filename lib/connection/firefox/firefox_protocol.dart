@@ -149,6 +149,7 @@ class FirefoxEngineEvent {
         selectionSource = raw['selectionSource'] as String? ?? '',
         recommended = raw['recommended'] == true,
         passExpiresAt = raw['passExpiresAt'] as String? ?? '',
+        quotaMax = raw['quotaMax'] as String? ?? '',
         quotaLeft = raw['quotaLeft'] as String? ?? '',
         quotaReset = raw['quotaReset'] as String? ?? '',
         exitIp = raw['exitIp'] as String? ?? '',
@@ -192,6 +193,12 @@ class FirefoxEngineEvent {
   final String selectionSource;
   final bool recommended;
   final String passExpiresAt;
+
+  /// 1.5.0 — the Guardian quota facts (passAcquired / renewed):
+  /// `quotaMax`/`quotaLeft` are byte counts as strings (empty when the
+  /// account carries no metered quota — the unlimited case),
+  /// `quotaReset` is the period reset (RFC3339 or Unix seconds).
+  final String quotaMax;
   final String quotaLeft;
   final String quotaReset;
   final String exitIp;

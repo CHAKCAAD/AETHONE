@@ -389,6 +389,48 @@ void main() {
   });
 
   testWidgets(
+      'v1.5.0 fix 4: the Firefox card carries the remaining-data block '
+      '(metered / unlimited / honest dash)', (tester) async {
+    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final store = ConnectionStore(engine: ScriptedEngine());
+    await _openPage(tester, store);
+
+    // Never-known quota: the honest dash (no made-up number).
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('proto-card-firefox-quota')),
+        matching: find.text('—'),
+      ),
+      findsOneWidget,
+    );
+
+    // Metered: 2 GB left → the app's own bytes grammar.
+    store.applyFirefoxQuota('10737418240', '2147483648', '');
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('proto-card-firefox-quota')),
+        matching: find.text('2 GB'),
+      ),
+      findsOneWidget,
+    );
+
+    // Unlimited: the empty pair is the no-metered-quota case.
+    store.applyFirefoxQuota('', '', '');
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('proto-card-firefox-quota')),
+        matching: find.text('نامحدود'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
       'PHASE B: the Firefox selection REPLACES a family member (the '
       'single-knob exclusivity) and the family cards keep their geometry',
     (tester) async {
