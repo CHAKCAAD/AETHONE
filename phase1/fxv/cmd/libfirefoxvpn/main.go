@@ -119,6 +119,16 @@ func runTunnel() int {
                 return engine.ExitStartup
         }
 
+        // When Firefox is running over WARP, its control-plane requests
+        // (RemoteSettings, Guardian and OAuth refresh) must use the same
+        // Aether carrier as its Fastly data-plane session. The transport
+        // keeps the pinned Firefox uTLS fingerprint and fails closed.
+        if cfg.UpstreamSocks != "" {
+                vpnclient.SetControlPlaneTransport(
+                        upstream.NewSOCKS5ControlPlaneTransport(cfg.UpstreamSocks),
+                )
+        }
+
         quiet := cfg.LogLevel == "quiet"
         log.enabled = !quiet
         log.verbose = cfg.LogLevel == "verbose" // the -verbose flag parity (stdin JSON, not env)
