@@ -14,6 +14,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../../connection/connection_store.dart';
+import '../../../connection/core_settings.dart';
 import '../../../connection/transport_modes.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
@@ -58,6 +59,7 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
     final strings = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final store = widget.store;
+    final core = store.coreSettings;
 
     final accountStatus = switch (store.firefoxAccount) {
       FirefoxAccountStatus.signedIn => strings.firefoxSignedIn,
@@ -161,6 +163,43 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
         const SubSectionGap.headingToCard(),
         SubSectionCard(
           child: _FirefoxDnsCard(store: store),
+        ),
+
+        // ---- Section: Aether carrier underneath Firefox VPN ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSwap1,
+          title: strings.secFamilyLeg,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingLabel(strings.aetherLegLabel),
+              const SizedBox(height: 10),
+              SettingPills<AetherLegProtocol>(
+                keyId: 'firefox-aether-leg',
+                options: [
+                  (AetherLegProtocol.wireguard,
+                      strings.aetherLegName(AetherLegProtocol.wireguard)),
+                  (AetherLegProtocol.masque,
+                      strings.aetherLegName(AetherLegProtocol.masque)),
+                  (AetherLegProtocol.gool,
+                      strings.aetherLegName(AetherLegProtocol.gool)),
+                  (AetherLegProtocol.goolClassic,
+                      strings.aetherLegName(AetherLegProtocol.goolClassic)),
+                  (AetherLegProtocol.mim,
+                      strings.aetherLegName(AetherLegProtocol.mim)),
+                ],
+                selected: core.firefoxLegProtocol,
+                onSelect: (value) =>
+                    store.updateCore((settings) => settings.firefoxLegProtocol = value),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.firefoxLegDesc),
+            ],
+          ),
         ),
 
         // ---- Section: the data-plane transport ----
