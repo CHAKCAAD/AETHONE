@@ -69,7 +69,44 @@ class RoutingSettingsPage extends StatelessWidget {
           ),
         ),
 
-        // ---- Section: per-app tunneling (Android, tunnel mode) ----
+        // ---- Section: direct & blocked routes (expert) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconFilter5,
+          title: strings.secRoutes,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingField(
+                keyId: 'route-block',
+                label: strings.routeBlockLabel,
+                hint: strings.routeBlockHint,
+                initial: store.coreSettings.routeBlock,
+                maxLines: 2,
+                onChanged: (v) =>
+                    store.updateCore((c) => c.routeBlock = v.trim()),
+              ),
+              const SubSectionDivider(),
+              SettingField(
+                keyId: 'route-direct',
+                label: strings.routeDirectLabel,
+                hint: strings.routeDirectHint,
+                initial: store.coreSettings.routeDirect,
+                maxLines: 2,
+                onChanged: (v) =>
+                    store.updateCore((c) => c.routeDirect = v.trim()),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.routesDesc),
+            ],
+          ),
+        ),
+        // ---- Section: per-app tunneling (Android, tunnel mode) —
+        // v4.42: moved to the END of the page (the owner's decree:
+        // «این بخش باید بخش آخر صفحه مسیریابی قرار بگیره»). ----
         // v4.41 (owner round 17, item 4): «قابلیت مثتثنی کردن برنامه ها
         // از تونل در اندروید … دو حالت داشته باشه 1. فقط برنامه های
         // انتخاب شده تونل بشن 2. برنامه های انتخاب شده تونل نشن این
@@ -109,41 +146,6 @@ class RoutingSettingsPage extends StatelessWidget {
           ),
         ],
 
-        // ---- Section: direct & blocked routes (expert) ----
-        SizedBox(height: 24 * s),
-        SubSectionHeading(
-          icon: AppAssets.iconFilter5,
-          title: strings.secRoutes,
-        ),
-        const SubSectionGap.headingToCard(),
-        SubSectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SettingField(
-                keyId: 'route-block',
-                label: strings.routeBlockLabel,
-                hint: strings.routeBlockHint,
-                initial: store.coreSettings.routeBlock,
-                maxLines: 2,
-                onChanged: (v) =>
-                    store.updateCore((c) => c.routeBlock = v.trim()),
-              ),
-              const SubSectionDivider(),
-              SettingField(
-                keyId: 'route-direct',
-                label: strings.routeDirectLabel,
-                hint: strings.routeDirectHint,
-                initial: store.coreSettings.routeDirect,
-                maxLines: 2,
-                onChanged: (v) =>
-                    store.updateCore((c) => c.routeDirect = v.trim()),
-              ),
-              const SubSectionDivider(),
-              SettingInfoText(strings.routesDesc),
-            ],
-          ),
-        ),
         SizedBox(height: 16 * s),
         SettingInfoText(strings.appliesNextConnect),
       ],
@@ -261,7 +263,10 @@ class _AppRow extends StatelessWidget {
                     app.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    textDirection: TextDirection.rtl,
+                    // v4.42 — the ambient direction (was hardcoded rtl:
+                    // Latin app names got mirrored ellipsis placement in
+                    // the LTR locales).
+                    textDirection: Directionality.of(context),
                     style: TextStyle(
                       fontFamily: 'IRANYekanX',
                       fontWeight:

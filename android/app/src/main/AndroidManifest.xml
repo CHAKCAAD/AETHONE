@@ -78,5 +78,18 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- v4.42 — the per-app tunneling picker's visibility (the
+             owner's report: «همه برنامه های گوشی نمایش داده نمیشه»):
+             on Android 11+ package-visibility filtering applies to
+             queryIntentActivities too — without this launcher-intent
+             declaration the picker only ever saw a small automatic-
+             visibility subset. With it, EVERY launchable app is visible
+             (the documented launcher/app-picker pattern; no
+             QUERY_ALL_PACKAGES needed — that permission is restricted
+             on Play and this app is not a device-admin tool). -->
+        <intent>
+            <action android:name="android.intent.action.MAIN"/>
+            <category android:name="android.intent.category.LAUNCHER"/>
+        </intent>
     </queries>
 </manifest>
