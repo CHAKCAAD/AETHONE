@@ -61,18 +61,11 @@ enum PsiphonFronting { auto, cdn, direct }
 /// `Bridges::Manual`).
 enum TorBridgePolicy { auto, off, custom }
 
-/// v4.31 — the WARP-leg protocol under a tor/psiphon FAMILY mode (owner
-/// round 7: «انتخاب پروتکل هسته ایتر برای حالت های ترکیبی اور وارپ»;
-/// the v4.21 decree deferred this exact option). The default keeps the
-/// v4.19 fixed leg: WireGuard. The adapter maps it through
-/// `protocolArgs`, which still forces MASQUE for the UDP-needing legs on
-/// the TCP-only reverse modes (the core's own refusal, lib.rs L203-244).
-///
-/// v4.31c — the leg is PER FAMILY now (owner round 8: «قسمت پایه حالت های
-/// ترکیبی باید توی زیرمجموعه تنطیمات تور و سایفون قرار بگیره»): the
-/// tor family's combined modes and the psiphon family's each pick their
-/// own base on their own settings page. The old single-field
-/// `aetherLegProtocol` is migrated into BOTH on load (see [fromJson]).
+/// The outer Aether/WARP carrier protocol used by combined Tor/Psiphon
+/// modes and by Firefox-over-WARP. Firefox has its own per-protocol
+/// [CoreSettings.firefoxLegProtocol] selection; fresh and migrated settings
+/// default it to WireGuard. Reverse Tor/Psiphon modes still map UDP-needing
+/// legs to MASQUE because their carrier only supports TCP.
 enum AetherLegProtocol { wireguard, masque, gool, goolClassic, mim }
 
 /// v4.31 — the IP version the core dials with (`-4` default / `-6` /
