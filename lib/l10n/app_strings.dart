@@ -424,6 +424,7 @@ class AppStrings {
   String get aetherLegLabel => _v['aetherLegLabel']!;
   String get torLegDesc => _v['torLegDesc']!;
   String get psiphonLegDesc => _v['psiphonLegDesc']!;
+  String get firefoxLegDesc => _v['firefoxLegDesc']!;
   String get secIpVersion => _v['secIpVersion']!;
   String get ipV4 => _v['ipV4']!;
   String get ipV6 => _v['ipV6']!;
@@ -861,6 +862,7 @@ class AppStrings {
       'aetherLegLabel': 'پایهٔ حالت‌های ترکیبی',
       'torLegDesc': 'در حالت‌های ترکیبی تور (زنجیره و معکوس)، تونل Aether زیرین با این پروتکل برقرار می‌شود. در حالت معکوس، پایه‌های نیازمند UDP خودکار به ماسک تغییر می‌کنند (محدودیت خود هسته)',
       'psiphonLegDesc': 'در حالت‌های ترکیبی سایفون (زنجیره و معکوس)، تونل Aether زیرین با این پروتکل برقرار می‌شود. در حالت معکوس، پایه‌های نیازمند UDP خودکار به ماسک تغییر می‌کنند (محدودیت خود هسته)',
+      'firefoxLegDesc': 'در حالت Firefox over WARP، ابتدا تونل Aether با این پروتکل برقرار می‌شود و سپس تونل فایرفاکس از داخل آن عبور می‌کند.',
       'secIpVersion': 'نسخهٔ IP',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -1210,6 +1212,7 @@ class AppStrings {
       'aetherLegLabel': 'Base of the combined modes',
       'torLegDesc': 'In the combined tor modes (chain and reverse) the underlying Aether tunnel runs this protocol. On the reverse mode the UDP-needing legs map to MASQUE automatically (a core limit)',
       'psiphonLegDesc': 'In the combined psiphon modes (chain and reverse) the underlying Aether tunnel runs this protocol. On the reverse mode the UDP-needing legs map to MASQUE automatically (a core limit)',
+      'firefoxLegDesc': 'For Firefox over WARP, Aether establishes this carrier first; the Firefox VPN tunnel is then carried inside it.',
       'secIpVersion': 'IP version',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -1555,6 +1558,7 @@ class AppStrings {
       'aetherLegLabel': 'Основа комбинированных режимов',
       'torLegDesc': 'В комбинированных режимах tor (цепочка и обратный) туннель Aether работает по этому протоколу. В обратном режиме ветки с UDP автоматически переходят на MASQUE (ограничение ядра)',
       'psiphonLegDesc': 'В комбинированных режимах psiphon (цепочка и обратный) туннель Aether работает по этому протоколу. В обратном режиме ветки с UDP автоматически переходят на MASQUE (ограничение ядра)',
+      'firefoxLegDesc': 'В режиме Firefox over WARP сначала поднимается туннель Aether с этим протоколом, а затем через него проходит туннель Firefox VPN.',
       'secIpVersion': 'Версия IP',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -1900,6 +1904,7 @@ class AppStrings {
       'aetherLegLabel': '组合模式的底层',
       'torLegDesc': '在 Tor 组合模式（链式与反向）中，底层 Aether 隧道使用此协议。反向模式下需要 UDP 的分支会自动映射为 MASQUE（内核自身的限制）',
       'psiphonLegDesc': '在 Psiphon 组合模式（链式与反向）中，底层 Aether 隧道使用此协议。反向模式下需要 UDP 的分支会自动映射为 MASQUE（内核自身的限制）',
+      'firefoxLegDesc': '在 Firefox over WARP 模式下，Aether 会先使用此协议建立底层隧道，然后 Firefox VPN 隧道通过该隧道连接。',
       'secIpVersion': 'IP 版本',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -2255,6 +2260,7 @@ class AppStrings {
       'aetherLegLabel': 'Birleşdirilen režimleriň esasy',
       'torLegDesc': 'Birleşdirilen tor režimlerinde (zelze we ters) aşaky Aether tuneli şu protokoly ulanýar. Ters režimde UDP isleg edýän protokollar awtomatiki MASQUE-e geçirilýär (çekirdegiň çäklenmesi)',
       'psiphonLegDesc': 'Birleşdirilen psiphon režimlerinde (zelze we ters) aşaky Aether tuneli şu protokoly ulanýar. Ters režimde UDP isleg edýän protokollar awtomatiki MASQUE-e geçirilýär (çekirdegiň çäklenmesi)',
+      'firefoxLegDesc': 'Firefox over WARP režiminde ilki Aether şu protokol bilen daşaýjy tuneli gurýar, soňra Firefox VPN tuneli onuň içinden geçýär.',
       'secIpVersion': 'IP wersiýasy',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
