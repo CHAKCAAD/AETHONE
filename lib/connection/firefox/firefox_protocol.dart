@@ -48,6 +48,7 @@ class FirefoxEngineConfig {
     this.country = '',
     this.transport = 'h2',
     this.upstreamOverride = '',
+    this.upstreamSocks = '',
     this.logLevel = 'normal',
     this.dns = const {'mode': 'system'},
   });
@@ -71,6 +72,9 @@ class FirefoxEngineConfig {
   /// RemoteSettings discovery).
   final String upstreamOverride;
 
+  /// Loopback Aether SOCKS5 carrier; empty keeps legacy direct mode.
+  final String upstreamSocks;
+
   final String logLevel;
 
   /// Process-scoped DNS policy; defaults to Android System DNS.
@@ -83,6 +87,7 @@ class FirefoxEngineConfig {
         'country': country,
         'transport': transport,
         if (upstreamOverride.isNotEmpty) 'upstreamOverride': upstreamOverride,
+        if (upstreamSocks.isNotEmpty) 'upstreamSocks': upstreamSocks,
         'logLevel': logLevel,
         'dns': dns,
         'auth': {
