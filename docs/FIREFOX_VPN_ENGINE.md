@@ -1,6 +1,6 @@
 # FIREFOX VPN ENGINE — architecture and process contract (Phase 1)
 
-Status: **Phase 1, private branch `phase1/firefox-vpn` only.**
+Status: **Firefox-over-WARP implementation on `feature/firefox-guardian-psiphon-bootstrap`; device verification remains outstanding.**
 The engine's upstream license is UNRESOLVED (see `fxv/ORIGIN.md` and
 `FIREFOX_VPN_SECURITY.md`): nothing derived from it may be pushed to a
 public repository or shipped in a public artifact until the owner settles
@@ -26,19 +26,17 @@ Provenance of every adapted piece: `fxv/ORIGIN.md`.
 
 ```
 AETHONE app (Dart, PlatformEngineAdapter._connectFirefox)
-   │  spawn (bare argv, empty env)
-   │  stdin ── ONE JSON config line (the only secret carrier)
-   │  stdout ─ JSON-lines status events
-   │  stderr ─ redacted human logs
-   ▼
-libfirefoxvpn.so (Go child process, one per session)
-   ├─ Control plane  : Guardian (vpn.mozilla.org) — proxy pass acquire/renew
-   │                   (FxA same-account OAuth refresh only; no pools)
-   ├─ Discovery      : live Mozilla RemoteSettings server list
-   │                   (upstream uTLS Firefox ClientHello; `--discover` role)
-   ├─ Data plane     : Fastly MASQUE proxy — h2 (TLS 1.3 + ALPN h2 over TCP,
-   │                   default) or h3 (QUIC/HTTP-3, optional)
-   └─ Local SOCKS5   : 127.0.0.1:1822 — CONNECT only, loopback only
+   │
+   ├─ Aether embedded Rust core — selected outer protocol (WireGuard by default)
+   │      └─ local SOCKS5 127.0.0.1:1819 (CONNECT + UDP ASSOCIATE)
+   │
+   └─ libfirefoxvpn.so (one Go child process, bare argv, empty env)
+          ├─ Control plane  : RemoteSettings + Guardian + OAuth refresh
+          │                   over Aether SOCKS5, with Firefox uTLS ClientHello
+          ├─ Data plane     : Fastly MASQUE over the SAME Aether carrier
+          │                   H2 = TCP CONNECT; H3 = UDP ASSOCIATE / QUIC
+          └─ Local SOCKS5   : 127.0.0.1:1822 — device traffic enters here
+                               and Connected requires a separate real probe
 ```
 
 ## 2. The fxv module map
@@ -104,6 +102,7 @@ additive `--login` role — the tunnel contract is unchanged).
 | `country` | `""`/`"REC"` = AUTO (recommended anycast); ISO-3166-1 alpha-2 or country name, case-insensitive; no match → `noMatchForCountry` with the available list |
 | `transport` | `h2` (default) or `h3` (`transportUnknown` otherwise) |
 | `upstreamOverride` | `host:port` — skip discovery, dial that MASQUE proxy (the `selected` event reports `selectionSource:"override"`); test/lifecycle harness use |
+| `upstreamSocks` | optional `socks5://127.0.0.1:1819` — loopback-only Aether carrier. In Firefox-over-WARP mode this is required; no direct fallback is attempted. |
 | `upstreamTimeoutMs` / `handshakeTimeoutMs` / `idleTimeoutMs` / `maxConns` | 0 → upstream defaults (20 s / 10 s / unlimited / 256) |
 | `exitCheckUrl` / `exitTimeoutMs` | engine-side exit probe; default `https://www.cloudflare.com/cdn-cgi/trace`, 10 s |
 | `logLevel` | `quiet` / `normal` / `verbose` (stderr) |
@@ -141,15 +140,23 @@ engine-side classifier (`docs/phaseb-engine-patch/`; type-based
 1.1.0 field names and codes remain valid forever; the raw Go chain
 stays in the engine's stderr log (redacted), never in the UI.
 
-## 4. Data plane (upstream session)
+## 4. Firefox-over-WARP transport (outer carrier + inner session)
 
 One session at a time (`upstream.Controller`, single-session policy):
 
 * **h2** (default): TCP + TLS 1.3 with the Firefox ClientHello (uTLS),
-  `h2` ALPN, then MASQUE `CONNECT`-style proxying of the SOCKS client's
-  target streams (ADAPTED `newH2ProxySession` + `tunnelConn`).
-* **h3** (optional): QUIC + `h3` ALPN (ADAPTED `newH3ProxySession`);
-  failure to negotiate → `upstreamSessionFailed` with the h3 reason.
+  `h2` ALPN. Firefox-over-WARP dials the Fastly endpoint through the
+  Aether SOCKS5 CONNECT method, then carries MASQUE CONNECT streams.
+* **h3** (optional): QUIC + `h3` ALPN. Firefox-over-WARP creates a
+  SOCKS5 UDP ASSOCIATE and carries QUIC datagrams through the Aether
+  relay; the remote hostname is sent to Aether as a domain, not resolved
+  directly by the Firefox child.
+* **Control plane**: the pinned Firefox HTTP/2 control-plane client is
+  configured with a uTLS-preserving SOCKS transport before RemoteSettings
+  discovery, Guardian pass acquisition, and any same-account OAuth
+  refresh. A failed carrier is a failed Firefox startup, never a direct
+  retry. The standalone `--discover` and `--login` roles run before the
+  VPN session exists and retain their separate pre-connect path.
 
 The controller owns the renewal loop: it refreshes the Guardian proxy
 pass before expiry and, on token refresh, emits `authRefreshed` (the
