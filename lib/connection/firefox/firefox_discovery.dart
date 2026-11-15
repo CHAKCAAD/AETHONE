@@ -136,6 +136,7 @@ class FirefoxDiscovery {
     required this.cachePath,
     this.ttl = const Duration(hours: 6),
     this.fetchTimeout = const Duration(seconds: 30),
+    this.dnsConfig = const {'mode': 'system'},
   });
 
   final String binaryPath;
@@ -145,6 +146,9 @@ class FirefoxDiscovery {
 
   final Duration ttl;
   final Duration fetchTimeout;
+
+  /// Process-scoped DNS policy; updated from the current settings before fetch.
+  Map<String, dynamic> dnsConfig;
 
   FirefoxLocationList? _memory;
 
@@ -176,16 +180,24 @@ class FirefoxDiscovery {
 
   Future<FirefoxLocationList?> _fetchLive() async {
     try {
-      final result = await Process.run(
+      final process = await Process.start(
         binaryPath,
         const ['--discover'],
         environment: const {},
         includeParentEnvironment: false,
-        stdoutEncoding: utf8,
-        stderrEncoding: utf8,
-      ).timeout(fetchTimeout);
-      if (result.exitCode != 0) return null;
-      final decoded = _decodeLine(result.stdout as String);
+      );
+      process.stdin.writeln(jsonEncode({'dns': dnsConfig}));
+      await process.stdin.close();
+      final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+      final stderrFuture = process.stderr.transform(utf8.decoder).join();
+      final code = await process.exitCode.timeout(fetchTimeout, onTimeout: () {
+        process.kill();
+        throw TimeoutException('Firefox DNS discovery timed out', fetchTimeout);
+      });
+      final stdout = await stdoutFuture;
+      await stderrFuture;
+      if (code != 0) return null;
+      final decoded = _decodeLine(stdout);
       if (decoded == null) return null;
       final list = FirefoxLocationList.fromJson(decoded)
           .copyWith(live: true, fetchedAt: DateTime.now());

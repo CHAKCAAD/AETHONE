@@ -97,6 +97,9 @@ dependencies {
     // M2: NotificationCompat + ServiceCompat for the VpnService foreground
     // notification (specialUse type gating per API level).
     implementation("androidx.core:core-ktx:1.13.1")
+    // AndroidX WebKit ProxyController routes the Firefox login WebView
+    // through the temporary loopback DNS-aware CONNECT proxy.
+    implementation("androidx.webkit:webkit:1.18.0")
 }
 
 flutter {

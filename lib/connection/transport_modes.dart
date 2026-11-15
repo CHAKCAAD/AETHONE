@@ -168,28 +168,28 @@ abstract final class TransportModes {
     tcpOnly: true,
     evidence: 'cli.rs L600 (no tunnel; --bind serves plain psiphon)',
   );
-  /// 1.4.0-warp — FIREFOX VPN OVER WARP (the chain-family posture,
-  /// the owner's decree: the firefox protocol connects through Warp
-  /// first, exactly like psiphon-over-warp): the IN-PROCESS aether core
-  /// boots first as the WARP carrier leg (the protocol the user picks
-  /// on the firefox settings page — CoreSettings.firefoxLegProtocol),
-  /// then the dedicated Go engine (libfirefoxvpn.so) serves SOCKS5
-  /// CONNECT on 127.0.0.1:1822 with BOTH its planes riding the core's
-  /// listener on 1819 (the engine contract's apiProxy + upstreamProxy
-  /// socks5 seams; the uTLS Firefox ClientHello survives the chaining).
-  /// `cliValue` documents that NO aether CLI flag exists for the
-  /// combined mode — the adapter builds the plain WARP-leg args itself
-  /// and drives the engine child over its stdin/stdout contract
-  /// (docs/FIREFOX_VPN_ENGINE.md).
+  /// FIREFOX VPN OVER WARP (the chain-family posture, the owner's
+  /// decree: the firefox protocol connects through Warp first, exactly
+  /// like psiphon-over-warp): the IN-PROCESS aether core boots first as
+  /// the WARP carrier leg (the protocol the user picks on the firefox
+  /// settings page — CoreSettings.firefoxLegProtocol), its listener on
+  /// 127.0.0.1:1819 verified with real traffic, then the dedicated Go
+  /// engine (libfirefoxvpn.so) serves SOCKS5 CONNECT on 127.0.0.1:1822
+  /// with BOTH its planes riding the core's listener (the engine
+  /// contract's upstreamSocks seam, TCP CONNECT + UDP ASSOCIATE — h2
+  /// and h3 both ride; the uTLS Firefox ClientHello survives the
+  /// chaining on the control plane). `cliValue` documents that NO
+  /// aether CLI flag exists for the combined mode — the adapter builds
+  /// the plain WARP-leg args itself and drives the engine child over
+  /// its stdin/stdout contract (docs/FIREFOX_VPN_ENGINE.md).
   static final TransportMode firefoxOnly = TransportMode(
     id: ProtocolId.firefoxOnly,
     label: 'FIREFOX VPN',
-    cliValue: '(warp carrier leg + dedicated engine child process)',
+    cliValue: '(Aether carrier + dedicated Firefox VPN child process)',
     socksEndpoint: Uri(scheme: 'socks5', host: _host, port: 1822),
     exitKind: ExitKind.firefoxExit,
     tcpOnly: true,
-    evidence: 'fxv cmd/libfirefoxvpn 1.4.0-warp (apiProxy/upstreamProxy); '
-        'the aether --bind listener as the carrier',
+    evidence: 'Aether SOCKS :1819 + Firefox SOCKS :1822; adapter-managed chain',
   );
 
   static final List<TransportMode> all = [

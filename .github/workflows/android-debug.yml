@@ -25,10 +25,9 @@
 #     scope (the owner did not request it).
 #
 # Containment (upstream license UNRESOLVED — phase1/fxv/ORIGIN.md): this
-# workflow lives on integration/firefox-vpn-debug and
-#     update/firefox-vpn-core (the 2026-11-11 owner-ordered core re-pin
-#     branch, same containment rules), delivers expiring
-# Actions artifacts only (14 days), and creates nothing public.
+# workflow runs only on the explicit Firefox debug branches below,
+# delivers expiring Actions artifacts only (14 days), and creates
+# nothing public. The default branch and public releases are untouched.
 #
 # Pins mirror .github/workflows/native-ci.yml (the project's frozen
 # recipe, decisions N1/N8) plus the phase-1 Firefox decrees. Actions are
@@ -37,21 +36,19 @@
 # =============================================================================
 name: AETHONE DA — Firefox Debug APK
 
-# Trigger note (recorded 2026-11-09): GitHub indexes workflow_dispatch
-# targets from the DEFAULT branch only (ci-bootstrap/v4.4), where this
-# file deliberately does NOT live (the phase-2 containment keeps the
-# default branch untouched). The runnable path on THIS branch is the
-# push trigger below — scoped to exactly integration/firefox-vpn-debug
-# so nothing else can fire it. workflow_dispatch stays declared for
-# manual runs once this branch is promoted (owner decision, after the
-# device test) or the file reaches the default branch.
+# Trigger policy: GitHub indexes workflow_dispatch targets from the
+# DEFAULT branch only (ci-bootstrap/v4.4), which remains untouched.
+# Push builds are limited to the three explicit Firefox development
+# branches; they produce expiring debug artifacts only.
 on:
   workflow_dispatch:
   push:
     branches:
+      - feature/firefox-guardian-psiphon-bootstrap
       - integration/firefox-vpn-debug
       - update/firefox-vpn-core
       - feature/firefox-over-warp
+      - fix/owner-round-2
 
 permissions:
   contents: read

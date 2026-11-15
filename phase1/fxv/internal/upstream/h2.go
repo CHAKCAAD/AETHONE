@@ -31,11 +31,6 @@ const (
 // ErrHTTP2Unavailable: the proxy did not negotiate HTTP/2.
 var ErrHTTP2Unavailable = errors.New("proxy did not negotiate HTTP/2")
 
-// DialFunc dials the MASQUE proxy's raw TCP connection. nil = the
-// direct net.Dialer (the pre-1.4.0 path); a carrier dialer routes the
-// session through the WARP carrier instead (1.4.0-warp).
-type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
-
 // Session is the single-upstream contract (OpenTunnel + live token
 // swap + liveness + close).
 type Session interface {
@@ -105,61 +100,47 @@ func (e *tunnelOpenTimeoutError) Error() string {
 func (e *tunnelOpenTimeoutError) Timeout() bool   { return true }
 func (e *tunnelOpenTimeoutError) Temporary() bool { return true }
 
-// NewH2ProxySession dials the MASQUE proxy with TLS 1.2+ and the h2
-// ALPN (ADAPTED from newH2ProxySession; keepalive retained). The
-// DIRECT path (see NewH2ProxySessionOverCarrier for the WARP-carrier
-// variant).
+// ContextDialer is implemented by net.Dialer and SOCKS5Dialer.
+type ContextDialer interface {
+	DialContext(context.Context, string, string) (net.Conn, error)
+}
+
+// NewH2ProxySession dials the MASQUE proxy directly with TLS 1.2+ and h2.
 func NewH2ProxySession(proxyURL *url.URL, token string, timeout time.Duration) (*H2ProxySession, error) {
-	return newH2ProxySession(proxyURL, token, timeout, nil)
+	return newH2ProxySession(proxyURL, token, timeout, &net.Dialer{Timeout: timeout})
 }
 
-// NewH2ProxySessionOverCarrier is the WARP-carrier variant (1.4.0-warp):
-// dial dials the proxy's raw TCP through the aether SOCKS listener, so
-// the whole MASQUE session (TLS + h2 CONNECT tunnels) rides the WARP
-// tunnel. The TLS handshake stays the engine's own crypto/tls with the
-// h2 ALPN -- the same ClientHello the working direct path presents.
-func NewH2ProxySessionOverCarrier(proxyURL *url.URL, token string, timeout time.Duration, dial DialFunc) (*H2ProxySession, error) {
-	if dial == nil {
-		return nil, errors.New("carrier dialer is nil")
-	}
-	return newH2ProxySession(proxyURL, token, timeout, dial)
+// NewH2ProxySessionThroughSOCKS carries the Fastly MASQUE TCP session through
+// the selected Aether SOCKS5 listener. The hostname is sent to SOCKS5 intact,
+// so Aether performs the destination lookup inside the outer WARP tunnel.
+func NewH2ProxySessionThroughSOCKS(proxyURL *url.URL, token string, timeout time.Duration, socksAddr string) (*H2ProxySession, error) {
+	return newH2ProxySession(proxyURL, token, timeout, &SOCKS5Dialer{ProxyAddr: socksAddr})
 }
 
-func newH2ProxySession(proxyURL *url.URL, token string, timeout time.Duration, dial DialFunc) (*H2ProxySession, error) {
+func newH2ProxySession(proxyURL *url.URL, token string, timeout time.Duration, dialer ContextDialer) (*H2ProxySession, error) {
 	proxyHost := proxyURL.Host
 	if proxyURL.Port() == "" {
-		proxyHost = proxyURL.Hostname() + ":443"
+		proxyHost = net.JoinHostPort(proxyURL.Hostname(), "443")
 	}
+	dialCtx := context.Background()
+	dialCancel := func() {}
+	if timeout > 0 {
+		dialCtx, dialCancel = context.WithTimeout(dialCtx, timeout)
+	}
+	defer dialCancel()
 
-	var proxyTLS *tls.Conn
-	if dial != nil {
-		raw, err := dialCarrierConn(dial, proxyHost, timeout)
-		if err != nil {
-			return nil, err
-		}
-		proxyTLS = tls.Client(raw, &tls.Config{
-			ServerName: proxyURL.Hostname(),
-			MinVersion: tls.VersionTLS12,
-			NextProtos: []string{"h2"},
-		})
-		hsCtx, cancel := context.WithTimeout(context.Background(), timeout)
-		err = proxyTLS.HandshakeContext(hsCtx)
-		cancel()
-		if err != nil {
-			_ = raw.Close()
-			return nil, err
-		}
-	} else {
-		dialer := &net.Dialer{Timeout: timeout}
-		var err error
-		proxyTLS, err = tls.DialWithDialer(dialer, "tcp", proxyHost, &tls.Config{
-			ServerName: proxyURL.Hostname(),
-			MinVersion: tls.VersionTLS12,
-			NextProtos: []string{"h2"},
-		})
-		if err != nil {
-			return nil, err
-		}
+	raw, err := dialer.DialContext(dialCtx, "tcp", proxyHost)
+	if err != nil {
+		return nil, err
+	}
+	proxyTLS := tls.Client(raw, &tls.Config{
+		ServerName: proxyURL.Hostname(),
+		MinVersion: tls.VersionTLS12,
+		NextProtos: []string{"h2"},
+	})
+	if err := proxyTLS.HandshakeContext(dialCtx); err != nil {
+		_ = raw.Close()
+		return nil, err
 	}
 
 	if proxyTLS.ConnectionState().NegotiatedProtocol != "h2" {
@@ -191,14 +172,6 @@ func newH2ProxySession(proxyURL *url.URL, token string, timeout time.Duration, d
 	go session.runKeepAlive(ctx)
 
 	return session, nil
-}
-
-// dialCarrierConn opens the raw TCP connection to the MASQUE proxy
-// through the WARP carrier, bounded by the session's open timeout.
-func dialCarrierConn(dial DialFunc, addr string, timeout time.Duration) (net.Conn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	return dial(ctx, "tcp", addr)
 }
 
 // ProxyHost reports the dial target (the upstreamReady event).

@@ -31,7 +31,7 @@ var ErrHTTP3Unavailable = errors.New("proxy did not negotiate HTTP/3")
 // CONNECT tunnels.
 type H3ProxySession struct {
         conn      *quic.Conn
-        udpConn   *net.UDPConn
+        udpConn   net.PacketConn
         rt        *http3.Transport
         proxyHost string
         token     string
@@ -41,106 +41,128 @@ type H3ProxySession struct {
         closeErr  error
 }
 
-// NewH3ProxySession dials the MASQUE proxy over QUIC (ADAPTED; the
-// InitialPacketSize 1200 below-RFC-floor start is retained so the
-// handshake succeeds on low-MTU paths, with PMTU discovery growing it).
+// NewH3ProxySession dials the MASQUE proxy directly over QUIC.
 func NewH3ProxySession(proxyURL *url.URL, token string, timeout time.Duration) (*H3ProxySession, error) {
-        host := proxyURL.Hostname()
-        portStr := proxyURL.Port()
-        if portStr == "" {
-                portStr = "443"
-        }
-        port, err := strconv.Atoi(portStr)
-        if err != nil {
-                return nil, fmt.Errorf("invalid proxy port %q: %w", portStr, err)
-        }
-        proxyHost := net.JoinHostPort(host, portStr)
+	return newH3ProxySession(proxyURL, token, timeout, "")
+}
 
-        ctx := context.Background()
-        cancel := func() {}
-        if timeout > 0 {
-                ctx, cancel = context.WithTimeout(context.Background(), timeout)
-        }
-        defer cancel()
+// NewH3ProxySessionThroughSOCKS carries QUIC datagrams through the Aether
+// SOCKS5 UDP association. The destination hostname is encoded in each SOCKS
+// UDP frame, so its lookup happens at the outer Aether/WARP carrier.
+func NewH3ProxySessionThroughSOCKS(proxyURL *url.URL, token string, timeout time.Duration, socksAddr string) (*H3ProxySession, error) {
+	return newH3ProxySession(proxyURL, token, timeout, socksAddr)
+}
 
-        ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
-        if err != nil {
-                return nil, fmt.Errorf("resolve %s: %w", host, err)
-        }
-        if len(ips) == 0 {
-                return nil, fmt.Errorf("no addresses for %s", host)
-        }
+func newH3ProxySession(proxyURL *url.URL, token string, timeout time.Duration, socksAddr string) (*H3ProxySession, error) {
+	host := proxyURL.Hostname()
+	portStr := proxyURL.Port()
+	if portStr == "" {
+		portStr = "443"
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil || port < 1 || port > 65535 {
+		return nil, fmt.Errorf("invalid proxy port %q", portStr)
+	}
+	proxyHost := net.JoinHostPort(host, portStr)
 
-        tlsCfg := &tls.Config{
-                ServerName: host,
-                MinVersion: tls.VersionTLS13,
-                NextProtos: []string{"h3"},
-        }
-        quicCfg := &quic.Config{
-                KeepAlivePeriod:  30 * time.Second,
-                InitialPacketSize: 1200,
-        }
+	ctx := context.Background()
+	cancel := func() {}
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	}
+	defer cancel()
 
-        var perAttempt time.Duration
-        if timeout > 0 {
-                perAttempt = timeout / time.Duration(len(ips))
-                if perAttempt < 3*time.Second {
-                        perAttempt = 3 * time.Second
-                }
-        }
+	tlsCfg := &tls.Config{
+		ServerName: host,
+		MinVersion: tls.VersionTLS13,
+		NextProtos: []string{"h3"},
+	}
+	quicCfg := &quic.Config{
+		KeepAlivePeriod:  30 * time.Second,
+		InitialPacketSize: 1200,
+	}
 
-        var (
-                conn    *quic.Conn
-                udpConn *net.UDPConn
-                lastErr error
-        )
-        for _, ip := range ips {
-                uc, err := net.ListenUDP("udp", &net.UDPAddr{Port: 0})
-                if err != nil {
-                        lastErr = err
-                        continue
-                }
-                udpAddr := &net.UDPAddr{IP: ip.AsSlice(), Port: port, Zone: ip.Zone()}
-                attemptCtx := ctx
-                attemptCancel := func() {}
-                if perAttempt > 0 {
-                        attemptCtx, attemptCancel = context.WithTimeout(ctx, perAttempt)
-                }
-                c, err := quic.Dial(attemptCtx, uc, udpAddr, tlsCfg, quicCfg)
-                attemptCancel()
-                if err != nil {
-                        _ = uc.Close()
-                        lastErr = fmt.Errorf("dial %s: %w", udpAddr, err)
-                        continue
-                }
-                conn = c
-                udpConn = uc
-                break
-        }
-        if conn == nil {
-                return nil, lastErr
-        }
+	var (
+		conn    *quic.Conn
+		udpConn net.PacketConn
+		lastErr error
+	)
+	if socksAddr != "" {
+		packetConn, packetErr := NewSOCKS5PacketConn(ctx, socksAddr)
+		if packetErr != nil {
+			return nil, packetErr
+		}
+		remote := &socks5DomainUDPAddr{host: host, port: port}
+		conn, err = quic.Dial(ctx, packetConn, remote, tlsCfg, quicCfg)
+		if err != nil {
+			_ = packetConn.Close()
+			return nil, fmt.Errorf("dial MASQUE through SOCKS5: %w", err)
+		}
+		udpConn = packetConn
+	} else {
+		ips, resolveErr := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+		if resolveErr != nil {
+			return nil, fmt.Errorf("resolve %s: %w", host, resolveErr)
+		}
+		if len(ips) == 0 {
+			return nil, fmt.Errorf("no addresses for %s", host)
+		}
 
-        if conn.ConnectionState().TLS.NegotiatedProtocol != "h3" {
-                _ = conn.CloseWithError(0, "")
-                _ = udpConn.Close()
-                return nil, ErrHTTP3Unavailable
-        }
+		var perAttempt time.Duration
+		if timeout > 0 {
+			perAttempt = timeout / time.Duration(len(ips))
+			if perAttempt < 3*time.Second {
+				perAttempt = 3 * time.Second
+			}
+		}
+		for _, ip := range ips {
+			packetConn, bindErr := net.ListenUDP("udp", &net.UDPAddr{Port: 0})
+			if bindErr != nil {
+				lastErr = bindErr
+				continue
+			}
+			remote := &net.UDPAddr{IP: ip.AsSlice(), Port: port, Zone: ip.Zone()}
+			attemptCtx := ctx
+			attemptCancel := func() {}
+			if perAttempt > 0 {
+				attemptCtx, attemptCancel = context.WithTimeout(ctx, perAttempt)
+			}
+			candidate, dialErr := quic.Dial(attemptCtx, packetConn, remote, tlsCfg, quicCfg)
+			attemptCancel()
+			if dialErr != nil {
+				_ = packetConn.Close()
+				lastErr = fmt.Errorf("dial %s: %w", remote, dialErr)
+				continue
+			}
+			conn = candidate
+			udpConn = packetConn
+			break
+		}
+	}
+	if conn == nil {
+		return nil, lastErr
+	}
 
-        rt := &http3.Transport{
-                Dial: func(_ context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
-                        return conn, nil
-                },
-        }
+	if conn.ConnectionState().TLS.NegotiatedProtocol != "h3" {
+		_ = conn.CloseWithError(0, "")
+		_ = udpConn.Close()
+		return nil, ErrHTTP3Unavailable
+	}
 
-        return &H3ProxySession{
-                conn:      conn,
-                udpConn:   udpConn,
-                rt:        rt,
-                proxyHost: proxyHost,
-                token:     token,
-                timeout:   timeout,
-        }, nil
+	rt := &http3.Transport{
+		Dial: func(_ context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
+			return conn, nil
+		},
+	}
+
+	return &H3ProxySession{
+		conn:      conn,
+		udpConn:   udpConn,
+		rt:        rt,
+		proxyHost: proxyHost,
+		token:     token,
+		timeout:   timeout,
+	}, nil
 }
 
 // ProxyHost reports the dial target (the upstreamReady event).

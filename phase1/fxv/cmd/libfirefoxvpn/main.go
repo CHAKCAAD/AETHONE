@@ -13,6 +13,9 @@
 //      libfirefoxvpn --dns-probe     resolve the control-plane domains
 //                                    through THIS process (the multi-arch
 //                                    DNS evidence role — no secrets)
+//      libfirefoxvpn --webview-proxy loopback HTTP CONNECT proxy for the
+//                                    Firefox login WebView; destination DNS
+//                                    uses the selected process-local resolver
 //
 // Spawn discipline (the Dart host): bare argv, EMPTY environment —
 // every secret travels on the stdin pipe only.
@@ -32,8 +35,8 @@ import (
 
         vpnclient "firefox-vpn-client"
 
-        "aethone/fxv/internal/carrier"
         "aethone/fxv/internal/discovery"
+        "aethone/fxv/internal/dnsresolver"
         "aethone/fxv/internal/engine"
         "aethone/fxv/internal/fferr"
         "aethone/fxv/internal/redact"
@@ -56,11 +59,13 @@ func run() int {
                         return runLogin()
                 case "--dns-probe":
                         return runDNSProbe()
+                case "--webview-proxy":
+                        return runWebViewProxy()
                 case "--help", "-h":
-                        fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe]\n")
+                        fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe|--webview-proxy]\n")
                         return 0
                 default:
-                        fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--dns-probe])\n", arg)
+                        fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--dns-probe|--webview-proxy])\n", arg)
                         return engine.ExitStartup
                 }
         }
@@ -106,47 +111,27 @@ func runTunnel() int {
                 return engine.ExitStartup
         }
 
+        if _, dnsErr := dnsresolver.Install(cfg.DNS); dnsErr != nil {
+                _ = emit.Emit(engine.Event{
+                        Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
+                        Message: "dnsConfigInvalid", Code: engine.ExitStartup,
+                })
+                return engine.ExitStartup
+        }
+
+        // When Firefox is running over WARP, its control-plane requests
+        // (RemoteSettings, Guardian and OAuth refresh) must use the same
+        // Aether carrier as its Fastly data-plane session. The transport
+        // keeps the pinned Firefox uTLS fingerprint and fails closed.
+        if cfg.UpstreamSocks != "" {
+                vpnclient.SetControlPlaneTransport(
+                        upstream.NewSOCKS5ControlPlaneTransport(cfg.UpstreamSocks),
+                )
+        }
+
         quiet := cfg.LogLevel == "quiet"
         log.enabled = !quiet
         log.verbose = cfg.LogLevel == "verbose" // the -verbose flag parity (stdin JSON, not env)
-
-        // 1b. the WARP carrier (contract 1.4.0-warp): the OPTIONAL
-        // socks5:// URLs route BOTH planes through the in-process
-        // Aether core's SOCKS listener — "Firefox over Warp", the
-        // chain-family posture (torChain / psiphonChain). apiProxy
-        // covers the control plane (FxA / Guardian / RemoteSettings)
-        // and keeps the uTLS FIREFOX ClientHello over the carrier
-        // socket — the chaining upgrade over the upstream's -api-proxy
-        // (which drops to Go's ClientHello + HTTP/1.1 and walks back
-        // into the Fastly blacklist). upstreamProxy covers the h2
-        // MASQUE data plane. Installed BEFORE the first control-plane
-        // request (the server-list fetch below); a config with neither
-        // URL keeps the exact 1.2.0 direct behavior.
-        var carrierDial upstream.DialFunc
-        if cfg.ApiProxy != "" {
-                apiCarrier, err := carrier.New(cfg.ApiProxy)
-                if err != nil {
-                        _ = emit.Emit(engine.Event{
-                                Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
-                                Message: "apiProxyInvalid", Code: engine.ExitStartup,
-                        })
-                        return engine.ExitStartup
-                }
-                vpnclient.SetControlPlaneTransport(carrier.NewControlPlaneTransport(apiCarrier))
-                log.Infof("control plane routed through the WARP carrier (%s)", apiCarrier.Host())
-        }
-        if cfg.UpstreamProxy != "" {
-                dataCarrier, err := carrier.New(cfg.UpstreamProxy)
-                if err != nil {
-                        _ = emit.Emit(engine.Event{
-                                Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
-                                Message: "upstreamProxyInvalid", Code: engine.ExitStartup,
-                        })
-                        return engine.ExitStartup
-                }
-                carrierDial = dataCarrier.DialContext
-                log.Infof("data plane routed through the WARP carrier (%s)", dataCarrier.Host())
-        }
 
         _ = emit.Emit(engine.Event{
                 Name: engine.EvStarted,
@@ -240,12 +225,13 @@ func runTunnel() int {
                 RefreshToken:  cfg.Auth.RefreshToken,
                 Transport:     cfg.Transport,
                 ProxyURL:      proxyURL,
+                UpstreamSocks: cfg.UpstreamSocks,
                 OpenTimeout:   time.Duration(cfg.UpstreamTimeoutMs) * time.Millisecond,
-                CarrierDial:   carrierDial,
                 OnPassRenewed: func(pass *vpnclient.ProxyPassInfo) {
                         _ = emit.Emit(engine.Event{
                                 Name:          engine.EvRenewed,
                                 PassExpiresAt: pass.ExpiresAt().UTC().Format(time.RFC3339),
+                                QuotaMax:      pass.QuotaMax,
                                 QuotaLeft:     pass.QuotaLeft,
                                 QuotaReset:    pass.QuotaReset,
                         })
@@ -290,6 +276,7 @@ func runTunnel() int {
         _ = emit.Emit(engine.Event{
                 Name:          engine.EvPassAcquired,
                 PassExpiresAt: pass.ExpiresAt().UTC().Format(time.RFC3339),
+                QuotaMax:      pass.QuotaMax,
                 QuotaLeft:     pass.QuotaLeft,
                 QuotaReset:    pass.QuotaReset,
         })

@@ -139,27 +139,31 @@ void main() {
       expect('at-secret'.allMatches(blob), hasLength(1));
       expect(cfg.transport, 'h2');
       expect(cfg.toJson()['version'], 1);
-      // 1.4.0-warp — the carrier seams are ABSENT by default (the
-      // additive contract: an older host's line stays valid).
-      expect(cfg.toJson().containsKey('apiProxy'), isFalse);
-      expect(cfg.toJson().containsKey('upstreamProxy'), isFalse);
-    });
-
-    test('config JSON carries the WARP carrier seams when set (1.4.0)',
-        () {
-      const cfg = FirefoxEngineConfig(
+      // The WARP carrier seam (upstreamSocks) is ABSENT by default (the
+      // additive contract: an older host's line stays valid), and the
+      // process-local DNS defaults to the system resolver.
+      expect(cfg.toJson().containsKey('upstreamSocks'), isFalse);
+      expect(cfg.toJson()['dns'], {'mode': 'system'});
+      const doh = FirefoxEngineConfig(
         socksListen: '127.0.0.1:1822',
         auth: FirefoxSessionAuth(accessToken: 'at'),
-        transport: 'h2',
-        apiProxy: 'socks5://127.0.0.1:1819',
-        upstreamProxy: 'socks5://127.0.0.1:1819',
+        upstreamSocks: 'socks5://127.0.0.1:1819',
+        dns: {
+          'mode': 'doh',
+          'provider': 'quad9',
+          'systemForLocalDomains': true,
+        },
       );
-      final blob = cfg.toJson();
-      expect(blob['apiProxy'], 'socks5://127.0.0.1:1819');
-      expect(blob['upstreamProxy'], 'socks5://127.0.0.1:1819');
-      // The carrier URLs never carry the tokens — the auth block stays
+      final dohBlob = doh.toJson();
+      expect(dohBlob['upstreamSocks'], 'socks5://127.0.0.1:1819');
+      expect(dohBlob['dns'], {
+        'mode': 'doh',
+        'provider': 'quad9',
+        'systemForLocalDomains': true,
+      });
+      // The carrier URL never carries the tokens — the auth block stays
       // the only secret carrier on the stdin line.
-      expect(jsonEncode(blob).contains('at-secret'), isFalse);
+      expect(jsonEncode(dohBlob).contains('at-secret'), isFalse);
     });
   });
 

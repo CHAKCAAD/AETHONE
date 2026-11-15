@@ -189,6 +189,9 @@ abstract class EngineConfigSource {
   /// TLS 1.3) or 'h3' (QUIC). Fed verbatim to the engine config.
   String get firefoxTransport;
 
+  /// Process-local resolver policy for Firefox control-plane traffic only.
+  Map<String, dynamic> get firefoxDnsConfig => const {'mode': 'system'};
+
   /// «سرعت اسکن» 1..5 (protocol sheet; feeds the core scan profile).
   int get scanSpeed;
 
@@ -267,6 +270,33 @@ abstract class EngineAdapter {
 
   /// Cancels an in-flight login exchange. Default: no-op.
   Future<void> firefoxLoginCancel() async {}
+
+}
+
+/// Optional capability for loading persisted Firefox DNS settings before
+/// any Go process (login, discovery or tunnel) is spawned.
+abstract interface class FirefoxDnsSettingsLoader {
+  Future<void> loadFirefoxDnsSettings();
+}
+
+/// Optional capability implemented only by the real Firefox platform adapter.
+abstract interface class FirefoxDnsProbeCapable {
+  Future<List<Map<String, dynamic>>?> firefoxDnsProbe(
+    Map<String, dynamic> dnsConfig,
+  );
+}
+
+/// Safe extension: preview, test and not-wired adapters report unavailable.
+extension EngineAdapterDnsProbe on EngineAdapter {
+  Future<List<Map<String, dynamic>>?> firefoxDnsProbe(
+    Map<String, dynamic> dnsConfig,
+  ) async {
+    final adapter = this;
+    if (adapter is FirefoxDnsProbeCapable) {
+      return adapter.firefoxDnsProbe(dnsConfig);
+    }
+    return null;
+  }
 }
 
 /// Default adapter until the native service lands (M2): fails honestly.

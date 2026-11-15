@@ -39,7 +39,9 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
     super.initState();
     // The honesty-first refreshes: the live country set (labeled live vs
     // cached) and the vault-backed signed-in state.
-    widget.store.refreshFirefoxLocations();
+    widget.store.loadFirefoxDnsSettings().then((_) {
+      if (mounted) widget.store.refreshFirefoxLocations();
+    });
     widget.store.refreshFirefoxAccount();
   }
 
@@ -57,6 +59,7 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
     final strings = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final store = widget.store;
+    final core = store.coreSettings;
 
     final core = store.coreSettings;
     final accountStatus = switch (store.firefoxAccount) {
@@ -152,40 +155,53 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
           ),
         ),
 
-        // ---- Section: the WARP carrier leg (1.4.0-warp — the owner's
-        // decree: «پروتکل فایرفاکس رو به صورت دیفالت اور وارپ کنی …
-        // کاربر از تنظیمات فایرفاکس بتونه پروتکل هسته ایتر رو خودش
-        // انتخاب کنه»): the same per-family leg pick the tor and psiphon
-        // pages carry, writing CoreSettings.firefoxLegProtocol. The
-        // engine's whole conversation rides the picked leg's WARP
-        // tunnel. ----
+        // ---- Section: process-scoped Firefox DNS (the guardian-branch
+        // feature, 2026-11-15 owner round): the resolver for Firefox's
+        // separate pre-connect roles — the WebChannel sign-in, initial
+        // discovery and the explicit DNS probe. System or DoH. ----
         SizedBox(height: 24 * s),
         SubSectionHeading(
           icon: AppAssets.iconSwap1,
-          title: strings.secFirefoxLeg,
+          title: strings.secFirefoxDns,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: _FirefoxDnsCard(store: store),
+        ),
+
+        // ---- Section: the WARP carrier leg (the owner's decree:
+        // «پروتکل فایرفاکس رو به صورت دیفالت اور وارپ کنی … کاربر از
+        // تنظیمات فایرفاکس بتونه پروتکل هسته ایتر رو خودش انتخاب کنه»):
+        // the same per-family leg pick the tor and psiphon pages carry,
+        // writing CoreSettings.firefoxLegProtocol. The engine's whole
+        // conversation rides the picked leg's WARP tunnel. ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSwap1,
+          title: strings.secFirefoxCarrier,
         ),
         const SubSectionGap.headingToCard(),
         SubSectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SettingLabel(strings.aetherLegLabel),
+              SettingLabel(strings.firefoxCarrierLabel),
               const SizedBox(height: 10),
               SettingPills<AetherLegProtocol>(
-                keyId: 'firefox-leg',
+                keyId: 'firefox-aether-leg',
                 options: [
                   // The same order + labels as the protocol page's own
                   // tiles (strings.aetherLegName reuses their names).
-                  (AetherLegProtocol.wireguard, strings.aetherLegName(
-                      AetherLegProtocol.wireguard)),
-                  (AetherLegProtocol.masque, strings.aetherLegName(
-                      AetherLegProtocol.masque)),
-                  (AetherLegProtocol.gool, strings.aetherLegName(
-                      AetherLegProtocol.gool)),
-                  (AetherLegProtocol.goolClassic, strings.aetherLegName(
-                      AetherLegProtocol.goolClassic)),
-                  (AetherLegProtocol.mim, strings.aetherLegName(
-                      AetherLegProtocol.mim)),
+                  (AetherLegProtocol.wireguard,
+                      strings.aetherLegName(AetherLegProtocol.wireguard)),
+                  (AetherLegProtocol.masque,
+                      strings.aetherLegName(AetherLegProtocol.masque)),
+                  (AetherLegProtocol.gool,
+                      strings.aetherLegName(AetherLegProtocol.gool)),
+                  (AetherLegProtocol.goolClassic,
+                      strings.aetherLegName(AetherLegProtocol.goolClassic)),
+                  (AetherLegProtocol.mim,
+                      strings.aetherLegName(AetherLegProtocol.mim)),
                 ],
                 selected: core.firefoxLegProtocol,
                 onSelect: (v) =>
@@ -193,12 +209,36 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
               ),
               const SubSectionDivider(),
               SettingInfoText(strings.firefoxLegDesc),
+            ],
+          ),
+        ),
+
+        // ---- Section: the data-plane transport (h2 via the carrier's
+        // TCP CONNECT, h3 via its UDP ASSOCIATE — both ride the WARP
+        // carrier) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSwap1,
+          title: strings.secFirefoxTransport,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingLabel(strings.firefoxTransportLabel),
+              const SizedBox(height: 10),
+              SettingPills<String>(
+                keyId: 'firefox-transport',
+                options: [
+                  ('h2', strings.firefoxTransportH2),
+                  ('h3', strings.firefoxTransportH3),
+                ],
+                selected: store.firefoxTransport,
+                onSelect: store.setFirefoxTransport,
+              ),
               const SubSectionDivider(),
-              // 1.4.0-warp — the transport note: the data plane is h2
-              // over the WARP carrier; h3 (QUIC/UDP) cannot ride a TCP
-              // SOCKS carrier, so the old h2/h3 picker is gone (offering
-              // h3 would be offering a dead option).
-              SettingInfoText(strings.firefoxTransportNote),
+              SettingInfoText(strings.firefoxTransportDesc),
             ],
           ),
         ),
@@ -215,5 +255,176 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
     // Locale-agnostic HH:mm — the label is informational only.
     return '${two(d.hour)}:${two(d.minute)}'
         '${loc.languageCode == 'fa' ? '، ' : ' '}${d.year}-${two(d.month)}-${two(d.day)}';
+  }
+}
+
+
+/// DNS for Firefox's separate pre-connect roles (WebChannel sign-in,
+/// initial discovery and the explicit DNS probe). Once Firefox over WARP
+/// is active, tunnel-server hostnames are resolved by the Aether carrier's
+/// DNS because the Go engine sends them through Aether SOCKS without local
+/// resolution. Chromium speculative DNS prefetch may still use system DNS.
+class _FirefoxDnsCard extends StatefulWidget {
+  const _FirefoxDnsCard({required this.store});
+
+  final ConnectionStore store;
+
+  @override
+  State<_FirefoxDnsCard> createState() => _FirefoxDnsCardState();
+}
+
+class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
+  String _endpoint = '';
+  String _bootstrap = '';
+  bool _testing = false;
+  List<Map<String, dynamic>>? _probeEvents;
+
+  @override
+  void initState() {
+    super.initState();
+    _endpoint = widget.store.firefoxDnsEndpoint;
+    _bootstrap = widget.store.firefoxDnsBootstrapIps.join(', ');
+    _restoreFields();
+  }
+
+  Future<void> _runDnsProbe() async {
+    setState(() {
+      _testing = true;
+      _probeEvents = null;
+    });
+    try {
+      final events = await widget.store.firefoxDnsProbe();
+      if (mounted) setState(() => _probeEvents = events ?? const []);
+    } catch (_) {
+      if (mounted) setState(() => _probeEvents = const []);
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
+  }
+
+  Future<void> _restoreFields() async {
+    await widget.store.loadFirefoxDnsSettings();
+    if (!mounted) return;
+    _endpoint = widget.store.firefoxDnsEndpoint;
+    _bootstrap = widget.store.firefoxDnsBootstrapIps.join(', ');
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final store = widget.store;
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final doh = store.firefoxDnsMode == 'doh';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SettingLabel(strings.firefoxDnsMode),
+        SizedBox(height: 10 * s),
+        SettingPills<String>(
+          keyId: 'firefox-dns-mode',
+          options: [
+            ('system', strings.firefoxDnsSystem),
+            ('doh', strings.firefoxDnsDoH),
+          ],
+          selected: store.firefoxDnsMode,
+          onSelect: (value) {
+            store.setFirefoxDnsMode(value);
+            setState(() => _probeEvents = null);
+          },
+        ),
+        if (doh) ...[
+          SizedBox(height: 16 * s),
+          SettingLabel(strings.firefoxDnsProvider),
+          SizedBox(height: 10 * s),
+          SettingPills<String>(
+            keyId: 'firefox-dns-provider',
+            options: const [
+              ('cloudflare', 'Cloudflare'),
+              ('google', 'Google'),
+              ('quad9', 'Quad9'),
+              ('custom', 'Custom'),
+            ],
+            selected: store.firefoxDnsProvider,
+            onSelect: (value) {
+              store.setFirefoxDnsProvider(value);
+              setState(() => _probeEvents = null);
+            },
+          ),
+          if (store.firefoxDnsProvider == 'custom') ...[
+            SizedBox(height: 16 * s),
+            SettingField(
+              key: ValueKey('firefox-dns-endpoint-$_endpoint'),
+              keyId: 'firefox-dns-endpoint',
+              label: strings.firefoxDnsEndpoint,
+              hint: 'https://dns.example/dns-query',
+              initial: _endpoint,
+              onChanged: (value) => _endpoint = value,
+            ),
+          ],
+          SizedBox(height: 12 * s),
+          SettingField(
+            key: ValueKey('firefox-dns-bootstrap-$_bootstrap'),
+            keyId: 'firefox-dns-bootstrap',
+            label: strings.firefoxDnsBootstrap,
+            hint: 'Optional IP addresses',
+            initial: _bootstrap,
+            onChanged: (value) => _bootstrap = value,
+          ),
+          SizedBox(height: 12 * s),
+          SettingActionButton(
+            keyId: 'firefox-dns-save',
+            label: strings.firefoxDnsSave,
+            onTap: () {
+              store.setFirefoxDnsCustom(_endpoint, _bootstrap);
+              setState(() => _probeEvents = null);
+              FocusScope.of(context).unfocus();
+            },
+          ),
+        ],
+        SizedBox(height: 14 * s),
+        if (_testing)
+          SettingInfoText(strings.firefoxDnsTesting)
+        else
+          SettingActionButton(
+            keyId: 'firefox-dns-test',
+            label: strings.firefoxDnsTestButton,
+            onTap: _runDnsProbe,
+          ),
+        if (_probeEvents != null) ...[
+          SizedBox(height: 10 * s),
+          Builder(builder: (context) {
+            Map<String, dynamic>? summary;
+            for (final event in _probeEvents!) {
+              if (event['event'] == 'dnsProbeSummary') {
+                summary = event;
+                break;
+              }
+            }
+            final ok = summary?['ok'] == true;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SettingInfoText(
+                  ok ? strings.firefoxDnsTestSuccess : strings.firefoxDnsTestFailed,
+                ),
+                for (final event in _probeEvents!)
+                  if (event['event'] == 'dnsProbe')
+                    SettingInfoText(
+                      "${event['domain']?.toString() ?? '—'} · "
+                          "${(event['addresses'] as List?)?.join(', ') ?? '—'} · "
+                          "${event['elapsedMs']?.toString() ?? '0'} ms",
+                    ),
+              ],
+            );
+          }),
+        ],
+        const SubSectionDivider(),
+        SettingInfoText(strings.firefoxDnsDesc),
+        const SubSectionDivider(),
+        SettingInfoText(strings.firefoxDnsWebViewNote),
+      ],
+    );
   }
 }

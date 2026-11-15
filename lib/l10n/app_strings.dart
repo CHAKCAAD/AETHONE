@@ -341,6 +341,26 @@ class AppStrings {
   String get secFirefoxLeg => _v['secFirefoxLeg']!;
   String get firefoxLegDesc => _v['firefoxLegDesc']!;
   String get firefoxTransportNote => _v['firefoxTransportNote']!;
+  String get secFirefoxTransport => _v['secFirefoxTransport']!;
+  String get firefoxTransportLabel => _v['firefoxTransportLabel']!;
+  String get firefoxTransportH2 => _v['firefoxTransportH2']!;
+  String get firefoxTransportH3 => _v['firefoxTransportH3']!;
+  String get firefoxTransportDesc => _v['firefoxTransportDesc']!;
+  String get secFirefoxDns => _v['secFirefoxDns']!;
+  String get firefoxDnsMode => _v['firefoxDnsMode']!;
+  String get firefoxDnsSystem => _v['firefoxDnsSystem']!;
+  String get firefoxDnsDoH => _v['firefoxDnsDoH']!;
+  String get firefoxDnsProvider => _v['firefoxDnsProvider']!;
+  String get firefoxDnsCustom => _v['firefoxDnsCustom']!;
+  String get firefoxDnsEndpoint => _v['firefoxDnsEndpoint']!;
+  String get firefoxDnsBootstrap => _v['firefoxDnsBootstrap']!;
+  String get firefoxDnsSave => _v['firefoxDnsSave']!;
+  String get firefoxDnsDesc => _v['firefoxDnsDesc']!;
+  String get firefoxDnsWebViewNote => _v['firefoxDnsWebViewNote']!;
+  String get firefoxDnsTesting => _v['firefoxDnsTesting']!;
+  String get firefoxDnsTestButton => _v['firefoxDnsTestButton']!;
+  String get firefoxDnsTestSuccess => _v['firefoxDnsTestSuccess']!;
+  String get firefoxDnsTestFailed => _v['firefoxDnsTestFailed']!;
   String get firefoxLoginTitle => _v['firefoxLoginTitle']!;
   String get firefoxLoginSubtitle => _v['firefoxLoginSubtitle']!;
   String get firefoxLoginWaiting => _v['firefoxLoginWaiting']!;
@@ -409,6 +429,9 @@ class AppStrings {
   String get aetherLegLabel => _v['aetherLegLabel']!;
   String get torLegDesc => _v['torLegDesc']!;
   String get psiphonLegDesc => _v['psiphonLegDesc']!;
+  String get firefoxLegDesc => _v['firefoxLegDesc']!;
+  String get secFirefoxCarrier => _v['secFirefoxCarrier']!;
+  String get firefoxCarrierLabel => _v['firefoxCarrierLabel']!;
   String get secIpVersion => _v['secIpVersion']!;
   String get ipV4 => _v['ipV4']!;
   String get ipV6 => _v['ipV6']!;
@@ -599,6 +622,26 @@ class AppStrings {
       'secFirefoxLeg': 'پروتکل هسته',
       'firefoxLegDesc': 'ابتدا اتصال وارپ با پروتکل انتخابی برقرار می‌شود و بعد فایرفاکس از درون همان تونل، تونل خودش را می‌سازد (مثل سایفون اُور وارپ). ترافیک اصلی همیشه از تونل وارپ می‌گذرد.',
       'firefoxTransportNote': 'انتقال داده روی H2 (TCP+TLS) انجام می‌شود؛ H3 به‌خاطر QUIC/UDP نمی‌تواند از بستر TCP وارپ عبور کند.',
+      'secFirefoxTransport': 'انتقال داده',
+      'firefoxTransportLabel': 'حالت انتقال',
+      'firefoxTransportH2': 'H2 (پیش‌فرض)',
+      'firefoxTransportH3': 'H3 (کوئیک)',
+      'firefoxTransportDesc': 'H2 روی TCP+TLS و H3 روی QUIC کار می‌کند. اگر مطمئن نیستید همان H2 بماند.',
+      'secFirefoxDns': 'DNS فایرفاکس',
+      'firefoxDnsMode': 'حالت DNS',
+      'firefoxDnsSystem': 'DNS سیستم اندروید',
+      'firefoxDnsDoH': 'DNS رمزگذاری‌شده (DoH)',
+      'firefoxDnsProvider': 'ارائه‌دهنده DNS',
+      'firefoxDnsCustom': 'سفارشی',
+      'firefoxDnsEndpoint': 'نشانی DoH (HTTPS)',
+      'firefoxDnsBootstrap': 'IPهای اولیه (اختیاری، جداشده با ویرگول)',
+      'firefoxDnsSave': 'ذخیره تنظیمات DNS',
+      'firefoxDnsDesc': 'این DNS برای فرایندهای مستقل Firefox، مثل ورود حساب و کشف اولیهٔ سرورها، استفاده می‌شود. در نشست Firefox over WARP، نام سرورهای تونل از مسیر DNS هستهٔ Aether حل می‌شود. خطای DoH در این فرایندها پنهانی به DNS معمولی برنمی‌گردد.',
+      'firefoxDnsWebViewNote': 'درخواست‌های واقعی HTTPS صفحه ورود از پراکسی محلی عبور می‌کنند و نام مقصد با DNS انتخاب‌شده حل می‌شود. پیش‌واکشی DNS در Chromium ممکن است همچنان از DNS سیستم اندروید استفاده کند.',
+      'firefoxDnsTestButton': 'آزمایش DNS',
+      'firefoxDnsTesting': 'در حال آزمایش DNS…',
+      'firefoxDnsTestSuccess': 'DNS برای همه دامنه‌های آزمایش‌شده پاسخ داد.',
+      'firefoxDnsTestFailed': 'برخی درخواست‌های DNS ناموفق بودند.',
       'firefoxLoginTitle': 'ورود به فایرفاکس',
       'firefoxLoginSubtitle': 'ورود در صفحهٔ رسمی موزیلا انجام می‌شود',
       'firefoxLoginWaiting': 'در انتظار ورود شما در صفحهٔ موزیلا…',
@@ -829,6 +872,9 @@ class AppStrings {
       'aetherLegLabel': 'پایهٔ حالت‌های ترکیبی',
       'torLegDesc': 'در حالت‌های ترکیبی تور (زنجیره و معکوس)، تونل Aether زیرین با این پروتکل برقرار می‌شود. در حالت معکوس، پایه‌های نیازمند UDP خودکار به ماسک تغییر می‌کنند (محدودیت خود هسته)',
       'psiphonLegDesc': 'در حالت‌های ترکیبی سایفون (زنجیره و معکوس)، تونل Aether زیرین با این پروتکل برقرار می‌شود. در حالت معکوس، پایه‌های نیازمند UDP خودکار به ماسک تغییر می‌کنند (محدودیت خود هسته)',
+      'firefoxLegDesc': 'در حالت Firefox over WARP، ابتدا تونل Aether با این پروتکل برقرار می‌شود و سپس تونل فایرفاکس از داخل آن عبور می‌کند.',
+      'secFirefoxCarrier': 'تونل پایهٔ فایرفاکس (WARP)',
+      'firefoxCarrierLabel': 'پروتکل هستهٔ Aether',
       'secIpVersion': 'نسخهٔ IP',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -931,6 +977,26 @@ class AppStrings {
       'secFirefoxLeg': 'Core protocol',
       'firefoxLegDesc': 'The WARP connection comes up first with the selected protocol, then Firefox builds its own tunnel inside it (like Psiphon over Warp). All Firefox traffic rides the WARP tunnel.',
       'firefoxTransportNote': 'The data plane runs on H2 (TCP+TLS); H3 (QUIC/UDP) cannot ride the TCP WARP carrier.',
+      'secFirefoxTransport': 'Data transport',
+      'firefoxTransportLabel': 'Transport mode',
+      'firefoxTransportH2': 'H2 (default)',
+      'firefoxTransportH3': 'H3 (QUIC)',
+      'firefoxTransportDesc': 'H2 runs over TCP+TLS; H3 runs over QUIC. Keep H2 if unsure.',
+      'secFirefoxDns': 'Firefox DNS',
+      'firefoxDnsMode': 'DNS mode',
+      'firefoxDnsSystem': 'Android System DNS',
+      'firefoxDnsDoH': 'Encrypted DNS (DoH)',
+      'firefoxDnsProvider': 'DNS provider',
+      'firefoxDnsCustom': 'Custom',
+      'firefoxDnsEndpoint': 'DoH endpoint (HTTPS)',
+      'firefoxDnsBootstrap': 'Bootstrap IPs (optional, comma-separated)',
+      'firefoxDnsSave': 'Save DNS settings',
+      'firefoxDnsDesc': 'This resolver is used by Firefox\'s separate pre-connect roles, such as account sign-in and initial server discovery. In an active Firefox-over-WARP session, tunnel server names are resolved by the Aether core\'s DNS. DoH failures in these Firefox roles do not silently fall back to plain DNS.',
+      'firefoxDnsWebViewNote': 'Actual HTTPS requests from the sign-in page use a local proxy and resolve destination names with the selected DNS. Chromium DNS prefetch may still use Android System DNS.',
+      'firefoxDnsTestButton': 'Test DNS',
+      'firefoxDnsTesting': 'Testing DNS…',
+      'firefoxDnsTestSuccess': 'DNS answered for every tested domain.',
+      'firefoxDnsTestFailed': 'Some DNS lookups failed.',
       'firefoxLoginTitle': 'Sign in to Firefox',
       'firefoxLoginSubtitle': 'Sign-in happens on Mozilla\'s official page',
       'firefoxLoginWaiting': 'Waiting for you to sign in on Mozilla\'s page…',
@@ -1161,6 +1227,9 @@ class AppStrings {
       'aetherLegLabel': 'Base of the combined modes',
       'torLegDesc': 'In the combined tor modes (chain and reverse) the underlying Aether tunnel runs this protocol. On the reverse mode the UDP-needing legs map to MASQUE automatically (a core limit)',
       'psiphonLegDesc': 'In the combined psiphon modes (chain and reverse) the underlying Aether tunnel runs this protocol. On the reverse mode the UDP-needing legs map to MASQUE automatically (a core limit)',
+      'firefoxLegDesc': 'For Firefox over WARP, Aether establishes this carrier first; the Firefox VPN tunnel is then carried inside it.',
+      'secFirefoxCarrier': 'Firefox outer carrier (WARP)',
+      'firefoxCarrierLabel': 'Aether carrier protocol',
       'secIpVersion': 'IP version',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -1261,6 +1330,26 @@ class AppStrings {
       'secFirefoxLeg': 'Протокол ядра',
       'firefoxLegDesc': 'Сначала поднимается WARP-соединение на выбранном протоколе, затем Firefox строит свой туннель внутри него (как Psiphon over Warp). Весь трафик Firefox идёт через WARP-туннель.',
       'firefoxTransportNote': 'Плоскость данных работает на H2 (TCP+TLS); H3 (QUIC/UDP) не может проходить через TCP-носитель WARP.',
+      'secFirefoxTransport': 'Транспорт данных',
+      'firefoxTransportLabel': 'Режим транспорта',
+      'firefoxTransportH2': 'H2 (по умолчанию)',
+      'firefoxTransportH3': 'H3 (QUIC)',
+      'firefoxTransportDesc': 'H2 работает поверх TCP+TLS; H3 — поверх QUIC. Если сомневаетесь, оставьте H2.',
+      'secFirefoxDns': 'DNS Firefox',
+      'firefoxDnsMode': 'Режим DNS',
+      'firefoxDnsSystem': 'Системный DNS Android',
+      'firefoxDnsDoH': 'Зашифрованный DNS (DoH)',
+      'firefoxDnsProvider': 'Поставщик DNS',
+      'firefoxDnsCustom': 'Другой',
+      'firefoxDnsEndpoint': 'Адрес DoH (HTTPS)',
+      'firefoxDnsBootstrap': 'Начальные IP (необязательно, через запятую)',
+      'firefoxDnsSave': 'Сохранить настройки DNS',
+      'firefoxDnsDesc': 'Этот DNS используется отдельными предварительными процессами Firefox — входом в аккаунт и первоначальным поиском серверов. В активном режиме Firefox over WARP имена серверов туннеля разрешает DNS ядра Aether. При сбое DoH в этих процессах скрытого перехода на обычный DNS нет.',
+      'firefoxDnsWebViewNote': 'Фактические HTTPS-запросы страницы входа проходят через локальный прокси и используют выбранный DNS для разрешения имён. Предварительное разрешение DNS в Chromium всё ещё может обращаться к системному DNS Android.',
+      'firefoxDnsTestButton': 'Проверить DNS',
+      'firefoxDnsTesting': 'Проверка DNS…',
+      'firefoxDnsTestSuccess': 'DNS ответил для всех проверенных доменов.',
+      'firefoxDnsTestFailed': 'Некоторые DNS-запросы завершились ошибкой.',
       'firefoxLoginTitle': 'Вход в Firefox',
       'firefoxLoginSubtitle': 'Вход выполняется на официальной странице Mozilla',
       'firefoxLoginWaiting': 'Ожидание входа на странице Mozilla…',
@@ -1489,6 +1578,9 @@ class AppStrings {
       'aetherLegLabel': 'Основа комбинированных режимов',
       'torLegDesc': 'В комбинированных режимах tor (цепочка и обратный) туннель Aether работает по этому протоколу. В обратном режиме ветки с UDP автоматически переходят на MASQUE (ограничение ядра)',
       'psiphonLegDesc': 'В комбинированных режимах psiphon (цепочка и обратный) туннель Aether работает по этому протоколу. В обратном режиме ветки с UDP автоматически переходят на MASQUE (ограничение ядра)',
+      'firefoxLegDesc': 'В режиме Firefox over WARP сначала поднимается туннель Aether с этим протоколом, а затем через него проходит туннель Firefox VPN.',
+      'secFirefoxCarrier': 'Внешний туннель Firefox (WARP)',
+      'firefoxCarrierLabel': 'Протокол ядра Aether',
       'secIpVersion': 'Версия IP',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -1589,6 +1681,26 @@ class AppStrings {
       'secFirefoxLeg': '核心协议',
       'firefoxLegDesc': '先以所选协议建立 WARP 连接，然后 Firefox 在其内部建立自己的隧道（类似 Psiphon over Warp）。所有 Firefox 流量都经过 WARP 隧道。',
       'firefoxTransportNote': '数据面运行在 H2（TCP+TLS）；H3（QUIC/UDP）无法穿越 TCP 的 WARP 载体。',
+      'secFirefoxTransport': '数据传输',
+      'firefoxTransportLabel': '传输模式',
+      'firefoxTransportH2': 'H2（默认）',
+      'firefoxTransportH3': 'H3（QUIC）',
+      'firefoxTransportDesc': 'H2 基于 TCP+TLS；H3 基于 QUIC。不确定时保持 H2。',
+      'secFirefoxDns': 'Firefox DNS',
+      'firefoxDnsMode': 'DNS 模式',
+      'firefoxDnsSystem': 'Android 系统 DNS',
+      'firefoxDnsDoH': '加密 DNS (DoH)',
+      'firefoxDnsProvider': 'DNS 服务商',
+      'firefoxDnsCustom': '自定义',
+      'firefoxDnsEndpoint': 'DoH 地址 (HTTPS)',
+      'firefoxDnsBootstrap': '引导 IP（可选，逗号分隔）',
+      'firefoxDnsSave': '保存 DNS 设置',
+      'firefoxDnsDesc': '此解析器用于 Firefox 的独立预连接流程，例如账户登录和初始服务器发现。Firefox over WARP 会话建立后，隧道服务器域名由 Aether 核心的 DNS 解析。上述 Firefox 流程中的 DoH 失败不会静默回退到普通 DNS。',
+      'firefoxDnsWebViewNote': '登录页的实际 HTTPS 请求会通过本地代理，并使用所选 DNS 解析目标域名。Chromium 的 DNS 预解析仍可能使用 Android 系统 DNS。',
+      'firefoxDnsTestButton': '测试 DNS',
+      'firefoxDnsTesting': '正在测试 DNS…',
+      'firefoxDnsTestSuccess': '所有测试域名均获得 DNS 响应。',
+      'firefoxDnsTestFailed': '部分 DNS 查询失败。',
       'firefoxLoginTitle': '登录 Firefox',
       'firefoxLoginSubtitle': '登录在 Mozilla 官方页面进行',
       'firefoxLoginWaiting': '等待您在 Mozilla 页面完成登录…',
@@ -1817,6 +1929,9 @@ class AppStrings {
       'aetherLegLabel': '组合模式的底层',
       'torLegDesc': '在 Tor 组合模式（链式与反向）中，底层 Aether 隧道使用此协议。反向模式下需要 UDP 的分支会自动映射为 MASQUE（内核自身的限制）',
       'psiphonLegDesc': '在 Psiphon 组合模式（链式与反向）中，底层 Aether 隧道使用此协议。反向模式下需要 UDP 的分支会自动映射为 MASQUE（内核自身的限制）',
+      'firefoxLegDesc': '在 Firefox over WARP 模式下，Aether 会先使用此协议建立底层隧道，然后 Firefox VPN 隧道通过该隧道连接。',
+      'secFirefoxCarrier': 'Firefox 外层隧道（WARP）',
+      'firefoxCarrierLabel': 'Aether 核心协议',
       'secIpVersion': 'IP 版本',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -1923,6 +2038,26 @@ class AppStrings {
       'secFirefoxLeg': 'Çekirdek protokoly',
       'firefoxLegDesc': 'Ilki saýlanan protokol bilen WARP birikmesi dikeldilýär, soň Firefox öz tuneliiniňi şol tuneliň içinde gurnaýar (Psiphon over Warp ýaly). Firefox trafiki hemişe WARP tuneli arkaly geçýär.',
       'firefoxTransportNote': 'Maglumat geçirişi H2 (TCP+TLS) üstünde işleýär; H3 (QUIC/UDP) WARP-nyň TCP göterijisinden geçip bilmeýär.',
+      'secFirefoxTransport': 'Maglumat geçirişi',
+      'firefoxTransportLabel': 'Geçiriş tertibi',
+      'firefoxTransportH2': 'H2 (adaty)',
+      'firefoxTransportH3': 'H3 (QUIC)',
+      'firefoxTransportDesc': 'H2 TCP+TLS üstünde, H3 QUIC üstünde işleýär. Ynamyňyz ýok bolsa H2 galsyn.',
+      'secFirefoxDns': 'Firefox DNS',
+      'firefoxDnsMode': 'DNS tertibi',
+      'firefoxDnsSystem': 'Android ulgam DNS-i',
+      'firefoxDnsDoH': 'Şifrlenen DNS (DoH)',
+      'firefoxDnsProvider': 'DNS üpjünçisi',
+      'firefoxDnsCustom': 'Ýörite',
+      'firefoxDnsEndpoint': 'DoH salgysy (HTTPS)',
+      'firefoxDnsBootstrap': 'Başlangyç IP-ler (islege görä, otur bilen)',
+      'firefoxDnsSave': 'DNS sazlamalaryny ýatda sakla',
+      'firefoxDnsDesc': 'Bu çözüji Firefox-yň aýratyn öňünden birikme proseslerinde, meselem hasaba girmekde we ilkinji serwer gözleginde ulanylýar. Işjeň Firefox over WARP sessiýasynda tunel serwerleriniň atlaryny Aether ýadrosynyň DNS-i çözýär. Bu Firefox proseslerinde DoH şowsuz bolsa, adaty DNS-e sessiz geçilmeýär.',
+      'firefoxDnsWebViewNote': 'Giriş sahypasynyň hakyky HTTPS islegleri ýerli proksi arkaly geçýär we maksat atlaryny saýlanan DNS bilen çözýär. Chromium DNS öňünden çözmesi henizem Android ulgam DNS-ini ulanyp biler.',
+      'firefoxDnsTestButton': 'DNS-i barla',
+      'firefoxDnsTesting': 'DNS barlanýar…',
+      'firefoxDnsTestSuccess': 'Synag edilen ähli domenler üçin DNS jogap berdi.',
+      'firefoxDnsTestFailed': 'Käbir DNS gözlegleri şowsuz boldy.',
       'firefoxLoginTitle': 'Firefox-a gir',
       'firefoxLoginSubtitle': 'Giriş Mozillanyň resmi sahyponda geçýär',
       'firefoxLoginWaiting': 'Mozillanyň sahyponda girişiňizi garaşýarys…',
@@ -2155,6 +2290,9 @@ class AppStrings {
       'aetherLegLabel': 'Birleşdirilen režimleriň esasy',
       'torLegDesc': 'Birleşdirilen tor režimlerinde (zelze we ters) aşaky Aether tuneli şu protokoly ulanýar. Ters režimde UDP isleg edýän protokollar awtomatiki MASQUE-e geçirilýär (çekirdegiň çäklenmesi)',
       'psiphonLegDesc': 'Birleşdirilen psiphon režimlerinde (zelze we ters) aşaky Aether tuneli şu protokoly ulanýar. Ters režimde UDP isleg edýän protokollar awtomatiki MASQUE-e geçirilýär (çekirdegiň çäklenmesi)',
+      'firefoxLegDesc': 'Firefox over WARP režiminde ilki Aether şu protokol bilen daşaýjy tuneli gurýar, soňra Firefox VPN tuneli onuň içinden geçýär.',
+      'secFirefoxCarrier': 'Firefox daşaýjy tuneli (WARP)',
+      'firefoxCarrierLabel': 'Aether çekirdek protokoly',
       'secIpVersion': 'IP wersiýasy',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',

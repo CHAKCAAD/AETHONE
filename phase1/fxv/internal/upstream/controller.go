@@ -63,13 +63,8 @@ type ControllerConfig struct {
         RefreshToken  string
         Transport     string // "h2" | "h3"
         ProxyURL      *url.URL
+        UpstreamSocks string // optional local Aether SOCKS5 carrier for the Firefox data plane
         OpenTimeout   time.Duration
-        // CarrierDial (1.4.0-warp), when non-nil, dials the MASQUE
-        // proxy's raw TCP through the WARP carrier (the aether SOCKS
-        // listener) instead of directly. h3 refuses a carrier — the
-        // engine's config validation already rejects that pair; the
-        // Start guard keeps the invariant local too.
-        CarrierDial   DialFunc
         OnPassRenewed func(pass *vpnclient.ProxyPassInfo)
         OnAuthRefresh func(pair vpnclient.TokenResponse)
         OnRenewalFail func(redactedErr string, retryInMs int64)
@@ -154,17 +149,22 @@ func (c *Controller) Start(ctx context.Context, pass *vpnclient.ProxyPassInfo) (
         started := time.Now()
         switch c.cfg.Transport {
         case "h3":
-                if c.cfg.CarrierDial != nil {
-                        return 0, errors.New("h3 cannot ride the SOCKS carrier (use h2)")
-                }
                 var s *H3ProxySession
-                s, err = NewH3ProxySession(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout)
+                if c.cfg.UpstreamSocks != "" {
+                        s, err = NewH3ProxySessionThroughSOCKS(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout, c.cfg.UpstreamSocks)
+                } else {
+                        s, err = NewH3ProxySession(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout)
+                }
                 if err == nil {
                         c.setSession(s, pass)
                 }
         default:
                 var s *H2ProxySession
-                s, err = newH2ProxySession(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout, c.cfg.CarrierDial)
+                if c.cfg.UpstreamSocks != "" {
+                        s, err = NewH2ProxySessionThroughSOCKS(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout, c.cfg.UpstreamSocks)
+                } else {
+                        s, err = NewH2ProxySession(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout)
+                }
                 if err == nil {
                         c.setSession(s, pass)
                 }

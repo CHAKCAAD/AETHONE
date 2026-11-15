@@ -6,7 +6,10 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
+
+	"aethone/fxv/internal/dnsresolver"
 )
 
 // maxConfigLine bounds the single stdin JSON line (1 MiB, the phase-1
@@ -30,6 +33,7 @@ type Config struct {
 	Country            string     `json:"country"`
 	Transport          string     `json:"transport"`
 	UpstreamOverride   string     `json:"upstreamOverride"`
+	UpstreamSocks      string     `json:"upstreamSocks"`
 	UpstreamTimeoutMs  int64      `json:"upstreamTimeoutMs"`
 	HandshakeTimeoutMs int64      `json:"handshakeTimeoutMs"`
 	IdleTimeoutMs      int64      `json:"idleTimeoutMs"`
@@ -37,14 +41,8 @@ type Config struct {
 	ExitCheckURL       string     `json:"exitCheckUrl"`
 	ExitTimeoutMs      int64      `json:"exitTimeoutMs"`
 	LogLevel           string     `json:"logLevel"`
-	// 1.4.0-warp -- the WARP carrier block (ADDITIVE): a socks5://
-	// URL on each seam routes that plane through the in-process
-	// Aether core's SOCKS listener -- "Firefox over Warp", the
-	// psiphon/tor chain-family posture. Empty = the direct path
-	// the pre-1.4.0 engine ran.
-	ApiProxy      string     `json:"apiProxy"`
-	UpstreamProxy string     `json:"upstreamProxy"`
-	Auth          AuthConfig `json:"auth"`
+	Auth               AuthConfig `json:"auth"`
+	DNS                dnsresolver.Config `json:"dns"`
 
 	// cfgLine is the raw buffer reference, dropped (nil-ed) after the
 	// parse so the tokens do not linger in a second copy.
@@ -125,6 +123,18 @@ func (c Config) Validate() (Config, error) {
 			return c, &ConfigError{Detail: detailUpstreamOverrideBad}
 		}
 	}
+	if c.UpstreamSocks != "" {
+		u, err := url.Parse(c.UpstreamSocks)
+		if err != nil || u.Scheme != "socks5" || u.User != nil ||
+			u.Hostname() == "" || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+			return c, &ConfigError{Detail: detailUpstreamSocksInvalid}
+		}
+		ip := net.ParseIP(u.Hostname())
+		port, portErr := strconv.Atoi(u.Port())
+		if ip == nil || !ip.IsLoopback() || portErr != nil || port < 1 || port > 65535 {
+			return c, &ConfigError{Detail: detailUpstreamSocksInvalid}
+		}
+	}
 	if strings.TrimSpace(c.Auth.AccessToken) == "" {
 		return c, &ConfigError{Detail: detailAuthAccessTokenMiss}
 	}
@@ -149,41 +159,12 @@ func (c Config) Validate() (Config, error) {
 	if c.LogLevel == "" {
 		c.LogLevel = "normal"
 	}
-	// 1.4.0-warp -- the carrier seams: shape-validated here so a
-	// garbage URL dies at the contract gate with a stable detail
-	// code (the carrier package's New is the defensive second
-	// gate). socks5/socks5h with an explicit host:port; userinfo
-	// allowed (harmless -- x/net/proxy carries it); path/query/
-	// fragment refused (a carrier address never has any).
-	if !isCarrierURL(c.ApiProxy) {
-		return c, &ConfigError{Detail: detailApiProxyInvalid}
-	}
-	if !isCarrierURL(c.UpstreamProxy) {
-		return c, &ConfigError{Detail: detailUpstreamProxyInvalid}
-	}
-	// QUIC is UDP; the SOCKS5 CONNECT carrier is TCP-only (the
-	// aether listener's UDP ASSOCIATE carries DNS and nothing
-	// else). The data plane through a carrier is h2, full stop --
-	// the host sends h2 for the warp mode; this is the contract
-	// defense, not a silent coercion.
-	if c.UpstreamProxy != "" && c.Transport == "h3" {
-		return c, &ConfigError{Detail: detailTransportUnsupportedOverProxy}
+	var dnsErr error
+	c.DNS, dnsErr = c.DNS.Validate()
+	if dnsErr != nil {
+		return c, &ConfigError{Detail: detailDNSConfigInvalid}
 	}
 	return c, nil
-}
-
-// isCarrierURL reports whether raw is a well-formed WARP-carrier
-// address (socks5/socks5h, explicit host:port, no path/query/
-// fragment); the empty string is the valid "off" value.
-func isCarrierURL(raw string) bool {
-	if strings.TrimSpace(raw) == "" {
-		return true
-	}
-	u, err := url.Parse(strings.TrimSpace(raw))
-	return err == nil &&
-		(u.Scheme == "socks5" || u.Scheme == "socks5h") &&
-		u.Host != "" && u.Port() != "" &&
-		u.Path == "" && u.RawQuery == "" && u.Fragment == ""
 }
 
 // isLoopbackListen reports whether host:port binds a loopback address

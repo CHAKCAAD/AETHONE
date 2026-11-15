@@ -52,7 +52,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Platform, SocketException;
+import 'dart:io' show Platform, Process, SocketException;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -533,7 +533,7 @@ fake_ip = true
 /// MethodChannel (see MainActivity.kt / AethoneVpnService.kt) and to Aether
 /// over dart:ffi. One active connection at a time; disconnect always cleans
 /// BOTH engines even if connect failed halfway.
-class PlatformEngineAdapter implements EngineAdapter {
+class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
   PlatformEngineAdapter({
     Duration? statsInterval,
     this._coreFactory,
@@ -698,8 +698,8 @@ class PlatformEngineAdapter implements EngineAdapter {
         const Duration(seconds: 210),
         core?.psiphonReadySecs == 180 ? null : core?.psiphonReadySecs,
       ),
-      // PHASE-1 (firefox-vpn): the engine's own startup budget + a probe
-      // retry window; the lifecycle tests clock startup well under 2 s.
+      // Firefox-over-WARP: budget the Firefox child startup and its
+      // second, independent end-to-end probe after the Aether carrier is up.
       ProtocolId.firefoxOnly => const Duration(seconds: 90),
       _ => const Duration(seconds: 120),
     };
@@ -1103,13 +1103,13 @@ class PlatformEngineAdapter implements EngineAdapter {
       return false;
     }
 
-    // PHASE-1 (firefox-vpn) — the DEDICATED engine branch: Firefox VPN
-    // runs its own Go child process (libfirefoxvpn.so, SOCKS5 on
-    // 127.0.0.1:1822) and NEVER starts the aether core. The walk mirrors
-    // the aether skeleton (permission → TUN → engine → listener →
-    // end-to-end probe → Connected) so the store's state machine needs
-    // no changes. SMART never routes here (smartCandidates excludes the
-    // mode; a manual firefoxOnly tile is never rewritten).
+    // Firefox over WARP is a two-engine chain: Aether starts first on
+    // SOCKS5 :1819 using coreSettings.firefoxLegProtocol; the Go Firefox
+    // VPN child then dials its Mozilla/Fastly control and data planes
+    // through that carrier and exposes its own SOCKS5 :1822 listener.
+    // The device TUN targets :1822, so Connected requires both the
+    // verified Aether carrier and the independent Firefox end-to-end probe.
+    // SMART never rewrites a manual firefoxOnly tile.
     if (config.selectedProtocol == ProtocolId.firefoxOnly) {
       return _connectFirefox(gen, config);
     }
@@ -2184,10 +2184,16 @@ class PlatformEngineAdapter implements EngineAdapter {
     String sessionToken, {
     void Function(String line)? onLog,
   }) async {
+    final source = _config;
+    final dnsLoader = source as FirefoxDnsSettingsLoader?;
+    if (dnsLoader != null) {
+      await dnsLoader.loadFirefoxDnsSettings();
+    }
     final paths = await _paths();
     final client = _firefoxLogin = FirefoxLoginClient(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
       onLog: onLog ?? _debugLog,
+      dnsConfig: _config?.firefoxDnsConfig ?? const {'mode': 'system'},
     );
     try {
       final result = await client.runWebChannel(sessionToken: sessionToken);
@@ -2235,11 +2241,19 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// wheel list + honesty labels follow (the phase-2 location picker
   /// binds to the store's copy).
   Future<FirefoxLocationList?> firefoxLocations() async {
+    final source = _config;
+    final dnsLoader = source as FirefoxDnsSettingsLoader?;
+    if (dnsLoader != null) {
+      await dnsLoader.loadFirefoxDnsSettings();
+    }
     final paths = await _paths();
     final discovery = _firefoxDiscovery ??= FirefoxDiscovery(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
       cachePath: '${paths.filesDir}/firefox/serverlist.json',
+      dnsConfig: _config?.firefoxDnsConfig ?? const {'mode': 'system'},
     );
+    discovery.dnsConfig =
+        Map<String, dynamic>.from(_config?.firefoxDnsConfig ?? const {'mode': 'system'});
     final list = await discovery.refresh();
     if (list != null) {
       _emit(EngineFirefoxLocations(
@@ -2249,6 +2263,49 @@ class PlatformEngineAdapter implements EngineAdapter {
       ));
     }
     return list;
+  }
+
+  /// Runs the same process-local resolver used by login, discovery and
+  /// the tunnel. The probe has no account data and never validates traffic.
+  @override
+  Future<List<Map<String, dynamic>>?> firefoxDnsProbe(
+    Map<String, dynamic> dnsConfig,
+  ) async {
+    final paths = await _paths();
+    final process = await Process.start(
+      '${paths.nativeLibraryDir}/libfirefoxvpn.so',
+      const ['--dns-probe'],
+      environment: const {},
+      includeParentEnvironment: false,
+    );
+    process.stdin.writeln(jsonEncode({'dns': dnsConfig}));
+    await process.stdin.close();
+    final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+    final stderrFuture = process.stderr.transform(utf8.decoder).join();
+    final code = await process.exitCode.timeout(
+      const Duration(seconds: 35),
+      onTimeout: () {
+        process.kill();
+        throw TimeoutException('Firefox DNS probe timed out');
+      },
+    );
+    final stdout = await stdoutFuture;
+    await stderrFuture;
+    final events = <Map<String, dynamic>>[];
+    for (final line in const LineSplitter().convert(stdout)) {
+      try {
+        final decoded = jsonDecode(line);
+        if (decoded is Map<String, dynamic>) events.add(decoded);
+      } catch (_) {
+        // Ignore non-JSON diagnostic noise; the summary remains authoritative.
+      }
+    }
+    if (events.isEmpty) return null;
+    if (code != 0) {
+      // Preserve per-domain evidence on failure; the summary carries ok=false.
+      return events;
+    }
+    return events;
   }
 
   /// PHASE-2 — the EngineAdapter surface: one --discover round per call
@@ -2283,40 +2340,64 @@ class PlatformEngineAdapter implements EngineAdapter {
     return pick.toUpperCase();
   }
 
+  /// Maps the transport pick: 'h3' passes through, anything else → 'h2'
+  /// (the engine's default and the evidence-backed path). The Aether
+  /// carrier serves TCP CONNECT + UDP ASSOCIATE, so both transports ride
+  /// it (the engine's h3 path dials QUIC over the carrier's UDP channel).
+  static String _firefoxTransportForEngine(EngineConfigSource config) {
+    return config.firefoxTransport == 'h3' ? 'h3' : 'h2';
+  }
+
   /// The firefox walk (the aether skeleton, engine swapped in).
   Future<bool> _connectFirefox(int gen, EngineConfigSource config) async {
     void fail(String code, String msg) => _emitFail(code, msg);
+    final dnsLoader = config as FirefoxDnsSettingsLoader?;
+    if (dnsLoader != null) {
+      await dnsLoader.loadFirefoxDnsSettings();
+    }
 
-    // Stale-state hygiene: never start a second engine over a live one.
+    // Firefox is always carried by an Aether/WARP outer session. The two
+    // local SOCKS listeners are deliberately distinct:
+    //   1819 = Aether carrier (TCP CONNECT + UDP ASSOCIATE)
+    //   1822 = Firefox VPN data plane (TCP CONNECT for device traffic)
     await _hardCleanup();
     if (_stale(gen)) return false;
 
-    final mode = TransportModes.byId(ProtocolId.firefoxOnly);
+    final firefoxMode = TransportModes.byId(ProtocolId.firefoxOnly);
+    _activePort = firefoxMode.socksEndpoint.port + portOffset;
+    final warpPort = TransportModes.masque.socksEndpoint.port + portOffset;
     final tunnel = config.connectionMode == ConnectionMode.tunnel;
     _activeMode = config.connectionMode;
-    _activePort = mode.socksEndpoint.port + portOffset;
 
-    // 1.4.0-warp — the Windows desktop limit is LIFTED: the engine no
-    // longer dials the internet directly at all. Its whole conversation
-    // (control plane + MASQUE data plane) goes to the loopback WARP
-    // carrier listener, and the in-process aether core rides the same
+    // The Windows desktop limit is LIFTED (the firefox-over-warp decree):
+    // the engine no longer dials the internet directly at all — its whole
+    // conversation (control plane + MASQUE data plane) goes to the loopback
+    // WARP carrier listener, and the in-process aether core rides the same
     // plain-WARP path that tunnels fine on every desktop (the -only
     // family's direct-dial problem does not apply to a chain leg).
 
-    // Port-conflict proof at runtime (the instruction's decree: prove no
-    // clash with 1819/1820/1821 in code AND at runtime — the map is
-    // asserted by transport_modes_test; here we assert the port FREE).
+    // Port-conflict proof at runtime (prove no clash with 1819/1820/1821
+    // in code AND at runtime — the map is asserted by transport_modes_test;
+    // here we assert BOTH ports FREE before anything starts).
     if (await TunnelProbe.isListenerReady(_activePort)) {
       fail(
         'firefoxPortBusy',
-        '127.0.0.1:$_activePort is still occupied (a previous engine or '
-        'another service) — refusing to start a second listener on it',
+        '127.0.0.1:$_activePort is still occupied — refusing to start a second Firefox listener',
+      );
+      return false;
+    }
+    if (await TunnelProbe.isListenerReady(warpPort)) {
+      fail(
+        'firefoxCarrierPortBusy',
+        '127.0.0.1:$warpPort is already occupied — refusing to replace the Aether carrier',
       );
       return false;
     }
     if (_stale(gen)) return false;
 
-    // --- 1. VPN permission (tunnel mode only), BEFORE any engine work.
+    // --- 1. Permission and the device TUN, if requested. The TUN targets
+    // Firefox's SOCKS listener; the Aether core itself uses its own local
+    // 1819 listener and the app UID remains exempt from its own VPN.
     if (tunnel && !await _ensureVpnPermission(gen)) {
       if (_stale(gen)) return false;
       if (!_disconnecting) {
@@ -2328,26 +2409,6 @@ class PlatformEngineAdapter implements EngineAdapter {
     }
     if (_stale(gen)) return false;
 
-    // --- 2. The session (Keystore vault; Phase-1 source: the controlled
-    // injection). No session = honest failure; NEVER fake credentials.
-    final vault = await _firefoxVault();
-    final auth = await vault.load();
-    if (_stale(gen)) return false;
-    if (auth == null || auth.accessToken.isEmpty) {
-      fail(
-        'firefoxNoSession',
-        'no Firefox VPN session is stored — sign in from Settings → '
-        'Firefox VPN first',
-      );
-      return false;
-    }
-
-    _emitState(VpnState.connecting);
-
-    // --- 3. Tunnel mode: the VpnService + zeptun TUN comes up FIRST
-    // (same decree as the aether walk; zeptun tolerates a not-yet-serving
-    // SOCKS target — the greeting is held). TCP-only: the engine serves
-    // SOCKS5 CONNECT only (UDP ASSOCIATE refused, upstream semantics).
     if (tunnel) {
       final tunnelUp = Completer<bool>();
       _tunnelUp = tunnelUp;
@@ -2362,10 +2423,6 @@ class PlatformEngineAdapter implements EngineAdapter {
           'tcpOnly': true,
           'appTunnelMode': config.appTunnelMode.name,
           'appTunnelApps': config.appTunnelApps.toList(growable: false),
-          // The Go SOCKS server reads its handshake strictly sequentially
-          // (io.ReadFull), so zeptun's pipelined greeting+request is safe
-          // — verified by the engine lifecycle tests (no goptlib-style
-          // buffered-byte rejection here).
           'socksStrict': false,
         });
       } on PlatformException catch (e) {
@@ -2379,74 +2436,63 @@ class PlatformEngineAdapter implements EngineAdapter {
           await _hardCleanup();
           fail(
             'platformBridgeMissing',
-            'the aethone/engine platform channel is not available in this '
-            'build',
+            'the aethone/engine platform channel is not available in this build',
           );
         }
         return false;
       }
       if (_stale(gen)) return false;
-      final up = await tunnelUp.future.timeout(_tunnelUpWaitBudget,
-          onTimeout: () => false);
+      final up = await tunnelUp.future.timeout(
+        _tunnelUpWaitBudget,
+        onTimeout: () => false,
+      );
       _tunnelUp = null;
       _tunnelAlive = up;
       if (!up) {
         if (_stale(gen)) return false;
         await _hardCleanup();
-        fail(
-          'tunnelStartFailed',
-          _tunnelDownReason ?? 'zeptun did not come up',
-        );
+        fail('tunnelStartFailed', _tunnelDownReason ?? 'zeptun did not come up');
         return false;
-      }
-      if (_stale(gen)) return false;
-    } else {
-      // Proxy mode: hold the process while the session lives (the aether
-      // walk's CoreHoldService precedent).
-      try {
-        await _channel.invokeMethod<void>(
-          'startCoreHold',
-          {'port': _activePort},
-        );
-      } on PlatformException {
-        // hold failed — proxy still works foregrounded
-      } on MissingPluginException {
-        // no platform (tests)
       }
       if (_stale(gen)) return false;
     }
 
-    // --- 3b. The WARP carrier leg (the firefox-over-warp decree,
-    // mirroring the psiphon/tor chain families): the in-process aether
-    // core boots FIRST; the engine's whole conversation — the control
-    // plane (FxA / Guardian / RemoteSettings, its uTLS Firefox
-    // ClientHello intact) AND the h2 MASQUE data plane — then rides
-    // the core's SOCKS listener on 127.0.0.1:1819 (the engine's 1.4.0
-    // apiProxy + upstreamProxy seams). The exit country stays the
-    // FIREFOX pick (the engine's own country config); the warp leg
-    // itself is never pinned.
-    final leg = AetherArguments.legProtocolId(
-      config.coreSettings.firefoxLegProtocol,
-    );
-    final warpPort = TransportModes.masque.socksEndpoint.port + portOffset;
+    // --- 1b. The session (Keystore vault; Phase-1 source: the controlled
+    // injection). No session = honest failure; NEVER fake credentials.
+    // Checked BEFORE the TUN/carrier so a signed-out user fails fast.
+    final vault = await _firefoxVault();
+    final auth = await vault.load();
+    if (_stale(gen)) return false;
+    if (auth == null || auth.accessToken.isEmpty) {
+      fail(
+        'firefoxNoSession',
+        'no Firefox VPN session is stored — sign in from Settings → '
+        'Firefox VPN first',
+      );
+      return false;
+    }
+
+    // --- 2. Start the Aether outer carrier using the protocol selected in
+    // Firefox settings. Its settings are independent of the Firefox VPN
+    // engine's own H2/H3 transport choice.
+    _emitState(VpnState.connecting);
     // v4.21 bind-race guard, the aether walk's own: a freed-but-still-
     // aborting previous core held the listener for a few scheduler
     // turns. A no-op when the port is already free.
     await _waitForPortFree(gen, warpPort);
     if (_stale(gen)) return false;
-
     clearAetherEnvironment();
+    _coreFailureDuringStart = null;
     final core = _core =
         _coreFactory == null ? AetherCore.open() : _coreFactory();
     final paths = await _paths();
-    // v4.26 ordering: no await between the staleness check and the job
-    // spawn (a cancel landing in between would orphan the core).
     if (_stale(gen)) return false;
+    final outerProtocol =
+        AetherArguments.legProtocolId(config.coreSettings.firefoxLegProtocol);
     _jobId = core.coreStart(
       AetherArguments.build(
-        protocol: leg,
-        chain: null,
-        countryCode: null, // the carrier is never country-pinned
+        protocol: outerProtocol,
+        countryCode: null,
         scanSpeed: config.scanSpeed,
         core: config.coreSettings,
         filesDir: paths.filesDir,
@@ -2458,10 +2504,37 @@ class PlatformEngineAdapter implements EngineAdapter {
     await _recordCoreJob();
     if (_stale(gen)) return false;
 
+    // Keep the app process alive in proxy mode. In tunnel mode the
+    // AethoneVpnService already owns the foreground lifetime.
+    if (!tunnel) {
+      try {
+        await _channel.invokeMethod<void>(
+          'startCoreHold',
+          {'port': _activePort},
+        );
+      } on PlatformException {
+        // Proxy mode still works while the app is foregrounded.
+      } on MissingPluginException {
+        // Test / unsupported platform.
+      }
+      if (_stale(gen)) return false;
+    }
+
+    // --- 3b. The WARP carrier leg (the firefox-over-warp decree,
+    // mirroring the psiphon/tor chain families): the in-process aether
+    // core's whole job is to carry the engine's conversation — the
+    // control plane (FxA / Guardian / RemoteSettings, its uTLS Firefox
+    // ClientHello intact) AND the MASQUE data plane — through the core's
+    // SOCKS listener on 127.0.0.1:1819 (the engine's upstreamSocks
+    // seam: TCP CONNECT for h2, UDP ASSOCIATE for h3). The exit country
+    // stays the FIREFOX pick (the engine's own country config); the
+    // warp leg itself is never pinned.
+    //
     // The carrier must really carry traffic BEFORE the engine dials
     // through it — the honest sequencing («ابتدا به وارپ متصل بشه و بعد
     // فایرفاکس»), the same listener wait + end-to-end probe the aether
-    // walk runs for its own legs.
+    // walk runs for its own legs. A listening port alone is not proof of
+    // an active carrier; no direct fallback is permitted.
     final warpListenerUp = await _waitForListenerFollowingCore(
       gen,
       warpPort,
@@ -2485,7 +2558,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     final warpProbe = await _probeUntilReadyFollowingCore(
       gen,
       warpPort,
-      budget: readyBudget(leg, core: config.coreSettings),
+      budget: readyBudget(outerProtocol, core: config.coreSettings),
     );
     if (_stale(gen)) return false;
     if (warpProbe == null) {
@@ -2503,16 +2576,19 @@ class PlatformEngineAdapter implements EngineAdapter {
       return false;
     }
     _debugLog('warp carrier leg up on 127.0.0.1:$warpPort '
-        '(leg: ${leg.name}, ping ${warpProbe.pingMs} ms)');
+        '(leg: ${outerProtocol.name}, ping ${warpProbe.pingMs} ms)');
 
-    // --- 4. Spawn the engine child. Tokens travel ONLY on the stdin
-    // pipe; argv is bare; environment is empty by design.
+    // --- 4. Start the Firefox tunnel engine. Tokens travel ONLY on the
+    // stdin pipe; argv is bare; environment is empty by design. All
+    // control/session dials and its Fastly MASQUE data plane use the
+    // Aether SOCKS carrier (h2 via CONNECT, h3 via UDP ASSOCIATE). The
+    // child fails closed if this carrier cannot be reached — it never
+    // retries the same endpoint directly.
     final engine = FirefoxVpnEngine(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
       onLog: _debugLog,
     );
     _firefox = engine;
-    final carrierUrl = 'socks5://127.0.0.1:$warpPort';
     final outcome = engine.start(
       FirefoxEngineConfig(
         socksListen: '127.0.0.1:$_activePort',
@@ -2520,30 +2596,39 @@ class PlatformEngineAdapter implements EngineAdapter {
         // PHASE-2: the UI's location pick ('auto' → the engine's AUTO =
         // the REC anycast; else the picked ISO country).
         country: _firefoxCountryForEngine(config),
-        // 1.4.0-warp: h2, full stop — the data plane rides the TCP
-        // SOCKS carrier and h3 (QUIC/UDP) cannot; the engine's contract
-        // refuses that pair, so the h3 pick is never sent.
-        transport: 'h2',
-        // The WARP carrier seams — the whole point of the mode.
-        apiProxy: carrierUrl,
-        upstreamProxy: carrierUrl,
+        // The h2/h3 pick (the Aether carrier carries both: h2 via TCP
+        // CONNECT, h3 via UDP ASSOCIATE).
+        transport: _firefoxTransportForEngine(config),
+        // The WARP carrier seam — the whole point of the mode: the
+        // engine's whole conversation rides the in-process aether core.
+        upstreamSocks: 'socks5://127.0.0.1:$warpPort',
+        // The process-local resolver policy for the engine's own
+        // pre-carrier lookups (bootstrap of the DoH endpoint itself).
+        dns: config.firefoxDnsConfig,
       ),
       onAuthRefreshed: (refreshed) {
-        // The private channel: straight back into the Keystore vault,
-        // never logged (the engine itself already redacts).
         unawaited(vault.save(refreshed));
+      },
+      onProcessStarted: (pid) {
+        // The Kotlin companion outlives a Flutter isolate. If the isolate
+        // is recreated, disconnect can still terminate this exact child.
+        unawaited(
+          _channel.invokeMethod<void>('setFirefoxPid', {
+            'pid': pid,
+            'binaryPath': '${paths.nativeLibraryDir}/libfirefoxvpn.so',
+          }).catchError((Object error) {
+            _debugLog('firefox pid registration failed: $error');
+          }),
+        );
       },
     );
 
-    // Engine death during the walk fails it with the ENGINE's own words.
     unawaited(outcome.then((o) {
       if (!_stale(gen) && o.state == FirefoxEngineState.failed) {
         _debugLog('firefox engine died during start: ${o.failCode}');
       }
     }));
 
-    // --- 5. Wait for the engine's own socksReady event (the listener is
-    // REALLY bound — process spawn alone proves nothing).
     final ready = await engine.waitForSocksReady(_firefoxStartBudget);
     if (_stale(gen)) return false;
     if (!ready) {
@@ -2552,25 +2637,15 @@ class PlatformEngineAdapter implements EngineAdapter {
           .timeout(const Duration(seconds: 2), onTimeout: () => null);
       await _hardCleanup();
       if (o != null && o.state == FirefoxEngineState.failed) {
-        // Quota exhaustion is its OWN error so the user can pick another
-        // engine (the owner decree; never a silent fallback).
         if (o.failCode == FirefoxEngineFailure.quotaExhausted) {
           _debugLog(FirefoxErrors.redactLine(
               'firefox engine failed (quotaExhausted): ${o.message}'));
           fail(
             'firefoxQuotaExhausted',
-            'this Firefox account\'s monthly quota is exhausted — pick '
-                'another communication engine',
+            'this Firefox account\'s monthly quota is exhausted — pick another communication engine',
           );
           return false;
         }
-        // PHASE B (Part 2) — the classified failure seam: the engine's
-        // raw Go chain goes to the diagnostics log ONLY (redacted); the
-        // store/UI receive the transport class code + the static
-        // diagnostic (never the chain, never host/port, never tokens).
-        // Legacy engines (the exchangeFailed umbrella) classify to the
-        // token-exchange class; v1.2.0-phaseb engines emit the granular
-        // codes with the real httpStatus/retryable.
         final failure = FirefoxErrors.classify(
           o.failCode,
           httpStatus: o.httpStatus,
@@ -2585,37 +2660,36 @@ class PlatformEngineAdapter implements EngineAdapter {
       } else {
         fail(
           'firefoxEngineStartTimeout',
-          'the Firefox VPN engine did not report its SOCKS listener '
-          'within $_firefoxStartBudget',
+          'the Firefox VPN engine did not report its SOCKS listener within $_firefoxStartBudget',
         );
       }
       return false;
     }
     engine.markProbing();
 
-    // --- 6. The end-to-end probe — the ONLY gate to Connected (the
-    // same TunnelProbe as the aether family; exit IP verified THROUGH
-    // the tunnel). Retries within the budget while following the engine.
+    // --- 5. Firefox's own end-to-end path must pass through its 1822
+    // listener. The Aether 1819 check above is separate and cannot mark
+    // Firefox Connected by itself.
     final deadline = DateTime.now().add(readyBudget(ProtocolId.firefoxOnly));
     TunnelProbeResult? probe;
     String? lastErr;
     while (DateTime.now().isBefore(deadline)) {
       if (_stale(gen)) return false;
-      // The engine dying fails the walk immediately with its own reason.
       if (engine.state == FirefoxEngineState.failed) {
-        final o = await outcome.timeout(const Duration(seconds: 2),
-            onTimeout: () => const FirefoxEngineOutcome(
-                  state: FirefoxEngineState.failed,
-                  exitCode: -1,
-                  failCode: 'unknown',
-                  message: 'the engine exited during the probe',
-                ));
+        final o = await outcome.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => const FirefoxEngineOutcome(
+            state: FirefoxEngineState.failed,
+            exitCode: -1,
+            failCode: 'unknown',
+            message: 'the engine exited during the probe',
+          ),
+        );
         await _hardCleanup();
         if (o.failCode == FirefoxEngineFailure.quotaExhausted) {
           fail(
             'firefoxQuotaExhausted',
-            'this Firefox account\'s monthly quota is exhausted '
-            '(${o.message}) — pick another communication engine',
+            'this Firefox account\'s monthly quota is exhausted',
           );
         } else {
           fail('firefoxEngineFailed', o.message);
@@ -2652,17 +2726,12 @@ class PlatformEngineAdapter implements EngineAdapter {
       return false;
     }
 
-    // --- 7. Connected: real stats only (the probe's ping/exit-country
-    // came THROUGH the tunnel; the engine's exitVerified event cross-
-    // checks it on the event stream).
     engine.markConnected();
     _emit(statsEvent(probe));
     _emitState(VpnState.connected);
     _exitResolveTries = 0;
     _degradedTicks = 0;
 
-    // The engine dying while connected surfaces as a health failure (the
-    // store's reconnect logic owns the recovery; no fake Connected).
     unawaited(outcome.then((o) {
       if (o.state == FirefoxEngineState.failed && !_disconnecting) {
         _debugLog(
@@ -2671,9 +2740,6 @@ class PlatformEngineAdapter implements EngineAdapter {
         _emit(const EngineHealthProbeFailed());
       }
     }));
-
-    // --- 8. Steady state: the SAME 5 s ticker (its probe is port-based;
-    // with no aether job id the core-liveness step is skipped by design).
     _startTicker(gen);
     return true;
   }
@@ -2685,6 +2751,24 @@ class PlatformEngineAdapter implements EngineAdapter {
     _firefox = null;
     if (firefox != null) {
       await firefox.stop();
+      try {
+        await _channel.invokeMethod<void>('clearFirefoxPid');
+      } on PlatformException {
+        // The child has already been reaped by its owning Process handle.
+      } on MissingPluginException {
+        // Pure-Dart test host.
+      }
+    } else {
+      // A Flutter-engine recreation loses the Dart Process handle while
+      // the child can still be alive in the same Android app process.
+      // MainActivity validates its exact executable path before SIGTERM.
+      try {
+        await _channel.invokeMethod<void>('stopFirefoxProcess');
+      } on PlatformException {
+        // Process may already have exited.
+      } on MissingPluginException {
+        // Pure-Dart test host.
+      }
     }
     _ticker?.cancel();
     _ticker = null;

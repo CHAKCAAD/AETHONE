@@ -4,7 +4,12 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import android.system.Os
+import android.system.OsConstants
 import android.util.Log
+import androidx.core.content.ContextCompat
+import androidx.webkit.ProxyConfig
+import androidx.webkit.ProxyController
+import androidx.webkit.WebViewFeature
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -80,6 +85,21 @@ class MainActivity : FlutterActivity() {
         /// disconnect actually cancels the core.
         @Volatile
         private var coreJobId: Int? = null
+
+        /// The Firefox Go child PID survives a Flutter-engine recreation.
+        /// The executable path is retained too so a reused PID is never
+        /// signalled unless /proc/<pid>/cmdline still names our native binary.
+        @Volatile
+        private var firefoxEnginePid: Int? = null
+
+        @Volatile
+        private var firefoxEngineBinary: String? = null
+
+        /// AndroidX ProxyController is process-wide for this app's WebViews.
+        /// Remember activation across Activity recreation so onDestroy can
+        /// always remove an override left by a dismissed login screen.
+        @Volatile
+        private var firefoxWebViewProxyActive = false
     }
 
     private var pendingPermissionResult: MethodChannel.Result? = null
@@ -103,6 +123,7 @@ class MainActivity : FlutterActivity() {
     ///    on its next chunk — the capture never grows back from the old
     ///    one.
     override fun onDestroy() {
+        clearFirefoxWebViewProxyOnDestroy()
         if (EngineBridge.channel != null) {
             EngineBridge.channel = null
         }
@@ -292,6 +313,8 @@ class MainActivity : FlutterActivity() {
                         result.error("firefoxVault", t.message, null)
                     }
                 }
+                "setFirefoxWebViewProxy" -> setFirefoxWebViewProxy(call, result)
+                "clearFirefoxWebViewProxy" -> clearFirefoxWebViewProxy(result)
                 "prepareVpn" -> prepareVpn(result)
                 "startVpn" -> {
                     val port = call.argument<Int>("port") ?: 1819
@@ -363,6 +386,51 @@ class MainActivity : FlutterActivity() {
                     coreJobId = null
                     result.success(null)
                 }
+                // Firefox child ownership survives Flutter-engine recreation.
+                // The binary path is checked before SIGTERM to guard against PID reuse.
+                "setFirefoxPid" -> {
+                    val pid = call.argument<Int>("pid") ?: 0
+                    val binary = call.argument<String>("binaryPath") ?: ""
+                    val expected = File(applicationInfo.nativeLibraryDir, "libfirefoxvpn.so").absolutePath
+                    if (pid <= 1 || binary != expected) {
+                        result.error("firefoxPidInvalid", "Firefox child identity is invalid", null)
+                    } else {
+                        firefoxEnginePid = pid
+                        firefoxEngineBinary = binary
+                        result.success(null)
+                    }
+                }
+                "clearFirefoxPid" -> {
+                    firefoxEnginePid = null
+                    firefoxEngineBinary = null
+                    result.success(null)
+                }
+                "stopFirefoxProcess" -> {
+                    val pid = firefoxEnginePid
+                    val binary = firefoxEngineBinary
+                    firefoxEnginePid = null
+                    firefoxEngineBinary = null
+                    if (pid != null && binary != null) {
+                        val pidUid = runCatching {
+                            File("/proc/$pid/status").readLines()
+                                .firstOrNull { it.startsWith("Uid:") }
+                                ?.substringAfter(':')
+                                ?.trim()
+                                ?.split(Regex("\\s+"))
+                                ?.firstOrNull()
+                                ?.toIntOrNull()
+                        }.getOrNull() ?: -1
+                        val command = runCatching {
+                            File("/proc/$pid/cmdline").readBytes()
+                                .toString(Charsets.UTF_8)
+                                .substringBefore(0.toChar())
+                        }.getOrDefault("")
+                        if (pidUid == applicationInfo.uid && command == binary) {
+                            runCatching { Os.kill(pid, OsConstants.SIGTERM) }
+                        }
+                    }
+                    result.success(null)
+                }
                 "vpnStatus" -> result.success(AethoneVpnService.status())
                 // v4.41 (round 17, item 4) — the launchable-app list for
                 // the per-app tunneling picker (label + package, the app
@@ -404,6 +472,95 @@ class MainActivity : FlutterActivity() {
         // services run without it too — the notification is simply hidden.
         if (Build.VERSION.SDK_INT >= 33) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
+    }
+
+
+    /// Installs an app-WebView-only proxy override. AndroidX documents this
+    /// override as applying to every WebView in the app (not native sockets
+    /// or other apps), so the Dart login screen keeps it active only for the
+    /// lifetime of the Firefox sign-in page and awaits this callback before
+    /// its first loadRequest.
+    private fun setFirefoxWebViewProxy(
+        call: io.flutter.plugin.common.MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
+            result.error(
+                "webViewProxyUnsupported",
+                "This Android System WebView does not support PROXY_OVERRIDE",
+                null,
+            )
+            return
+        }
+        val host = call.argument<String>("host") ?: ""
+        val port = call.argument<Int>("port") ?: 0
+        if (host != "127.0.0.1" || port !in 1..65535) {
+            result.error("webViewProxyInvalid", "Only a valid IPv4 loopback proxy is accepted", null)
+            return
+        }
+
+        try {
+            val config = ProxyConfig.Builder()
+                .addProxyRule("$host:$port")
+                // Do not let WebView implicitly bypass localhost/link-local
+                // targets; the loopback Go proxy blocks those destinations.
+                .removeImplicitRules()
+                .build()
+            // Mark before scheduling the asynchronous application so an
+            // Activity teardown racing this callback still clears the proxy.
+            firefoxWebViewProxyActive = true
+            ProxyController.getInstance().setProxyOverride(
+                config,
+                ContextCompat.getMainExecutor(this),
+            ) {
+                result.success(null)
+            }
+        } catch (t: Throwable) {
+            firefoxWebViewProxyActive = false
+            result.error("webViewProxySetFailed", t.message, null)
+        }
+    }
+
+    /// Clears the process-scoped WebView override and waits for AndroidX's
+    /// callback before the Dart side stops the loopback CONNECT process.
+    private fun clearFirefoxWebViewProxy(result: MethodChannel.Result) {
+        if (!firefoxWebViewProxyActive) {
+            result.success(null)
+            return
+        }
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
+            firefoxWebViewProxyActive = false
+            result.success(null)
+            return
+        }
+        try {
+            ProxyController.getInstance().clearProxyOverride(
+                ContextCompat.getMainExecutor(this),
+            ) {
+                firefoxWebViewProxyActive = false
+                result.success(null)
+            }
+        } catch (t: Throwable) {
+            result.error("webViewProxyClearFailed", t.message, null)
+        }
+    }
+
+    /// Last-resort teardown: normally the Flutter page has already awaited
+    /// clearFirefoxWebViewProxy, but a real Activity finish must not leave a
+    /// stale process-wide WebView proxy behind.
+    private fun clearFirefoxWebViewProxyOnDestroy() {
+        if (!firefoxWebViewProxyActive ||
+            !WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)
+        ) {
+            return
+        }
+        runCatching {
+            ProxyController.getInstance().clearProxyOverride(
+                ContextCompat.getMainExecutor(this),
+            ) {
+                firefoxWebViewProxyActive = false
+            }
         }
     }
 

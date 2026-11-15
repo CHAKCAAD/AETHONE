@@ -36,15 +36,23 @@ const LoginConfigVersion = 1
 //
 //      classes + optional httpStatus / retryable) and the OAuth pair
 //      guard. Additive only; the 1.1.0 field names stay valid forever.
-// 1.4.0 — the WARP carrier block: the OPTIONAL `apiProxy` and
+// 1.4.0 — the WARP carrier block: socks5:// carrier URLs on the tunnel
 //
-//      `upstreamProxy` socks5:// URLs on the tunnel config line —
-//      "Firefox over Warp" (the control plane rides the carrier with
-//      the uTLS Firefox ClientHello kept; the h2 data plane dials
-//      through it; h3 is refused over a carrier). A host that sends
-//      neither keeps the exact 1.2.0 direct behavior. The --login
-//      role is unchanged (its exchange stays direct).
-const EngineVersion = "1.4.0-warp"
+//      config line — "Firefox over Warp" (the control plane rides the
+//      carrier with the uTLS Firefox ClientHello kept; the data plane
+//      dials through it).
+// 1.5.0 — the guardian-line merge (2026-11-15, the owner's round 2):
+//
+//      the single `upstreamSocks` seam replaces 1.4.0's apiProxy +
+//      upstreamProxy pair (one loopback-only socks5:// URL routes BOTH
+//      planes — TCP CONNECT for h2 AND UDP ASSOCIATE for h3, so the
+//      transport pick is free again); the process-local `dns` block
+//      (system | DoH) on the tunnel and login config lines; the
+//      `--webview-proxy` role (the DNS-aware CONNECT proxy for the sign-in
+//      WebView — the login-page fix); and the quota events now carry
+//      `quotaMax` beside quotaLeft/quotaReset. A host that sends none of
+//      the new fields keeps the exact 1.2.0 direct behavior.
+const EngineVersion = "1.5.0"
 
 // Event names (mirrored by FirefoxEngineEvents on the Dart side).
 const (
@@ -107,11 +115,10 @@ const (
         detailConfigNotJSON         = "configNotJSON"
         detailUpstreamOverrideBad   = "upstreamOverrideInvalid"
         detailMaxConnsNegative      = "maxConnsNegative"
-        // 1.4.0-warp — the WARP-carrier config details (badConfig
-        // family; static English, never secrets).
-        detailApiProxyInvalid               = "apiProxyInvalid"
-        detailUpstreamProxyInvalid          = "upstreamProxyInvalid"
-        detailTransportUnsupportedOverProxy = "transportUnsupportedOverProxy"
+        // 1.5.0 — the merged-carrier config details (badConfig family;
+        // static English, never secrets).
+        detailUpstreamSocksInvalid = "upstreamSocksInvalid"
+        detailDNSConfigInvalid     = "dnsConfigInvalid"
 )
 
 // Event is one stdout JSON line. Only authRefreshed and loginCompleted
@@ -155,6 +162,7 @@ type Event struct {
 
         // passAcquired / renewed / quotaExhausted
         PassExpiresAt string `json:"passExpiresAt,omitempty"`
+        QuotaMax      string `json:"quotaMax,omitempty"`
         QuotaLeft     string `json:"quotaLeft,omitempty"`
         QuotaReset    string `json:"quotaReset,omitempty"`
 

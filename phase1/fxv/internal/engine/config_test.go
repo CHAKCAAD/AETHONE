@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"errors"
 	"strings"
 	"testing"
 )
@@ -155,6 +154,31 @@ func TestUpstreamOverrideInvalid(t *testing.T) {
 	}
 }
 
+func TestUpstreamSocksLoopbackAccepted(t *testing.T) {
+	c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","upstreamSocks":"socks5://127.0.0.1:1819","auth":{"accessToken":"a"}}`)
+	v, err := c.Validate()
+	if err != nil {
+		t.Fatalf("loopback SOCKS upstream must pass: %v", err)
+	}
+	if v.UpstreamSocks != "socks5://127.0.0.1:1819" {
+		t.Fatalf("upstream SOCKS = %q", v.UpstreamSocks)
+	}
+}
+
+func TestUpstreamSocksRefusesNonLoopbackAndNonSocks(t *testing.T) {
+	for _, value := range []string{
+		"socks5://8.8.8.8:1080",
+		"http://127.0.0.1:1819",
+		"socks5://127.0.0.1",
+		"socks5://user:pass@127.0.0.1:1819",
+	} {
+		c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","upstreamSocks":"`+value+`","auth":{"accessToken":"a"}}`)
+		if _, err := c.Validate(); err == nil {
+			t.Fatalf("invalid upstream SOCKS %q must be refused", value)
+		}
+	}
+}
+
 func TestConfigLineBound(t *testing.T) {
 	// A config line beyond 1 MiB must fail (never an unbounded read).
 	big := strings.Repeat("a", maxConfigLine+10)
@@ -163,96 +187,14 @@ func TestConfigLineBound(t *testing.T) {
 	}
 }
 
-// ---- 1.4.0-warp: the WARP-carrier config gates ----------------------------
+func TestConfigDNSDefaultAndValidation(t *testing.T) {
+	c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"a"}}`)
+	v, err := c.Validate()
+	if err != nil { t.Fatalf("default DNS config must remain compatible: %v", err) }
+	if v.DNS.Mode != "system" { t.Fatalf("DNS default = %q, want system", v.DNS.Mode) }
 
-// validLine builds one minimal valid config JSON with the given
-// carrier overrides (h2 so the transport/proxy pair never conflicts).
-func validLine(api, upstream string) string {
-	return `{"version":1,"socksListen":"127.0.0.1:1822","transport":"h2",` +
-		`"apiProxy":"` + api + `","upstreamProxy":"` + upstream + `",` +
-		`"auth":{"accessToken":"x"}}`
-}
-
-func TestCarrierURLsAccepted(t *testing.T) {
-	for _, raw := range []string{
-		`{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"x"},"apiProxy":"socks5://127.0.0.1:1819"}`,
-		validLine("socks5://127.0.0.1:1819", ""),
-		validLine("", "socks5h://127.0.0.1:1819"),
-		validLine("socks5://127.0.0.1:1819", "socks5://127.0.0.1:1819"),
-	} {
-		cfg, err := ReadConfigLine(strings.NewReader(raw))
-		if err != nil {
-			t.Fatalf("ReadConfigLine(%s): %v", raw, err)
-		}
-		if _, err := cfg.Validate(); err != nil {
-			t.Errorf("Validate(%s) = %v, want ok", raw, err)
-		}
-	}
-}
-
-func TestApiProxyInvalid(t *testing.T) {
-	for _, api := range []string{
-		"http://127.0.0.1:1819",       // wrong scheme
-		"socks5://127.0.0.1",          // no port
-		"socks5://127.0.0.1:1819/p",   // path
-		"socks5://127.0.0.1:1819?x=1", // query
-	} {
-		cfg, err := ReadConfigLine(strings.NewReader(validLine(api, "")))
-		if err != nil {
-			t.Fatalf("ReadConfigLine: %v", err)
-		}
-		_, err = cfg.Validate()
-		var cfgErr *ConfigError
-		if !errors.As(err, &cfgErr) || cfgErr.DetailCode() != "apiProxyInvalid" {
-			t.Errorf("Validate(apiProxy=%q) = %v, want apiProxyInvalid", api, err)
-		}
-	}
-}
-
-func TestUpstreamProxyInvalid(t *testing.T) {
-	for _, up := range []string{
-		"https://127.0.0.1:1819",
-		"socks5://127.0.0.1",
-		"127.0.0.1:1819",
-	} {
-		cfg, err := ReadConfigLine(strings.NewReader(validLine("", up)))
-		if err != nil {
-			t.Fatalf("ReadConfigLine: %v", err)
-		}
-		_, err = cfg.Validate()
-		var cfgErr *ConfigError
-		if !errors.As(err, &cfgErr) || cfgErr.DetailCode() != "upstreamProxyInvalid" {
-			t.Errorf("Validate(upstreamProxy=%q) = %v, want upstreamProxyInvalid", up, err)
-		}
-	}
-}
-
-// h3 is QUIC/UDP; the SOCKS5 CONNECT carrier is TCP-only — the pair is
-// refused, not silently coerced.
-func TestH3OverUpstreamProxyRefused(t *testing.T) {
-	raw := `{"version":1,"socksListen":"127.0.0.1:1822","transport":"h3",` +
-		`"upstreamProxy":"socks5://127.0.0.1:1819","auth":{"accessToken":"x"}}`
-	cfg, err := ReadConfigLine(strings.NewReader(raw))
-	if err != nil {
-		t.Fatalf("ReadConfigLine: %v", err)
-	}
-	_, err = cfg.Validate()
-	var cfgErr *ConfigError
-	if !errors.As(err, &cfgErr) || cfgErr.DetailCode() != "transportUnsupportedOverProxy" {
-		t.Errorf("Validate(h3+upstreamProxy) = %v, want transportUnsupportedOverProxy", err)
-	}
-}
-
-// apiProxy alone (control-plane-only routing) leaves h3 legal — the
-// data plane is the UDP-constrained seam, not the control plane.
-func TestH3WithApiProxyOnlyAllowed(t *testing.T) {
-	raw := `{"version":1,"socksListen":"127.0.0.1:1822","transport":"h3",` +
-		`"apiProxy":"socks5://127.0.0.1:1819","auth":{"accessToken":"x"}}`
-	cfg, err := ReadConfigLine(strings.NewReader(raw))
-	if err != nil {
-		t.Fatalf("ReadConfigLine: %v", err)
-	}
-	if _, err := cfg.Validate(); err != nil {
-		t.Errorf("Validate(h3+apiProxy) = %v, want ok", err)
+	bad := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","dns":{"mode":"doh","provider":"custom","endpoint":"http://dns.example/dns-query"},"auth":{"accessToken":"a"}}`)
+	if _, err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "dnsConfigInvalid") {
+		t.Fatalf("invalid DoH endpoint must be rejected as dnsConfigInvalid, got %v", err)
 	}
 }

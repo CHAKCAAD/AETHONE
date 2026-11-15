@@ -1,9 +1,6 @@
 # FIREFOX VPN on Android — ABI matrix, build, packaging, paths and ports (Phase 1)
 
-Status: **Phase 1, private branch `phase1/firefox-vpn` only** (engine
-license UNRESOLVED — `fxv/ORIGIN.md`). The Android matrix below is the
-entire Phase 1 deliverable surface: Linux/Windows desktop builds of the
-engine are out of scope.
+Status: **Android Firefox-over-WARP development on `feature/firefox-guardian-psiphon-bootstrap`; device verification outstanding.** The upstream engine license remains unresolved (`fxv/ORIGIN.md`), so this branch is a development/test boundary only: no default-branch promotion, release, or public distribution until the owner resolves licensing. The Android matrix below is the supported device surface; Linux/Windows desktop builds of the engine are out of scope.
 
 ## 1. ABI matrix and toolchain pins
 
