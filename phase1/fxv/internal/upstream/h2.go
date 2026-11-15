@@ -122,14 +122,14 @@ func newH2ProxySession(proxyURL *url.URL, token string, timeout time.Duration, d
 	if proxyURL.Port() == "" {
 		proxyHost = net.JoinHostPort(proxyURL.Hostname(), "443")
 	}
-	ctx := context.Background()
-	cancel := func() {}
+	dialCtx := context.Background()
+	dialCancel := func() {}
 	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, timeout)
+		dialCtx, dialCancel = context.WithTimeout(dialCtx, timeout)
 	}
-	defer cancel()
+	defer dialCancel()
 
-	raw, err := dialer.DialContext(ctx, "tcp", proxyHost)
+	raw, err := dialer.DialContext(dialCtx, "tcp", proxyHost)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func newH2ProxySession(proxyURL *url.URL, token string, timeout time.Duration, d
 		MinVersion: tls.VersionTLS12,
 		NextProtos: []string{"h2"},
 	})
-	if err := proxyTLS.HandshakeContext(ctx); err != nil {
+	if err := proxyTLS.HandshakeContext(dialCtx); err != nil {
 		_ = raw.Close()
 		return nil, err
 	}
