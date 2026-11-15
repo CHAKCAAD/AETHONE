@@ -131,6 +131,7 @@ class FirefoxVpnEngine {
   Future<FirefoxEngineOutcome> start(
     FirefoxEngineConfig config, {
     void Function(FirefoxSessionAuth refreshed)? onAuthRefreshed,
+    void Function(int pid)? onProcessStarted,
     Map<String, String> environment = const {},
   }) async {
     if (isAlive || _state == FirefoxEngineState.starting) {
@@ -148,6 +149,10 @@ class FirefoxVpnEngine {
       includeParentEnvironment: false,
     );
     _process = process;
+    // The Android host keeps the child PID across Flutter-engine recreation.
+    // The native side verifies /proc/<pid>/cmdline before signalling it, so
+    // an unrelated PID reuse is never treated as our Firefox engine.
+    onProcessStarted?.call(process.pid);
     _setState(FirefoxEngineState.processStarted);
 
     _stdoutSub = process.stdout
