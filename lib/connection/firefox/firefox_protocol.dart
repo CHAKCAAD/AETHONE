@@ -49,6 +49,7 @@ class FirefoxEngineConfig {
     this.transport = 'h2',
     this.upstreamOverride = '',
     this.upstreamSocks = '',
+    this.dataPlaneDirect = false,
     this.logLevel = 'normal',
     this.dns = const {'mode': 'system'},
   });
@@ -75,6 +76,14 @@ class FirefoxEngineConfig {
   /// Loopback Aether SOCKS5 carrier; empty keeps legacy direct mode.
   final String upstreamSocks;
 
+  /// 1.6.0 — the DIRECT data plane (the owner's round 4, arman's relay
+  /// posture): with a carrier set, the initial connection stages (the
+  /// control plane — sign-in exchange, RemoteSettings discovery, the
+  /// Guardian pass, the OAuth refresh) still ride the carrier while the
+  /// h2/h3 data session dials the Fastly edge DIRECTLY. Meaningful only
+  /// together with [upstreamSocks] (the engine fails fast otherwise).
+  final bool dataPlaneDirect;
+
   final String logLevel;
 
   /// Process-scoped DNS policy; defaults to Android System DNS.
@@ -88,6 +97,7 @@ class FirefoxEngineConfig {
         'transport': transport,
         if (upstreamOverride.isNotEmpty) 'upstreamOverride': upstreamOverride,
         if (upstreamSocks.isNotEmpty) 'upstreamSocks': upstreamSocks,
+        if (dataPlaneDirect) 'dataPlaneDirect': true,
         'logLevel': logLevel,
         'dns': dns,
         'auth': {

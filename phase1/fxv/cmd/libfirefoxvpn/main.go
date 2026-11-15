@@ -119,10 +119,13 @@ func runTunnel() int {
                 return engine.ExitStartup
         }
 
-        // When Firefox is running over WARP, its control-plane requests
+        // When Firefox runs over WARP, its control-plane requests
         // (RemoteSettings, Guardian and OAuth refresh) must use the same
         // Aether carrier as its Fastly data-plane session. The transport
         // keeps the pinned Firefox uTLS fingerprint and fails closed.
+        // 1.6.0: in BOTH carrier modes the control plane — the initial
+        // connection stages — rides this seam; the mode only picks the
+        // DATA plane's path (dataPlaneCarrier below).
         if cfg.UpstreamSocks != "" {
                 vpnclient.SetControlPlaneTransport(
                         upstream.NewSOCKS5ControlPlaneTransport(cfg.UpstreamSocks),
@@ -219,13 +222,25 @@ func runTunnel() int {
         })
 
         // 3. the initial Guardian pass (same-account recovery inside).
+        // 1.6.0 (the owner's round 4, «مراحل اولیهٔ اتصال از تونل ایتر
+        // بگذره و بعد خود اتصال مستقیم انجام بشه»): the DIRECT mode's
+        // split — the initial stages (discovery, this Guardian pass, the
+        // OAuth refresh in the renewal walk) ride the carrier through the
+        // package-level control-plane seam installed above, while the
+        // h2/h3 data session dials the Fastly edge itself (arman's relay
+        // posture: the relay carries the handshake stages, never the
+        // bulk tunnel).
+        dataSocks := dataPlaneCarrier(cfg)
+        if cfg.UpstreamSocks != "" && dataSocks == "" {
+                log.Infof("direct data plane — the control plane (discovery, guardian, refresh) rides %s", cfg.UpstreamSocks)
+        }
         controller := upstream.NewController(upstream.ControllerConfig{
                 Guardian:      cfg.Guardian,
                 AccessToken:   cfg.Auth.AccessToken,
                 RefreshToken:  cfg.Auth.RefreshToken,
                 Transport:     cfg.Transport,
                 ProxyURL:      proxyURL,
-                UpstreamSocks: cfg.UpstreamSocks,
+                UpstreamSocks: dataSocks,
                 OpenTimeout:   time.Duration(cfg.UpstreamTimeoutMs) * time.Millisecond,
                 OnPassRenewed: func(pass *vpnclient.ProxyPassInfo) {
                         _ = emit.Emit(engine.Event{
@@ -526,6 +541,18 @@ func classifyUpstream(err error, cfg engine.Config) fferr.Classified {
                 class.Message = "the proxy did not negotiate the requested transport"
         }
         return class
+}
+
+// dataPlaneCarrier returns the SOCKS URL the h2/h3 DATA session dials
+// through: the config carrier, or "" when the 1.6.0 direct-data posture
+// (dataPlaneDirect) asks the data plane to dial the Fastly edge itself.
+// The control plane is NOT decided here — it always rides cfg.UpstreamSocks
+// via the package-level transport seam when one is set.
+func dataPlaneCarrier(cfg engine.Config) string {
+        if cfg.DataPlaneDirect {
+                return ""
+        }
+        return cfg.UpstreamSocks
 }
 
 // hostOf / portOf split a host:port override.

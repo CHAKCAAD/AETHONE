@@ -35,6 +35,7 @@ type Config struct {
         Transport          string     `json:"transport"`
         UpstreamOverride   string     `json:"upstreamOverride"`
         UpstreamSocks      string     `json:"upstreamSocks"`
+        DataPlaneDirect    bool       `json:"dataPlaneDirect"`
         UpstreamTimeoutMs  int64      `json:"upstreamTimeoutMs"`
         HandshakeTimeoutMs int64      `json:"handshakeTimeoutMs"`
         IdleTimeoutMs      int64      `json:"idleTimeoutMs"`
@@ -135,6 +136,13 @@ func (c Config) Validate() (Config, error) {
                 if ip == nil || !ip.IsLoopback() || portErr != nil || port < 1 || port > 65535 {
                         return c, &ConfigError{Detail: detailUpstreamSocksInvalid}
                 }
+        }
+        // 1.6.0 — the direct data plane needs its carrier: the flag is only
+        // meaningful with upstreamSocks set (the control plane's ride). A
+        // carrier-less config is already fully direct — sending the flag
+        // anyway is a config bug and fails fast, never a silent no-op.
+        if c.DataPlaneDirect && c.UpstreamSocks == "" {
+                return c, &ConfigError{Detail: detailDataPlaneDirectWithoutCarrier}
         }
         if strings.TrimSpace(c.Auth.AccessToken) == "" {
                 return c, &ConfigError{Detail: detailAuthAccessTokenMiss}

@@ -24,6 +24,8 @@ import (
         "sync"
         "testing"
         "time"
+
+        "aethone/fxv/internal/engine"
 )
 
 var binaryPath string
@@ -121,6 +123,29 @@ func (s *session) waitEvent(t *testing.T, name string, timeout time.Duration) ma
                         }
                 case <-deadline:
                         t.Fatalf("timeout waiting for event %q", name)
+                }
+        }
+}
+
+// waitEventIn waits for the FIRST of the named events (a walk's honest
+// terminal outcome can legitimately take more than one shape — e.g. the
+// live edge's 429 surfaces as quotaExhausted, not failed).
+func (s *session) waitEventIn(t *testing.T, names []string, timeout time.Duration) map[string]any {
+        t.Helper()
+        want := make(map[string]bool, len(names))
+        for _, n := range names {
+                want[n] = true
+        }
+        deadline := time.After(timeout)
+        for {
+                select {
+                case ev := <-s.events:
+                        name, _ := ev["event"].(string)
+                        if want[name] {
+                                return ev
+                        }
+                case <-deadline:
+                        t.Fatalf("timeout waiting for one of %v", names)
                 }
         }
 }
@@ -256,7 +281,7 @@ func TestStartedEventShape(t *testing.T) {
         defer s.kill()
         s.send(`{"version":1,"socksListen":"127.0.0.1:1822","upstreamOverride":"127.0.0.1:1","guardian":"https://127.0.0.1:1","auth":{"accessToken":"x"}}`)
         ev := s.waitEvent(t, "started", 5*time.Second)
-        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "1.5.0") {
+        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "1.6.0") {
                 t.Fatalf("engine version = %v", ev["message"])
         }
         if pid, _ := ev["pid"].(float64); pid <= 0 {
@@ -289,27 +314,74 @@ func TestSelectedEventWireFields(t *testing.T) {
 }
 
 // The real Guardian with an INVALID token: the honest failure carries
-// the sessionRejected class and the REAL HTTP status (401/403).
+// a REAL HTTP status and the classification the fferr table promises
+// FOR THAT STATUS. The live edge answers an invalid bearer with
+// 401/403 most days, but it has also been observed answering 406
+// (the sandbox probe, 2026-11-15) and a non-401/403 4xx/5xx on CI
+// (run 43704068797) — the exact status is the SERVER's to choose; the
+// CONSISTENCY (status → failCode), the real status, the exit code and
+// the no-leak rule are the engine's contract under test here.
 func TestRealGuardianInvalidTokenHonestFailure(t *testing.T) {
         if !networkAvailable() {
                 t.Skip("network egress unavailable — the real Guardian probe cannot run here (honest skip, not a green)")
         }
         s := startEngine(t)
         defer s.kill()
-        s.send(`{"version":1,"socksListen":"127.0.0.1:1822","country":"DE","guardian":"https://vpn.mozilla.org","auth":{"accessToken":"0000000000000000000000000000000000000000000000000000000000000000"}}`)
-        ev := s.waitEvent(t, "failed", 60*time.Second)
-        if code, _ := ev["failCode"].(string); code != "sessionRejected" {
-                t.Fatalf("failCode = %v (want sessionRejected)", ev["failCode"])
+        sendZeroTokenConfig(s)
+        // A rate-limited runner (the edge's 429) surfaces as quotaExhausted,
+        // not failed — an environmental outcome, honestly skipped here.
+        ev := s.waitEventIn(t, []string{"failed", "quotaExhausted"}, 60*time.Second)
+        if name, _ := ev["event"].(string); name == "quotaExhausted" {
+                t.Skip("the live edge rate-limited this runner (429) — the invalid-token contract cannot be probed now (honest skip, not a green)")
         }
-        if status, _ := ev["httpStatus"].(float64); status != 401 && status != 403 {
-                t.Fatalf("httpStatus = %v (want 401/403)", ev["httpStatus"])
+        // A transport-class outcome (the edge never spoke at the HTTP level)
+        // is environmental too — dnsError / networkUnavailable / timeout /
+        // tlsError are honestly skipped, never a green.
+        if code, _ := ev["failCode"].(string); code == "dnsError" || code == "networkUnavailable" ||
+                code == "timeout" || code == "tlsError" {
+                t.Skipf("the live edge was not reachable at the HTTP level (%v) — the invalid-token contract cannot be probed now (honest skip, not a green)", code)
+        }
+        status, _ := ev["httpStatus"].(float64)
+        if status < 400 || status > 599 {
+                t.Fatalf("httpStatus = %v (an HTTP-level failure must surface its real 4xx/5xx status)", ev["httpStatus"])
+        }
+        want := "serverRejection"
+        if status == 401 || status == 403 {
+                want = "sessionRejected"
+        }
+        if code, _ := ev["failCode"].(string); code != want {
+                t.Fatalf("failCode = %v with httpStatus %v (want %s)", ev["failCode"], status, want)
         }
         // the invalid token itself must NEVER appear anywhere on the wire
-        if strings.Contains(fmt.Sprint(ev), "0000000000000000000000000000000000000000000000000000000000000000") {
+        if strings.Contains(fmt.Sprint(ev), invalidTokenZeros) {
                 t.Fatal("the rejected token leaked into the failed event")
         }
         if code := s.waitExit(t, 10*time.Second); code != 1 {
                 t.Fatalf("exit = %d", code)
+        }
+}
+
+// invalidTokenZeros is the all-zero 64-hex stand-in bearer the honest
+// failure tests feed the live Guardian (never a real secret).
+const invalidTokenZeros = "0000000000000000000000000000000000000000000000000000000000000000"
+
+func sendZeroTokenConfig(s *session) {
+        s.send(`{"version":1,"socksListen":"127.0.0.1:1822","country":"DE","guardian":"https://vpn.mozilla.org","auth":{"accessToken":"` + invalidTokenZeros + `"}}`)
+}
+
+// The 1.6.0 seam: the mode decides ONLY the data plane's ride. The
+// control plane is not this function's business — it always rides
+// cfg.UpstreamSocks through the package-level transport seam.
+func TestDataPlaneCarrierSplit(t *testing.T) {
+        carrier := "socks5://127.0.0.1:1819"
+        if got := dataPlaneCarrier(engine.Config{UpstreamSocks: carrier}); got != carrier {
+                t.Fatalf("carried mode: data plane carrier = %q, want %q", got, carrier)
+        }
+        if got := dataPlaneCarrier(engine.Config{UpstreamSocks: carrier, DataPlaneDirect: true}); got != "" {
+                t.Fatalf("direct mode: data plane carrier = %q, want \"\" (the Fastly edge is dialed directly)", got)
+        }
+        if got := dataPlaneCarrier(engine.Config{}); got != "" {
+                t.Fatalf("carrier-less config: data plane carrier = %q, want \"\"", got)
         }
 }
 

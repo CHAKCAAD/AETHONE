@@ -239,3 +239,97 @@ posture — the direct one.
   SHA256SUMS.txt در پوشه download/owner-round-2 ایجنت؛ artifact
   Actions (انقضا ۱۴ روز). NOT TESTED روی دستگاه — پذیرش on-device با
   مالک است.
+
+## 6. Round 4 — the DIRECT mode corrected + the run-124 flake (same day, night)
+
+دستور مالک (این بار صریح دربارهٔ معنای «مستقیم»):
+
+«دقت کن در حالت رله آرمان وی‌پی‌ان کل تونل از رله عبور نمیکنه بلکه
+مراحل اولیه اتصال از رله عبور میکنه. منظور من از ایجاد حالت مستقیم
+همین بود یعنی مراحل اولیه اتصال که باید از روی کد ببینی چه مراحلیه
+از تونل ایتر بگذره و بعد خود اتصال مستقیم انجام بشه.»
+
+Round 3 had read «مستقیم» as arman's *direct* posture (no carrier at
+all). The owner's correction: DIRECT is arman's *relay* posture — the
+initial connection stages ride the Aether/WARP tunnel, then the
+connection itself runs direct. The code walk identified the stages:
+
+* **The initial stages (control plane)** — the sign-in WebView exchange
+  (`--login` / `--webview-proxy`), the RemoteSettings discovery
+  (`FetchServerList`), the Guardian pass (`FetchProxyPass`) and the
+  OAuth refresh (`FxaRefreshToken` — also the renewal walk's recurring
+  legs). These ride the carrier in BOTH modes now.
+* **The connection itself (data plane)** — the single h2/h3 MASQUE
+  session to the selected Fastly edge (`NewH2/H3ProxySession*` in
+  `internal/upstream`). In over-WARP it dials through the carrier's
+  SOCKS (TCP CONNECT / UDP ASSOCIATE); in DIRECT it dials the edge
+  itself (h2 over TCP+TLS, h3 over QUIC; the process-local `dns`
+  policy resolves the edge hostname).
+
+### 6.1 The engine contract 1.6.0 (additive)
+
+* `dataPlaneDirect` (bool, tunnel config): with `upstreamSocks` set it
+  splits the planes — the control-plane transport seam
+  (`SetControlPlaneTransport`) still rides the carrier, while the
+  controller receives NO data-plane SOCKS (`dataPlaneCarrier`). A new
+  Info line records the split on-device («direct data plane — the
+  control plane … rides socks5://127.0.0.1:1819»).
+* Fail-fast: the flag without `upstreamSocks` is a config bug
+  (`dataPlaneDirectWithoutCarrier` — a carrier-less config is already
+  fully direct; never a silent no-op). Absent flag = the exact 1.5.0
+  carried behavior.
+* `EngineVersion` 1.5.0 → **1.6.0** (started/loginStarted events); the
+  two version-prefix tests follow.
+
+### 6.2 The host walk (round-3 reversals)
+
+* The carrier leg (Aether core boot, listener wait, probe, the 1819
+  busy gate) runs in BOTH modes — the initial stages need it either
+  way; only `dataPlaneDirect` differs on the engine config line.
+* The login carrier boots in DIRECT too (round 3 had suppressed it):
+  the sign-in IS an initial stage — a DIRECT-mode user in a blocked
+  region signs in through WARP exactly like an over-WARP user.
+* The Aether leg-protocol picker renders in BOTH modes again (round 3
+  had hidden it in DIRECT — a dead picker was the wrong fix because
+  the carrier is alive in both).
+* The Windows whole-device-tunnel limit STANDS for DIRECT + tunnel
+  (the data plane's own dials would loop through zeptun's TUN).
+* l10n: the DIRECT-mode texts rewritten in all 5 locales to the relay
+  semantics («مراحل اولیهٔ اتصال … از تونل وارپ … بعد خودِ اتصال داده
+  مستقیماً …»), plus `firefoxLegDesc` naming the per-mode split.
+
+### 6.3 The run-124 CI failure (the flake, diagnosed)
+
+Run `43704068797` (commit `c511a71`, docs-only) failed the engine job
+at `go test`: `TestRealGuardianInvalidTokenHonestFailure` —
+`failCode = serverRejection (want sessionRejected)`. The probe evidence
+(sandbox, same day): with the upstream's exact headers the live edge
+answers the all-zero bearer with **401** («{"error":"Unauthorized"}»),
+but the edge has ALSO been observed answering **406** (a wrong client
+signature) and other non-401/403 4xx/5xx depending on the edge node —
+the exact status is the SERVER's to choose. The test was over-specified
+(round-124's failure was environmental, not a code regression — run
+123 passed the same code). Reworked to assert the CONTRACT instead of
+one outcome:
+
+* the `failed` event must carry a REAL 4xx/5xx `httpStatus`;
+* the failCode must be CONSISTENT with that status (401/403 →
+  `sessionRejected`, any other 4xx/5xx → `serverRejection`);
+* the rejected token never leaks; exit 1;
+* environmental outcomes are HONEST SKIPS, never greens: the edge's 429
+  (surfaces as `quotaExhausted`) and the transport classes
+  (dnsError/networkUnavailable/timeout/tlsError — no HTTP answer at
+  all). An HTTP-level failure WITHOUT a status still FAILS the test
+  (the masking hole stays closed).
+
+### 6.4 Verification (this round)
+
+* Go 1.25.0 (the CI pin): `go vet ./...` PASS; `go test ./...` — all
+  8 packages PASS, including the reworked live-edge test (0.28 s, real
+  401 → sessionRejected) and the new 1.6.0 shape tests
+  (`TestDataPlaneDirectRequiresCarrier`,
+  `TestDataPlaneDirectWithCarrierAccepted`, `TestDataPlaneCarrierSplit`).
+* Flutter 3.47.9 (the CI pin): `flutter analyze` — No issues found;
+  `flutter test` — **320 passed, 8 skipped** (the skips are the
+  suite's own honest network/platform guards), including the three
+  reworked config-shape tests.

@@ -198,3 +198,35 @@ func TestConfigDNSDefaultAndValidation(t *testing.T) {
 		t.Fatalf("invalid DoH endpoint must be rejected as dnsConfigInvalid, got %v", err)
 	}
 }
+
+// 1.6.0 — the direct data plane is only meaningful WITH its carrier.
+func TestDataPlaneDirectRequiresCarrier(t *testing.T) {
+	c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","dataPlaneDirect":true,"auth":{"accessToken":"a"}}`)
+	_, err := c.Validate()
+	if err == nil {
+		t.Fatal("dataPlaneDirect without upstreamSocks must be refused (a carrier-less config is already fully direct)")
+	}
+	if !strings.Contains(err.Error(), detailDataPlaneDirectWithoutCarrier) {
+		t.Fatalf("expected %s, got %v", detailDataPlaneDirectWithoutCarrier, err)
+	}
+}
+
+func TestDataPlaneDirectWithCarrierAccepted(t *testing.T) {
+	c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","upstreamSocks":"socks5://127.0.0.1:1819","dataPlaneDirect":true,"auth":{"accessToken":"a"}}`)
+	v, err := c.Validate()
+	if err != nil {
+		t.Fatalf("dataPlaneDirect with a loopback carrier must pass: %v", err)
+	}
+	if !v.DataPlaneDirect {
+		t.Fatal("dataPlaneDirect must survive the parse")
+	}
+	// The flag absent (the 1.5.0 host) keeps the carried data plane.
+	legacy := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","upstreamSocks":"socks5://127.0.0.1:1819","auth":{"accessToken":"a"}}`)
+	lv, err := legacy.Validate()
+	if err != nil {
+		t.Fatalf("the carrier-only 1.5.0 config must stay valid: %v", err)
+	}
+	if lv.DataPlaneDirect {
+		t.Fatal("dataPlaneDirect must default to false")
+	}
+}

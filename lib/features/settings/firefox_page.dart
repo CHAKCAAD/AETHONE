@@ -154,13 +154,12 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
           ),
         ),
 
-        // ---- Section: the carrier mode (v1.5.0, the owner's round 3:
-        // «یک حالت اتصال مستقیم هسته فایرفاکس هم باید اضافه کنی») —
-        // over-WARP (the standing default: the whole engine conversation
-        // rides the in-process Aether core, arman's upstream-proxy
-        // posture with Aether in the relay's seat) or DIRECT (arman's
-        // direct posture: the engine dials out itself — uTLS control
-        // plane, h2/h3 data plane, the DNS policy below). ----
+        // ---- Section: the carrier mode (v1.5.0, the owner's round 3;
+        // semantics corrected in round 4) — over-WARP (the standing
+        // default: the whole engine conversation rides the in-process
+        // Aether core) or DIRECT (arman's relay posture: the initial
+        // connection stages still ride the Aether core's WARP tunnel,
+        // then the data connection dials the Fastly edge itself). ----
         SizedBox(height: 24 * s),
         SubSectionHeading(
           icon: AppAssets.iconSwap1,
@@ -193,8 +192,10 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
 
         // ---- Section: process-scoped Firefox DNS (the resolver for
         // Firefox's separate pre-connect roles — the WebChannel sign-in,
-        // initial discovery and the explicit DNS probe; the DIRECT mode's
-        // own tool). System or DoH. ----
+        // initial discovery and the explicit DNS probe; in the DIRECT
+        // mode it also resolves the Fastly edge for the direct data
+        // plane's dials, since those no longer resolve at the carrier's
+        // remote end). System or DoH. ----
         SizedBox(height: 24 * s),
         SubSectionHeading(
           icon: AppAssets.iconSwap1,
@@ -209,54 +210,53 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
         // «پروتکل فایرفاکس رو به صورت دیفالت اور وارپ کنی … کاربر از
         // تنظیمات فایرفاکس بتونه پروتکل هسته ایتر رو خودش انتخاب کنه»):
         // the same per-family leg pick the tor and psiphon pages carry,
-        // writing CoreSettings.firefoxLegProtocol. The engine's whole
-        // conversation rides the picked leg's WARP tunnel. v1.5.0: the
-        // section renders only in the over-WARP mode — in DIRECT there is
-        // no carrier to configure (the honest hide, never a dead picker).
+        // writing CoreSettings.firefoxLegProtocol. 1.6.0 (round 4):
+        // the section renders in BOTH modes — the initial connection
+        // stages ride the picked leg's WARP tunnel in over-WARP and
+        // DIRECT alike; only the data plane's path differs.
         // ----
-        if (core.firefoxCarrierMode != FirefoxCarrierMode.direct) ...[
-          SizedBox(height: 24 * s),
-          SubSectionHeading(
-            icon: AppAssets.iconSwap1,
-            title: strings.secFirefoxCarrier,
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSwap1,
+          title: strings.secFirefoxCarrier,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingLabel(strings.firefoxCarrierLabel),
+              const SizedBox(height: 10),
+              SettingPills<AetherLegProtocol>(
+                keyId: 'firefox-aether-leg',
+                options: [
+                  // The same order + labels as the protocol page's own
+                  // tiles (strings.aetherLegName reuses their names).
+                  (AetherLegProtocol.wireguard,
+                      strings.aetherLegName(AetherLegProtocol.wireguard)),
+                  (AetherLegProtocol.masque,
+                      strings.aetherLegName(AetherLegProtocol.masque)),
+                  (AetherLegProtocol.gool,
+                      strings.aetherLegName(AetherLegProtocol.gool)),
+                  (AetherLegProtocol.goolClassic,
+                      strings.aetherLegName(AetherLegProtocol.goolClassic)),
+                  (AetherLegProtocol.mim,
+                      strings.aetherLegName(AetherLegProtocol.mim)),
+                ],
+                selected: core.firefoxLegProtocol,
+                onSelect: (v) =>
+                    store.updateCore((c) => c.firefoxLegProtocol = v),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.firefoxLegDesc),
+            ],
           ),
-          const SubSectionGap.headingToCard(),
-          SubSectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SettingLabel(strings.firefoxCarrierLabel),
-                const SizedBox(height: 10),
-                SettingPills<AetherLegProtocol>(
-                  keyId: 'firefox-aether-leg',
-                  options: [
-                    // The same order + labels as the protocol page's own
-                    // tiles (strings.aetherLegName reuses their names).
-                    (AetherLegProtocol.wireguard,
-                        strings.aetherLegName(AetherLegProtocol.wireguard)),
-                    (AetherLegProtocol.masque,
-                        strings.aetherLegName(AetherLegProtocol.masque)),
-                    (AetherLegProtocol.gool,
-                        strings.aetherLegName(AetherLegProtocol.gool)),
-                    (AetherLegProtocol.goolClassic,
-                        strings.aetherLegName(AetherLegProtocol.goolClassic)),
-                    (AetherLegProtocol.mim,
-                        strings.aetherLegName(AetherLegProtocol.mim)),
-                  ],
-                  selected: core.firefoxLegProtocol,
-                  onSelect: (v) =>
-                      store.updateCore((c) => c.firefoxLegProtocol = v),
-                ),
-                const SubSectionDivider(),
-                SettingInfoText(strings.firefoxLegDesc),
-              ],
-            ),
-          ),
-        ],
+        ),
 
         // ---- Section: the data-plane transport (h2 via the carrier's
         // TCP CONNECT, h3 via its UDP ASSOCIATE — both ride the WARP
-        // carrier) ----
+        // carrier in over-WARP; in DIRECT both dial the Fastly edge
+        // straight from the device) ----
         SizedBox(height: 24 * s),
         SubSectionHeading(
           icon: AppAssets.iconSwap1,

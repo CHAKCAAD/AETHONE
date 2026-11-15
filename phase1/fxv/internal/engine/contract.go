@@ -52,7 +52,18 @@ const LoginConfigVersion = 1
 //      WebView — the login-page fix); and the quota events now carry
 //      `quotaMax` beside quotaLeft/quotaReset. A host that sends none of
 //      the new fields keeps the exact 1.2.0 direct behavior.
-const EngineVersion = "1.5.0"
+// 1.6.0 — the direct DATA plane (2026-11-15, the owner's round 4:
+//
+//      «مراحل اولیهٔ اتصال … از تونل ایتر بگذره و بعد خود اتصال
+//      مستقیم انجام بشه» — arman's relay posture): the optional
+//      `dataPlaneDirect` flag on the tunnel config line. With
+//      upstreamSocks set AND dataPlaneDirect true, the control plane
+//      (RemoteSettings discovery, the Guardian pass, the OAuth refresh —
+//      the initial connection stages) still rides the carrier, but the
+//      h2/h3 data session dials the Fastly edge DIRECTLY. The flag
+//      requires upstreamSocks (fail-fast: dataPlaneDirectWithoutCarrier);
+//      a host that sends no flag keeps the exact 1.5.0 behavior.
+const EngineVersion = "1.6.0"
 
 // Event names (mirrored by FirefoxEngineEvents on the Dart side).
 const (
@@ -119,6 +130,8 @@ const (
         // static English, never secrets).
         detailUpstreamSocksInvalid = "upstreamSocksInvalid"
         detailDNSConfigInvalid     = "dnsConfigInvalid"
+        // 1.6.0 — the direct-data-plane detail (same family).
+        detailDataPlaneDirectWithoutCarrier = "dataPlaneDirectWithoutCarrier"
 )
 
 // Event is one stdout JSON line. Only authRefreshed and loginCompleted

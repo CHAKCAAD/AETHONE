@@ -62,13 +62,15 @@ the Android-Keystore vault on the Dart side).
 ## 3. Process contract
 
 Fixed and versioned by `engine.ConfigVersion = 1` / `EngineVersion
-"1.5.0"` (bump both on breaking change; every bump since 1.1.0 is
+"1.6.0"` (bump both on breaking change; every bump since 1.1.0 is
 ADDITIVE — the 1.2.0 classified `failed` event, the 1.4.0 WARP carrier
-seams, and the 1.5.0 guardian-line merge: the single `upstreamSocks`
+seams, the 1.5.0 guardian-line merge (the single `upstreamSocks`
 seam replacing 1.4.0's apiProxy/upstreamProxy pair, the process-local
 `dns` block, the `--webview-proxy` role and `quotaMax` on the quota
-events; a host that sends none of the new fields keeps the exact
-pre-1.4.0 direct behavior).
+events), and the 1.6.0 direct data plane (the `dataPlaneDirect` flag
+— arman's relay posture: the initial stages ride the carrier, the
+data connection dials the Fastly edge itself); a host that sends none
+of the new fields keeps the exact pre-1.4.0 direct behavior).
 
 * **stdin** — exactly ONE JSON line (`engine.Config`), written by the host
   right after spawn. The line is bounded to 1 MiB (`readConfigLine`);
@@ -118,7 +120,8 @@ pre-1.4.0 direct behavior).
 | `guardian` | default `https://vpn.mozilla.org`; must be https (`guardianNotHttps`) |
 | `country` | `""`/`"REC"` = AUTO (recommended anycast); ISO-3166-1 alpha-2 or country name, case-insensitive; no match → `noMatchForCountry` with the available list |
 | `transport` | `h2` (default) or `h3` (`transportUnknown` otherwise). Over the `upstreamSocks` carrier both ride: h2 via TCP CONNECT, h3 via UDP ASSOCIATE (1.5.0 — the 1.4.0 h3-over-carrier refusal is retired with the two-seam carrier it gated) |
-| `upstreamSocks` | 1.5.0 — the single WARP-carrier seam (replaces 1.4.0's `apiProxy` + `upstreamProxy` pair): `socks5://127.0.0.1:port`, loopback host only, no userinfo/path/query (`upstreamSocksInvalid` otherwise). Routes the CONTROL plane (FxA / Guardian / RemoteSettings, the uTLS Firefox ClientHello kept) AND the MASQUE data plane through the in-process Aether carrier; empty = the direct path. The HOST's mode pick decides (CoreSettings.firefoxCarrierMode): over-WARP sets it and never falls back; DIRECT sends nothing and the engine keeps its exact 1.2.0 direct behavior (arman-vpn-client's direct posture — the Aether core holds the relay's seat in the other mode). |
+| `upstreamSocks` | 1.5.0 — the single WARP-carrier seam (replaces 1.4.0's `apiProxy` + `upstreamProxy` pair): `socks5://127.0.0.1:port`, loopback host only, no userinfo/path/query (`upstreamSocksInvalid` otherwise). Routes the CONTROL plane (FxA / Guardian / RemoteSettings, the uTLS Firefox ClientHello kept) AND the MASQUE data plane through the in-process Aether carrier; empty = the direct path. The HOST's mode pick decides (CoreSettings.firefoxCarrierMode): over-WARP sets it and never falls back; DIRECT (1.6.0 semantics) sets it TOO — the initial connection stages ride the carrier in both modes — and adds `dataPlaneDirect` so only the data plane leaves it. |
+| `dataPlaneDirect` | 1.6.0 — the DIRECT data plane (the owner's round 4, arman's relay posture): `true` asks the engine to keep ONLY the control plane on the `upstreamSocks` carrier while the h2/h3 data session dials the Fastly edge directly (h2 over TCP+TLS, h3 over QUIC; the process-local `dns` policy resolves the edge). Requires `upstreamSocks` (fail-fast `dataPlaneDirectWithoutCarrier` otherwise); absent = the 1.5.0 carried behavior. |
 | `dns` | 1.5.0 — the process-local resolver policy (system \| DoH; see `internal/dnsresolver`), applied BEFORE any network work in the tunnel, `--login`, `--discover` and `--webview-proxy` roles (`dnsConfigInvalid` otherwise; absent = system) |
 | `upstreamOverride` | `host:port` — skip discovery, dial that MASQUE proxy (the `selected` event reports `selectionSource:"override"`); test/lifecycle harness use |
 | `upstreamTimeoutMs` / `handshakeTimeoutMs` / `idleTimeoutMs` / `maxConns` | 0 → upstream defaults (20 s / 10 s / unlimited / 256) |

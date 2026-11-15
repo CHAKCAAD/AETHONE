@@ -73,15 +73,43 @@ void main() {
       expect(legacy.firefoxLegProtocol, AetherLegProtocol.masque);
     });
 
-    test('v1.5.0: the direct mode omits the carrier seam entirely '
-        '(the engine keeps its exact 1.2.0 direct behavior)', () {
+    test('a carrier-less config keeps the legacy direct shape '
+        '(no seam keys — the engine stays on its 1.2.0/1.5.0 path)', () {
       const config = FirefoxEngineConfig(
         socksListen: '127.0.0.1:1822',
         auth: FirefoxSessionAuth(accessToken: 'access'),
       );
       final blob = config.toJson();
       expect(blob.containsKey('upstreamSocks'), isFalse);
+      expect(blob.containsKey('dataPlaneDirect'), isFalse);
       expect(blob['dns'], {'mode': 'system'});
+    });
+
+    test('v1.6.0: the DIRECT mode sends the carrier AND the direct-data '
+        'flag (the initial stages ride the Aether carrier, then the data '
+        'connection dials the Fastly edge itself — arman\'s relay posture)',
+        () {
+      const config = FirefoxEngineConfig(
+        socksListen: '127.0.0.1:1822',
+        auth: FirefoxSessionAuth(accessToken: 'access'),
+        upstreamSocks: 'socks5://127.0.0.1:1819',
+        dataPlaneDirect: true,
+      );
+      final blob = config.toJson();
+      expect(blob['upstreamSocks'], 'socks5://127.0.0.1:1819');
+      expect(blob['dataPlaneDirect'], isTrue);
+    });
+
+    test('v1.6.0: the over-WARP mode carries the data plane too '
+        '(dataPlaneDirect stays absent from the wire)', () {
+      const config = FirefoxEngineConfig(
+        socksListen: '127.0.0.1:1822',
+        auth: FirefoxSessionAuth(accessToken: 'access'),
+        upstreamSocks: 'socks5://127.0.0.1:1819',
+      );
+      final blob = config.toJson();
+      expect(blob['upstreamSocks'], 'socks5://127.0.0.1:1819');
+      expect(blob.containsKey('dataPlaneDirect'), isFalse);
     });
 
     test('v1.5.0: the mode strings exist in each supported locale', () {

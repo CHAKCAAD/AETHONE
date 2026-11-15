@@ -68,10 +68,11 @@ enum TorBridgePolicy { auto, off, custom }
 /// legs to MASQUE because their carrier only supports TCP.
 /// v1.5.0 (the owner's round 3) — HOW the Firefox VPN engine reaches the
 /// internet: over the in-process Aether core's WARP carrier (the owner's
-/// standing default — arman-vpn-client's relay/upstream-proxy posture,
-/// with the Aether core in the relay's seat), or DIRECT (arman's direct
-/// posture: the engine's own 1.2.0 path — uTLS control plane, h2/h3 data
-/// plane, the process-local DNS policy; no Aether core, no TUN leg).
+/// standing default — the WHOLE engine conversation rides it), or DIRECT
+/// (1.6.0, the owner's round 4 — arman's relay posture: the initial
+/// connection stages still ride the Aether carrier, then the data
+/// connection dials the Fastly edge itself; the engine's dataPlaneDirect
+/// seam).
 enum FirefoxCarrierMode { overWarp, direct }
 
 enum AetherLegProtocol { wireguard, masque, gool, goolClassic, mim }
