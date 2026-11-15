@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"aethone/fxv/internal/dnsresolver"
@@ -32,6 +33,7 @@ type Config struct {
 	Country            string     `json:"country"`
 	Transport          string     `json:"transport"`
 	UpstreamOverride   string     `json:"upstreamOverride"`
+	UpstreamSocks      string     `json:"upstreamSocks"`
 	UpstreamTimeoutMs  int64      `json:"upstreamTimeoutMs"`
 	HandshakeTimeoutMs int64      `json:"handshakeTimeoutMs"`
 	IdleTimeoutMs      int64      `json:"idleTimeoutMs"`
@@ -119,6 +121,18 @@ func (c Config) Validate() (Config, error) {
 	if c.UpstreamOverride != "" {
 		if _, _, err := net.SplitHostPort(c.UpstreamOverride); err != nil {
 			return c, &ConfigError{Detail: detailUpstreamOverrideBad}
+		}
+	}
+	if c.UpstreamSocks != "" {
+		u, err := url.Parse(c.UpstreamSocks)
+		if err != nil || u.Scheme != "socks5" || u.User != nil ||
+			u.Hostname() == "" || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+			return c, &ConfigError{Detail: "upstreamSocksInvalid"}
+		}
+		ip := net.ParseIP(u.Hostname())
+		port, portErr := strconv.Atoi(u.Port())
+		if ip == nil || !ip.IsLoopback() || portErr != nil || port < 1 || port > 65535 {
+			return c, &ConfigError{Detail: "upstreamSocksInvalid"}
 		}
 	}
 	if strings.TrimSpace(c.Auth.AccessToken) == "" {
