@@ -169,14 +169,13 @@ abstract final class TransportModes {
     evidence: 'cli.rs L600 (no tunnel; --bind serves plain psiphon)',
   );
 
-  /// PHASE-1 (firefox-vpn, private branch) — FIREFOX VPN ONLY: the
-  /// dedicated Go engine (libfirefoxvpn.so) serving SOCKS5 CONNECT on
-  /// 127.0.0.1:1822. Port 1822 was vetted against the evidence-locked
-  /// map (1819 aether --bind, 1820 --tor-bind, 1821 --psiphon-bind) and
-  /// the adapter asserts it free at runtime before every connect.
-  /// `cliValue` documents that NO aether CLI exists for this mode — the
-  /// aether core never starts; the child process is driven over its
-  /// stdin/stdout contract (docs/FIREFOX_VPN_ENGINE.md).
+  /// Firefox over WARP: the Aether carrier listens on 127.0.0.1:1819
+  /// and the dedicated Go Firefox engine exposes its SOCKS5 CONNECT
+  /// listener on 127.0.0.1:1822. The adapter starts Aether first using
+  /// the per-Firefox core protocol selection, verifies real traffic on
+  /// :1819, then starts Firefox with SOCKS5 TCP/UDP upstream routing.
+  /// Port 1822 remains distinct from the Aether/Tor/Psiphon 1819/1820/1821
+  /// map and is checked free at runtime before every connect.
   static final TransportMode firefoxOnly = TransportMode(
     id: ProtocolId.firefoxOnly,
     label: 'FIREFOX VPN',
