@@ -154,6 +154,31 @@ func TestUpstreamOverrideInvalid(t *testing.T) {
 	}
 }
 
+func TestUpstreamSocksLoopbackAccepted(t *testing.T) {
+	c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","upstreamSocks":"socks5://127.0.0.1:1819","auth":{"accessToken":"a"}}`)
+	v, err := c.Validate()
+	if err != nil {
+		t.Fatalf("loopback SOCKS upstream must pass: %v", err)
+	}
+	if v.UpstreamSocks != "socks5://127.0.0.1:1819" {
+		t.Fatalf("upstream SOCKS = %q", v.UpstreamSocks)
+	}
+}
+
+func TestUpstreamSocksRefusesNonLoopbackAndNonSocks(t *testing.T) {
+	for _, value := range []string{
+		"socks5://8.8.8.8:1080",
+		"http://127.0.0.1:1819",
+		"socks5://127.0.0.1",
+		"socks5://user:pass@127.0.0.1:1819",
+	} {
+		c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","upstreamSocks":"`+value+`","auth":{"accessToken":"a"}}`)
+		if _, err := c.Validate(); err == nil {
+			t.Fatalf("invalid upstream SOCKS %q must be refused", value)
+		}
+	}
+}
+
 func TestConfigLineBound(t *testing.T) {
 	// A config line beyond 1 MiB must fail (never an unbounded read).
 	big := strings.Repeat("a", maxConfigLine+10)
