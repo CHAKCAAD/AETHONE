@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart' show CupertinoLocalizations;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -31,10 +32,15 @@ class AethoneApp extends StatefulWidget {
     Locale('en'),
     Locale('ru'),
     Locale('zh', 'CN'),
-    // v4.41: tk (Turkmen) resolves its OWN AppStrings table (round 17);
-    // the Material-locale mapping below stays 'en' because
-    // flutter_localizations ships no Turkmen coverage — only the few
-    // framework-owned strings (cut/copy/paste tooltips) render English.
+    // v4.42 — tk (Turkmen) is a FIRST-CLASS locale now: the v4.41
+    // approach (mapping tk → the English Material locale) silently
+    // killed the whole Turkmen table — AppStrings resolves through the
+    // MATERIAL locale, so it read 'en' and rendered English no matter
+    // what the store held (the owner's report: «زبان ترکمنی اپ کار
+    // نمیکنه و به جاش زبان انگلیسی نمایش داده میشه»). tk now rides
+    // its own Locale with the three fallback delegates below feeding
+    // the framework widgets their English strings.
+    Locale('tk'),
   ];
 
   @override
@@ -161,6 +167,13 @@ class _AethoneAppState extends State<AethoneApp>
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
+            // v4.42 — the Turkmen seam: each fallback claims ONLY the tk
+            // locale and loads the matching English Global* resources,
+            // so every framework-owned string keeps rendering while
+            // AppStrings resolves the real tk table from the locale.
+            _TkMaterialLocalizationsDelegate(),
+            _TkWidgetsLocalizationsDelegate(),
+            _TkCupertinoLocalizationsDelegate(),
           ],
           home: widget.store.onboardingComplete
               ? HomeScreen(store: widget.store)
@@ -173,18 +186,19 @@ class _AethoneAppState extends State<AethoneApp>
   /// The user override → a supported Locale (zh carries the CN script);
   /// null keeps the device locale (MaterialApp resolves it against
   /// [AethoneApp.supportedLocales], else Persian — the design language).
-  /// v4.23 — 'tk' (the wizard's Turkmenistan tile) maps onto the English
-  /// Material locale: flutter_localizations has no Turkmen coverage. Since
-  /// v4.41 AppStrings carries the COMPLETE tk table (round 17) — every
-  /// app-owned string renders Turkmen; only framework tooltips fall back
-  /// to English. The store keeps the raw 'tk' so both language pages show
-  /// the pick as selected.
+  /// v4.42 — 'tk' maps onto ITSELF (the v4.23 English mapping was the
+  /// Turkmen bug: AppStrings reads the Material locale, saw 'en', and
+  /// rendered English forever). The framework's own widgets (tooltips,
+  /// text-selection handles) get their English strings from the
+  /// [_tkFallbackDelegates] below — flutter_localizations ships no
+  /// Turkmen coverage, so the fallback delegates load the English
+  /// Global* resources for exactly the tk locale.
   Locale? _locale(String? code) => switch (code) {
         'fa' => const Locale('fa'),
         'en' => const Locale('en'),
         'ru' => const Locale('ru'),
         'zh' => const Locale('zh', 'CN'),
-        'tk' => const Locale('en'),
+        'tk' => const Locale('tk'),
         _ => null,
       };
 
@@ -211,4 +225,59 @@ class _AethoneAppState extends State<AethoneApp>
       fontFamily: 'IRANYekanX',
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// v4.42 — the Turkmen fallback delegates: flutter_localizations ships no
+// 'tk' coverage, and the v4.41 "map tk → the English Material locale"
+// workaround silently killed the whole app-owned Turkmen table (AppStrings
+// resolves through the MATERIAL locale, so it read 'en'). With tk as a
+// real locale, these three delegates claim exactly the tk locale and load
+// the matching ENGLISH Global* resources for the framework widgets — the
+// standard recipe for locales the ecosystem does not cover yet.
+// ---------------------------------------------------------------------------
+
+class _TkMaterialLocalizationsDelegate
+    extends LocalizationsDelegate<MaterialLocalizations> {
+  const _TkMaterialLocalizationsDelegate();
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'tk';
+
+  @override
+  Future<MaterialLocalizations> load(Locale locale) =>
+      GlobalMaterialLocalizations.delegate.load(const Locale('en'));
+
+  @override
+  bool shouldReload(_TkMaterialLocalizationsDelegate old) => false;
+}
+
+class _TkWidgetsLocalizationsDelegate
+    extends LocalizationsDelegate<WidgetsLocalizations> {
+  const _TkWidgetsLocalizationsDelegate();
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'tk';
+
+  @override
+  Future<WidgetsLocalizations> load(Locale locale) =>
+      GlobalWidgetsLocalizations.delegate.load(const Locale('en'));
+
+  @override
+  bool shouldReload(_TkWidgetsLocalizationsDelegate old) => false;
+}
+
+class _TkCupertinoLocalizationsDelegate
+    extends LocalizationsDelegate<CupertinoLocalizations> {
+  const _TkCupertinoLocalizationsDelegate();
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'tk';
+
+  @override
+  Future<CupertinoLocalizations> load(Locale locale) =>
+      GlobalCupertinoLocalizations.delegate.load(const Locale('en'));
+
+  @override
+  bool shouldReload(_TkCupertinoLocalizationsDelegate old) => false;
 }
