@@ -85,18 +85,22 @@ Adapted from `cmd/proxy-demo/main.go` of the pinned commit:
 |---|---|---|
 | `socksServer`, `handshakeSOCKS5`, `readSOCKSAddr`, `writeSOCKSReply`, `mapUpstreamError`, `proxyBidirectional`, `copyConn`, `closeIdleConns` | `internal/socks/server.go` | client-affinity opener REMOVED (single-session decree); logging through the injected level-tagged sink. Stage 6 restored the demo's level discipline: `logDebug`→sink-gated `Debugf` (verbose only), `logTarget`→`Server.logTarget` (`<redacted; use -verbose>` unless verbose, warn lines included), `logErr`→`upstream.RedactedError`; the Stage-2 live=N diagnostics ride Info |
 | `tunnelWriteBuffer`, `tunnelConn`, `tunnelAddr` | `internal/upstream/tunnel.go` | behavior preserved verbatim |
-| `newH2ProxySession`, keepalive, `OpenTunnel`, `roundTripWithOpenTimeout` | `internal/upstream/h2.go` | sessionFailureTracker REMOVED (no pool); Stage 6 added `RedactedError` (the demo's `logErr`, relocated next to its type) |
-| `newH3ProxySession`, `OpenTunnel` | `internal/upstream/h3.go` | same; the 1200-byte InitialPacketSize floor kept |
+| `newH2ProxySession`, keepalive, `OpenTunnel`, `roundTripWithOpenTimeout` | `internal/upstream/h2.go` | sessionFailureTracker REMOVED (no pool); now supports direct test mode or a loopback Aether SOCKS5 CONNECT dialer; Stage 6 added `RedactedError` |
+| `newH3ProxySession`, `OpenTunnel` | `internal/upstream/h3.go` | now supports direct test mode or Aether SOCKS5 UDP ASSOCIATE for QUIC datagrams; the 1200-byte InitialPacketSize floor kept |
 | `proxyController` | `internal/upstream/controller.go` | the POOL IS REMOVED — exactly one session, one account, no rotation; renewal loop + quota/renewal-timeout terminals preserved |
 | `verifyExit`, `parseExitProbeResponse`, `openTunnelContext` | `internal/upstream/exitprobe.go` | the probe request now presents the uTLS Firefox ClientHello (the anti-bot edge treats Go's ClientHello as a bot signature) |
+| SOCKS5 TCP CONNECT + UDP ASSOCIATE client for the outer carrier | `internal/upstream/socks5.go` | NEW AETHONE code; loopback-only; CONNECT keeps hostname in the SOCKS request; UDP association preserves hostname in the UDP frame so Aether resolves it inside WARP |
+| Firefox-fingerprint control-plane transport through SOCKS5 | `internal/upstream/controlplane_socks.go` | NEW AETHONE adapter; preserves the pinned Firefox uTLS ClientHello while routing RemoteSettings, Guardian and OAuth-refresh HTTP/2 requests over Aether |
+
 
 Used as LIBRARIES through the pin (unmodified, via the `replace`):
 `vpnclient.FxaOAuthToken` (the audited `fxa-credentials` exchange with
 HAWK + uTLS + the Fastly anti-bot retry), `vpnclient.FxaRefreshToken`,
 `vpnclient.FetchProxyPass` (Guardian; `ErrQuotaExceeded` /
-`ErrTokenInvalid` semantics), `vpnclient.FetchServerList`
-(RemoteSettings), and the control-plane transport
-(`NewControlPlaneTransport` — the uTLS Firefox ClientHello on HTTP/2).
+`ErrTokenInvalid` semantics), and `vpnclient.FetchServerList`
+(RemoteSettings). In Firefox-over-WARP mode the engine supplies its own
+`SetControlPlaneTransport` implementation that retains the same uTLS
+Firefox ClientHello while dials go through the local Aether SOCKS carrier.
 
 ## Deliberately NOT carried over (policy)
 
