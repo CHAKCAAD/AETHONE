@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/connection/core_settings.dart';
-import '../lib/connection/firefox/firefox_protocol.dart';
-import '../lib/connection/platform_engine_adapter.dart';
-import '../lib/l10n/app_strings.dart';
+import 'package:aethone/connection/core_settings.dart';
+import 'package:aethone/connection/firefox/firefox_protocol.dart';
+import 'package:aethone/connection/platform_engine_adapter.dart';
+import 'package:aethone/l10n/app_strings.dart';
 
 void main() {
   group('Firefox over WARP settings', () {
