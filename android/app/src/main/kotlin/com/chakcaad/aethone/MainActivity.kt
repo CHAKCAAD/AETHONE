@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import android.system.Os
+import android.system.OsConstants
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.webkit.ProxyConfig
@@ -84,6 +85,15 @@ class MainActivity : FlutterActivity() {
         /// disconnect actually cancels the core.
         @Volatile
         private var coreJobId: Int? = null
+
+        /// The Firefox Go child PID survives a Flutter-engine recreation.
+        /// The executable path is retained too so a reused PID is never
+        /// signalled unless /proc/<pid>/cmdline still names our native binary.
+        @Volatile
+        private var firefoxEnginePid: Int? = null
+
+        @Volatile
+        private var firefoxEngineBinary: String? = null
 
         /// AndroidX ProxyController is process-wide for this app's WebViews.
         /// Remember activation across Activity recreation so onDestroy can
@@ -375,6 +385,46 @@ class MainActivity : FlutterActivity() {
                 "clearCoreJob" -> {
                     coreJobId = null
                     result.success(null)
+                }
+                // Firefox child ownership survives Flutter-engine recreation.
+                // The binary path is checked before SIGTERM to guard against PID reuse.
+                "setFirefoxPid" -> {
+                    val pid = call.argument<Int>("pid") ?: 0
+                    val binary = call.argument<String>("binaryPath") ?: ""
+                    val expected = File(applicationInfo.nativeLibraryDir, "libfirefoxvpn.so").absolutePath
+                    if (pid <= 1 || binary != expected) {
+                        result.error("firefoxPidInvalid", "Firefox child identity is invalid", null)
+                    } else {
+                        firefoxEnginePid = pid
+                        firefoxEngineBinary = binary
+                        result.success(null)
+                    }
+                }
+                "clearFirefoxPid" -> {
+                    firefoxEnginePid = null
+                    firefoxEngineBinary = null
+                    result.success(null)
+                }
+                "stopFirefoxProcess" -> {
+                    val pid = firefoxEnginePid
+                    val binary = firefoxEngineBinary
+                    firefoxEnginePid = null
+                    firefoxEngineBinary = null
+                    var signalled = false
+                    if (pid != null && binary != null) {
+                        val command = runCatching {
+                            File("/proc/$pid/cmdline").readBytes()
+                                .toString(Charsets.UTF_8)
+                                .substringBefore('\\u0000')
+                        }.getOrDefault("")
+                        if (command == binary) {
+                            signalled = runCatching {
+                                Os.kill(pid, OsConstants.SIGTERM)
+                                true
+                            }.getOrDefault(false)
+                        }
+                    }
+                    result.success(mapOf("signalled" to signalled))
                 }
                 "vpnStatus" -> result.success(AethoneVpnService.status())
                 // v4.41 (round 17, item 4) — the launchable-app list for
