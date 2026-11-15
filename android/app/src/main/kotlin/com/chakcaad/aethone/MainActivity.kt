@@ -410,7 +410,6 @@ class MainActivity : FlutterActivity() {
                     val binary = firefoxEngineBinary
                     firefoxEnginePid = null
                     firefoxEngineBinary = null
-                    var signalled = false
                     if (pid != null && binary != null) {
                         val pidUid = runCatching {
                             File("/proc/$pid/status").readLines()
@@ -427,13 +426,10 @@ class MainActivity : FlutterActivity() {
                                 .substringBefore(0.toChar())
                         }.getOrDefault("")
                         if (pidUid == applicationInfo.uid && command == binary) {
-                            signalled = runCatching {
-                                Os.kill(pid, OsConstants.SIGTERM)
-                                true
-                            }.getOrDefault(false)
+                            runCatching { Os.kill(pid, OsConstants.SIGTERM) }
                         }
                     }
-                    result.success(mapOf("signalled" to signalled))
+                    result.success(null)
                 }
                 "vpnStatus" -> result.success(AethoneVpnService.status())
                 // v4.41 (round 17, item 4) — the launchable-app list for
