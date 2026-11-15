@@ -11,7 +11,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert' show jsonDecode, jsonEncode;
-import 'dart:io' show Platform;
+import 'dart:io' show InternetAddress, Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -374,36 +374,66 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   List<String> firefoxDnsBootstrapIps = const [];
   Future<void>? _firefoxDnsLoadFuture;
 
+  /// 1.7.1 — a VALID absolute HTTPS URL (the engine's own rule:
+  /// scheme https, a host, no user-info, no fragment). A custom
+  /// endpoint failing this shape degrades the effective mode to system
+  /// — the round-6 lesson: a malformed endpoint (no scheme, plain
+  /// hostname, …) survived round 5's empty-only guard and killed EVERY
+  /// role at startup (dnsConfigInvalid — the login page, the DNS test
+  /// AND both carrier modes) because each installs the DNS policy
+  /// before any network work.
+  static bool _isValidDohEndpoint(String raw) {
+    final uri = Uri.tryParse(raw);
+    return uri != null &&
+        uri.isAbsolute &&
+        uri.scheme == 'https' &&
+        uri.host.isNotEmpty &&
+        uri.userInfo.isEmpty &&
+        !uri.hasFragment;
+  }
+
+  /// 1.7.1 — a real IP literal (v4 or v6) or nothing.
+  static bool _isValidIpLiteral(String raw) =>
+      InternetAddress.tryParse(raw) != null;
+
   @override
   Map<String, dynamic> get firefoxDnsConfig {
-    // 1.7.0 — NEVER an invalid line: a custom provider with an empty
-    // endpoint would make the engine fail dnsConfigInvalid (killing
-    // BOTH carrier modes at startup) and the DNS probe report a setup
-    // failure. The half-configured pick degrades to system until the
-    // user saves a real endpoint.
-    final doh = firefoxDnsMode == 'doh' &&
-        !(firefoxDnsProvider == 'custom' &&
-            firefoxDnsEndpoint.trim().isEmpty);
+    // 1.7.1 — NEVER an invalid line, against ANY garbage the store
+    // can hold (round 5 guarded only the EMPTY custom endpoint; a
+    // MALFORMED endpoint or junk bootstrap IPs — persisted by the
+    // earlier builds or typed into the free-text fields — made the
+    // engine fail dnsConfigInvalid, killing the login page, the DNS
+    // test and BOTH carrier modes at startup). The doh pick rides
+    // only when every custom piece parses; otherwise the effective
+    // mode degrades to system and the settings page says why.
+    final endpoint = firefoxDnsEndpoint.trim();
+    final endpointOk = firefoxDnsProvider != 'custom' ||
+        (endpoint.isNotEmpty && _isValidDohEndpoint(endpoint));
+    // Bootstrap IPs: only real IP literals ride the line (junk entries
+    // from the free-text field are dropped, not fatal).
+    final bootstrap = firefoxDnsBootstrapIps
+        .map((v) => v.trim())
+        .where((v) => v.isNotEmpty && _isValidIpLiteral(v))
+        .toList(growable: false);
+    final doh = firefoxDnsMode == 'doh' && endpointOk;
     return {
       'mode': doh ? 'doh' : 'system',
       if (doh) ...{
         'provider': firefoxDnsProvider,
-        if (firefoxDnsProvider == 'custom')
-          'endpoint': firefoxDnsEndpoint.trim(),
-        if (firefoxDnsBootstrapIps.isNotEmpty)
-          'bootstrapIps': firefoxDnsBootstrapIps,
+        if (firefoxDnsProvider == 'custom') 'endpoint': endpoint,
+        if (bootstrap.isNotEmpty) 'bootstrapIps': bootstrap,
         'systemForLocalDomains': true,
       },
     };
   }
 
-  /// 1.7.0 — true when the user picked DoH + custom but has not saved
-  /// an endpoint yet (the settings page surfaces WHY the effective mode
-  /// fell back to system instead of silently ignoring the pick).
+  /// 1.7.1 — true when the user picked DoH + custom but the endpoint is
+  /// empty or malformed (the settings page surfaces WHY the effective
+  /// mode fell back to system instead of silently ignoring the pick).
   bool get firefoxDnsCustomIncomplete =>
       firefoxDnsMode == 'doh' &&
       firefoxDnsProvider == 'custom' &&
-      firefoxDnsEndpoint.trim().isEmpty;
+      !_isValidDohEndpoint(firefoxDnsEndpoint.trim());
 
   @override
   Future<void> loadFirefoxDnsSettings() =>
@@ -469,10 +499,13 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   }
 
   void setFirefoxDnsCustom(String endpoint, String bootstrapIps) {
+    // 1.7.1 — sanitize at SET time too: only real IP literals persist
+    // (the free-text field accepts anything; junk never reaches the
+    // engine line even before the getter's filter sees it).
     final nextIps = bootstrapIps
         .split(RegExp(r'[\s,;]+'))
         .map((v) => v.trim())
-        .where((v) => v.isNotEmpty)
+        .where((v) => v.isNotEmpty && _isValidIpLiteral(v))
         .take(8)
         .toList(growable: false);
     if (firefoxDnsEndpoint == endpoint.trim() &&

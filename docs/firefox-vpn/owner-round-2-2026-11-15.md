@@ -466,3 +466,73 @@ h2-pick-never-touches-h3, the double-failure chain) · the Dart round-5
 suite (the quota flag parse, the never-invalid DNS line, the provider
 switch reset, the usage event parse, the page affordances). The build
 pin lands in §7.5 below after the run goes green.
+
+---
+
+## 8. Round 6 (2026-11-15, after the owner's device test of the round-5 build)
+
+The owner's report on the round-5 build:
+
+> «در صفحه ورود به حساب کاربری ارور صفحه وب در دسترس نیست دریافت میشه
+> و برای DNS ها هم ارور راه اندازی DNS انتخاب شده ناموفق بود. تنظیمات
+> را بررسی کنید. دریافت میشه. مجدد مشکل بسته شدن برنامه و ارور ایتن
+> پاسخ نمی دهد دریافت میکنم این اتفاق زمانی که توی صغحه تنظیمات
+> فایرفاکس هستم اتفاق میفته. ضمن اینکه اتصال هم اتفاق نمیشه که ممکنه
+> به خاطر همین مساله DNS باشه.»
+
+### 8.1 The diagnosis — one root cause, three symptoms
+
+The quoted error strings are the round-5 additions themselves
+(`firefoxDnsSetupFailed`), which made the trail precise:
+
+* «راه‌اندازی DNS انتخاب‌شده ناموفق بود» = the `--dns-probe` role
+  produced NO events = `dnsresolver.Install()` failed = the DNS config
+  line was INVALID. Round 5's store guard covered only the EMPTY
+  custom endpoint — a **MALFORMED** endpoint (a schemeless hostname
+  typed into the free-text field) or **junk bootstrap IPs** (any text
+  was accepted; the earlier builds persisted it) still sailed through.
+* «صفحه وب در دسترس نیست» = the `--webview-proxy` child installs the
+  same DNS config first → `dnsSetupFailed` → `proxy.start()` threw →
+  the login screen's honest-unavailable fallback. **Same root.**
+* «اتصال هم اتفاق نمیشه» = `runTunnel` installs it too →
+  `dnsConfigInvalid` → the engine dies at startup, BOTH carrier modes.
+  **Same root.** (The owner's own guess — «ممکنه به خاطر همین مساله
+  DNS باشه» — was exactly right.)
+
+The settings-page ANR + app closes («ایتن پاسخ نمی دهد», on the
+Firefox settings page): round 5's auto quota refresh BOOTED A FULL
+WARP CARRIER (an Aether core) at every page open — the memory churn
+the device felt as repeated kills, and while that carrier held
+127.0.0.1:1819, a concurrent connect walk failed outright with
+`firefoxCarrierPortBusy`.
+
+### 8.2 The fixes (host-side only — the engine contract stays 1.7.0)
+
+* **The DNS line is now bullet-proof against ANY garbage the store can
+  hold**: the custom endpoint rides only when it parses as an absolute
+  HTTPS URL (scheme https, a host, no user-info/fragment — the engine's
+  own rule); bootstrap entries ride only when they are real IP
+  literals (v4 or v6), junk entries are dropped rather than fatal; any
+  invalid custom piece degrades the effective mode to system and the
+  inline hint now says «نشانی DoH سفارشی معتبر نیست…» (covering
+  malformed, not just empty). `setFirefoxDnsCustom` sanitizes at save
+  time too. One getter feeds the tunnel config, the login screen's
+  proxy line AND the DNS probe — one fix, all three symptoms.
+* **The quota refresh NEVER boots a carrier anymore**: a LIVE carrier
+  (a connected session's, or the login screen's own during the
+  post-sign-in fetch) is probed and ridden; without one the `--usage`
+  role walks DIRECT (the pinned-uTLS control plane with the selected
+  DNS — the IP-literal DoH defaults survive poisoned networks). No
+  core churn on the settings page, no port-1819 conflict with a
+  concurrent connect, and an honest failure on a hard-blocked network
+  is fine — the value still lands on connect through the standing
+  passAcquired path.
+
+### 8.3 Verification
+
+Go: unchanged engine (vet/test green from round 5, re-run in this
+round's gates). Flutter analyze clean; the round-6 suite adds the
+malformed-endpoint shapes (schemeless / http / garbage), the junk
+bootstrap filtering, the save-time sanitization, and the end-to-end
+regression shape (DoH + custom + schemeless endpoint + junk bootstrap →
+a system line the engine accepts). The build pin lands in §8.4.

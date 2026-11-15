@@ -146,6 +146,99 @@ void main() {
     });
   });
 
+  group('the DNS config line (1.7.1 — round 6: malformed never rides)', () {
+    // The round-6 device report: «راه‌اندازی DNS انتخاب‌شده ناموفق بود»
+    // on the DNS test AND «صفحه وب در دسترس نیست» on the login page AND
+    // no connection at all — one root: a MALFORMED custom endpoint or
+    // junk bootstrap IPs (persisted by the earlier builds, accepted by
+    // the free-text fields) made dnsresolver.Install fail in EVERY
+    // role (each installs the DNS policy before any network work).
+    test('a MALFORMED custom endpoint degrades to system (not just empty)',
+        () {
+      final store = ConnectionStore(engine: EngineNotWiredAdapter());
+      store.firefoxDnsMode = 'doh';
+      store.firefoxDnsProvider = 'custom';
+      // No scheme / plain hostname / http — all shapes the free-text
+      // field accepted.
+      for (final bad in [
+        'dns.example.com/dns-query',
+        'http://dns.example/dns-query',
+        'https://',
+        'not a url at all',
+      ]) {
+        store.firefoxDnsEndpoint = bad;
+        expect(store.firefoxDnsConfig['mode'], 'system',
+            reason: '$bad must never reach the engine line');
+        expect(store.firefoxDnsCustomIncomplete, isTrue,
+            reason: '$bad must surface the hint');
+      }
+    });
+
+    test('a VALID custom endpoint still rides after the hardening', () {
+      final store = ConnectionStore(engine: EngineNotWiredAdapter());
+      store.firefoxDnsMode = 'doh';
+      store.firefoxDnsProvider = 'custom';
+      store.firefoxDnsEndpoint = 'https://1.2.3.4/dns-query';
+      expect(store.firefoxDnsConfig['mode'], 'doh');
+      expect(store.firefoxDnsConfig['endpoint'], 'https://1.2.3.4/dns-query');
+      expect(store.firefoxDnsCustomIncomplete, isFalse);
+    });
+
+    test('junk bootstrap IPs are FILTERED, not fatal (every provider)', () {
+      final store = ConnectionStore(engine: EngineNotWiredAdapter());
+      store.firefoxDnsMode = 'doh';
+      store.firefoxDnsProvider = 'cloudflare';
+      // Legacy-persisted junk (urls, words, empty-ish entries) beside
+      // one real IP.
+      store.firefoxDnsBootstrapIps = const [
+        'https://8.8.8.8/dns-query',
+        'abc',
+        '1.1.1.1',
+        '',
+      ];
+      final config = store.firefoxDnsConfig;
+      expect(config['mode'], 'doh',
+          reason: 'junk bootstrap entries must not kill the provider');
+      expect(config['bootstrapIps'], const ['1.1.1.1']);
+    });
+
+    test('all-junk bootstrap yields no bootstrapIps key at all', () {
+      final store = ConnectionStore(engine: EngineNotWiredAdapter());
+      store.firefoxDnsMode = 'doh';
+      store.firefoxDnsProvider = 'google';
+      store.firefoxDnsBootstrapIps = const ['not-an-ip', 'x.x.x.x'];
+      expect(store.firefoxDnsConfig['mode'], 'doh');
+      expect(store.firefoxDnsConfig.containsKey('bootstrapIps'), isFalse);
+    });
+
+    test('setFirefoxDnsCustom sanitizes junk IPs at save time', () {
+      final store = ConnectionStore(engine: EngineNotWiredAdapter());
+      store.setFirefoxDnsCustom('https://dns.example/dns-query',
+          '1.1.1.1, garbage, 2606:4700:4700::1111, , ok');
+      expect(store.firefoxDnsBootstrapIps,
+          const ['1.1.1.1', '2606:4700:4700::1111']);
+    });
+
+    test('the round-6 regression shape end-to-end: malformed persisted state',
+        () {
+      // Exactly what the device held: DoH + custom + a schemeless
+      // endpoint + junk bootstrap, persisted by the round-4/5 build.
+      // EVERY consumer (the tunnel config, the login screen's proxy
+      // line, the DNS probe) reads this ONE getter — it must yield a
+      // line the engine accepts.
+      final store = ConnectionStore(engine: EngineNotWiredAdapter());
+      store.firefoxDnsMode = 'doh';
+      store.firefoxDnsProvider = 'custom';
+      store.firefoxDnsEndpoint = 'dns.example.com/dns-query';
+      store.firefoxDnsBootstrapIps = const ['junk'];
+      final config = store.firefoxDnsConfig;
+      expect(config['mode'], 'system');
+      expect(config.containsKey('endpoint'), isFalse);
+      expect(config.containsKey('bootstrapIps'), isFalse);
+      expect(store.firefoxDnsCustomIncomplete, isTrue);
+    });
+  });
+
   group('the usage event on the wire (1.7.0)', () {
     test('parses quotaUnlimited beside the trio', () {
       final event = FirefoxEngineEvent.fromJson(const {

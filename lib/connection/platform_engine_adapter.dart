@@ -2462,12 +2462,20 @@ class PlatformEngineAdapter
 
   /// 1.7.0 (the owner's round 5) — the on-demand quota refresh: the
   /// engine's `--usage` role (the account's Guardian quota WITHOUT
-  /// minting a pass — arman's fetchProxyUsage model). The request rides
-  /// a WARP carrier: a LIVE one (a connected session, or the login
-  /// screen's leg during the post-sign-in refresh) is probed and
-  /// reused; otherwise the plain login carrier is booted for the fetch
-  /// and taken down after it. A signed-out vault is an honest false —
-  /// never a fake quota.
+  /// minting a pass — arman's fetchProxyUsage model). A signed-out
+  /// vault is an honest false — never a fake quota.
+  ///
+  /// 1.7.1 (the owner's round 6, the settings-page ANR) — this NEVER
+  /// boots a carrier of its own anymore: the round-5 auto refresh at
+  /// Firefox-settings page open booted a full Aether core there (the
+  /// memory churn the device felt as «برنامه هی متوقف میشه»), and the
+  /// carrier's 1819 listener made a concurrent connect walk fail with
+  /// `firefoxCarrierPortBusy`. Now: a LIVE carrier (a connected
+  /// session's, or the login screen's own during the post-sign-in
+  /// refresh) is probed and ridden; without one the usage role walks
+  /// DIRECT (the pinned-uTLS control plane — an honest failure on a
+  /// blocked network is fine; the value still lands on connect through
+  /// the standing passAcquired path).
   @override
   Future<bool> refreshFirefoxQuota() async {
     final vault = await _firefoxVault();
@@ -2475,10 +2483,9 @@ class PlatformEngineAdapter
     if (auth == null || auth.accessToken.isEmpty) return false;
 
     // A live carrier (the connected tunnel's 1819 leg, or the login
-    // screen's) is probed and reused — never replaced.
+    // screen's) is probed and reused — never replaced, never booted.
     final warpPort = TransportModes.masque.socksEndpoint.port + portOffset;
     String? carrier;
-    var ownedCarrier = false;
     if (await TunnelProbe.isListenerReady(warpPort)) {
       try {
         await TunnelProbe().trace(port: warpPort, timeout: _probeTimeout);
@@ -2487,22 +2494,7 @@ class PlatformEngineAdapter
         carrier = null; // a half-dead listener — refuse to stack on it
       }
     }
-    if (carrier == null) {
-      try {
-        carrier = await firefoxLoginCarrierUp();
-        ownedCarrier = carrier != null;
-      } catch (_) {
-        carrier = null;
-      }
-    }
-
-    try {
-      return await _firefoxUsage(auth, carrier);
-    } finally {
-      if (ownedCarrier) {
-        await firefoxLoginCarrierDown();
-      }
-    }
+    return _firefoxUsage(auth, carrier);
   }
 
   /// Spawns the engine's `--usage` role and routes its `usage` event
