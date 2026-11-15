@@ -1,6 +1,6 @@
 # FIREFOX VPN lifecycle — state machine, start/stop, errors, recovery (Phase 1)
 
-Status: **Phase 1, private branch `phase1/firefox-vpn` only.**
+Status: **Firefox-over-WARP development on `feature/firefox-guardian-psiphon-bootstrap`; CI and Android device verification are tracked separately.**
 
 Three cooperating layers run in one session and never conflate responsibilities:
 
