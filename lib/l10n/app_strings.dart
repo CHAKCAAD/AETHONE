@@ -362,6 +362,9 @@ class AppStrings {
   String get firefoxDnsSystem => _v['firefoxDnsSystem']!;
   String get firefoxDnsDoH => _v['firefoxDnsDoH']!;
   String get firefoxDnsProvider => _v['firefoxDnsProvider']!;
+
+  /// 1.9.0 — the AUTO racing provider (the reference's DefaultDNSServers).
+  String get firefoxDnsProviderAuto => _v['firefoxDnsProviderAuto']!;
   String get firefoxDnsCustom => _v['firefoxDnsCustom']!;
   String get firefoxDnsEndpoint => _v['firefoxDnsEndpoint']!;
   String get firefoxDnsBootstrap => _v['firefoxDnsBootstrap']!;
@@ -392,6 +395,44 @@ class AppStrings {
   String get firefoxLoginRejected => _v['firefoxLoginRejected']!;
   String get firefoxLoginTimeout => _v['firefoxLoginTimeout']!;
   String get firefoxLoginUnavailable => _v['firefoxLoginUnavailable']!;
+
+  // 1.8.0 — the arman-pattern round: the DIRECT email+password sign-in
+  // (the form tab) and its granular failure texts.
+  String get firefoxLoginMethodForm => _v['firefoxLoginMethodForm']!;
+  String get firefoxLoginMethodBrowser => _v['firefoxLoginMethodBrowser']!;
+  String get firefoxLoginSubtitleForm => _v['firefoxLoginSubtitleForm']!;
+  String get firefoxLoginFormHint => _v['firefoxLoginFormHint']!;
+  String get firefoxLoginBrowserHint => _v['firefoxLoginBrowserHint']!;
+  String get firefoxLoginEmail => _v['firefoxLoginEmail']!;
+  String get firefoxLoginPassword => _v['firefoxLoginPassword']!;
+  String get firefoxLoginSubmit => _v['firefoxLoginSubmit']!;
+  String get firefoxLoginSubmitting => _v['firefoxLoginSubmitting']!;
+  String get firefoxLoginEmailInvalid => _v['firefoxLoginEmailInvalid']!;
+  String get firefoxLoginPasswordEmpty => _v['firefoxLoginPasswordEmpty']!;
+  String get firefoxLoginCodeLabel => _v['firefoxLoginCodeLabel']!;
+  String get firefoxLoginCodeVerify => _v['firefoxLoginCodeVerify']!;
+  String get firefoxLoginCodeVerifying => _v['firefoxLoginCodeVerifying']!;
+  String get firefoxLoginWrongCode => _v['firefoxLoginWrongCode']!;
+  String get firefoxLoginNetworkRetry => _v['firefoxLoginNetworkRetry']!;
+  String get firefoxLoginNoAccount => _v['firefoxLoginNoAccount']!;
+  String get firefoxLoginWrongPassword => _v['firefoxLoginWrongPassword']!;
+  String get firefoxLoginTooManyAttempts => _v['firefoxLoginTooManyAttempts']!;
+  String get firefoxLoginRequestBlocked => _v['firefoxLoginRequestBlocked']!;
+  String get firefoxLoginSecondaryEmail => _v['firefoxLoginSecondaryEmail']!;
+  String get firefoxLoginInvalidEmail => _v['firefoxLoginInvalidEmail']!;
+  String get firefoxLoginUnverifiedAccount => _v['firefoxLoginUnverifiedAccount']!;
+  String get firefoxLoginEmailCase => _v['firefoxLoginEmailCase']!;
+  String get firefoxLoginCodeExpired => _v['firefoxLoginCodeExpired']!;
+  String get firefoxLoginCodeAttempts => _v['firefoxLoginCodeAttempts']!;
+  String get firefoxLoginStartOver => _v['firefoxLoginStartOver']!;
+
+  /// The email-2fa step's strip text (the code went to [email]).
+  String firefoxLoginCodeSent(String email) =>
+      _v['firefoxLoginCodeSent']!.replaceAll('{email}', email);
+
+  // 1.8.0 — the DNS test's path labels (through the tunnel vs direct).
+  String get firefoxDnsViaCarrier => _v['firefoxDnsViaCarrier']!;
+  String get firefoxDnsViaDirect => _v['firefoxDnsViaDirect']!;
 
   // PHASE B (Part 2) — the login-failure classes (firefox_errors.dart).
   // Static per-class text; the engine's raw chain is never rendered.
@@ -653,6 +694,7 @@ class AppStrings {
       'firefoxDnsSystem': 'DNS سیستم اندروید',
       'firefoxDnsDoH': 'DNS رمزگذاری‌شده (DoH)',
       'firefoxDnsProvider': 'ارائه‌دهنده DNS',
+      'firefoxDnsProviderAuto': 'خودکار (همهً)',
       'firefoxDnsCustom': 'سفارشی',
       'firefoxDnsEndpoint': 'نشانی DoH (HTTPS)',
       'firefoxDnsBootstrap': 'IPهای اولیه (اختیاری، جداشده با ویرگول)',
@@ -685,6 +727,36 @@ class AppStrings {
       'firefoxLoginRejected': 'نشست ورود پذیرفته نشد؛ دوباره وارد شوید',
       'firefoxLoginTimeout': 'تأیید ورود بیش از حد طول کشید؛ دوباره تلاش کنید',
       'firefoxLoginUnavailable': 'صفحهٔ ورود روی این دستگاه در دسترس نیست',
+      'firefoxLoginMethodForm': 'ورود مستقیم',
+      'firefoxLoginMethodBrowser': 'ورود با مرورگر',
+      'firefoxLoginSubtitleForm': 'ورود مستقیم با ایمیل و رمز عبور',
+      'firefoxLoginFormHint': 'برای حساب‌های ساخته‌شده با گوگل یا اپل از ورود با مرورگر استفاده کنید',
+      'firefoxLoginBrowserHint': 'رمز عبور فقط در موتور داخلی اپ پردازش می‌شود و جایی ثبت نمی‌شود',
+      'firefoxLoginEmail': 'ایمیل',
+      'firefoxLoginPassword': 'رمز عبور',
+      'firefoxLoginSubmit': 'ورود',
+      'firefoxLoginSubmitting': 'در حال ورود…',
+      'firefoxLoginEmailInvalid': 'نشانی ایمیل معتبر نیست',
+      'firefoxLoginPasswordEmpty': 'رمز عبور را وارد کنید',
+      'firefoxLoginCodeLabel': 'کد تأیید',
+      'firefoxLoginCodeVerify': 'تأیید',
+      'firefoxLoginCodeVerifying': 'در حال بررسی کد…',
+      'firefoxLoginWrongCode': 'کد واردشده درست نیست',
+      'firefoxLoginNetworkRetry': 'مشکل شبکه؛ دوباره تلاش کنید',
+      'firefoxLoginNoAccount': 'با این ایمیل حساب فایرفاکسی یافت نشد',
+      'firefoxLoginWrongPassword': 'رمز عبور نادرست است',
+      'firefoxLoginTooManyAttempts': 'تلاش‌های ناموفق زیاد بوده؛ کمی بعد دوباره امتحان کنید',
+      'firefoxLoginRequestBlocked': 'ورود به دلایل امنیتی مسدود شد؛ از تب «ورود با مرورگر» استفاده کنید',
+      'firefoxLoginSecondaryEmail': 'برای ورود باید ایمیلِ اصلی حساب را وارد کنید',
+      'firefoxLoginInvalidEmail': 'این ایمیل برای ورود قابل استفاده نیست',
+      'firefoxLoginUnverifiedAccount': 'ایمیل حساب شما هنوز تأیید نشده است؛ ابتدا ایمیل تأیید را باز کنید',
+      'firefoxLoginEmailCase': 'بزرگی و کوچکی حروف ایمیل با حساب هم‌خوانی ندارد',
+      'firefoxLoginCodeExpired': 'کد تأیید منقضی شده است؛ دوباره وارد شوید',
+      'firefoxLoginCodeAttempts': 'تلاش‌های ناموفق برای کد زیاد بود؛ دوباره وارد شوید',
+      'firefoxLoginStartOver': 'شروع دوباره',
+      'firefoxLoginCodeSent': 'کد تأیید به {email} ارسال شد',
+      'firefoxDnsViaCarrier': 'از مسیر تونل',
+      'firefoxDnsViaDirect': 'مستقیم (بدون تونل)',
       // PHASE B (Part 2) — the login-failure classes.
       'firefoxErrDns': 'نام سرور حساب حل نشد (DNS)؛ اتصال دستگاه را بررسی کنید',
       'firefoxErrNetwork': 'سرور حساب در دسترس نبود؛ اتصال شبکه را بررسی کنید',
@@ -1020,6 +1092,7 @@ class AppStrings {
       'firefoxDnsSystem': 'Android System DNS',
       'firefoxDnsDoH': 'Encrypted DNS (DoH)',
       'firefoxDnsProvider': 'DNS provider',
+      'firefoxDnsProviderAuto': 'Auto (all)',
       'firefoxDnsCustom': 'Custom',
       'firefoxDnsEndpoint': 'DoH endpoint (HTTPS)',
       'firefoxDnsBootstrap': 'Bootstrap IPs (optional, comma-separated)',
@@ -1052,6 +1125,36 @@ class AppStrings {
       'firefoxLoginRejected': 'The sign-in session was rejected; sign in again',
       'firefoxLoginTimeout': 'Sign-in confirmation took too long; try again',
       'firefoxLoginUnavailable': 'The sign-in page is not available on this device',
+      'firefoxLoginMethodForm': 'Direct sign-in',
+      'firefoxLoginMethodBrowser': 'Browser sign-in',
+      'firefoxLoginSubtitleForm': 'Sign in directly with email and password',
+      'firefoxLoginFormHint': 'Accounts created with Google or Apple need the browser sign-in',
+      'firefoxLoginBrowserHint': 'Your password is processed only inside the app engine and never stored',
+      'firefoxLoginEmail': 'Email',
+      'firefoxLoginPassword': 'Password',
+      'firefoxLoginSubmit': 'Sign in',
+      'firefoxLoginSubmitting': 'Signing in…',
+      'firefoxLoginEmailInvalid': 'The email address is not valid',
+      'firefoxLoginPasswordEmpty': 'Enter your password',
+      'firefoxLoginCodeLabel': 'Verification code',
+      'firefoxLoginCodeVerify': 'Verify',
+      'firefoxLoginCodeVerifying': 'Verifying the code…',
+      'firefoxLoginWrongCode': 'The code you entered is not correct',
+      'firefoxLoginNetworkRetry': 'A network problem; try again',
+      'firefoxLoginNoAccount': 'No Firefox Account has this email',
+      'firefoxLoginWrongPassword': 'The password is incorrect',
+      'firefoxLoginTooManyAttempts': 'Too many attempts; try again later',
+      'firefoxLoginRequestBlocked': 'The sign-in was blocked for security reasons; use the browser tab',
+      'firefoxLoginSecondaryEmail': 'The primary account email is required for sign-in',
+      'firefoxLoginInvalidEmail': 'This email cannot be used to sign in',
+      'firefoxLoginUnverifiedAccount': "Your account's email has not been verified yet; open the verification email first",
+      'firefoxLoginEmailCase': "The email's letter case does not match the account",
+      'firefoxLoginCodeExpired': 'The verification code has expired; sign in again',
+      'firefoxLoginCodeAttempts': 'Too many wrong codes; sign in again',
+      'firefoxLoginStartOver': 'Start over',
+      'firefoxLoginCodeSent': 'The verification code was sent to {email}',
+      'firefoxDnsViaCarrier': 'through the tunnel',
+      'firefoxDnsViaDirect': 'direct (no tunnel)',
       // PHASE B (Part 2) — the login-failure classes.
       'firefoxErrDns': 'The account server name could not be resolved (DNS); check the connection',
       'firefoxErrNetwork': 'The account server was unreachable; check the network connection',
@@ -1385,6 +1488,7 @@ class AppStrings {
       'firefoxDnsSystem': 'Системный DNS Android',
       'firefoxDnsDoH': 'Зашифрованный DNS (DoH)',
       'firefoxDnsProvider': 'Поставщик DNS',
+      'firefoxDnsProviderAuto': 'Авто (все)',
       'firefoxDnsCustom': 'Другой',
       'firefoxDnsEndpoint': 'Адрес DoH (HTTPS)',
       'firefoxDnsBootstrap': 'Начальные IP (необязательно, через запятую)',
@@ -1417,6 +1521,36 @@ class AppStrings {
       'firefoxLoginRejected': 'Сессия входа отклонена; войдите снова',
       'firefoxLoginTimeout': 'Подтверждение входа заняло слишком много времени; попробуйте снова',
       'firefoxLoginUnavailable': 'Страница входа недоступна на этом устройстве',
+      'firefoxLoginMethodForm': 'Прямой вход',
+      'firefoxLoginMethodBrowser': 'Вход через браузер',
+      'firefoxLoginSubtitleForm': 'Прямой вход по электронной почте и паролю',
+      'firefoxLoginFormHint': 'Для аккаунтов Google или Apple используйте вход через браузер',
+      'firefoxLoginBrowserHint': 'Пароль обрабатывается только внутри движка приложения и нигде не сохраняется',
+      'firefoxLoginEmail': 'Электронная почта',
+      'firefoxLoginPassword': 'Пароль',
+      'firefoxLoginSubmit': 'Войти',
+      'firefoxLoginSubmitting': 'Выполняется вход…',
+      'firefoxLoginEmailInvalid': 'Недопустимый адрес электронной почты',
+      'firefoxLoginPasswordEmpty': 'Введите пароль',
+      'firefoxLoginCodeLabel': 'Код подтверждения',
+      'firefoxLoginCodeVerify': 'Подтвердить',
+      'firefoxLoginCodeVerifying': 'Проверка кода…',
+      'firefoxLoginWrongCode': 'Введён неверный код',
+      'firefoxLoginNetworkRetry': 'Проблема сети; попробуйте ещё раз',
+      'firefoxLoginNoAccount': 'Аккаунта Firefox с такой почтой нет',
+      'firefoxLoginWrongPassword': 'Неверный пароль',
+      'firefoxLoginTooManyAttempts': 'Слишком много попыток; попробуйте позже',
+      'firefoxLoginRequestBlocked': 'Вход заблокирован по соображениям безопасности; используйте вкладку браузера',
+      'firefoxLoginSecondaryEmail': 'Для входа нужен основной адрес аккаунта',
+      'firefoxLoginInvalidEmail': 'Эта почта не может использоваться для входа',
+      'firefoxLoginUnverifiedAccount': 'Почта аккаунта ещё не подтверждена; сначала откройте письмо с подтверждением',
+      'firefoxLoginEmailCase': 'Регистр букв почты не совпадает с аккаунтом',
+      'firefoxLoginCodeExpired': 'Код подтверждения истёк; войдите заново',
+      'firefoxLoginCodeAttempts': 'Слишком много неверных кодов; войдите заново',
+      'firefoxLoginStartOver': 'Начать заново',
+      'firefoxLoginCodeSent': 'Код подтверждения отправлен на {email}',
+      'firefoxDnsViaCarrier': 'через туннель',
+      'firefoxDnsViaDirect': 'напрямую (без туннеля)',
       // PHASE B (Part 2) — the login-failure classes.
       'firefoxErrDns': 'Не удалось разрешить имя сервера аккаунтов (DNS); проверьте подключение',
       'firefoxErrNetwork': 'Сервер аккаунтов недоступен; проверьте сетевое подключение',
@@ -1748,6 +1882,7 @@ class AppStrings {
       'firefoxDnsSystem': 'Android 系统 DNS',
       'firefoxDnsDoH': '加密 DNS (DoH)',
       'firefoxDnsProvider': 'DNS 服务商',
+      'firefoxDnsProviderAuto': '自动（全部）',
       'firefoxDnsCustom': '自定义',
       'firefoxDnsEndpoint': 'DoH 地址 (HTTPS)',
       'firefoxDnsBootstrap': '引导 IP（可选，逗号分隔）',
@@ -1780,6 +1915,36 @@ class AppStrings {
       'firefoxLoginRejected': '登录会话被拒绝；请重新登录',
       'firefoxLoginTimeout': '登录确认超时；请重试',
       'firefoxLoginUnavailable': '此设备上无法打开登录页面',
+      'firefoxLoginMethodForm': '直接登录',
+      'firefoxLoginMethodBrowser': '浏览器登录',
+      'firefoxLoginSubtitleForm': '使用电子邮箱和密码直接登录',
+      'firefoxLoginFormHint': '使用 Google 或 Apple 创建的账户请用浏览器登录',
+      'firefoxLoginBrowserHint': '密码只在应用引擎内处理，绝不会被存储',
+      'firefoxLoginEmail': '电子邮箱',
+      'firefoxLoginPassword': '密码',
+      'firefoxLoginSubmit': '登录',
+      'firefoxLoginSubmitting': '正在登录…',
+      'firefoxLoginEmailInvalid': '电子邮箱地址无效',
+      'firefoxLoginPasswordEmpty': '请输入密码',
+      'firefoxLoginCodeLabel': '验证码',
+      'firefoxLoginCodeVerify': '验证',
+      'firefoxLoginCodeVerifying': '正在验证验证码…',
+      'firefoxLoginWrongCode': '输入的验证码不正确',
+      'firefoxLoginNetworkRetry': '网络问题；请重试',
+      'firefoxLoginNoAccount': '没有使用此邮箱的 Firefox 账户',
+      'firefoxLoginWrongPassword': '密码不正确',
+      'firefoxLoginTooManyAttempts': '尝试次数过多；请稍后再试',
+      'firefoxLoginRequestBlocked': '登录因安全原因被阻止；请使用浏览器标签页',
+      'firefoxLoginSecondaryEmail': '登录需要账户的主邮箱地址',
+      'firefoxLoginInvalidEmail': '此邮箱无法用于登录',
+      'firefoxLoginUnverifiedAccount': '您的账户邮箱尚未验证；请先打开验证邮件',
+      'firefoxLoginEmailCase': '邮箱的大小写与账户不匹配',
+      'firefoxLoginCodeExpired': '验证码已过期；请重新登录',
+      'firefoxLoginCodeAttempts': '错误验证码次数过多；请重新登录',
+      'firefoxLoginStartOver': '重新开始',
+      'firefoxLoginCodeSent': '验证码已发送至 {email}',
+      'firefoxDnsViaCarrier': '经由隧道',
+      'firefoxDnsViaDirect': '直连（无隧道）',
       // PHASE B (Part 2) — the login-failure classes.
       'firefoxErrDns': '无法解析账户服务器域名（DNS）；请检查网络连接',
       'firefoxErrNetwork': '无法连接账户服务器；请检查网络',
@@ -2117,6 +2282,7 @@ class AppStrings {
       'firefoxDnsSystem': 'Android ulgam DNS-i',
       'firefoxDnsDoH': 'Şifrlenen DNS (DoH)',
       'firefoxDnsProvider': 'DNS üpjünçisi',
+      'firefoxDnsProviderAuto': 'Awtomatik (hemmesi)',
       'firefoxDnsCustom': 'Ýörite',
       'firefoxDnsEndpoint': 'DoH salgysy (HTTPS)',
       'firefoxDnsBootstrap': 'Başlangyç IP-ler (islege görä, otur bilen)',
@@ -2149,6 +2315,36 @@ class AppStrings {
       'firefoxLoginRejected': 'Giriş sessiýasy kabul edilmedi; ýene gir',
       'firefoxLoginTimeout': 'Girişi tassyklamak wagtynyň üstünden geçdi; ýene synanyş',
       'firefoxLoginUnavailable': 'Bu enjamda giriş sahypasy elýeterli däl',
+      'firefoxLoginMethodForm': 'Giriş göni',
+      'firefoxLoginMethodBrowser': 'Brauzer arkaly giriş',
+      'firefoxLoginSubtitleForm': 'E-poçta we parol bilen göni giriş',
+      'firefoxLoginFormHint': 'Google ýa-da Apple bilen döredilen hasaplar brauzer girişini talap edýär',
+      'firefoxLoginBrowserHint': 'Parol diňe programmanyň motorunda işlenilýär we hiç ýerde saklanmaýar',
+      'firefoxLoginEmail': 'E-poçta',
+      'firefoxLoginPassword': 'Parol',
+      'firefoxLoginSubmit': 'Gir',
+      'firefoxLoginSubmitting': 'Girilýär…',
+      'firefoxLoginEmailInvalid': 'E-poçta salgy ýalňyş',
+      'firefoxLoginPasswordEmpty': 'Paroly giriziň',
+      'firefoxLoginCodeLabel': 'Tassyklyk kody',
+      'firefoxLoginCodeVerify': 'Tassykla',
+      'firefoxLoginCodeVerifying': 'Kod barlanýar…',
+      'firefoxLoginWrongCode': 'Girizilen kod dogry däl',
+      'firefoxLoginNetworkRetry': 'Torynda mesele; gaýtadan synanyşyň',
+      'firefoxLoginNoAccount': 'Bu e-poçta bilen Firefox hasaby tapylmady',
+      'firefoxLoginWrongPassword': 'Parol nädogry',
+      'firefoxLoginTooManyAttempts': 'Örän köp synanyşyk; soňrak gaýtadan synanyşyň',
+      'firefoxLoginRequestBlocked': 'Giriş howpsuzlyk sebäpli bloklandy; brauzer goşmasyny ulanyň',
+      'firefoxLoginSecondaryEmail': 'Giriş üçin hasabyň esasy e-poçtasy gerek',
+      'firefoxLoginInvalidEmail': 'Bu e-poçta giriş üçin ulanylyp bilinmez',
+      'firefoxLoginUnverifiedAccount': 'Hasabyň e-poçtasy entek tassyklanmady; ilki tassyklyk hatyny açyň',
+      'firefoxLoginEmailCase': 'E-poçtanyň harp ölçegi hasaba laýyk gelmeýär',
+      'firefoxLoginCodeExpired': 'Tassyklyk kodyň möhuti gutardy; gaýtadan gir',
+      'firefoxLoginCodeAttempts': 'Nädogry köp kod; gaýtadan gir',
+      'firefoxLoginStartOver': 'Täzeden başla',
+      'firefoxLoginCodeSent': 'Tassyklyk kody {email} salgyna iberildi',
+      'firefoxDnsViaCarrier': 'tunelden',
+      'firefoxDnsViaDirect': 'gowak (tunelsiz)',
       // PHASE B (Part 2) — the login-failure classes.
       'firefoxErrDns': 'Hasap serweriniň ady çözülmedi (DNS); birikmegi barlaň',
       'firefoxErrNetwork': 'Hasap serweri elýeterli däldi; tor birikmesini barlaň',

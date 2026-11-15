@@ -281,8 +281,13 @@ void main() {
       store.setFirefoxTransport('quic'); // unknown → h2
       expect(store.firefoxTransport, 'h2');
 
-      expect(store.firefoxDnsConfig, {'mode': 'system'});
-      store.setFirefoxDnsMode('doh');
+      // 1.9.0 — the never-touched default is the reference's AUTO
+      // racing posture (doh + auto; the bootstrap list stays absent).
+      expect(store.firefoxDnsConfig, {
+        'mode': 'doh',
+        'provider': 'auto',
+        'systemForLocalDomains': true,
+      });
       store.setFirefoxDnsProvider('quad9');
       expect(store.firefoxDnsConfig, {
         'mode': 'doh',

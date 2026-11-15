@@ -18,16 +18,40 @@ and means Android System DNS.
 
 ## Modes
 
-- `system` (default): keep Go's original platform resolver. Android
-  builds continue to use CGO + Bionic `getaddrinfo` under the A1
-  build rule; the DNS feature does not replace that path.
-- `doh`: use RFC 8484 POST (`application/dns-message`) over
-  HTTPS. Supported provider IDs are `cloudflare`, `google`,
-  `quad9`, and `custom`. TLS certificate and hostname validation
-  remain enabled; redirects are not followed.
+- `doh` with `provider: "auto"` (**the default since 1.9.0** — the
+  reference's `DefaultDNSServers` + `fallback_to_system`, ported from
+  arman-vpn-client `core/internal/resolver`): every IP-literal DoH
+  endpoint — Cloudflare `https://1.1.1.1/dns-query`, Google
+  `https://8.8.8.8/dns-query`, Quad9 `https://9.9.9.9/dns-query` — is
+  queried AT ONCE and the first valid answer wins; the system resolver
+  joins the race after 1 s (or at once, when every endpoint has
+  errored) and its answer wins only when it is real. A filtering
+  network must block ALL THREE endpoints AND answer its own DNS with
+  real addresses to keep the control-plane names from resolving.
+- `doh` with one provider (`cloudflare` | `google` | `quad9` |
+  `custom`): RFC 8484 POST (`application/dns-message`) over HTTPS to
+  the picked provider. TLS certificate and hostname validation remain
+  enabled; redirects are not followed.
+- `system`: keep Go's original platform resolver (an EXPLICIT pick —
+  the empty/omitted dns object no longer means this). Android builds
+  continue to use CGO + Bionic `getaddrinfo` under the A1 build rule.
+
+### The block-page filter (1.9.0, the reference's `IsBlockPage` rule)
+
+An answer whose addresses cannot be a public server's real address is
+a filtering network's answer, not a resolution: private space
+(RFC1918 — including Iran's block page `10.10.34.34-36`), loopback,
+unspecified, link-local, and the filtering page's IPv6 block
+`2001:4188:2:600:10:10:34:0/112` are STRIPPED from both the system's
+and the DoH servers' answers. An answer that was ONLY block pages
+never wins the race while another endpoint can still answer; the
+system's block page is held as the last resort and returned only when
+the endpoints' race then fails (on a filtering network only they can
+give the real address). A system lookup failure (NXDOMAIN and the
+like) never cancels the endpoints' race — exactly the reference's
+`lookupWithSystem` state machine.
 
 The resolver is installed as a process-local Go `net.Resolver`.
-DoH failures do not silently fall back to ordinary DNS.
 
 ## DNS during Firefox over WARP
 
@@ -47,6 +71,24 @@ embedded sign-in WebView's HTTPS CONNECT proxy. The account sign-in
 and pre-connect discovery roles are not represented as tunneled by
 Firefox over WARP; only the live tunnel-role control/data planes are
 carried through Aether.
+
+### 1.8.0 — the probe rides the carrier (the arman pattern)
+
+The `--dns-probe` role gained the SAME `upstreamSocks` seam the other
+roles have (the shared `dns + upstreamSocks` config line). With a
+carrier the probe changes its evidence model: each control-plane
+domain is dialed THROUGH the carrier BY HOSTNAME on :443 (socks5h
+semantics — remote DNS at the WARP egress, exactly the path the
+login/discovery/usage control-plane walks take). The local resolver is
+NOT consulted — that is the point: on a network with a poisoned system
+DNS and blocked DoH endpoints (the direct probes fail for every
+provider), the through-carrier probe answers the question that matters
+(«can the app's control plane reach Mozilla the way it will?»). Every
+event and the summary carry `via: "carrier"` (`"direct"` otherwise)
+so the host labels the evidence honestly. The Dart host rides a LIVE
+carrier when one exists (a connected session's, or the login screen's)
+and boots the login carrier only for the EXPLICIT test press — the
+round-6 rule (no carrier churn on page open) stands.
 
 ## Bootstrap and split DNS
 
@@ -126,6 +168,9 @@ at one hour). Negative answers and zero-TTL answers are not cached.
   local TLS DoH endpoint, and the WebView CONNECT proxy lifecycle/relay.
 - `--dns-probe` tests the same process-local resolver used by the
   engine and reports A/AAAA results for FxA, Remote Settings and Guardian.
+  1.8.0: with `upstreamSocks` set it reports the through-carrier
+  connect evidence instead (`via: "carrier"`, no local lookups) —
+  tested against a local SOCKS5 server that accepts domain CONNECTs.
 - Host tests are not evidence that every Android ABI resolves over the
   actual mobile network. Per-ABI runtime evidence still requires a device.
 - Flutter settings persist the mode, provider, custom HTTPS endpoint and

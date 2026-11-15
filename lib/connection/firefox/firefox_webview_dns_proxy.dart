@@ -30,8 +30,9 @@ class FirefoxWebViewDnsProxy {
   bool _proxySetAttempted = false;
   String? resolver;
 
-  /// The WARP carrier the proxy dials through ('socks5://127.0.0.1:1819'),
-  /// when the login screen brought one up; null = the direct dial.
+  /// The upstream the proxy dials through when one is given
+  /// ('socks5://127.0.0.1:1819'); null = the direct dial (the 1.9.0
+  /// reference posture — the login screen never passes one).
   String? carrier;
 
   Future<void> start(

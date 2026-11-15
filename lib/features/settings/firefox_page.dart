@@ -556,7 +556,10 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
           SizedBox(height: 10 * s),
           SettingPills<String>(
             keyId: 'firefox-dns-provider',
-            options: const [
+            options: [
+              // 1.9.0 — the AUTO pill (the reference's DefaultDNSServers):
+              // the default posture, listed first.
+              ('auto', strings.firefoxDnsProviderAuto),
               ('cloudflare', 'Cloudflare'),
               ('google', 'Google'),
               ('quad9', 'Quad9'),
@@ -626,6 +629,12 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
               }
             }
             final ok = summary?['ok'] == true;
+            // 1.8.0 — the honest path label: through the tunnel (the
+            // real path the control-plane walks take) or direct.
+            final viaCarrier = summary?['via'] == 'carrier';
+            final pathLabel = viaCarrier
+                ? strings.firefoxDnsViaCarrier
+                : strings.firefoxDnsViaDirect;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -636,14 +645,14 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
                   _setupFailed
                       ? strings.firefoxDnsSetupFailed
                       : ok
-                          ? strings.firefoxDnsTestSuccess
-                          : strings.firefoxDnsTestFailed,
+                          ? '${strings.firefoxDnsTestSuccess} ($pathLabel)'
+                          : '${strings.firefoxDnsTestFailed} ($pathLabel)',
                 ),
                 for (final event in _probeEvents!)
                   if (event['event'] == 'dnsProbe')
                     SettingInfoText(
                       "${event['domain']?.toString() ?? '—'} · "
-                          "${(event['addresses'] as List?)?.join(', ') ?? (event['error'] as String? ?? '—')} · "
+                          "${viaCarrier ? pathLabel : ((event['addresses'] as List?)?.join(', ') ?? (event['error'] as String? ?? '—'))} · "
                           "${event['elapsedMs']?.toString() ?? '0'} ms",
                     ),
               ],

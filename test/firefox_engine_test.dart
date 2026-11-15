@@ -141,9 +141,13 @@ void main() {
       expect(cfg.toJson()['version'], 1);
       // The WARP carrier seam (upstreamSocks) is ABSENT by default (the
       // additive contract: an older host's line stays valid), and the
-      // process-local DNS defaults to the system resolver.
+      // process-local DNS defaults to the reference's AUTO racing
+      // posture (1.9.0 — never the poisonable system resolver).
       expect(cfg.toJson().containsKey('upstreamSocks'), isFalse);
-      expect(cfg.toJson()['dns'], {'mode': 'system'});
+      expect(
+        cfg.toJson()['dns'],
+        {'mode': 'doh', 'provider': 'auto'},
+      );
       const doh = FirefoxEngineConfig(
         socksListen: '127.0.0.1:1822',
         auth: FirefoxSessionAuth(accessToken: 'at'),

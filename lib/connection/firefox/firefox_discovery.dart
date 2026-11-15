@@ -136,7 +136,7 @@ class FirefoxDiscovery {
     required this.cachePath,
     this.ttl = const Duration(hours: 6),
     this.fetchTimeout = const Duration(seconds: 30),
-    this.dnsConfig = const {'mode': 'system'},
+    this.dnsConfig = const {'mode': 'doh', 'provider': 'auto'},
   });
 
   final String binaryPath;

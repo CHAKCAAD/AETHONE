@@ -74,7 +74,41 @@ const LoginConfigVersion = 1
 //      bootstrap lookup); and a failed h3 session build falls back to h2
 //      ONCE, honestly logged (a dead h3 serves nobody — the pick is a
 //      preference, not a death sentence). Additive only.
-const EngineVersion = "1.7.0"
+// 1.8.0 — the arman-pattern round (2026-11-16, the owner's round 8:
+//      «از پروژه arman-vpn-client الگو بگیر» — the reference app's
+//      DEFAULT sign-in is the direct email+password form driven by the
+//      core; the browser page is the alternative):
+//      the `--login` role's `password` mode — the config line carries
+//      email+password (the stdin pipe ONLY, exactly like the session
+//      token; the engine derives authPW immediately and the password is
+//      never logged or echoed), the FxA password flow runs inside the
+//      engine (FxaLogin → the optional email-2fa code → the OAuth mint),
+//      and the new `loginNeedsCode` event asks the host for the emailed
+//      code (the second stdin line). The granular FxA application codes
+//      (noAccount / wrongPassword / tooManyAttempts / requestBlocked /
+//      secondaryEmail / invalidEmail / unverifiedAccount / codeExpired /
+//      codeAttemptsExhausted / emailCaseInvalid) map arman's SignInError
+//      model. The `--dns-probe` role gains the SAME upstreamSocks seam
+//      the other roles have: with a carrier the probe dials each
+//      control-plane domain THROUGH the carrier BY HOSTNAME (remote DNS —
+//      the engine's own control-plane posture), and the events and
+//      summary carry `via: "carrier"` ("direct" otherwise). Additive
+//      only; a host that sends none of the new fields keeps the exact
+//      1.7.0 behavior.
+// 1.9.0 — the resolver round (the reference's OWN posture, ported from
+//      arman-vpn-client core/internal/resolver): the `auto` DNS provider
+//      races Cloudflare + Google + Quad9 IP-literal DoH endpoints at
+//      once (first valid answer wins), the system resolver joins after
+//      1s (or at once when every endpoint failed) and its answer wins
+//      only when real, and IsBlockPage answers (private space + Iran's
+//      filtering page 10.10.34.34-36 / 2001:4188:2:600:10:10:34::/112)
+//      are stripped from BOTH the system's and the servers' answers — a
+//      fully poisoned answer never wins while another server can still
+//      answer. The EMPTY dns block now defaults to this posture (the
+//      reference's DefaultDNSServers + fallback_to_system), never the
+//      poisonable system one; system stays an explicit pick. Additive
+//      only; a host that sends a full dns block keeps its exact pick.
+const EngineVersion = "1.9.0"
 
 // Event names (mirrored by FirefoxEngineEvents on the Dart side).
 const (
@@ -92,6 +126,7 @@ const (
         EvQuotaExhausted   = "quotaExhausted"
         EvLoginStarted     = "loginStarted"
         EvLoginRetry       = "loginRetry"
+        EvLoginNeedsCode   = "loginNeedsCode" // 1.8.0 — the password mode's email-2fa step
         EvLoginCompleted   = "loginCompleted"
         EvUsage            = "usage"      // 1.7.0 — the --usage role's success
         EvUsageFailed      = "usageFailed" // 1.7.0 — the --usage role's failure
@@ -117,6 +152,19 @@ const (
         ErrSessionRejected     = "sessionRejected"
         ErrLoginTimeout        = "loginTimeout"
         ErrExchangeFailed      = "exchangeFailed"
+
+        // 1.8.0 — the password mode's granular FxA application codes
+        // (arman's SignInError model; the errno seam maps onto these).
+        ErrNoAccount             = "noAccount"
+        ErrWrongPassword         = "wrongPassword"
+        ErrTooManyAttempts       = "tooManyAttempts"
+        ErrRequestBlocked        = "requestBlocked"
+        ErrSecondaryEmail        = "secondaryEmail"
+        ErrInvalidEmail          = "invalidEmail"
+        ErrUnverifiedAccount     = "unverifiedAccount"
+        ErrEmailCaseInvalid      = "emailCaseInvalid"
+        ErrCodeExpired           = "codeExpired"
+        ErrCodeAttemptsExhausted = "codeAttemptsExhausted"
 )
 
 // Exit codes (mirrored by FirefoxEngineExitCode on the Dart side).
@@ -208,6 +256,15 @@ type Event struct {
 
         // loginStarted
         LoginMode string `json:"loginMode,omitempty"`
+
+        // loginNeedsCode (1.8.0, the password mode): the account's email
+        // (the user typed it — not a secret), the FxA verification method
+        // ("email-2fa"), and the LAST step's failure when it re-asks
+        // ("wrongCode" | "codeExpired" | "network" — a machine code; the
+        // localized text is the host's). Attempt counts the code asks.
+        Email              string `json:"email,omitempty"`
+        VerificationMethod string `json:"verificationMethod,omitempty"`
+        LastError          string `json:"lastError,omitempty"`
 
         // authRefreshed / loginCompleted (SECRET — never logged)
         AccessToken  string `json:"accessToken,omitempty"`

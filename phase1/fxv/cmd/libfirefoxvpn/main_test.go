@@ -281,7 +281,7 @@ func TestStartedEventShape(t *testing.T) {
         defer s.kill()
         s.send(`{"version":1,"socksListen":"127.0.0.1:1822","upstreamOverride":"127.0.0.1:1","guardian":"https://127.0.0.1:1","auth":{"accessToken":"x"}}`)
         ev := s.waitEvent(t, "started", 5*time.Second)
-        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "1.7.0") {
+        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "1.9.0") {
                 t.Fatalf("engine version = %v", ev["message"])
         }
         if pid, _ := ev["pid"].(float64); pid <= 0 {

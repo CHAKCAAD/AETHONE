@@ -62,18 +62,25 @@ the Android-Keystore vault on the Dart side).
 ## 3. Process contract
 
 Fixed and versioned by `engine.ConfigVersion = 1` / `EngineVersion
-"1.7.0"` (bump both on breaking change; every bump since 1.1.0 is
+"1.9.0"` (bump both on breaking change; every bump since 1.1.0 is
 ADDITIVE — the 1.2.0 classified `failed` event, the 1.4.0 WARP carrier
 seams, the 1.5.0 guardian-line merge (the single `upstreamSocks`
 seam replacing 1.4.0's apiProxy/upstreamProxy pair, the process-local
 `dns` block, the `--webview-proxy` role and `quotaMax` on the quota
 events), the 1.6.0 direct data plane (the `dataPlaneDirect` flag
 — arman's relay posture: the initial stages ride the carrier, the
-data connection dials the Fastly edge itself), and the 1.7.0
+data connection dials the Fastly edge itself), the 1.7.0
 remaining-data round (the `--usage` role + `quotaUnlimited` on the
-event, the IP-literal DoH provider defaults, the h3→h2 fallback);
-a host that sends none of the new fields keeps the exact pre-1.4.0
-direct behavior).
+event, the IP-literal DoH provider defaults, the h3→h2 fallback),
+the 1.8.0 arman-pattern round (the `--login` role's `password`
+mode + the `loginNeedsCode` event + the granular FxA application
+codes + the `--dns-probe` role's `upstreamSocks` seam),
+and the 1.9.0 resolver round (the `auto` DNS provider — the
+reference's raced Cloudflare+Google+Quad9 posture with the system
+fallback and the `IsBlockPage` block-page filter, now also the
+EMPTY dns block's default); a host that sends none of the new
+fields keeps its explicit pick or the new auto default — every
+previously valid config line stays valid.
 
 * **stdin** — exactly ONE JSON line (`engine.Config`), written by the host
   right after spawn. The line is bounded to 1 MiB (`readConfigLine`);
@@ -113,6 +120,27 @@ direct behavior).
   retrying unverified sessions inside a 300 s budget and emitting the
   pair on the secret-carrying `loginCompleted` event. Short-lived
   child; stdin EOF = clean cancel (exit 0).
+  **1.8.0 — the `password` mode (the arman-vpn-client pattern, the
+  owner's round 8)**: the config line carries `email` + `password`
+  instead of the session token (the SAME stdin-pipe-only discipline —
+  never argv, never env, never a log; `redact.Line` scrubs the
+  password from every stderr path and it is dropped from memory the
+  moment `FxaLogin` returns). The engine runs the whole FxA password
+  flow itself: `vpnclient.FxaLogin` with the `email-2fa` verification
+  method (the code is EMAILED, not a link — a headless client finishes
+  it); when the session lands unverified the `loginNeedsCode` event
+  asks (email + method + the previous submission's `lastError`:
+  wrongCode | badCodeInput | network) and the SECOND stdin line
+  (`{"code":"…"}`) answers it on the SAME child; `FxaVerifySession`
+  validates; then the same OAuth mint walk runs. Wrong submissions are
+  capped at 5 (`codeAttemptsExhausted`); a network hiccup re-asks
+  without consuming an attempt; stdin EOF at ANY wait is the clean
+  cancel. The granular FxA errnos map arman's SignInError model:
+  102 `noAccount` · 103 `wrongPassword` · 104/138 `unverifiedAccount`
+  · 114 (and HTTP 429) `tooManyAttempts` · 120 `emailCaseInvalid` ·
+  125/126 `requestBlocked` · 142 `secondaryEmail` · 149 `invalidEmail`
+  · 153 `codeExpired` — each its OWN `failed` failCode (the transport
+  classes are unchanged).
 * **`--usage` role** (1.7.0, the owner's round 5 — the remaining-data
   fix, arman's `fetchProxyUsage` model) — `libfirefoxvpn.so --usage`
   reads ONE JSON line on stdin (`engine.UsageConfig` v1: `auth`

@@ -51,7 +51,7 @@ class FirefoxEngineConfig {
     this.upstreamSocks = '',
     this.dataPlaneDirect = false,
     this.logLevel = 'normal',
-    this.dns = const {'mode': 'system'},
+    this.dns = const {'mode': 'doh', 'provider': 'auto'},
   });
 
   /// Loopback listener ONLY (the engine refuses anything else).
@@ -172,6 +172,10 @@ class FirefoxEngineEvent {
         latencyMs = (raw['latencyMs'] as num?)?.toInt() ?? 0,
         line = raw['line'] as String? ?? '',
         loginMode = raw['loginMode'] as String? ?? '',
+        // 1.8.0 — the password mode's needsCode fields (tolerant reads).
+        needsCodeEmail = _tolerantString(raw['email']),
+        verificationMethod = _tolerantString(raw['verificationMethod']),
+        needsCodeLastError = _tolerantString(raw['lastError']),
         attempt = (raw['attempt'] as num?)?.toInt() ?? 0,
         expiresIn = (raw['expiresIn'] as num?)?.toInt() ?? 0,
         obtainedAt = DateTime.tryParse(raw['obtainedAt'] as String? ?? ''),
@@ -226,6 +230,13 @@ class FirefoxEngineEvent {
   final int latencyMs;
   final String line;
   final String loginMode;
+
+  /// loginNeedsCode (1.8.0): the account's email, the FxA verification
+  /// method ('email-2fa'), and the previous submission's failure code
+  /// when the engine re-asks.
+  final String needsCodeEmail;
+  final String verificationMethod;
+  final String needsCodeLastError;
   final int attempt;
 
   /// loginCompleted / authRefreshed: the pair's lifetime facts (never
@@ -263,6 +274,10 @@ class FirefoxEngineEvent {
       case 'loginRetry':
         return 'login: session not confirmed yet '
             '(attempt $attempt, retrying)';
+      case 'loginNeedsCode':
+        return 'login: the emailed code is needed '
+            '${needsCodeEmail.isEmpty ? '' : '($needsCodeEmail)'}'
+            '${needsCodeLastError.isEmpty ? '' : ' — last: $needsCodeLastError'}';
       case 'failed':
         return 'engine failed ($failCode): $message';
       default:
@@ -288,6 +303,9 @@ abstract final class FirefoxEngineEvents {
   // --login role (Phase 2)
   static const loginStarted = 'loginStarted';
   static const loginRetry = 'loginRetry';
+  /// 1.8.0 — the password mode's email-2fa step: the engine asks for
+  /// the code it emailed (the second stdin line answers it).
+  static const loginNeedsCode = 'loginNeedsCode';
   static const loginCompleted = 'loginCompleted';
   static const stopping = 'stopping';
   static const stopped = 'stopped';
@@ -313,6 +331,19 @@ abstract final class FirefoxEngineFailure {
   static const loginTimeout = 'loginTimeout';
   static const exchangeFailed = 'exchangeFailed';
 
+  /// 1.8.0 — the password mode's granular FxA application codes (the
+  /// arman SignInError model; the Dart UI maps each to its own text).
+  static const noAccount = 'noAccount';
+  static const wrongPassword = 'wrongPassword';
+  static const tooManyAttempts = 'tooManyAttempts';
+  static const requestBlocked = 'requestBlocked';
+  static const secondaryEmail = 'secondaryEmail';
+  static const invalidEmail = 'invalidEmail';
+  static const unverifiedAccount = 'unverifiedAccount';
+  static const emailCaseInvalid = 'emailCaseInvalid';
+  static const codeExpired = 'codeExpired';
+  static const codeAttemptsExhausted = 'codeAttemptsExhausted';
+
   /// PHASE B (Part 2) — the granular transport classes a v1.2.0-phaseb
   /// engine emits for the exchange/login failures (fferr.Code; the
   /// legacy codes above stay valid forever — see firefox_errors.dart).
@@ -335,13 +366,18 @@ abstract final class FirefoxEngineExitCode {
   static const internal = 4;
 }
 
-/// Terminal outcome of one `--login` exchange (Phase 2).
+/// Terminal outcome of one `--login` exchange (Phase 2). 1.8.0 adds
+/// the [FirefoxLoginState.needsCode] intermediate state: the password
+/// mode's emailed-code step — the client stays alive and
+/// `FirefoxLoginClient.submitCode` answers it.
 class FirefoxLoginResult {
   const FirefoxLoginResult({
     required this.state,
     this.auth,
     this.failCode = '',
     this.message = '',
+    this.email = '',
+    this.lastError = '',
   });
 
   factory FirefoxLoginResult.cancelled() =>
@@ -354,6 +390,18 @@ class FirefoxLoginResult {
         message: message,
       );
 
+  /// 1.8.0 — the email-2fa ask: [email] is the account's address,
+  /// [lastError] carries the previous submission's failure when the
+  /// engine re-asks ('wrongCode' | 'badCodeInput' | 'network' | '').
+  factory FirefoxLoginResult.needsCode(
+    String email,
+    String lastError,
+  ) => FirefoxLoginResult(
+    state: FirefoxLoginState.needsCode,
+    email: email,
+    lastError: lastError,
+  );
+
   final FirefoxLoginState state;
 
   /// The minted pair — present ONLY on [FirefoxLoginState.completed];
@@ -363,7 +411,14 @@ class FirefoxLoginResult {
   final String failCode;
   final String message;
 
+  /// loginNeedsCode — the account's email (the user typed it).
+  final String email;
+
+  /// loginNeedsCode — the previous submission's failure code ('' on
+  /// the first ask).
+  final String lastError;
+
   bool get isCompleted => state == FirefoxLoginState.completed;
 }
 
-enum FirefoxLoginState { running, completed, cancelled, failed }
+enum FirefoxLoginState { running, completed, cancelled, failed, needsCode }

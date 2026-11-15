@@ -368,8 +368,17 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
 
   /// Firefox DNS preferences. They are deliberately process-scoped: they
   /// never modify Android Private DNS or the other AETHONE engines.
-  String firefoxDnsMode = 'system';
-  String firefoxDnsProvider = 'cloudflare';
+  ///
+  /// 1.9.0 — the DEFAULT is the reference's posture (arman-vpn-client's
+  /// DefaultDNSServers + fallback_to_system): DoH mode with the AUTO
+  /// provider (Cloudflare + Google + Quad9 raced at once, the first
+  /// valid answer wins, the system resolver joins after 1 s and its
+  /// answer wins only when real — the engine's own IsBlockPage rule
+  /// strips the filtering page's answers). A user who never touched the
+  /// DNS settings (no stored pick) migrates to this posture; an
+  /// EXPLICIT stored pick is always respected.
+  String firefoxDnsMode = 'doh';
+  String firefoxDnsProvider = 'auto';
   String firefoxDnsEndpoint = '';
   List<String> firefoxDnsBootstrapIps = const [];
   Future<void>? _firefoxDnsLoadFuture;
@@ -421,7 +430,8 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
       if (doh) ...{
         'provider': firefoxDnsProvider,
         if (firefoxDnsProvider == 'custom') 'endpoint': endpoint,
-        if (bootstrap.isNotEmpty) 'bootstrapIps': bootstrap,
+        if (firefoxDnsProvider != 'auto' && bootstrap.isNotEmpty)
+          'bootstrapIps': bootstrap,
         'systemForLocalDomains': true,
       },
     };
@@ -442,20 +452,22 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   Future<void> _loadFirefoxDnsSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final mode = prefs.getString('firefox.dns.mode') ?? 'system';
-      final provider = prefs.getString('firefox.dns.provider') ?? 'cloudflare';
+      // 1.9.0 — the never-touched default migrates to the reference's
+      // AUTO posture; an explicit stored pick is always respected.
+      final mode = prefs.getString('firefox.dns.mode') ?? 'doh';
+      final provider = prefs.getString('firefox.dns.provider') ?? 'auto';
       firefoxDnsMode = mode == 'doh' ? 'doh' : 'system';
-      firefoxDnsProvider = const {'cloudflare', 'google', 'quad9', 'custom'}
+      firefoxDnsProvider = const {'auto', 'cloudflare', 'google', 'quad9', 'custom'}
               .contains(provider)
           ? provider
-          : 'cloudflare';
+          : 'auto';
       firefoxDnsEndpoint = prefs.getString('firefox.dns.endpoint') ?? '';
       firefoxDnsBootstrapIps =
           prefs.getStringList('firefox.dns.bootstrap_ips') ?? const [];
       notifyListeners();
     } catch (_) {
-      // Preferences unavailable (e.g. a pure unit-test host): System DNS
-      // remains the safe, backward-compatible default.
+      // Preferences unavailable (e.g. a pure unit-test host): the AUTO
+      // racing posture remains the safe default.
     }
   }
 
@@ -481,8 +493,8 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   }
 
   void setFirefoxDnsProvider(String provider) {
-    const allowed = {'cloudflare', 'google', 'quad9', 'custom'};
-    final pick = allowed.contains(provider) ? provider : 'cloudflare';
+    const allowed = {'auto', 'cloudflare', 'google', 'quad9', 'custom'};
+    final pick = allowed.contains(provider) ? provider : 'auto';
     if (firefoxDnsProvider == pick) return;
     // 1.7.0 — switching providers RESETS the endpoint/bootstrap fields:
     // a stale custom endpoint must never ride the newly picked provider
@@ -681,6 +693,21 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
     return _engine.firefoxWebChannelLogin(sessionToken);
   }
 
+  /// 1.8.0 (the owner's round 8 — the arman pattern): the DIRECT
+  /// email+password sign-in. The engine child runs the whole FxA flow;
+  /// the result is terminal or the emailed-code ask.
+  Future<FirefoxLoginResult> firefoxPasswordLogin(
+    String email,
+    String password,
+  ) {
+    return _engine.firefoxPasswordLogin(email, password);
+  }
+
+  /// 1.8.0 — the emailed code's answer (the SAME engine child).
+  Future<FirefoxLoginResult> firefoxPasswordLoginCode(String code) {
+    return _engine.firefoxPasswordLoginCode(code);
+  }
+
   /// PHASE-2 — cancels an in-flight login exchange (the login screen's
   /// dispose path): stdin close → grace → kill; no orphan survives.
   Future<void> firefoxLoginCancel() => _engine.firefoxLoginCancel();
@@ -689,13 +716,6 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   /// This is DNS evidence only, not an OAuth or VPN-connectivity test.
   Future<List<Map<String, dynamic>>?> firefoxDnsProbe() =>
       _engine.firefoxDnsProbe(firefoxDnsConfig);
-
-  /// 1.5.0 (fix 5) — brings the plain WARP login carrier up for the
-  /// sign-in WebView (null = it could not come up; the screen then uses
-  /// the direct DNS-aware proxy) and takes it down when the page closes.
-  Future<String?> firefoxLoginCarrierUp() => _engine.firefoxLoginCarrierUp();
-  Future<void> firefoxLoginCarrierDown() =>
-      _engine.firefoxLoginCarrierDown();
 
   /// v4.22 — direct setters for the SETTINGS pages (the Psiphon/Tor pages
   /// write their own family field regardless of the currently selected

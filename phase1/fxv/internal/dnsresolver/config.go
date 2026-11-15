@@ -11,11 +11,24 @@ const (
         ModeSystem = "system"
         ModeDoH    = "doh"
 
+        ProviderAuto      = "auto"
         ProviderCloudflare = "cloudflare"
         ProviderGoogle     = "google"
         ProviderQuad9      = "quad9"
         ProviderCustom     = "custom"
 )
+
+// AutoEndpoints is the reference project's DefaultDNSServers posture
+// (arman-vpn-client, core/internal/config): the "Automatic" choice races
+// every IP-literal DoH endpoint at once and the first valid answer wins,
+// with the system resolver asked after SystemAfter when none answers — a
+// filtering network must block ALL of them to keep the names from
+// resolving.
+var AutoEndpoints = []string{
+        "https://1.1.1.1/dns-query",
+        "https://8.8.8.8/dns-query",
+        "https://9.9.9.9/dns-query",
+}
 
 // Config is scoped to the Firefox engine process. It never changes the
 // Android device resolver or any other AETHONE core.
@@ -29,7 +42,11 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-        return Config{Mode: ModeSystem, SystemForLocalDomains: true}
+        // 1.9.0 — the reference posture (arman-vpn-client's DefaultDNSServers
+        // + fallback_to_system): a host that sends no DNS block gets the AUTO
+        // resolver, not the poisonable system one. System stays an explicit
+        // pick.
+        return Config{Mode: ModeDoH, Provider: ProviderAuto, SystemForLocalDomains: true}
 }
 
 func (c Config) Validate() (Config, error) {
@@ -49,6 +66,15 @@ func (c Config) Validate() (Config, error) {
         case ModeDoH:
                 c.Provider = strings.ToLower(strings.TrimSpace(c.Provider))
                 switch c.Provider {
+                // 1.9.0 — the AUTO provider (the reference's
+                // DefaultDNSServers): every IP-literal endpoint is queried
+                // at once, the first valid answer wins, and the system
+                // resolver is asked after SystemAfter when none answers.
+                // Bootstrap IPs are inert here (every endpoint is an IP
+                // literal) and are dropped.
+                case ProviderAuto:
+                        c.Endpoint = ""
+                        c.BootstrapIPs = nil
                 // 1.7.0 — the provider defaults are IP-LITERAL endpoints
                 // (arman's ThroughServers model): a hostname endpoint
                 // (cloudflare-dns.com, dns.google, …) must itself be
@@ -71,30 +97,34 @@ func (c Config) Validate() (Config, error) {
                 default:
                         return c, fmt.Errorf("unsupported DNS provider %q", c.Provider)
                 }
-                if c.Provider == ProviderCustom && strings.TrimSpace(c.Endpoint) == "" {
-                        return c, fmt.Errorf("custom DoH endpoint is required")
-                }
-                parsed, err := url.Parse(strings.TrimSpace(c.Endpoint))
-                if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
-                        return c, fmt.Errorf("DoH endpoint must be an absolute HTTPS URL without user-info or fragment")
-                }
-                c.Endpoint = parsed.String()
-                if len(c.BootstrapIPs) > 8 {
-                        return c, fmt.Errorf("at most 8 DoH bootstrap IPs are allowed")
-                }
-                bootstrap := make([]string, 0, len(c.BootstrapIPs))
-                seenBootstrap := make(map[string]struct{}, len(c.BootstrapIPs))
-                for i, raw := range c.BootstrapIPs {
-                        ip := net.ParseIP(strings.TrimSpace(raw))
-                        if ip == nil || ip.IsUnspecified() || ip.IsMulticast() {
-                                return c, fmt.Errorf("invalid DoH bootstrap IP at index %d", i)
+                // The AUTO posture races [AutoEndpoints] (validated IP
+                // literals): the single-endpoint checks below do not apply.
+                if c.Provider != ProviderAuto {
+                        if c.Provider == ProviderCustom && strings.TrimSpace(c.Endpoint) == "" {
+                                return c, fmt.Errorf("custom DoH endpoint is required")
                         }
-                        normalized := ip.String()
-                        if _, ok := seenBootstrap[normalized]; ok { continue }
-                        seenBootstrap[normalized] = struct{}{}
-                        bootstrap = append(bootstrap, normalized)
+                        parsed, err := url.Parse(strings.TrimSpace(c.Endpoint))
+                        if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+                                return c, fmt.Errorf("DoH endpoint must be an absolute HTTPS URL without user-info or fragment")
+                        }
+                        c.Endpoint = parsed.String()
+                        if len(c.BootstrapIPs) > 8 {
+                                return c, fmt.Errorf("at most 8 DoH bootstrap IPs are allowed")
+                        }
+                        bootstrap := make([]string, 0, len(c.BootstrapIPs))
+                        seenBootstrap := make(map[string]struct{}, len(c.BootstrapIPs))
+                        for i, raw := range c.BootstrapIPs {
+                                ip := net.ParseIP(strings.TrimSpace(raw))
+                                if ip == nil || ip.IsUnspecified() || ip.IsMulticast() {
+                                        return c, fmt.Errorf("invalid DoH bootstrap IP at index %d", i)
+                                }
+                                normalized := ip.String()
+                                if _, ok := seenBootstrap[normalized]; ok { continue }
+                                seenBootstrap[normalized] = struct{}{}
+                                bootstrap = append(bootstrap, normalized)
+                        }
+                        c.BootstrapIPs = bootstrap
                 }
-                c.BootstrapIPs = bootstrap
         default:
                 return c, fmt.Errorf("unsupported DNS mode %q", c.Mode)
         }
@@ -148,4 +178,14 @@ func (c Config) UsesSystemDNS(host string) bool {
                 if host == suffix || strings.HasSuffix(host, "."+suffix) { return true }
         }
         return false
+}
+
+// DoHEndpoints expands a validated DoH config into the endpoint list the
+// exchange races: the AUTO provider's three IP-literal servers, or the
+// one endpoint of the picked provider.
+func (c Config) DoHEndpoints() []string {
+        if c.Provider == ProviderAuto {
+                return append([]string(nil), AutoEndpoints...)
+        }
+        return []string{c.Endpoint}
 }

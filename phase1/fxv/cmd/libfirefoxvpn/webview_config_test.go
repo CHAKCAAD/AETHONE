@@ -26,12 +26,14 @@ func TestWebViewProxyConfigLine(t *testing.T) {
 		}
 	})
 
-	t.Run("empty line is the system default + direct dial", func(t *testing.T) {
+	t.Run("empty line is the auto racing default + direct dial", func(t *testing.T) {
 		cfg, err := readWebviewProxyConfigBuffered(br(""))
 		if err != nil {
 			t.Fatalf("empty line must parse: %v", err)
 		}
-		if cfg.DNS.Mode != "system" || cfg.UpstreamSocks != "" {
+		// 1.9.0 — the empty default is the reference's AUTO racing
+		// posture, never the poisonable system one.
+		if cfg.DNS.Mode != "doh" || cfg.DNS.Provider != "auto" || cfg.UpstreamSocks != "" {
 			t.Fatalf("cfg = %+v", cfg)
 		}
 	})

@@ -181,3 +181,49 @@ forever — the Dart mapper accepts both, see
 Related docs: `FIREFOX_VPN_ENGINE.md` (the tunnel contract),
 `FIREFOX_VPN_SECURITY.md` (token handling),
 `FIREFOX_VPN_PHASE2_REPORT.md` (the phase report).
+
+## 6. The 1.8.0/1.9.0 rounds — the arman-vpn-client pattern
+
+The owner's round-8 decree («از پروژه arman-vpn-client الگو بگیر») made
+the reference app the pattern for the sign-in, and the round-9 resolver
+round completed its network posture.
+
+### Two methods (the reference's own shape)
+
+* **DIRECT — the email + password FORM (the DEFAULT)**: the engine's
+  `--login` `password` mode (1.8.0) runs the whole FxA password flow
+  itself — `FxaLogin` with the `email-2fa` verification method, the
+  optional emailed-code step (the `loginNeedsCode` event asks; the
+  second stdin line answers on the SAME child), then the same OAuth
+  mint the webchannel mode uses. The credentials travel ONLY on the
+  child's stdin pipe. The granular FxA application codes
+  (`noAccount` / `wrongPassword` / `tooManyAttempts` /
+  `requestBlocked` / `secondaryEmail` / `invalidEmail` /
+  `unverifiedAccount` / `emailCaseInvalid` / `codeExpired` /
+  `codeAttemptsExhausted`) map the reference's `SignInError` model.
+* **BROWSER — the Phase-2 WebView page (the alternative)**: unchanged
+  mechanically, but created LAZILY — switching to the browser tab is
+  what boots the WebView and its DNS-aware loopback proxy.
+
+### The network posture (1.9.0 — the reference's own answer)
+
+**NOTHING is booted for the sign-in.** Both methods walk DIRECT on the
+engine's hardened control plane:
+
+* the raced DoH resolver (the `auto` provider: Cloudflare + Google +
+  Quad9 IP-literal endpoints queried at once, the first valid answer
+  wins, the system resolver joins after 1 s — see
+  [dns-resolution.md](firefox-vpn/dns-resolution.md));
+* the block-page filter (the reference's `IsBlockPage` rule) so a
+  filtering network's answers never win;
+* the pinned upstream's uTLS **Firefox ClientHello** on every
+  control-plane TLS connection (the Fastly edge's bot defense).
+
+The LOGIN CARRIER — the in-process Aether core booted at screen open
+(rounds 2–8) — is GONE: it stacked the heaviest memory in the app
+(the Rust WARP core + the Chromium WebView at once — the pressure the
+owner felt as «بسته شدن برنامه») and it never made the sign-in work.
+The reference project signs in with no tunnel, and so does AETHONE
+now. The engine's `upstreamSocks` seam stays (a future explicit user
+pick can ride a live carrier), but nothing boots one and no login path
+passes it.

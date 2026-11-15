@@ -1,26 +1,44 @@
-/// The Firefox VPN sign-in page (Phase 2): the REAL accounts.firefox.com
-/// page (context=fx_desktop_v3) inside an embedded WebView, bridged to
-/// the app by the WebChannel hook (firefox_web_channel.dart — adapted
-/// from FoxyVPN's MIT BrowserLoginScreen; the protocol is Mozilla's).
+/// The Firefox VPN sign-in page — TWO methods, the arman-vpn-client
+/// pattern (the owner's round 8: «از پروژه arman-vpn-client الگو بگیر»):
 ///
-/// Flow: the user signs in on MOZILLA'S OWN PAGE (the password never
-/// transits AETHONE code) → the page's `fxaccounts:login` WebChannel
-/// message hands the 64-hex session token to the bridge → the engine's
-/// `--login` role exchanges it for the same-account OAuth pair (the
-/// token travels ONLY on the child's stdin pipe) → the pair lands in the
-/// Keystore vault → the WebView's cookies are cleared (the browser
-/// session dies locally) → the page pops back to the Firefox settings
-/// page with the account signed in.
+///  * DIRECT (the DEFAULT, arman's own default sign-in): an email +
+///    password FORM. The engine's `--login` password mode runs the
+///    whole FxA flow itself — when Mozilla emails the confirmation
+///    code the engine asks (`loginNeedsCode`) and the SAME child takes
+///    the answer. No WebView, no browser page, no Fastly anti-bot
+///    wall: the password never transits anything but the child's
+///    stdin pipe, and the accounts that need the browser (Google /
+///    Apple sign-ins, no password) are pointed at the second tab.
 ///
-/// Non-Mozilla links open in the external browser (the WebView stays on
-/// Mozilla properties only). The back gesture during the exchange
-/// cancels it cleanly (stdin close → grace → kill; no orphan).
+///  * BROWSER (the alternative): the REAL accounts.firefox.com page
+///    inside an embedded WebView, bridged by the WebChannel hook
+///    (firefox_web_channel.dart; the protocol is Mozilla's). Created
+///    LAZILY — switching to this tab is what boots the WebView and its
+///    DNS-aware proxy; the direct path never pays for it (the
+///    round-5/6 «بسته شدن برنامه» memory pressure had its heaviest
+///    page here).
+///
+/// 1.9.0 — the reference's OWN network posture, end to end: NOTHING is
+/// booted for the sign-in. Both methods walk DIRECT on the engine's
+/// hardened control plane (the raced DoH resolver — Cloudflare +
+/// Google + Quad9 at once with the system fallback and the
+/// block-page filter — plus the uTLS Firefox ClientHello), exactly
+/// the way arman-vpn-client's core drives its own account requests
+/// with no account and the VPN off. The old login carrier (the
+/// in-process Aether core booted at screen open) is GONE: it was the
+/// memory pressure the owner felt as «بسته شدن برنامه» on top of the
+/// WebView, and it never made the sign-in work — the reference
+/// project needs no tunnel to sign in, and neither do we now.
+///
+/// The back gesture during any exchange cancels it cleanly (stdin
+/// close → grace → kill; no orphan).
 library;
 
 import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -32,8 +50,47 @@ import '../../../connection/firefox/firefox_webview_dns_proxy.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 
-/// The login screen's phases (its own status strip under the top bar).
+/// The sign-in methods (the segmented control at the top of the page).
+enum _LoginMethod { form, browser }
+
+/// The form's own phases (its half of the status strip).
+enum _FormPhase { idle, connecting, submitting, needsCode, verifying, success, failed }
+
+/// The browser tab's phases (the historical strip).
 enum _LoginPhase { browsing, exchanging, success, failed }
+
+/// Keeps the digits of a typed or pasted code and drops everything
+/// else (spaces, dashes); Persian and Arabic-Indic digits, which a
+/// Persian keyboard types, become 0-9 (arman-vpn-client's _CodeDigits,
+/// ported verbatim — the emailed codes are digits).
+class FirefoxLoginCodeDigits extends TextInputFormatter {
+  const FirefoxLoginCodeDigits();
+
+  static String? _digit(int rune) {
+    if (rune >= 0x30 && rune <= 0x39) return String.fromCharCode(rune);
+    if (rune >= 0x6F0 && rune <= 0x6F9) return '${rune - 0x6F0}';
+    if (rune >= 0x660 && rune <= 0x669) return '${rune - 0x660}';
+    return null;
+  }
+
+  static String _digits(String text) =>
+      text.runes.map(_digit).whereType<String>().join();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = _digits(newValue.text);
+    if (text == newValue.text) return newValue;
+    final end = newValue.selection.end.clamp(0, newValue.text.length);
+    final cursor = _digits(newValue.text.substring(0, end)).length;
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: cursor),
+    );
+  }
+}
 
 class FirefoxLoginScreen extends StatefulWidget {
   const FirefoxLoginScreen({super.key, required this.store});
@@ -45,28 +102,174 @@ class FirefoxLoginScreen extends StatefulWidget {
 }
 
 class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
+  // ---- the method pick (the form is the DEFAULT — arman's posture) ----
+  _LoginMethod _method = _LoginMethod.form;
+
+  // ---- the form's state ----
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  final _code = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode();
+  bool _obscure = true;
+  _FormPhase _formPhase = _FormPhase.idle;
+  String? _formError;
+  String _codeEmail = '';
+  String _codeLastError = '';
+
+  // ---- the browser tab's state (created LAZILY) ----
   final FirefoxWebChannelBridge _bridge = FirefoxWebChannelBridge();
   WebViewController? _controller;
   FirefoxWebViewDnsProxy? _webViewDnsProxy;
   bool _webViewInitializing = true;
+  bool _browserCreated = false;
   _LoginPhase _phase = _LoginPhase.browsing;
   String? _errorText;
   String _currentUrl = kFirefoxLoginUrl;
 
   @override
+  void initState() {
+    super.initState();
+    // 1.9.0 — NOTHING boots at screen open (the reference posture): no
+    // carrier, no core, no proxy. The form submits direct; the browser
+    // tab brings up its own WebView + loopback proxy lazily when the
+    // user switches to it. The screen is as light as the reference's.
+  }
+
+  @override
   void dispose() {
-    // Clear the app-WebView proxy override first, then stop its loopback
-    // Go child. The login exchange is cancelled as part of the same teardown.
+    // Cancel any in-flight login (either method) and stop the browser
+    // tab's proxy if it was ever created.
     unawaited(_teardownLoginNetwork());
+    _email.dispose();
+    _password.dispose();
+    _code.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
   Future<void> _teardownLoginNetwork() async {
     await widget.store.firefoxLoginCancel();
     await _webViewDnsProxy?.stop();
-    // The login carrier (the plain WARP leg this screen booted) goes down
-    // with the page — a reused live-session core is never touched.
-    await widget.store.firefoxLoginCarrierDown();
+  }
+
+  // ---- the DIRECT form (the arman default) -----------------------------
+
+  Future<void> _submitForm() async {
+    final email = _email.text.trim();
+    final password = _password.text;
+    if (!email.contains('@') || email.length > 254) {
+      setState(() => _formError = AppStrings.of(context).firefoxLoginEmailInvalid);
+      return;
+    }
+    if (password.isEmpty) {
+      setState(() => _formError = AppStrings.of(context).firefoxLoginPasswordEmpty);
+      return;
+    }
+    setState(() {
+      _formPhase = _FormPhase.submitting;
+      _formError = null;
+    });
+    // 1.9.0 — the reference posture: DIRECT. The engine's own raced
+    // resolver + the uTLS Firefox ClientHello carry the walk; nothing
+    // is booted and nothing is awaited before the submit.
+    final result = await widget.store.firefoxPasswordLogin(email, password);
+    if (!mounted) return;
+    _handleFormResult(result);
+  }
+
+  Future<void> _submitCode() async {
+    final code = _code.text.trim();
+    if (code.isEmpty) return;
+    setState(() {
+      _formPhase = _FormPhase.verifying;
+      _formError = null;
+    });
+    final result = await widget.store.firefoxPasswordLoginCode(code);
+    if (!mounted) return;
+    _handleFormResult(result);
+  }
+
+  void _handleFormResult(FirefoxLoginResult result) {
+    if (result.isCompleted) {
+      setState(() => _formPhase = _FormPhase.success);
+      _finishSignIn();
+    } else if (result.state == FirefoxLoginState.needsCode) {
+      setState(() {
+        _formPhase = _FormPhase.needsCode;
+        _codeEmail = result.email;
+        _codeLastError = result.lastError;
+        _code.clear();
+      });
+    } else if (result.state == FirefoxLoginState.cancelled) {
+      // The dispose path's cancel — nothing to render.
+    } else {
+      setState(() {
+        _formPhase = _FormPhase.failed;
+        _formError = _failureText(result.failCode);
+      });
+    }
+  }
+
+  /// The shared closing choreography: refresh the account state, land
+  /// the remaining-data value, a beat of success, then pop.
+  Future<void> _finishSignIn() async {
+    await widget.store.refreshFirefoxAccount();
+    if (!mounted) return;
+    final quotaLanded = widget.store
+        .refreshFirefoxQuota()
+        .timeout(const Duration(seconds: 12), onTimeout: () => false);
+    Timer(const Duration(milliseconds: 1400), () async {
+      await quotaLanded;
+      if (mounted) Navigator.of(context).maybePop();
+    });
+  }
+
+  /// The failure text by the CLASSIFIED code only — the granular
+  /// password errnos keep their own texts (the arman SignInError
+  /// model), the transport classes map through [firefoxErrorText],
+  /// and the raw chain is never rendered.
+  String _failureText(String failCode) {
+    final strings = AppStrings.of(context);
+    switch (failCode) {
+      case 'noAccount':
+        return strings.firefoxLoginNoAccount;
+      case 'wrongPassword':
+        return strings.firefoxLoginWrongPassword;
+      case 'tooManyAttempts':
+        return strings.firefoxLoginTooManyAttempts;
+      case 'requestBlocked':
+        return strings.firefoxLoginRequestBlocked;
+      case 'secondaryEmail':
+        return strings.firefoxLoginSecondaryEmail;
+      case 'invalidEmail':
+        return strings.firefoxLoginInvalidEmail;
+      case 'unverifiedAccount':
+        return strings.firefoxLoginUnverifiedAccount;
+      case 'emailCaseInvalid':
+        return strings.firefoxLoginEmailCase;
+      case 'codeExpired':
+        return strings.firefoxLoginCodeExpired;
+      case 'codeAttemptsExhausted':
+        return strings.firefoxLoginCodeAttempts;
+      case 'sessionTokenInvalid':
+        return strings.firefoxLoginRejected;
+      case 'loginTimeout':
+        return strings.firefoxLoginTimeout;
+      default:
+        return strings.firefoxErrorText(FirefoxErrors.classify(failCode).code);
+    }
+  }
+
+  // ---- the BROWSER tab (lazy — today's flow, unchanged) ----------------
+
+  void _switchToBrowser() {
+    setState(() => _method = _LoginMethod.browser);
+    if (!_browserCreated) {
+      _browserCreated = true;
+      unawaited(_initializeLoginWebView(_webViewDnsProxy = FirefoxWebViewDnsProxy()));
+    }
   }
 
   void _onSessionToken(String token) async {
@@ -87,237 +290,29 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
       await widget.store.refreshFirefoxAccount();
       if (!mounted) return;
       setState(() => _phase = _LoginPhase.success);
-      // 1.7.0 — the remaining-data value lands BEFORE the page closes:
-      // the login carrier is still up (its teardown rides this page's
-      // dispose), so the `--usage` fetch rides it; a bounded wait keeps
-      // a slow network from holding the success pane hostage.
-      final quotaLanded = widget.store
-          .refreshFirefoxQuota()
-          .timeout(const Duration(seconds: 12), onTimeout: () => false);
-      // A beat of success, then back to the settings page (after the
-      // quota walk — its carrier teardown must not race the fetch).
-      Timer(const Duration(milliseconds: 1400), () async {
-        await quotaLanded;
-        if (mounted) Navigator.of(context).maybePop();
-      });
+      _finishSignIn();
     } else if (result.state == FirefoxLoginState.cancelled) {
       Navigator.of(context).maybePop();
     } else {
       setState(() {
         _phase = _LoginPhase.failed;
-        _errorText = _failureText(result.failCode, result.message);
+        _errorText = _failureText(result.failCode);
       });
     }
   }
 
-  /// PHASE B (Part 2) — the failure text is chosen by the CLASSIFIED
-  /// code only ([FirefoxErrors.classify]): every granular transport class
-  /// and every legacy engine code maps to its static localized text; the
-  /// engine's raw `message` chain is never rendered (log-only), and an
-  /// unknown/empty code degrades to the generic text — the raw code is
-  /// not echoed to the user either.
-  String _failureText(String failCode, String message) {
-    final strings = AppStrings.of(context);
-    if (failCode == 'sessionTokenInvalid') {
-      // the captured token was not a 64-hex session token — the same
-      // user remedy as a rejected session (sign in again).
-      return strings.firefoxLoginRejected;
-    }
-    if (failCode == 'loginTimeout') {
-      // the DART-side safety net (the exchange never finished in the
-      // bounded budget) — its own text, distinct from a transport
-      // timeout reported by the engine.
-      return strings.firefoxLoginTimeout;
-    }
-    return strings.firefoxErrorText(
-        FirefoxErrors.classify(failCode).code);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = AppStrings.of(context);
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    return Scaffold(
-      backgroundColor: AethColors.bgScreen,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ---- The top bar (back + title + subtitle) ----
-            Row(
-              children: [
-                IconButton(
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: Icon(Icons.arrow_back,
-                      color: AethColors.textPrimary),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        strings.firefoxLoginTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'IRANYekanX',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                          color: AethColors.textPrimary,
-                        ),
-                      ),
-                      Text(
-                        strings.firefoxLoginSubtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'IRANYekanX',
-                          fontWeight: FontWeight.w400,
-                          fontSize: 11,
-                          color: AethColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(width: 16 * s),
-              ],
-            ),
-            // ---- The status strip ----
-            SizedBox(height: 6 * s),
-            _statusStrip(strings, s),
-            // ---- The page ----
-            Expanded(
-              child: _phase == _LoginPhase.success
-                  ? _successPane(strings, s)
-                  : _webViewPane(strings),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statusStrip(AppStrings strings, double s) {
-    final (label, color) = switch (_phase) {
-      // While the WARP carrier + the loopback proxy come up (fix 5) the
-      // strip says what is really happening: connecting.
-      _LoginPhase.browsing => _webViewInitializing
-          ? (strings.statusConnecting, AethColors.accentConnected)
-          : (strings.firefoxLoginWaiting, AethColors.textSecondary),
-      _LoginPhase.exchanging => (strings.firefoxLoginExchanging, AethColors.accentConnected),
-      _LoginPhase.success => (strings.firefoxLoginSuccess, AethColors.accentConnected),
-      _LoginPhase.failed => (_errorText ?? strings.firefoxLoginFailed, AethColors.statusDisconnected),
-    };
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 4 * s),
-      child: Text(
-        label,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontFamily: 'IRANYekanX',
-          fontWeight: FontWeight.w500,
-          fontSize: 11 * s,
-          height: 1.4,
-          color: color,
-        ),
-      ),
-    );
-  }
-
-  Widget _successPane(AppStrings strings, double s) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.check_circle_outline,
-              size: 64 * s, color: AethColors.accentConnected),
-          SizedBox(height: 12 * s),
-          Text(
-            strings.firefoxLoginSuccess,
-            style: TextStyle(
-              fontFamily: 'IRANYekanX',
-              fontWeight: FontWeight.w600,
-              fontSize: 15 * s,
-              color: AethColors.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _webViewPane(AppStrings strings) {
-    final controller = _controller;
-    if (controller != null) {
-      return WebViewWidget(controller: controller);
-    }
-    // Honest: no WebView platform here (desktop builds, tests, web) —
-    // never a fake page. Desktop keeps the phase-1 controlled-injection
-    // path for the owner's real session pair.
-    if (_webViewInitializing && Platform.isAndroid) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          _errorText ?? strings.firefoxLoginUnavailable,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'IRANYekanX',
-            fontWeight: FontWeight.w500,
-            fontSize: 13,
-            color: AethColors.textSecondary,
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    if (!Platform.isAndroid) {
-      _webViewInitializing = false;
-      return;
-    }
-    final proxy = _webViewDnsProxy = FirefoxWebViewDnsProxy();
-    unawaited(_initializeLoginWebView(proxy));
-  }
-
-  /// Bring up the LOGIN CARRIER (the plain WARP leg — the owner's chain
-  /// posture applied to the one-time sign-in), then the selected DNS
-  /// resolver and the loopback CONNECT proxy BEFORE creating/loading
-  /// Chromium's WebView. The AndroidX callback is awaited by
-  /// [FirefoxWebViewDnsProxy.start], so the first navigation cannot race
-  /// the process-scoped WebView proxy installation.
-  ///
-  /// The carrier is the fix for the blocked-region page load: with it,
-  /// the page's traffic dials through the WARP tunnel BY HOSTNAME
-  /// (remote DNS, foreign egress) — neither a poisoned local resolver
-  /// nor an SNI/IP block can stop it, exactly like another VPN would
-  /// (the owner's own evidence). Without it (carrier failed to boot),
-  /// the direct DNS-aware proxy still carries the page wherever the
-  /// block is DNS-only — the honest degradation, never a fake page.
+  /// Brings up the selected DNS resolver and the loopback CONNECT proxy
+  /// BEFORE creating/loading Chromium's WebView (the reference's
+  /// sign-in proxy: the core's own resolver, no account, no tunnel).
+  /// The AndroidX callback is awaited by [FirefoxWebViewDnsProxy.start],
+  /// so the first navigation cannot race the process-scoped WebView
+  /// proxy installation.
   Future<void> _initializeLoginWebView(FirefoxWebViewDnsProxy proxy) async {
     try {
       await widget.store.loadFirefoxDnsSettings();
-      String? carrier;
-      try {
-        carrier = await widget.store.firefoxLoginCarrierUp();
-      } catch (_) {
-        carrier = null; // degrade honestly to the direct proxy
-      }
-      if (!mounted) {
-        await widget.store.firefoxLoginCarrierDown();
-        await proxy.stop();
-        return;
-      }
       await proxy.start(
         Map<String, dynamic>.from(widget.store.firefoxDnsConfig),
-        upstreamSocks: carrier,
+        upstreamSocks: null,
       );
       if (!mounted) {
         await proxy.stop();
@@ -401,5 +396,519 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
     } catch (_) {
       return false;
     }
+  }
+
+  // ---- the page ---------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    return Scaffold(
+      backgroundColor: AethColors.bgScreen,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ---- The top bar (back + title + subtitle) ----
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: Icon(Icons.arrow_back,
+                      color: AethColors.textPrimary),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        strings.firefoxLoginTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'IRANYekanX',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          color: AethColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        _method == _LoginMethod.form
+                            ? strings.firefoxLoginSubtitleForm
+                            : strings.firefoxLoginSubtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'IRANYekanX',
+                          fontWeight: FontWeight.w400,
+                          fontSize: 11,
+                          color: AethColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 16 * s),
+              ],
+            ),
+            // ---- The method picker (the form is the DEFAULT) ----
+            SizedBox(height: 6 * s),
+            _methodPicker(strings, s),
+            // ---- The status strip ----
+            SizedBox(height: 6 * s),
+            _statusStrip(strings, s),
+            // ---- The page body ----
+            Expanded(
+              child: _method == _LoginMethod.form
+                  ? _formPane(strings, s)
+                  : _browserPane(strings),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _methodPicker(AppStrings strings, double s) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16 * s),
+      child: Row(
+        children: [
+          Expanded(
+            child: _methodChip(
+              strings.firefoxLoginMethodForm,
+              _LoginMethod.form,
+              s,
+            ),
+          ),
+          SizedBox(width: 8 * s),
+          Expanded(
+            child: _methodChip(
+              strings.firefoxLoginMethodBrowser,
+              _LoginMethod.browser,
+              s,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _methodChip(String label, _LoginMethod method, double s) {
+    final selected = _method == method;
+    return GestureDetector(
+      onTap: () {
+        if (method == _LoginMethod.browser) {
+          _switchToBrowser();
+        } else {
+          setState(() => _method = _LoginMethod.form);
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: EdgeInsets.symmetric(vertical: 9 * s),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AethColors.accentConnected : AethColors.sheetDescCard,
+          borderRadius: BorderRadius.circular(12 * s),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'IRANYekanX',
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            fontSize: 12 * s,
+            color: selected ? AethColors.bgScreen : AethColors.textPrimary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statusStrip(AppStrings strings, double s) {
+    final (label, color) = _method == _LoginMethod.form
+        ? _formStrip(strings)
+        : _browserStrip(strings);
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 4 * s),
+      child: Text(
+        label,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontFamily: 'IRANYekanX',
+          fontWeight: FontWeight.w500,
+          fontSize: 11 * s,
+          height: 1.4,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  (String, Color) _formStrip(AppStrings strings) {
+    return switch (_formPhase) {
+      _FormPhase.idle => (strings.firefoxLoginFormHint, AethColors.textSecondary),
+      _FormPhase.submitting => (strings.firefoxLoginSubmitting, AethColors.accentConnected),
+      _FormPhase.needsCode => (
+          strings.firefoxLoginCodeSent(_codeEmail),
+          AethColors.accentConnected
+        ),
+      _FormPhase.verifying => (strings.firefoxLoginCodeVerifying, AethColors.accentConnected),
+      _FormPhase.success => (strings.firefoxLoginSuccess, AethColors.accentConnected),
+      _FormPhase.failed => (_formError ?? strings.firefoxLoginFailed, AethColors.statusDisconnected),
+      _FormPhase.connecting => (strings.statusConnecting, AethColors.accentConnected),
+    };
+  }
+
+  (String, Color) _browserStrip(AppStrings strings) {
+    final (label, color) = switch (_phase) {
+      // While the WebView and its loopback proxy come up the strip says
+      // what is really happening: connecting.
+      _LoginPhase.browsing => _webViewInitializing
+          ? (strings.statusConnecting, AethColors.accentConnected)
+          : (strings.firefoxLoginWaiting, AethColors.textSecondary),
+      _LoginPhase.exchanging => (strings.firefoxLoginExchanging, AethColors.accentConnected),
+      _LoginPhase.success => (strings.firefoxLoginSuccess, AethColors.accentConnected),
+      _LoginPhase.failed => (_errorText ?? strings.firefoxLoginFailed, AethColors.statusDisconnected),
+    };
+    return (label, color);
+  }
+
+  // ---- the form pane ----------------------------------------------------
+
+  Widget _formPane(AppStrings strings, double s) {
+    if (_formPhase == _FormPhase.success) {
+      return _successPane(strings, s);
+    }
+    final busy = _formPhase == _FormPhase.submitting ||
+        _formPhase == _FormPhase.verifying;
+    return SingleChildScrollView(
+      padding: EdgeInsets.symmetric(horizontal: 20 * s, vertical: 14 * s),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_formPhase == _FormPhase.needsCode) ...[
+            _codeCard(strings, s),
+          ] else ...[
+            _loginField(
+              strings: strings,
+              s: s,
+              label: strings.firefoxLoginEmail,
+              controller: _email,
+              focusNode: _emailFocus,
+              keyId: 'firefox-login-email',
+              keyboardType: TextInputType.emailAddress,
+              autofillHints: const [
+                AutofillHints.email,
+                AutofillHints.username,
+              ],
+            ),
+            SizedBox(height: 12 * s),
+            _loginField(
+              strings: strings,
+              s: s,
+              label: strings.firefoxLoginPassword,
+              controller: _password,
+              focusNode: _passwordFocus,
+              keyId: 'firefox-login-password',
+              obscure: _obscure,
+              autofillHints: const [AutofillHints.password],
+              onSubmitted: (_) => _submitForm(),
+              trailing: IconButton(
+                icon: Icon(
+                  _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                  size: 20 * s,
+                  color: AethColors.textSecondary,
+                ),
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+            ),
+            SizedBox(height: 14 * s),
+          ],
+          if (_formError != null) ...[
+            _errorBox(strings, s, _formError!),
+            SizedBox(height: 12 * s),
+          ],
+          _primaryButton(
+            s: s,
+            label: _formPhase == _FormPhase.needsCode
+                ? strings.firefoxLoginCodeVerify
+                : strings.firefoxLoginSubmit,
+            busy: busy,
+            onTap: _formPhase == _FormPhase.needsCode ? _submitCode : _submitForm,
+          ),
+          SizedBox(height: 10 * s),
+          Text(
+            _formPhase == _FormPhase.needsCode
+                ? strings.firefoxLoginFormHint
+                : strings.firefoxLoginBrowserHint,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'IRANYekanX',
+              fontWeight: FontWeight.w400,
+              fontSize: 10.5 * s,
+              height: 1.6,
+              color: AethColors.textSecondary,
+            ),
+          ),
+          if (_formPhase == _FormPhase.needsCode) ...[
+            SizedBox(height: 6 * s),
+            GestureDetector(
+              onTap: () => setState(() {
+                _formPhase = _FormPhase.idle;
+                _formError = null;
+                _codeLastError = '';
+                _code.clear();
+              }),
+              child: Text(
+                strings.firefoxLoginStartOver,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'IRANYekanX',
+                  fontWeight: FontWeight.w500,
+                  fontSize: 10.5 * s,
+                  color: AethColors.accentConnected,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _codeCard(AppStrings strings, double s) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _loginField(
+          strings: strings,
+          s: s,
+          label: strings.firefoxLoginCodeLabel,
+          controller: _code,
+          keyId: 'firefox-login-code',
+          keyboardType: TextInputType.number,
+          autofillHints: const [AutofillHints.oneTimeCode],
+          inputFormatters: const [FirefoxLoginCodeDigits()],
+          textAlign: TextAlign.center,
+          letterSpacing: 6,
+          autofocusCode: true,
+          onSubmitted: (_) => _submitCode(),
+        ),
+        if (_codeLastError.isNotEmpty) ...[
+          SizedBox(height: 10 * s),
+          _errorBox(strings, s, _codeLastText(strings)),
+        ],
+      ],
+    );
+  }
+
+  String _codeLastText(AppStrings strings) => switch (_codeLastError) {
+        'wrongCode' => strings.firefoxLoginWrongCode,
+        'badCodeInput' => strings.firefoxLoginWrongCode,
+        'network' => strings.firefoxLoginNetworkRetry,
+        _ => strings.firefoxLoginWrongCode,
+      };
+
+  Widget _loginField({
+    required AppStrings strings,
+    required double s,
+    required String label,
+    required TextEditingController controller,
+    FocusNode? focusNode,
+    String? keyId,
+    bool obscure = false,
+    Widget? trailing,
+    TextInputType? keyboardType,
+    Iterable<String>? autofillHints,
+    List<TextInputFormatter>? inputFormatters,
+    TextAlign? textAlign,
+    double? letterSpacing,
+    bool autofocusCode = false,
+    ValueChanged<String>? onSubmitted,
+  }) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'IRANYekanX',
+              fontWeight: FontWeight.w600,
+              fontSize: 12 * s,
+              color: AethColors.textPrimary,
+            ),
+          ),
+          SizedBox(height: 8 * s),
+          Directionality(
+            // The credentials are typed LEFT-TO-RIGHT, also in Persian
+            // (arman's rule — an RTL password field mangles input).
+            textDirection: TextDirection.ltr,
+            child: TextField(
+              key: keyId == null ? null : ValueKey('field-$keyId'),
+              controller: controller,
+              focusNode: focusNode,
+              obscureText: obscure,
+              enableSuggestions: !obscure,
+              autocorrect: false,
+              autofocus: autofocusCode,
+              keyboardType: keyboardType,
+              autofillHints: autofillHints,
+              inputFormatters: inputFormatters,
+              textAlign: textAlign ?? TextAlign.start,
+              onSubmitted: onSubmitted,
+              style: TextStyle(
+                fontFamily: 'IRANYekanX',
+                fontWeight: FontWeight.w400,
+                fontSize: 13 * s,
+                letterSpacing: letterSpacing,
+                color: AethColors.textPrimary,
+              ),
+              decoration: InputDecoration(
+                hintText: label,
+                hintStyle: TextStyle(
+                  fontFamily: 'IRANYekanX',
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12 * s,
+                  color: AethColors.textSecondary,
+                ),
+                suffixIcon: trailing,
+                filled: true,
+                fillColor: AethColors.sheetDescCard,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12 * s,
+                  vertical: 10 * s,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12 * s),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12 * s),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12 * s),
+                  borderSide: const BorderSide(color: AethColors.accentConnected),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _primaryButton({
+    required double s,
+    required String label,
+    required bool busy,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: busy ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: EdgeInsets.symmetric(vertical: 12 * s),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: busy ? AethColors.accentConnected : AethColors.accentConnected,
+          borderRadius: BorderRadius.circular(12 * s),
+        ),
+        child: busy
+            ? SizedBox(
+                width: 20 * s,
+                height: 20 * s,
+                child: const CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'IRANYekanX',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13 * s,
+                  color: AethColors.bgScreen,
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _errorBox(AppStrings strings, double s, String message) {
+    return Container(
+      padding: EdgeInsets.all(10 * s),
+      decoration: BoxDecoration(
+        color: AethColors.statusDisconnected.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10 * s),
+      ),
+      child: Text(
+        message,
+        style: TextStyle(
+          fontFamily: 'IRANYekanX',
+          fontWeight: FontWeight.w500,
+          fontSize: 11.5 * s,
+          height: 1.5,
+          color: AethColors.statusDisconnected,
+        ),
+      ),
+    );
+  }
+
+  // ---- the browser pane (today's, unchanged) ----------------------------
+
+  Widget _successPane(AppStrings strings, double s) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle_outline,
+              size: 64 * s, color: AethColors.accentConnected),
+          SizedBox(height: 12 * s),
+          Text(
+            strings.firefoxLoginSuccess,
+            style: TextStyle(
+              fontFamily: 'IRANYekanX',
+              fontWeight: FontWeight.w600,
+              fontSize: 15 * s,
+              color: AethColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _browserPane(AppStrings strings) {
+    final controller = _controller;
+    if (controller != null) {
+      return WebViewWidget(controller: controller);
+    }
+    // Honest: no WebView platform here (desktop builds, tests, web) —
+    // never a fake page.
+    if (_webViewInitializing && Platform.isAndroid) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          _errorText ?? strings.firefoxLoginUnavailable,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'IRANYekanX',
+            fontWeight: FontWeight.w500,
+            fontSize: 13,
+            color: AethColors.textSecondary,
+          ),
+        ),
+      ),
+    );
   }
 }

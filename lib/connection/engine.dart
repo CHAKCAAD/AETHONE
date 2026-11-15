@@ -286,6 +286,31 @@ abstract class EngineAdapter {
         'the Firefox VPN engine is not available on this platform',
       );
 
+  /// 1.8.0 (the owner's round 8 — the arman-vpn-client pattern): the
+  /// DIRECT email+password sign-in (the engine's `--login` password
+  /// mode). Default: the honest not-wired failure.
+  Future<FirefoxLoginResult> firefoxPasswordLogin(
+    String email,
+    String password, {
+    void Function(String line)? onLog,
+  }) async =>
+      FirefoxLoginResult.failed(
+        'engineNotWired',
+        'the Firefox VPN engine is not available on this platform',
+      );
+
+  /// 1.8.0 — answers the engine's emailed-code ask (the second stdin
+  /// line on the SAME child [firefoxPasswordLogin] spawned). Default:
+  /// the honest not-wired failure.
+  Future<FirefoxLoginResult> firefoxPasswordLoginCode(
+    String code, {
+    void Function(String line)? onLog,
+  }) async =>
+      FirefoxLoginResult.failed(
+        'engineNotWired',
+        'the Firefox VPN engine is not available on this platform',
+      );
+
   /// Whether a session pair lives in the Keystore vault. Default: absent.
   Future<bool> firefoxHasSession() async => false;
 
@@ -323,44 +348,15 @@ extension EngineAdapterDnsProbe on EngineAdapter {
   }
 }
 
-/// 1.5.0 (the owner's round 2, fix 5) — the login-carrier capability:
-/// the plain WARP leg the sign-in WebView's proxy dials through (the
-/// same chain posture the owner decreed for the tunnel, applied to the
-/// one-time sign-in). Implemented only by the real Firefox platform
-/// adapter.
-abstract interface class FirefoxLoginCarrierCapable {
-  Future<String?> firefoxLoginCarrierUp();
-  Future<void> firefoxLoginCarrierDown();
-}
-
 /// 1.7.0 (the owner's round 5) — the on-demand quota refresh capability:
 /// the engine's `--usage` role (the account's Guardian quota without
-/// minting a pass), riding a live or freshly-booted WARP carrier.
+/// minting a pass), riding a live WARP carrier when one is already up.
 /// Implemented only by the real Firefox platform adapter.
 abstract interface class FirefoxQuotaRefreshCapable {
   /// Fetches the signed-in account's quota; emits [EngineFirefoxQuota]
   /// through the event stream on success. Returns whether the fetch
-  /// completed (false = no session / the carrier could not come up).
+  /// completed (false = no session / the walk failed).
   Future<bool> refreshFirefoxQuota();
-}
-
-/// Safe extension: adapters without the capability report no carrier —
-/// the login screen then degrades to the direct DNS-aware proxy.
-extension EngineAdapterLoginCarrier on EngineAdapter {
-  Future<String?> firefoxLoginCarrierUp() async {
-    final adapter = this;
-    if (adapter is FirefoxLoginCarrierCapable) {
-      return adapter.firefoxLoginCarrierUp();
-    }
-    return null;
-  }
-
-  Future<void> firefoxLoginCarrierDown() async {
-    final adapter = this;
-    if (adapter is FirefoxLoginCarrierCapable) {
-      await adapter.firefoxLoginCarrierDown();
-    }
-  }
 }
 
 /// Safe extension: adapters without the capability report no refresh —

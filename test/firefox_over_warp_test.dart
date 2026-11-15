@@ -82,7 +82,8 @@ void main() {
       final blob = config.toJson();
       expect(blob.containsKey('upstreamSocks'), isFalse);
       expect(blob.containsKey('dataPlaneDirect'), isFalse);
-      expect(blob['dns'], {'mode': 'system'});
+      // 1.9.0 — the DNS default is the reference's AUTO racing posture.
+      expect(blob['dns'], {'mode': 'doh', 'provider': 'auto'});
     });
 
     test('v1.6.0: the DIRECT mode sends the carrier AND the direct-data '
