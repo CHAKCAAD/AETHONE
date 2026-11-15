@@ -660,3 +660,28 @@ send is the app's own «لاگ هسته» page (filesDir/logs/core-log.txt) —
 it carries the core's whole scan trail (profile lines, candidate
 counts, per-endpoint failures), which pins the remaining cause in one
 round.
+
+### 9.5 Build — PASS (GitHub Actions, طبق قاعده مالک)
+
+- **Run**: `43734302737` (run_number 130) — branch `fix/owner-round-2`،
+  commit `b136e10` (= کد نهایی دور ۷)، **conclusion: success** در همان
+  یک پوش (رفع شکست run 129 — همان فلکِ تست اسکرین‌شات، §9.1).
+- **جاب‌ها**: Firefox engine (go_vet=PASS، go_test=PASS) / Native cores
+  هر ۳ ABI success / DA debug APK (flutter_analyze=PASS، flutter_test=PASS؛
+  zipalign + apksigner PASS).
+- **APK**: `AETHONE-DA-Firefox-Debug.apk` — ۱۸۷,۴۰۲,۱۴۲ بایت؛
+  universal (۳ ABI)؛ package_id=`com.chakcaad.aethone.da`.
+- **SHA256 APK**: `be81edb290ee63a732852a3acee8917b0ed264d6040d79c1d94b959b8d3a8cc0`
+  — توسط CI ثبت و مستقل در sandbox بازمحاسبه و تطبیق یافت.
+- **_byte-identity مستقل موتور درون APK_**: arm64-v8a `998ac846…`
+  (۱۴,۶۶۰,۴۴۰ بایت) / armeabi-v7a `b2f4a58c…` (۱۴,۴۶۸,۹۱۲ بایت) /
+  x86_64 `9ecce2b6…` (۱۵,۶۳۷,۹۳۶ بایت) — هر سه مطابق.
+- **نسخه محلی برای مالک**: کپی APK + build-report.txt +
+  SHA256SUMS.txt در پوشه download/owner-round-7 ایجنت؛ artifact
+  Actions (ID 14169644702، انقضا ۱۴ روز). NOT TESTED روی دستگاه.
+
+**برای تست دستگاه**: وایرگارد را امتحان کنید — اگر باز هم وصل نشد،
+صفحهٔ «لاگ هسته» در تنظیمات (filesDir/logs/core-log.txt) ردپای کامل
+اسکن هسته را دارد (خطوط profile، تعداد کاندیدها، خطای هر endpoint) و
+همان یک دور بعدی را قطعی می‌کند. توجه: مقدار پیش‌فرض «سرعت اسکن»
+اکنون ۴ (balanced) است؛ انتخاب ذخیره‌شدهٔ قبلی دست‌نخورده مانده.
