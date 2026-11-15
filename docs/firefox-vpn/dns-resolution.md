@@ -29,6 +29,25 @@ and means Android System DNS.
 The resolver is installed as a process-local Go `net.Resolver`.
 DoH failures do not silently fall back to ordinary DNS.
 
+## DNS during Firefox over WARP
+
+The Firefox VPN tunnel is carried inside the Aether/WARP outer tunnel.
+Before the Go tunnel role makes its RemoteSettings, Guardian and token
+refresh requests, its control-plane transport sends hostnames to the
+Aether loopback SOCKS5 listener as domain targets; the H2/H3 Fastly
+session uses the same mechanism. Those names are resolved by the Aether
+core inside its outer tunnel, using the Aether core's own DNS settings.
+The Firefox DNS choice does not override that carrier resolver during
+an active Firefox-over-WARP session.
+
+The Firefox-selected resolver remains relevant to separate processes
+that run before the tunnel exists: the WebChannel sign-in exchange,
+the standalone `--discover` role, the explicit `--dns-probe`, and the
+embedded sign-in WebView's HTTPS CONNECT proxy. The account sign-in
+and pre-connect discovery roles are not represented as tunneled by
+Firefox over WARP; only the live tunnel-role control/data planes are
+carried through Aether.
+
 ## Bootstrap and split DNS
 
 The DoH endpoint itself must be reachable before it can resolve other
