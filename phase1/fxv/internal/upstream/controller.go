@@ -63,6 +63,7 @@ type ControllerConfig struct {
         RefreshToken  string
         Transport     string // "h2" | "h3"
         ProxyURL      *url.URL
+        UpstreamSocks string // optional local Aether SOCKS5 carrier for the Firefox data plane
         OpenTimeout   time.Duration
         OnPassRenewed func(pass *vpnclient.ProxyPassInfo)
         OnAuthRefresh func(pair vpnclient.TokenResponse)
@@ -149,13 +150,21 @@ func (c *Controller) Start(ctx context.Context, pass *vpnclient.ProxyPassInfo) (
         switch c.cfg.Transport {
         case "h3":
                 var s *H3ProxySession
-                s, err = NewH3ProxySession(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout)
+                if c.cfg.UpstreamSocks != "" {
+                        s, err = NewH3ProxySessionThroughSOCKS(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout, c.cfg.UpstreamSocks)
+                } else {
+                        s, err = NewH3ProxySession(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout)
+                }
                 if err == nil {
                         c.setSession(s, pass)
                 }
         default:
                 var s *H2ProxySession
-                s, err = NewH2ProxySession(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout)
+                if c.cfg.UpstreamSocks != "" {
+                        s, err = NewH2ProxySessionThroughSOCKS(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout, c.cfg.UpstreamSocks)
+                } else {
+                        s, err = NewH2ProxySession(c.cfg.ProxyURL, pass.RawToken, c.cfg.OpenTimeout)
+                }
                 if err == nil {
                         c.setSession(s, pass)
                 }
