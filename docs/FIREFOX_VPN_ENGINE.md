@@ -63,8 +63,10 @@ the Android-Keystore vault on the Dart side).
 ## 3. Process contract
 
 Fixed and versioned by `engine.ConfigVersion = 1` / `EngineVersion
-"1.1.0-phase2"` (bump both on breaking change; the 1.1.0 bump is the
-additive `--login` role — the tunnel contract is unchanged).
+"1.4.0-warp"` (bump both on breaking change; every bump since 1.1.0 is
+ADDITIVE — the 1.2.0 classified `failed` event, and the 1.4.0 WARP
+carrier seams below; a host that sends no carrier URLs keeps the exact
+pre-1.4.0 direct behavior).
 
 * **stdin** — exactly ONE JSON line (`engine.Config`), written by the host
   right after spawn. The line is bounded to 1 MiB (`readConfigLine`);
@@ -102,7 +104,9 @@ additive `--login` role — the tunnel contract is unchanged).
 | `socksListen` | MUST be loopback (`socksListenNotLoopback` otherwise); default `127.0.0.1:1822` |
 | `guardian` | default `https://vpn.mozilla.org`; must be https (`guardianNotHttps`) |
 | `country` | `""`/`"REC"` = AUTO (recommended anycast); ISO-3166-1 alpha-2 or country name, case-insensitive; no match → `noMatchForCountry` with the available list |
-| `transport` | `h2` (default) or `h3` (`transportUnknown` otherwise) |
+| `transport` | `h2` (default) or `h3` (`transportUnknown` otherwise); `h3` is REFUSED while `upstreamProxy` is set (`transportUnsupportedOverProxy` — QUIC/UDP cannot ride the TCP carrier) |
+| `apiProxy` | 1.4.0-warp — `socks5://host:port` (or `socks5h://`): route the CONTROL plane (FxA / Guardian / RemoteSettings) through the WARP carrier, keeping the uTLS Firefox ClientHello over the carrier socket (`apiProxyInvalid` otherwise; empty = direct) |
+| `upstreamProxy` | 1.4.0-warp — `socks5://host:port`: dial the h2 MASQUE data plane through the WARP carrier (`upstreamProxyInvalid` otherwise; empty = direct) |
 | `upstreamOverride` | `host:port` — skip discovery, dial that MASQUE proxy (the `selected` event reports `selectionSource:"override"`); test/lifecycle harness use |
 | `upstreamTimeoutMs` / `handshakeTimeoutMs` / `idleTimeoutMs` / `maxConns` | 0 → upstream defaults (20 s / 10 s / unlimited / 256) |
 | `exitCheckUrl` / `exitTimeoutMs` | engine-side exit probe; default `https://www.cloudflare.com/cdn-cgi/trace`, 10 s |

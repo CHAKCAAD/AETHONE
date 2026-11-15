@@ -13,6 +13,7 @@ import (
         "bufio"
         "context"
         "encoding/json"
+        "errors"
         "fmt"
         "io"
         "net"
@@ -24,6 +25,8 @@ import (
         "sync"
         "testing"
         "time"
+
+        "aethone/fxv/internal/socks"
 )
 
 var binaryPath string
@@ -256,7 +259,7 @@ func TestStartedEventShape(t *testing.T) {
         defer s.kill()
         s.send(`{"version":1,"socksListen":"127.0.0.1:1822","upstreamOverride":"127.0.0.1:1","guardian":"https://127.0.0.1:1","auth":{"accessToken":"x"}}`)
         ev := s.waitEvent(t, "started", 5*time.Second)
-        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "1.2.0-phaseb") {
+        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "1.4.0-warp") {
                 t.Fatalf("engine version = %v", ev["message"])
         }
         if pid, _ := ev["pid"].(float64); pid <= 0 {
@@ -454,5 +457,108 @@ func TestRuntimeStatsLoopEmitsAndStops(t *testing.T) {
         case <-done:
         case <-time.After(3 * time.Second):
                 t.Fatal("the stats loop did not stop on cancel")
+        }
+}
+
+// ---- 1.4.0-warp: the control-plane carrier routing ------------------------
+
+// recordingOpener records every authority the carrier was asked to dial,
+// then refuses it (the ROUTING is the assertion; the fetch must fail).
+type recordingOpener struct {
+        seen chan string
+}
+
+func (o *recordingOpener) OpenTunnel(authority string) (net.Conn, error) {
+        select {
+        case o.seen <- authority:
+        default:
+        }
+        return nil, errors.New("refused by the recording opener")
+}
+
+type discardSink struct{}
+
+func (discardSink) Debugf(string, ...any) {}
+func (discardSink) Infof(string, ...any)  {}
+func (discardSink) Warnf(string, ...any)  {}
+func (discardSink) Verbose() bool         { return false }
+
+// TestTunnelControlPlaneDialsThroughCarrier proves the apiProxy seam
+// end-to-end: with apiProxy set, the engine's FIRST control-plane
+// request (the RemoteSettings server-list fetch) arrives at the SOCKS
+// carrier carrying the mozilla hostname (remote DNS — the name, never
+// a locally resolved IP), and the walk fails honestly when the carrier
+// refuses the dial.
+func TestTunnelControlPlaneDialsThroughCarrier(t *testing.T) {
+        seen := make(chan string, 8)
+        srv := socks.NewServer(&recordingOpener{seen: seen}, 5*time.Second, 0, 0, discardSink{})
+        carrierAddr, err := srv.Listen("127.0.0.1:0")
+        if err != nil {
+                t.Fatalf("carrier listen: %v", err)
+        }
+        defer srv.Close()
+
+        s := startEngine(t)
+        s.send(`{"version":1,"socksListen":"127.0.0.1:1822",` +
+                `"apiProxy":"socks5://` + carrierAddr.String() + `",` +
+                `"guardian":"https://vpn.mozilla.org","auth":{"accessToken":"x"}}`)
+
+        // The RemoteSettings authority, dialed THROUGH the carrier, hostname
+        // intact (socks5h semantics — the carrier resolves, not the engine).
+        var authority string
+        select {
+        case authority = <-seen:
+        case <-time.After(20 * time.Second):
+                t.Fatal("the control plane never dialed through the carrier")
+        }
+        if !strings.Contains(authority, "mozilla.com") || !strings.Contains(authority, ":443") {
+                t.Fatalf("carrier saw %q, want the mozilla control-plane host:443", authority)
+        }
+
+        // The refused dial fails the walk honestly (discovery cannot lie).
+        select {
+        case ev := <-s.events:
+                if ev["event"] == "failed" {
+                        // the transport class (networkUnavailable/dnsError/…) or the
+                        // umbrella discoveryFailed — any honest failure is correct
+                        // here; the routing assertion above is the point.
+                        t.Logf("engine failed as expected: %v", ev["failCode"])
+                        return
+                }
+        case <-time.After(30 * time.Second):
+                t.Fatal("the engine did not fail on the refused carrier dial")
+        }
+        s.kill()
+}
+
+// TestTunnelApiProxyInvalidShape pins the contract gate: a non-socks5
+// apiProxy dies at config validation with the stable detail code.
+func TestTunnelApiProxyInvalidShape(t *testing.T) {
+        s := startEngine(t)
+        s.send(`{"version":1,"socksListen":"127.0.0.1:1822",` +
+                `"apiProxy":"http://127.0.0.1:1819",` +
+                `"guardian":"https://vpn.mozilla.org","auth":{"accessToken":"x"}}`)
+        ev := s.waitEvent(t, "failed", 10*time.Second)
+        if ev["message"] != "apiProxyInvalid" {
+                t.Fatalf("message = %v, want apiProxyInvalid", ev["message"])
+        }
+        if code := s.waitExit(t, 10*time.Second); code != 1 {
+                t.Fatalf("exit = %d, want 1", code)
+        }
+}
+
+// TestTunnelH3OverUpstreamProxyRefused pins the UDP constraint: h3 +
+// a data-plane carrier is a config error, not a silent coercion.
+func TestTunnelH3OverUpstreamProxyRefused(t *testing.T) {
+        s := startEngine(t)
+        s.send(`{"version":1,"socksListen":"127.0.0.1:1822","transport":"h3",` +
+                `"upstreamProxy":"socks5://127.0.0.1:1819",` +
+                `"guardian":"https://vpn.mozilla.org","auth":{"accessToken":"x"}}`)
+        ev := s.waitEvent(t, "failed", 10*time.Second)
+        if ev["message"] != "transportUnsupportedOverProxy" {
+                t.Fatalf("message = %v, want transportUnsupportedOverProxy", ev["message"])
+        }
+        if code := s.waitExit(t, 10*time.Second); code != 1 {
+                t.Fatalf("exit = %d, want 1", code)
         }
 }

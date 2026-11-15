@@ -336,11 +336,11 @@ class AppStrings {
   String get firefoxLocationDesc => _v['firefoxLocationDesc']!;
   String get firefoxLocationsLive => _v['firefoxLocationsLive']!;
   String get firefoxLocationsCached => _v['firefoxLocationsCached']!;
-  String get secFirefoxTransport => _v['secFirefoxTransport']!;
-  String get firefoxTransportLabel => _v['firefoxTransportLabel']!;
-  String get firefoxTransportH2 => _v['firefoxTransportH2']!;
-  String get firefoxTransportH3 => _v['firefoxTransportH3']!;
-  String get firefoxTransportDesc => _v['firefoxTransportDesc']!;
+  /// 1.4.0-warp — the firefox settings page's WARP-carrier leg
+  /// section (the owner's per-family core-protocol pick).
+  String get secFirefoxLeg => _v['secFirefoxLeg']!;
+  String get firefoxLegDesc => _v['firefoxLegDesc']!;
+  String get firefoxTransportNote => _v['firefoxTransportNote']!;
   String get firefoxLoginTitle => _v['firefoxLoginTitle']!;
   String get firefoxLoginSubtitle => _v['firefoxLoginSubtitle']!;
   String get firefoxLoginWaiting => _v['firefoxLoginWaiting']!;
@@ -596,11 +596,9 @@ class AppStrings {
       'firefoxLocationDesc': 'موقعیت خروج از فهرست زندهٔ سرورهای فایرفاکس انتخاب می‌شود؛ «خودکار» یعنی موقعیت پیشنهادی خود موزیلا. کشوری که پس از اتصال نمایش داده می‌شود از پروب واقعی تونل می‌آید، نه از انتخاب شما.',
       'firefoxLocationsLive': 'فهرست زندهٔ سرورها',
       'firefoxLocationsCached': 'فهرست ذخیره‌شده (آفلاین)',
-      'secFirefoxTransport': 'انتقال داده',
-      'firefoxTransportLabel': 'حالت انتقال',
-      'firefoxTransportH2': 'H2 (پیش‌فرض)',
-      'firefoxTransportH3': 'H3 (کوئیک)',
-      'firefoxTransportDesc': 'H2 روی TCP+TLS و H3 روی QUIC کار می‌کند. اگر مطمئن نیستید همان H2 بماند.',
+      'secFirefoxLeg': 'پروتکل هسته',
+      'firefoxLegDesc': 'ابتدا اتصال وارپ با پروتکل انتخابی برقرار می‌شود و بعد فایرفاکس از درون همان تونل، تونل خودش را می‌سازد (مثل سایفون اُور وارپ). ترافیک اصلی همیشه از تونل وارپ می‌گذرد.',
+      'firefoxTransportNote': 'انتقال داده روی H2 (TCP+TLS) انجام می‌شود؛ H3 به‌خاطر QUIC/UDP نمی‌تواند از بستر TCP وارپ عبور کند.',
       'firefoxLoginTitle': 'ورود به فایرفاکس',
       'firefoxLoginSubtitle': 'ورود در صفحهٔ رسمی موزیلا انجام می‌شود',
       'firefoxLoginWaiting': 'در انتظار ورود شما در صفحهٔ موزیلا…',
@@ -930,11 +928,9 @@ class AppStrings {
       'firefoxLocationDesc': 'The exit location is picked from the live Firefox server list; "Automatic" is Mozilla\'s own recommended location. The country shown after connecting comes from the real tunnel probe, never from your pick.',
       'firefoxLocationsLive': 'Live server list',
       'firefoxLocationsCached': 'Saved list (offline)',
-      'secFirefoxTransport': 'Data transport',
-      'firefoxTransportLabel': 'Transport mode',
-      'firefoxTransportH2': 'H2 (default)',
-      'firefoxTransportH3': 'H3 (QUIC)',
-      'firefoxTransportDesc': 'H2 runs over TCP+TLS; H3 runs over QUIC. Keep H2 if unsure.',
+      'secFirefoxLeg': 'Core protocol',
+      'firefoxLegDesc': 'The WARP connection comes up first with the selected protocol, then Firefox builds its own tunnel inside it (like Psiphon over Warp). All Firefox traffic rides the WARP tunnel.',
+      'firefoxTransportNote': 'The data plane runs on H2 (TCP+TLS); H3 (QUIC/UDP) cannot ride the TCP WARP carrier.',
       'firefoxLoginTitle': 'Sign in to Firefox',
       'firefoxLoginSubtitle': 'Sign-in happens on Mozilla\'s official page',
       'firefoxLoginWaiting': 'Waiting for you to sign in on Mozilla\'s page…',
@@ -1262,11 +1258,9 @@ class AppStrings {
       'firefoxLocationDesc': 'Локация выхода выбирается из живого списка серверов Firefox; «Автоматически» — рекомендуемая локация самой Mozilla. Страна после подключения берётся из реальной проверки туннеля, а не из вашего выбора.',
       'firefoxLocationsLive': 'Живой список серверов',
       'firefoxLocationsCached': 'Сохранённый список (офлайн)',
-      'secFirefoxTransport': 'Транспорт данных',
-      'firefoxTransportLabel': 'Режим транспорта',
-      'firefoxTransportH2': 'H2 (по умолчанию)',
-      'firefoxTransportH3': 'H3 (QUIC)',
-      'firefoxTransportDesc': 'H2 работает поверх TCP+TLS; H3 — поверх QUIC. Если сомневаетесь, оставьте H2.',
+      'secFirefoxLeg': 'Протокол ядра',
+      'firefoxLegDesc': 'Сначала поднимается WARP-соединение на выбранном протоколе, затем Firefox строит свой туннель внутри него (как Psiphon over Warp). Весь трафик Firefox идёт через WARP-туннель.',
+      'firefoxTransportNote': 'Плоскость данных работает на H2 (TCP+TLS); H3 (QUIC/UDP) не может проходить через TCP-носитель WARP.',
       'firefoxLoginTitle': 'Вход в Firefox',
       'firefoxLoginSubtitle': 'Вход выполняется на официальной странице Mozilla',
       'firefoxLoginWaiting': 'Ожидание входа на странице Mozilla…',
@@ -1592,11 +1586,9 @@ class AppStrings {
       'firefoxLocationDesc': '出口位置从 Firefox 实时服务器列表中选择；“自动”即 Mozilla 官方推荐位置。连接后显示的国家来自真实隧道探测，绝非来自您的选择。',
       'firefoxLocationsLive': '实时服务器列表',
       'firefoxLocationsCached': '已保存列表（离线）',
-      'secFirefoxTransport': '数据传输',
-      'firefoxTransportLabel': '传输模式',
-      'firefoxTransportH2': 'H2（默认）',
-      'firefoxTransportH3': 'H3（QUIC）',
-      'firefoxTransportDesc': 'H2 基于 TCP+TLS；H3 基于 QUIC。不确定时保持 H2。',
+      'secFirefoxLeg': '核心协议',
+      'firefoxLegDesc': '先以所选协议建立 WARP 连接，然后 Firefox 在其内部建立自己的隧道（类似 Psiphon over Warp）。所有 Firefox 流量都经过 WARP 隧道。',
+      'firefoxTransportNote': '数据面运行在 H2（TCP+TLS）；H3（QUIC/UDP）无法穿越 TCP 的 WARP 载体。',
       'firefoxLoginTitle': '登录 Firefox',
       'firefoxLoginSubtitle': '登录在 Mozilla 官方页面进行',
       'firefoxLoginWaiting': '等待您在 Mozilla 页面完成登录…',
@@ -1928,11 +1920,9 @@ class AppStrings {
       'firefoxLocationDesc': 'Çykyş ýeri Firefox-yň göni ýaýlym serwer sanawyndan saýlanýar; «Awtomatiki» Mozillanyň öz maslahat berýän ýeri. Birikdirilenden soň görkezilýän ýurt hakyky tunnel barlagyndan gelýär, siziniň saýlawyňyzdan däl.',
       'firefoxLocationsLive': 'Göni ýaýlym serwer sanawy',
       'firefoxLocationsCached': 'Ýazylan sanaw (oflaýn)',
-      'secFirefoxTransport': 'Maglumat geçirişi',
-      'firefoxTransportLabel': 'Geçiriş tertibi',
-      'firefoxTransportH2': 'H2 (adaty)',
-      'firefoxTransportH3': 'H3 (QUIC)',
-      'firefoxTransportDesc': 'H2 TCP+TLS üstünde, H3 QUIC üstünde işleýär. Ynamyňyz ýok bolsa H2 galsyn.',
+      'secFirefoxLeg': 'Çekirdek protokoly',
+      'firefoxLegDesc': 'Ilki saýlanan protokol bilen WARP birikmesi dikeldilýär, soň Firefox öz tuneliiniňi şol tuneliň içinde gurnaýar (Psiphon over Warp ýaly). Firefox trafiki hemişe WARP tuneli arkaly geçýär.',
+      'firefoxTransportNote': 'Maglumat geçirişi H2 (TCP+TLS) üstünde işleýär; H3 (QUIC/UDP) WARP-nyň TCP göterijisinden geçip bilmeýär.',
       'firefoxLoginTitle': 'Firefox-a gir',
       'firefoxLoginSubtitle': 'Giriş Mozillanyň resmi sahyponda geçýär',
       'firefoxLoginWaiting': 'Mozillanyň sahyponda girişiňizi garaşýarys…',

@@ -154,6 +154,7 @@ class CoreSettings {
     this.torLog = TorLogLevel.info,
     this.torLegProtocol = AetherLegProtocol.wireguard,
     this.psiphonLegProtocol = AetherLegProtocol.wireguard,
+    this.firefoxLegProtocol = AetherLegProtocol.wireguard,
     this.ipVersion = IpVersion.v4,
     this.upstreamProxy = '',
     this.echMode = EchMode.off,
@@ -254,6 +255,13 @@ class CoreSettings {
   /// modes. Default = the v4.19 fixed WireGuard leg.
   AetherLegProtocol psiphonLegProtocol;
 
+  /// 1.4.0-warp — the Aether protocol under the FIREFOX VPN mode —
+  /// the WARP carrier leg of the firefox-over-warp chain (the owner's
+  /// decree: the firefox protocol connects through Warp first, like
+  /// psiphon-over-warp; the user picks the core protocol on the
+  /// firefox settings page). Default = the v4.19 fixed WireGuard leg.
+  AetherLegProtocol firefoxLegProtocol;
+
   /// The IP version of the dial (`-4`/`-6`/`--dual`); default = the
   /// core's own v4.
   IpVersion ipVersion;
@@ -347,6 +355,7 @@ class CoreSettings {
         'torLog': torLog.name,
         'torLegProtocol': torLegProtocol.name,
         'psiphonLegProtocol': psiphonLegProtocol.name,
+        'firefoxLegProtocol': firefoxLegProtocol.name,
         'ipVersion': ipVersion.name,
         'upstreamProxy': upstreamProxy,
         'echMode': echMode.name,
@@ -433,6 +442,13 @@ class CoreSettings {
         pickEnum(AetherLegProtocol.values, m['psiphonLegProtocol']) ??
         legacyLeg ??
         s.psiphonLegProtocol;
+    // 1.4.0-warp — the firefox family's own leg (same migration posture:
+    // the legacy single-field pick seeds it until the user picks on the
+    // firefox page itself).
+    s.firefoxLegProtocol =
+        pickEnum(AetherLegProtocol.values, m['firefoxLegProtocol']) ??
+        legacyLeg ??
+        s.firefoxLegProtocol;
     s.ipVersion = pickEnum(IpVersion.values, m['ipVersion']) ?? s.ipVersion;
     if (m['upstreamProxy'] is String) s.upstreamProxy = m['upstreamProxy'];
     s.echMode = pickEnum(EchMode.values, m['echMode']) ?? s.echMode;

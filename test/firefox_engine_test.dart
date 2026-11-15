@@ -139,6 +139,27 @@ void main() {
       expect('at-secret'.allMatches(blob), hasLength(1));
       expect(cfg.transport, 'h2');
       expect(cfg.toJson()['version'], 1);
+      // 1.4.0-warp — the carrier seams are ABSENT by default (the
+      // additive contract: an older host's line stays valid).
+      expect(cfg.toJson().containsKey('apiProxy'), isFalse);
+      expect(cfg.toJson().containsKey('upstreamProxy'), isFalse);
+    });
+
+    test('config JSON carries the WARP carrier seams when set (1.4.0)',
+        () {
+      const cfg = FirefoxEngineConfig(
+        socksListen: '127.0.0.1:1822',
+        auth: FirefoxSessionAuth(accessToken: 'at'),
+        transport: 'h2',
+        apiProxy: 'socks5://127.0.0.1:1819',
+        upstreamProxy: 'socks5://127.0.0.1:1819',
+      );
+      final blob = cfg.toJson();
+      expect(blob['apiProxy'], 'socks5://127.0.0.1:1819');
+      expect(blob['upstreamProxy'], 'socks5://127.0.0.1:1819');
+      // The carrier URLs never carry the tokens — the auth block stays
+      // the only secret carrier on the stdin line.
+      expect(jsonEncode(blob).contains('at-secret'), isFalse);
     });
   });
 

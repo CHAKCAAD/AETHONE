@@ -70,6 +70,7 @@ prohibition).
 | Piece | Files |
 |---|---|
 | The wire contract (Config/Event/LoginConfig, versions, codes) | `internal/engine/` |
+| The WARP carrier (1.4.0-warp): the SOCKS5 client seam + the uTLS control-plane transport that keeps the Firefox ClientHello over the carrier socket | `internal/carrier/` |
 | The classification guard (Phase B Part 2/3) | `internal/fferr/` (from `docs/phaseb-engine-patch/fferr`, applied here verbatim) |
 | The redaction scrubber | `internal/redact/` |
 | The discovery selection policy (REC/CatchAll/quarantine/country) | `internal/discovery/` |
@@ -85,7 +86,7 @@ Adapted from `cmd/proxy-demo/main.go` of the pinned commit:
 |---|---|---|
 | `socksServer`, `handshakeSOCKS5`, `readSOCKSAddr`, `writeSOCKSReply`, `mapUpstreamError`, `proxyBidirectional`, `copyConn`, `closeIdleConns` | `internal/socks/server.go` | client-affinity opener REMOVED (single-session decree); logging through the injected level-tagged sink. Stage 6 restored the demo's level discipline: `logDebug`→sink-gated `Debugf` (verbose only), `logTarget`→`Server.logTarget` (`<redacted; use -verbose>` unless verbose, warn lines included), `logErr`→`upstream.RedactedError`; the Stage-2 live=N diagnostics ride Info |
 | `tunnelWriteBuffer`, `tunnelConn`, `tunnelAddr` | `internal/upstream/tunnel.go` | behavior preserved verbatim |
-| `newH2ProxySession`, keepalive, `OpenTunnel`, `roundTripWithOpenTimeout` | `internal/upstream/h2.go` | sessionFailureTracker REMOVED (no pool); Stage 6 added `RedactedError` (the demo's `logErr`, relocated next to its type) |
+| `newH2ProxySession`, keepalive, `OpenTunnel`, `roundTripWithOpenTimeout` | `internal/upstream/h2.go` | sessionFailureTracker REMOVED (no pool); Stage 6 added `RedactedError` (the demo's `logErr`, relocated next to its type). 1.4.0-warp: the dial seam is injectable (`NewH2ProxySessionOverCarrier`) — the direct `NewH2ProxySession` path is byte-equivalent to the pre-warp behavior |
 | `newH3ProxySession`, `OpenTunnel` | `internal/upstream/h3.go` | same; the 1200-byte InitialPacketSize floor kept |
 | `proxyController` | `internal/upstream/controller.go` | the POOL IS REMOVED — exactly one session, one account, no rotation; renewal loop + quota/renewal-timeout terminals preserved |
 | `verifyExit`, `parseExitProbeResponse`, `openTunnelContext` | `internal/upstream/exitprobe.go` | the probe request now presents the uTLS Firefox ClientHello (the anti-bot edge treats Go's ClientHello as a bot signature) |

@@ -14,6 +14,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../../connection/connection_store.dart';
+import '../../../connection/core_settings.dart';
 import '../../../connection/transport_modes.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
@@ -57,6 +58,7 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final store = widget.store;
 
+    final core = store.coreSettings;
     final accountStatus = switch (store.firefoxAccount) {
       FirefoxAccountStatus.signedIn => strings.firefoxSignedIn,
       FirefoxAccountStatus.signedOut => strings.firefoxSignedOut,
@@ -150,30 +152,53 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
           ),
         ),
 
-        // ---- Section: the data-plane transport ----
+        // ---- Section: the WARP carrier leg (1.4.0-warp — the owner's
+        // decree: «پروتکل فایرفاکس رو به صورت دیفالت اور وارپ کنی …
+        // کاربر از تنظیمات فایرفاکس بتونه پروتکل هسته ایتر رو خودش
+        // انتخاب کنه»): the same per-family leg pick the tor and psiphon
+        // pages carry, writing CoreSettings.firefoxLegProtocol. The
+        // engine's whole conversation rides the picked leg's WARP
+        // tunnel. ----
         SizedBox(height: 24 * s),
         SubSectionHeading(
           icon: AppAssets.iconSwap1,
-          title: strings.secFirefoxTransport,
+          title: strings.secFirefoxLeg,
         ),
         const SubSectionGap.headingToCard(),
         SubSectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SettingLabel(strings.firefoxTransportLabel),
+              SettingLabel(strings.aetherLegLabel),
               const SizedBox(height: 10),
-              SettingPills<String>(
-                keyId: 'firefox-transport',
+              SettingPills<AetherLegProtocol>(
+                keyId: 'firefox-leg',
                 options: [
-                  ('h2', strings.firefoxTransportH2),
-                  ('h3', strings.firefoxTransportH3),
+                  // The same order + labels as the protocol page's own
+                  // tiles (strings.aetherLegName reuses their names).
+                  (AetherLegProtocol.wireguard, strings.aetherLegName(
+                      AetherLegProtocol.wireguard)),
+                  (AetherLegProtocol.masque, strings.aetherLegName(
+                      AetherLegProtocol.masque)),
+                  (AetherLegProtocol.gool, strings.aetherLegName(
+                      AetherLegProtocol.gool)),
+                  (AetherLegProtocol.goolClassic, strings.aetherLegName(
+                      AetherLegProtocol.goolClassic)),
+                  (AetherLegProtocol.mim, strings.aetherLegName(
+                      AetherLegProtocol.mim)),
                 ],
-                selected: store.firefoxTransport,
-                onSelect: store.setFirefoxTransport,
+                selected: core.firefoxLegProtocol,
+                onSelect: (v) =>
+                    store.updateCore((c) => c.firefoxLegProtocol = v),
               ),
               const SubSectionDivider(),
-              SettingInfoText(strings.firefoxTransportDesc),
+              SettingInfoText(strings.firefoxLegDesc),
+              const SubSectionDivider(),
+              // 1.4.0-warp — the transport note: the data plane is h2
+              // over the WARP carrier; h3 (QUIC/UDP) cannot ride a TCP
+              // SOCKS carrier, so the old h2/h3 picker is gone (offering
+              // h3 would be offering a dead option).
+              SettingInfoText(strings.firefoxTransportNote),
             ],
           ),
         ),

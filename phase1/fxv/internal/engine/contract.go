@@ -36,7 +36,15 @@ const LoginConfigVersion = 1
 //
 //      classes + optional httpStatus / retryable) and the OAuth pair
 //      guard. Additive only; the 1.1.0 field names stay valid forever.
-const EngineVersion = "1.2.0-phaseb"
+// 1.4.0 — the WARP carrier block: the OPTIONAL `apiProxy` and
+//
+//      `upstreamProxy` socks5:// URLs on the tunnel config line —
+//      "Firefox over Warp" (the control plane rides the carrier with
+//      the uTLS Firefox ClientHello kept; the h2 data plane dials
+//      through it; h3 is refused over a carrier). A host that sends
+//      neither keeps the exact 1.2.0 direct behavior. The --login
+//      role is unchanged (its exchange stays direct).
+const EngineVersion = "1.4.0-warp"
 
 // Event names (mirrored by FirefoxEngineEvents on the Dart side).
 const (
@@ -99,6 +107,11 @@ const (
         detailConfigNotJSON         = "configNotJSON"
         detailUpstreamOverrideBad   = "upstreamOverrideInvalid"
         detailMaxConnsNegative      = "maxConnsNegative"
+        // 1.4.0-warp — the WARP-carrier config details (badConfig
+        // family; static English, never secrets).
+        detailApiProxyInvalid               = "apiProxyInvalid"
+        detailUpstreamProxyInvalid          = "upstreamProxyInvalid"
+        detailTransportUnsupportedOverProxy = "transportUnsupportedOverProxy"
 )
 
 // Event is one stdout JSON line. Only authRefreshed and loginCompleted

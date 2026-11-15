@@ -2283,12 +2283,6 @@ class PlatformEngineAdapter implements EngineAdapter {
     return pick.toUpperCase();
   }
 
-  /// Maps the transport pick: 'h3' passes through, anything else → 'h2'
-  /// (the engine's default and the evidence-backed path).
-  static String _firefoxTransportForEngine(EngineConfigSource config) {
-    return config.firefoxTransport == 'h3' ? 'h3' : 'h2';
-  }
-
   /// The firefox walk (the aether skeleton, engine swapped in).
   Future<bool> _connectFirefox(int gen, EngineConfigSource config) async {
     void fail(String code, String msg) => _emitFail(code, msg);
@@ -2302,18 +2296,12 @@ class PlatformEngineAdapter implements EngineAdapter {
     _activeMode = config.connectionMode;
     _activePort = mode.socksEndpoint.port + portOffset;
 
-    // The honest Windows desktop limit (the same family reasoning as the
-    // -only modes): the engine dials the internet DIRECTLY and zeptun's
-    // Windows routing cannot exempt the app's own unmarked sockets —
-    // the tunnel would loop back into itself. Proxy mode works.
-    if (tunnel && Platform.isWindows) {
-      fail(
-        'platformLimit',
-        'the whole-device tunnel for Firefox VPN needs a direct internet '
-        'leg the Windows routing cannot exempt yet — use proxy mode for it',
-      );
-      return false;
-    }
+    // 1.4.0-warp — the Windows desktop limit is LIFTED: the engine no
+    // longer dials the internet directly at all. Its whole conversation
+    // (control plane + MASQUE data plane) goes to the loopback WARP
+    // carrier listener, and the in-process aether core rides the same
+    // plain-WARP path that tunnels fine on every desktop (the -only
+    // family's direct-dial problem does not apply to a chain leg).
 
     // Port-conflict proof at runtime (the instruction's decree: prove no
     // clash with 1819/1820/1821 in code AND at runtime — the map is
@@ -2428,24 +2416,117 @@ class PlatformEngineAdapter implements EngineAdapter {
       if (_stale(gen)) return false;
     }
 
+    // --- 3b. The WARP carrier leg (the firefox-over-warp decree,
+    // mirroring the psiphon/tor chain families): the in-process aether
+    // core boots FIRST; the engine's whole conversation — the control
+    // plane (FxA / Guardian / RemoteSettings, its uTLS Firefox
+    // ClientHello intact) AND the h2 MASQUE data plane — then rides
+    // the core's SOCKS listener on 127.0.0.1:1819 (the engine's 1.4.0
+    // apiProxy + upstreamProxy seams). The exit country stays the
+    // FIREFOX pick (the engine's own country config); the warp leg
+    // itself is never pinned.
+    final leg = AetherArguments.legProtocolId(
+      config.coreSettings.firefoxLegProtocol,
+    );
+    final warpPort = TransportModes.masque.socksEndpoint.port + portOffset;
+    // v4.21 bind-race guard, the aether walk's own: a freed-but-still-
+    // aborting previous core held the listener for a few scheduler
+    // turns. A no-op when the port is already free.
+    await _waitForPortFree(gen, warpPort);
+    if (_stale(gen)) return false;
+
+    clearAetherEnvironment();
+    final core = _core =
+        _coreFactory == null ? AetherCore.open() : _coreFactory();
+    final paths = await _paths();
+    // v4.26 ordering: no await between the staleness check and the job
+    // spawn (a cancel landing in between would orphan the core).
+    if (_stale(gen)) return false;
+    _jobId = core.coreStart(
+      AetherArguments.build(
+        protocol: leg,
+        chain: null,
+        countryCode: null, // the carrier is never country-pinned
+        scanSpeed: config.scanSpeed,
+        core: config.coreSettings,
+        filesDir: paths.filesDir,
+        nativeLibraryDir: paths.nativeLibraryDir,
+        lyrebirdPath: paths.lyrebirdPath,
+        psiphonPath: paths.psiphonPath,
+      ),
+    );
+    await _recordCoreJob();
+    if (_stale(gen)) return false;
+
+    // The carrier must really carry traffic BEFORE the engine dials
+    // through it — the honest sequencing («ابتدا به وارپ متصل بشه و بعد
+    // فایرفاکس»), the same listener wait + end-to-end probe the aether
+    // walk runs for its own legs.
+    final warpListenerUp = await _waitForListenerFollowingCore(
+      gen,
+      warpPort,
+      timeout: _listenerBudget,
+    );
+    if (_stale(gen)) return false;
+    if (!warpListenerUp) {
+      await _hardCleanup();
+      if (_coreFailureDuringStart != null) {
+        fail('coreExited', _coreFailureDuringStart!);
+      } else {
+        fail(
+          'warpLegStartTimeout',
+          'the WARP carrier leg did not serve 127.0.0.1:$warpPort within '
+          '$_listenerBudget',
+        );
+      }
+      return false;
+    }
+    _coreFailureDuringStart = null;
+    final warpProbe = await _probeUntilReadyFollowingCore(
+      gen,
+      warpPort,
+      budget: readyBudget(leg, core: config.coreSettings),
+    );
+    if (_stale(gen)) return false;
+    if (warpProbe == null) {
+      await _hardCleanup();
+      if (_coreFailureDuringStart != null) {
+        fail('coreExited', _coreFailureDuringStart!);
+      } else {
+        fail(
+          'warpLegProbeFailed',
+          'the WARP carrier leg did not answer through '
+          '127.0.0.1:$warpPort'
+          '${_probeLastErrorKind == null ? '' : ' — $_probeLastErrorKind'}',
+        );
+      }
+      return false;
+    }
+    _debugLog('warp carrier leg up on 127.0.0.1:$warpPort '
+        '(leg: ${leg.name}, ping ${warpProbe.pingMs} ms)');
+
     // --- 4. Spawn the engine child. Tokens travel ONLY on the stdin
     // pipe; argv is bare; environment is empty by design.
-    final paths = await _paths();
     final engine = FirefoxVpnEngine(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
       onLog: _debugLog,
     );
     _firefox = engine;
+    final carrierUrl = 'socks5://127.0.0.1:$warpPort';
     final outcome = engine.start(
       FirefoxEngineConfig(
         socksListen: '127.0.0.1:$_activePort',
         auth: auth,
         // PHASE-2: the UI's location pick ('auto' → the engine's AUTO =
-        // the REC anycast; else the picked ISO country) and transport
-        // (h2 default / h3 optional) — the same contract, now fed by the
-        // wheel + the firefox settings page.
+        // the REC anycast; else the picked ISO country).
         country: _firefoxCountryForEngine(config),
-        transport: _firefoxTransportForEngine(config),
+        // 1.4.0-warp: h2, full stop — the data plane rides the TCP
+        // SOCKS carrier and h3 (QUIC/UDP) cannot; the engine's contract
+        // refuses that pair, so the h3 pick is never sent.
+        transport: 'h2',
+        // The WARP carrier seams — the whole point of the mode.
+        apiProxy: carrierUrl,
+        upstreamProxy: carrierUrl,
       ),
       onAuthRefreshed: (refreshed) {
         // The private channel: straight back into the Keystore vault,

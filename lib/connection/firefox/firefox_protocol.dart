@@ -49,6 +49,8 @@ class FirefoxEngineConfig {
     this.transport = 'h2',
     this.upstreamOverride = '',
     this.logLevel = 'normal',
+    this.apiProxy = '',
+    this.upstreamProxy = '',
   });
 
   /// Loopback listener ONLY (the engine refuses anything else).
@@ -72,6 +74,18 @@ class FirefoxEngineConfig {
 
   final String logLevel;
 
+  /// 1.4.0-warp — the WARP carrier seams (socks5:// URLs; empty = the
+  /// direct path). [apiProxy] routes the control plane (FxA / Guardian /
+  /// RemoteSettings — the engine keeps its uTLS Firefox ClientHello over
+  /// the carrier socket); [upstreamProxy] routes the h2 MASQUE data plane.
+  /// The adapter sets both to the in-process aether core's listener —
+  /// "Firefox over Warp", the psiphon/tor chain-family posture.
+  final String apiProxy;
+
+  /// See [apiProxy]. h3 (QUIC/UDP) cannot ride the TCP carrier — the
+  /// engine's contract refuses that pair.
+  final String upstreamProxy;
+
   Map<String, dynamic> toJson() => {
         'version': 1,
         'socksListen': socksListen,
@@ -80,6 +94,8 @@ class FirefoxEngineConfig {
         'transport': transport,
         if (upstreamOverride.isNotEmpty) 'upstreamOverride': upstreamOverride,
         'logLevel': logLevel,
+        if (apiProxy.isNotEmpty) 'apiProxy': apiProxy,
+        if (upstreamProxy.isNotEmpty) 'upstreamProxy': upstreamProxy,
         'auth': {
           'accessToken': auth.accessToken,
           'refreshToken': auth.refreshToken,
