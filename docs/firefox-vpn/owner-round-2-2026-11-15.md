@@ -333,3 +333,28 @@ one outcome:
   `flutter test` — **320 passed, 8 skipped** (the skips are the
   suite's own honest network/platform guards), including the three
   reworked config-shape tests.
+
+### 6.5 Build — PASS (GitHub Actions, طبق قاعده مالک)
+
+- **Run**: `43710519166` (run_number 125) — branch `fix/owner-round-2`،
+  commit `6774e4d` (= کد نهایی این دور)، **conclusion: success**. مسیر
+  رسیدن: `43704068797` (run 124 — تستِ over-specifiedِ واقعی-شبکه‌ای که
+  لبهٔ زنده با وضعیتی غیر از 401/403 جوابش داد؛ ریشه‌یابی و اصلاح در
+  §6.3) → سبز در همان یک پوش.
+- **جاب‌ها**: Firefox engine (go_vet=PASS، go_test=PASS — هر ۸ پکیج،
+  شامل تست بازنویسی‌شدهٔ live-edge) / Native cores هر ۳ ABI success /
+  DA debug APK (flutter_analyze=PASS «No issues found»،
+  flutter_test=PASS — **۳۲۸ تست گذشت**، شامل real-engine --login
+  suite؛ zipalign + apksigner PASS).
+- **APK**: `AETHONE-DA-Firefox-Debug.apk` — ۱۸۷,۳۳۶,۸۸۶ بایت؛
+  universal (۳ ABI)؛ package_id=`com.chakcaad.aethone.da`.
+- **SHA256 APK**: `c9501159591af9e12e22354bc6e3902726d7505958de12cc3c092a62a99b5ca0`
+  — توسط CI ثبت و مستقل در sandbox بازمحاسبه و تطبیق یافت.
+- **_byte-identity مستقل موتور درون APK_** (manifest جابِ engine در
+  برابر استخراج از APK، در sandbox): arm64-v8a `4c321b23…`
+  (۱۴,۶۳۳,۸۲۴ بایت) / armeabi-v7a `b61e3b6c…` (۱۴,۴۴۳,۴۸۴ بایت) /
+  x86_64 `563f5352…` (۱۵,۶۱۰,۲۸۰ بایت) — هر سه مطابق.
+- **نسخه محلی برای مالک**: کپی APK + build-report.txt +
+  SHA256SUMS.txt در پوشه download/owner-round-4 ایجنت؛ artifact
+  Actions (ID 14160627577، انقضا ۱۴ روز). NOT TESTED روی دستگاه —
+  پذیرش on-device با مالک است.
