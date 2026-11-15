@@ -215,6 +215,7 @@ func runTunnel() int {
                 RefreshToken:  cfg.Auth.RefreshToken,
                 Transport:     cfg.Transport,
                 ProxyURL:      proxyURL,
+                UpstreamSocks: cfg.UpstreamSocks,
                 OpenTimeout:   time.Duration(cfg.UpstreamTimeoutMs) * time.Millisecond,
                 OnPassRenewed: func(pass *vpnclient.ProxyPassInfo) {
                         _ = emit.Emit(engine.Event{
