@@ -685,3 +685,119 @@ round.
 اسکن هسته را دارد (خطوط profile، تعداد کاندیدها، خطای هر endpoint) و
 همان یک دور بعدی را قطعی می‌کند. توجه: مقدار پیش‌فرض «سرعت اسکن»
 اکنون ۴ (balanced) است؛ انتخاب ذخیره‌شدهٔ قبلی دست‌نخورده مانده.
+
+## 10. Rounds 8+9 (2026-11-15/16, the owner's decree: «از پروژه arman-vpn-client الگو بگیر»)
+
+The owner's report on the round-7 build: «ورود به حساب کاربری و dns
+مشکلاتش رفع نشده و بسته شدن برنامه هم همینطور» — login, DNS and the
+app closing were STILL broken — and the instruction changed the method:
+take arman-vpn-client (github.com/armanlife/arman-vpn-client) as the
+pattern instead of our own inventions.
+
+### 10.1 What the reference actually does (and we did not)
+
+* Its DEFAULT sign-in is the direct **email + password form**; the
+  browser page is the alternative (`lib/ui/signin_dialog.dart` /
+  `browser_signin.dart`).
+* Its control plane (FxA, Guardian, RemoteSettings —
+  `core/internal/controlplane`) walks DIRECT: `t.Proxy = nil`, the
+  resolver's `DialContext`, and the **Firefox ClientHello via uTLS**
+  (`firefoxtls`). No VPN, no tunnel, no carrier for the sign-in.
+* Its resolver (`core/internal/resolver`): **all configured DoH
+  servers queried at once, the first answer wins** (DefaultDNSServers
+  = 1.1.1.1 + 8.8.8.8 + 9.9.9.9), the system resolver asked after
+  **1 s** (`systemAfter`) or at once when every server failed, and
+  **`IsBlockPage`** — an answer in private space (10.10.34.34-36 is
+  Iran's block page), loopback, link-local or
+  `2001:4188:2:600:10:10:34:0/112` is a filtering network's answer,
+  never a resolution; a system block page is used only when the
+  servers fail, and a system failure never cancels the race.
+
+Our rounds kept failing because AETHONE kept its own answers: the
+login carrier (the in-process Aether core booted at sign-in screen
+open — the heaviest memory in the app stacked on the WebView: the
+«بسته شدن برنامه» pressure itself), the single-provider DoH pick, and
+the system resolver as the default.
+
+### 10.2 The fixes (engine contract 1.9.0)
+
+* **Round 8 — the form (the reference's default sign-in)**: the
+  `--login` role's `password` mode — the whole FxA password flow inside
+  the engine (`FxaLogin` + `email-2fa`), the `loginNeedsCode` event
+  asks for the emailed code and the SECOND stdin line answers on the
+  same child; the granular FxA errnos map arman's `SignInError`. The
+  browser WebView is a LAZY alternative tab; the code-digit
+  normalizer is arman's `_CodeDigits`, ported verbatim.
+* **Round 9 — the reference's network posture, end to end**:
+  * the `auto` DNS provider (the reference's `DefaultDNSServers`):
+    Cloudflare + Google + Quad9 IP-literal DoH **raced at once**;
+  * the system fallback per the reference's `lookupWithSystem` state
+    machine (join after 1 s or at once when every endpoint errored; a
+    system failure never cancels the race; a system block page is the
+    last resort only);
+  * `IsBlockPage` ported verbatim (private/loopback/link-local +
+    `2001:4188:2:600:10:10:34:0/112`), applied to BOTH the servers'
+    and the system's answers;
+  * **the EMPTY dns block now defaults to this posture** (never the
+    poisonable system resolver); the store migrates the never-touched
+    pick, the settings page gains the «خودکار» pill (first, default);
+  * **the login carrier is GONE** — nothing is booted for the
+    sign-in; both methods walk DIRECT on the engine's hardened
+    control plane (the raced resolver + the uTLS Firefox ClientHello).
+    This is also the «بسته شدن برنامه» fix: the Rust WARP core no
+    longer stacks on the Chromium WebView at sign-in;
+  * the DNS probe is purely DIRECT (the reference's `/api/dns/test`):
+    the honest signal about the user's own resolver on this network,
+    never a carrier ride.
+
+### 10.3 Verification
+
+* **Go** (phase1/fxv, Go 1.25.0): `go vet ./...` clean; `go test ./...`
+  all 8 packages green — including the NEW suites:
+  `TestIsBlockPage` (the filtering-page addresses),
+  `TestAutoRacePrefersFastValidAnswer` (the race prefers a fast valid
+  answer over a slow one and never lets a poisoned answer win) and
+  `TestSystemFallbackWhenAllEndpointsError` (the system wins when
+  every endpoint errors, with a real-UDP fake resolver).
+* **Dart**: `flutter analyze` clean (0 issues); `flutter test`
+  **355 passed** (one v419 multi-tap flake under full-suite load,
+  re-run clean — the known flake family).
+* The stale-default assertions (engine config, webview config, store,
+  login/engine/over-warp tests) were updated to the new doh/auto
+  default honestly, not deleted.
+
+### 10.4 Build — PASS (GitHub Actions, طبق قاعده مالک)
+
+- **Run**: `43750559962` (run_number 132) — branch `fix/owner-round-2`،
+  commit `9db4129` (= کد نهایی دور ۸+۹)، **conclusion: success** در
+  همان یک پوش.
+- **جاب‌ها**: Firefox engine (go_vet=PASS، go_test=PASS) / Native cores
+  هر ۳ ABI success / DA debug APK (flutter_analyze=PASS،
+  flutter_test=PASS؛ zipalign + apksigner PASS).
+- **APK**: `AETHONE-DA-Firefox-Debug.apk` — ۱۸۷,۵۷۳,۰۱۰ بایت؛
+  universal (۳ ABI)؛ package_id=`com.chakcaad.aethone.da`.
+- **SHA256 APK**:
+  `8e4e3144edc94a107bbb4b3ca1ff1a9a09fa0b39def01b9449ac4b9aae23ca0e`
+  — توسط CI ثبت و مستقل در sandbox بازمحاسبه و تطبیق یافت.
+- **_byte-identity مستقل موتور درون APK_**: arm64-v8a `ecee1e8c…`
+  (۱۴,۷۴۶,۵۸۴ بایت) / armeabi-v7a `30945516…` (۱۴,۵۵۴,۹۷۶ بایت) /
+  x86_64 `ff20c12f…` (۱۵,۷۳۲,۱۷۶ بایت) — هر سه مطابق artifact
+  جابِ موتور. رشته‌های `1.9.0`، پیشوند IPv6 صفحهٔ فیلترینگ
+  (`2001:4188:2:600:10:10:34:0/112`) و `DoH auto (cloudflare+
+  google+quad9 raced, system fallback)` در باینری موتور مستقیماً
+  دیدار شدند — کد جدیدِ resolver واقعاً داخل APK است.
+- **نسخه محلی برای مالک**: کپی APK + build-report.txt +
+  SHA256SUMS.txt در پوشه download/owner-rounds-8-9 ایجنت؛ artifact
+  Actions (ID 14176433827، انقضا ۱۴ روز). NOT TESTED روی دستگاه.
+
+**برای تست دستگاه (سه شکایت مالک)**:
+1. **ورود**: تب «فرم» (پیش‌فرض) — ایمیل + رمز؛ اگر موزیلا کد ایمیل
+   کرد همان فرم کد را می‌پرسد. تب مرورگر فقط برای حساب‌های بدون
+   رمز (گوگل/اپل).
+2. **DNS**: تنظیمات فایرفاکس → DNS → دکمهٔ «آزمایش DNS» — اکنون
+   مستقیم از resolver خودِ موتور (سه سرویس هم‌زمان + fallback
+   سیستم + فیلتر صفحهٔ فیلترینگ). حالت پیش‌فرض «خودکار» است.
+3. **بسته شدن برنامه**: صفحهٔ ورود دیگر هیچ هستهٔ سنگینی بوت
+   نمی‌کند (نه Aether، نه proxy تا پیش از انتخاب تب مرورگر) — اگر
+   باز هم بسته شد، صفحهٔ «لاگ هسته» (filesDir/logs/core-log.txt)
+   و فایل aethone-crash.txt ردپا را دارند.
