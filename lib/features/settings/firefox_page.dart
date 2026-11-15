@@ -169,14 +169,14 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
         SizedBox(height: 24 * s),
         SubSectionHeading(
           icon: AppAssets.iconSwap1,
-          title: strings.secFamilyLeg,
+          title: strings.secFirefoxCarrier,
         ),
         const SubSectionGap.headingToCard(),
         SubSectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SettingLabel(strings.aetherLegLabel),
+              SettingLabel(strings.firefoxCarrierLabel),
               const SizedBox(height: 10),
               SettingPills<AetherLegProtocol>(
                 keyId: 'firefox-aether-leg',
