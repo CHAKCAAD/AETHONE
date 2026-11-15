@@ -2,9 +2,10 @@
 
 Status: **Firefox-over-WARP implementation on `feature/firefox-guardian-psiphon-bootstrap`; device verification remains outstanding.**
 The engine's upstream license is UNRESOLVED (see `fxv/ORIGIN.md` and
-`FIREFOX_VPN_SECURITY.md`): nothing derived from it may be pushed to a
-public repository or shipped in a public artifact until the owner settles
-the question.
+`FIREFOX_VPN_SECURITY.md`). The owner authorized this feature branch as a
+bounded development/CI surface; that does not authorize default-branch
+promotion, releases, or public distribution. Those remain blocked until
+the licensing question is resolved.
 
 ## 1. What the engine is
 
