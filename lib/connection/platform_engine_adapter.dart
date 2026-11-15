@@ -698,8 +698,8 @@ class PlatformEngineAdapter implements EngineAdapter, FirefoxDnsProbeCapable {
         const Duration(seconds: 210),
         core?.psiphonReadySecs == 180 ? null : core?.psiphonReadySecs,
       ),
-      // PHASE-1 (firefox-vpn): the engine's own startup budget + a probe
-      // retry window; the lifecycle tests clock startup well under 2 s.
+      // Firefox-over-WARP: budget the Firefox child startup and its
+      // second, independent end-to-end probe after the Aether carrier is up.
       ProtocolId.firefoxOnly => const Duration(seconds: 90),
       _ => const Duration(seconds: 120),
     };
