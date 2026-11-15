@@ -179,11 +179,11 @@ abstract final class TransportModes {
   static final TransportMode firefoxOnly = TransportMode(
     id: ProtocolId.firefoxOnly,
     label: 'FIREFOX VPN',
-    cliValue: '(no aether core — dedicated engine child process)',
+    cliValue: '(Aether carrier + dedicated Firefox VPN child process)',
     socksEndpoint: Uri(scheme: 'socks5', host: _host, port: 1822),
     exitKind: ExitKind.firefoxExit,
     tcpOnly: true,
-    evidence: 'fxv cmd/libfirefoxvpn (engine contract; phase-1 pin)',
+    evidence: 'Aether SOCKS :1819 + Firefox SOCKS :1822; adapter-managed chain',
   );
 
   static final List<TransportMode> all = [
