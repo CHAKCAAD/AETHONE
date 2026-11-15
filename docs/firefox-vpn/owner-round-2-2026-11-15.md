@@ -217,3 +217,25 @@ posture — the direct one.
 * New tests: the mode pick's default/persist/migration roundtrip, the
   direct config's omitted seam, and the mode strings in all 5 locales
   (test/firefox_over_warp_test.dart).
+
+### 5.5 Build — PASS (GitHub Actions, طبق قاعده مالک)
+
+- **Run**: `43702458897` — branch `fix/owner-round-2`، commit
+  `f248ee0` (= کد نهایی شاخه)، **conclusion: success**. مسیر رسیدن:
+  `43697410574` (duplicate firefoxLegDesc) → `43698888528` (۳۲۱ گذشت،
+  ۲ شکست فرمت «5.0 GB») → `43700985076` (۳۲۵ گذشت، ۱ شکست تست
+  migration بدون `v:1`) → سبز.
+- **جاب‌ها**: Firefox engine (go_vet=PASS، go_test=PASS) / Native cores
+  هر ۳ ABI success / DA debug APK (flutter_analyze=PASS «No issues
+  found»، flutter_test=PASS — **۳۲۶ تست گذشت**، شامل real-engine
+  --login suite).
+- **APK**: `AETHONE-DA-Firefox-Debug.apk` — ۱۸۷,۳۳۵,۲۵۰ بایت؛
+  universal (۳ ABI)؛ package_id=`com.chakcaad.aethone.da`.
+- **SHA256 APK**: `ebddb3bc9d98526bd02813cf42b521ec1ea63931819b0d296d26145cc34a1f1a`
+  — توسط CI ثبت و مستقل در sandbox بازمحاسبه و تطبیق یافت؛
+  `libfirefoxvpn.so` در هر ۳ ABI byte-identical با باینری ساخته‌شده
+  (fail-closed در CI).
+- **نسخه محلی برای مالک**: کپی APK + build-report.txt +
+  SHA256SUMS.txt در پوشه download/owner-round-2 ایجنت؛ artifact
+  Actions (انقضا ۱۴ روز). NOT TESTED روی دستگاه — پذیرش on-device با
+  مالک است.
