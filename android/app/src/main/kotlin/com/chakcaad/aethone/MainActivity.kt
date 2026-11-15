@@ -412,8 +412,15 @@ class MainActivity : FlutterActivity() {
                     firefoxEngineBinary = null
                     var signalled = false
                     if (pid != null && binary != null) {
-                        val pidUid = runCatching { android.os.Process.getUidForPid(pid) }
-                            .getOrDefault(-1)
+                        val pidUid = runCatching {
+                            File("/proc/$pid/status").readLines()
+                                .firstOrNull { it.startsWith("Uid:") }
+                                ?.substringAfter(':')
+                                ?.trim()
+                                ?.split(Regex("\\s+"))
+                                ?.firstOrNull()
+                                ?.toIntOrNull()
+                        }.getOrNull() ?: -1
                         val command = runCatching {
                             File("/proc/$pid/cmdline").readBytes()
                                 .toString(Charsets.UTF_8)
