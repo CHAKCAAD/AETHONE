@@ -965,7 +965,7 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
                           size: 16, color: AethColors.accentConnected),
                       label: Text(
                         strings.firefoxBrowserTabRetry,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontFamily: 'IRANYekanX',
                           fontWeight: FontWeight.w600,
                           fontSize: 11,
@@ -996,7 +996,7 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
         children: [
           SizedBox(height: 24 * s),
           if (loading) ...[
-            SizedBox(
+            const SizedBox(
               width: 28,
               height: 28,
               child: ScanRings(
@@ -1038,7 +1038,7 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
                   size: 18 * s, color: AethColors.accentConnected),
               label: Text(
                 strings.firefoxBrowserTabRetry,
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'IRANYekanX',
                   fontWeight: FontWeight.w600,
                   fontSize: 12,
