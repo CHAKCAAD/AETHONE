@@ -63,12 +63,32 @@ rm -rf "$DEST_DIR"
 mkdir -p "$DEST_DIR"
 git -C "$WORK/src" archive "$UPSTREAM_PIN" | tar -x -C "$DEST_DIR"
 
+# 2b. the AETHONE patch layer (phase1/scripts/upstream_patches/*.patch,
+#     applied in lexical order — git apply -p1 from the upstream root).
+#     The upstream declares NO license, so its code is never committed;
+#     the PATCHES are ours and committed, and the manifest below pins
+#     the PATCHED tree byte-exactly (a stale or half-applied copy cannot
+#     build — build_engine.sh verifies against the same manifest).
+#     0001 (2026-11-16, round 10): the reference's network posture —
+#     hellosplit + the ONE desktop-Firefox identity + the Guardian 451
+#     recovery chain (doubled path + the automatic shared relay pool).
+PATCH_DIR="$SCRIPT_DIR/upstream_patches"
+if [ -d "$PATCH_DIR" ]; then
+    for patch_file in "$PATCH_DIR"/*.patch; do
+        [ -e "$patch_file" ] || continue
+        log "applying $(basename "$patch_file")"
+        (cd "$DEST_DIR" && git apply -p1 "$patch_file") \
+            || { log "FAILED to apply $(basename "$patch_file") — refusing"; exit 1; }
+    done
+fi
+
 # 3. the integrity manifest (committed; makes the gitignored copy
-#    verifiable without committing its contents)
+#    verifiable without committing its contents — INCLUDING the patch
+#    layer, so the manifest describes the patched tree)
 (
     cd "$DEST_DIR"
     find . -type f -print0 | sort -z | xargs -0 sha256sum
 ) > "$MANIFEST"
 log "wrote $MANIFEST ($(wc -l < "$MANIFEST") files)"
 
-log "upstream ready at $DEST_DIR (pin $UPSTREAM_PIN)"
+log "upstream ready at $DEST_DIR (pin $UPSTREAM_PIN + the AETHONE patch layer)"

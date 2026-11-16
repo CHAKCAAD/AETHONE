@@ -156,12 +156,16 @@ func runLogin() int {
                 })
                 return engine.ExitStartup
         }
+        // 2.0.0 — the reference's hello split for the direct sign-in's
+        // control plane.
+        vpnclient.SetHelloSplit(cfg.DNS.HelloSplit)
 
         // 1.5.0 (the owner's round 2) — the WARP-carried exchange: with
         // an upstreamSocks carrier the token exchange dials through the
         // in-process Aether core's SOCKS listener (the pinned Firefox
         // uTLS ClientHello kept; the Fastly edge sees the WARP egress,
-        // not the blocked region's). Fails closed; never falls back.
+        // not the blocked region's). A refused carrier CONNECT now
+        // falls back to the direct dial (2.0.0).
         if cfg.UpstreamSocks != "" {
                 vpnclient.SetControlPlaneTransport(
                         upstream.NewSOCKS5ControlPlaneTransport(cfg.UpstreamSocks))

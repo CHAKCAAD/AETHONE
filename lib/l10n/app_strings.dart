@@ -371,6 +371,20 @@ class AppStrings {
   String get firefoxDnsSave => _v['firefoxDnsSave']!;
   String get firefoxDnsDesc => _v['firefoxDnsDesc']!;
   String get firefoxDnsWebViewNote => _v['firefoxDnsWebViewNote']!;
+
+  // 2.0.0 — the reference's hello split (network.hello_split), exposed
+  // as its own pill on the Firefox DNS card.
+  String get firefoxDnsHelloSplit => _v['firefoxDnsHelloSplit']!;
+  String get firefoxDnsHelloSplitOff => _v['firefoxDnsHelloSplitOff']!;
+  String get firefoxDnsHelloSplitSNI => _v['firefoxDnsHelloSplitSNI']!;
+  String get firefoxDnsHelloSplitFirstByte => _v['firefoxDnsHelloSplitFirstByte']!;
+  String get firefoxDnsHelloSplitRecord => _v['firefoxDnsHelloSplitRecord']!;
+  String get firefoxDnsHelloSplitDesc => _v['firefoxDnsHelloSplitDesc']!;
+  String get firefoxAccountLoading => _v['firefoxAccountLoading']!;
+  String get firefoxBrowserTabLoading => _v['firefoxBrowserTabLoading']!;
+  String get firefoxBrowserTabFailed => _v['firefoxBrowserTabFailed']!;
+  String get firefoxBrowserTabRetry => _v['firefoxBrowserTabRetry']!;
+  String get firefoxBrowserTabHint => _v['firefoxBrowserTabHint']!;
   String get firefoxDnsTesting => _v['firefoxDnsTesting']!;
   String get firefoxDnsTestButton => _v['firefoxDnsTestButton']!;
   String get firefoxDnsTestSuccess => _v['firefoxDnsTestSuccess']!;
@@ -707,6 +721,17 @@ class AppStrings {
       'firefoxDnsTestFailed': 'برخی درخواست‌های DNS ناموفق بودند.',
       'firefoxDnsSetupFailed': 'راه‌اندازی DNS انتخاب‌شده ناموفق بود؛ تنظیمات را بررسی کنید.',
       'firefoxDnsCustomIncomplete': 'نشانی DoH سفارشی معتبر نیست؛ تا ذخیرهٔ نشانی معتبر، DNS سیستم اعمال می‌شود.',
+      'firefoxDnsHelloSplit': 'شیوهٔ ارسال درخواست TLS',
+      'firefoxDnsHelloSplitOff': 'خاموش',
+      'firefoxDnsHelloSplitSNI': 'داخل نام سرور',
+      'firefoxDnsHelloSplitFirstByte': 'بایت اول',
+      'firefoxDnsHelloSplitRecord': 'دو رکورد',
+      'firefoxDnsHelloSplitDesc': 'برای شبکه‌هایی که نام سرور را در آغاز TLS می‌خوانند و اتصال را قطع می‌کنند؛ سرور همان بایت‌ها را دریافت می‌کند و چیزی تغییر نمی‌کند.',
+      'firefoxAccountLoading': 'در حال بررسی حساب…',
+      'firefoxBrowserTabLoading': 'در حال آماده‌سازی مرورگر…',
+      'firefoxBrowserTabFailed': 'صفحهٔ ورود بارگذاری نشد.',
+      'firefoxBrowserTabRetry': 'تلاش دوباره',
+      'firefoxBrowserTabHint': 'این روش به شبکه‌ای نیاز دارد که صفحه‌های موزیلا را باز کند؛ اگر باز نشد، از تب «ورود مستقیم» استفاده کنید.',
       'firefoxQuotaLabel': 'حجم باقی‌مانده',
       'firefoxQuotaUnlimited': 'نامحدود',
       'firefoxQuotaRefresh': 'به‌روزرسانی حجم',
@@ -1105,6 +1130,17 @@ class AppStrings {
       'firefoxDnsTestFailed': 'Some DNS lookups failed.',
       'firefoxDnsSetupFailed': 'The selected DNS failed to start; check the settings.',
       'firefoxDnsCustomIncomplete': 'The custom DoH endpoint is not valid; system DNS applies until a valid one is saved.',
+      'firefoxDnsHelloSplit': 'TLS request delivery',
+      'firefoxDnsHelloSplitOff': 'Off',
+      'firefoxDnsHelloSplitSNI': 'Inside server name',
+      'firefoxDnsHelloSplitFirstByte': 'First byte',
+      'firefoxDnsHelloSplitRecord': 'Two records',
+      'firefoxDnsHelloSplitDesc': 'For networks that read the server name at the start of TLS and cut the connection; the server receives the same bytes and nothing changes.',
+      'firefoxAccountLoading': 'Checking the account…',
+      'firefoxBrowserTabLoading': 'Preparing the browser…',
+      'firefoxBrowserTabFailed': 'The sign-in page did not load.',
+      'firefoxBrowserTabRetry': 'Try again',
+      'firefoxBrowserTabHint': 'This method needs a network that opens Mozilla pages; if it does not open, use the Direct sign-in tab.',
       'firefoxQuotaLabel': 'Remaining data',
       'firefoxQuotaUnlimited': 'Unlimited',
       'firefoxQuotaRefresh': 'Refresh data',
@@ -1501,6 +1537,17 @@ class AppStrings {
       'firefoxDnsTestFailed': 'Некоторые DNS-запросы завершились ошибкой.',
       'firefoxDnsSetupFailed': 'Не удалось запустить выбранный DNS; проверьте настройки.',
       'firefoxDnsCustomIncomplete': 'Пользовательский DoH-адрес недействителен; до сохранения корректного адреса применяется системный DNS.',
+      'firefoxDnsHelloSplit': 'Способ отправки TLS-запроса',
+      'firefoxDnsHelloSplitOff': 'Выключено',
+      'firefoxDnsHelloSplitSNI': 'Внутри имени сервера',
+      'firefoxDnsHelloSplitFirstByte': 'Первый байт',
+      'firefoxDnsHelloSplitRecord': 'Две записи',
+      'firefoxDnsHelloSplitDesc': 'Для сетей, которые читают имя сервера в начале TLS и обрывают соединение; сервер получает те же байты, ничего не меняется.',
+      'firefoxAccountLoading': 'Проверка аккаунта…',
+      'firefoxBrowserTabLoading': 'Подготовка браузера…',
+      'firefoxBrowserTabFailed': 'Страница входа не загрузилась.',
+      'firefoxBrowserTabRetry': 'Повторить',
+      'firefoxBrowserTabHint': 'Этот способ требует сеть, открывающую страницы Mozilla; если не открывается, используйте вкладку прямого входа.',
       'firefoxQuotaLabel': 'Остаток трафика',
       'firefoxQuotaUnlimited': 'Без ограничений',
       'firefoxQuotaRefresh': 'Обновить данные о трафике',
@@ -1895,6 +1942,17 @@ class AppStrings {
       'firefoxDnsTestFailed': '部分 DNS 查询失败。',
       'firefoxDnsSetupFailed': '所选 DNS 启动失败；请检查设置。',
       'firefoxDnsCustomIncomplete': '自定义 DoH 地址无效；保存有效地址前将使用系统 DNS。',
+      'firefoxDnsHelloSplit': 'TLS 请求发送方式',
+      'firefoxDnsHelloSplitOff': '关闭',
+      'firefoxDnsHelloSplitSNI': '服务器名内',
+      'firefoxDnsHelloSplitFirstByte': '首字节',
+      'firefoxDnsHelloSplitRecord': '两条记录',
+      'firefoxDnsHelloSplitDesc': '针对在 TLS 开始时读取服务器名并切断连接的网络；服务器收到的字节完全相同，不会有任何改变。',
+      'firefoxAccountLoading': '正在检查账户…',
+      'firefoxBrowserTabLoading': '正在准备浏览器…',
+      'firefoxBrowserTabFailed': '登录页未能加载。',
+      'firefoxBrowserTabRetry': '重试',
+      'firefoxBrowserTabHint': '此方式需要能打开 Mozilla 页面的网络；打不开时请使用「直接登录」标签页。',
       'firefoxQuotaLabel': '剩余流量',
       'firefoxQuotaUnlimited': '不限量',
       'firefoxQuotaRefresh': '刷新流量',
@@ -2295,6 +2353,17 @@ class AppStrings {
       'firefoxDnsTestFailed': 'Käbir DNS gözlegleri şowsuz boldy.',
       'firefoxDnsSetupFailed': 'Saýlanan DNS başlanmady; sazlamalary barlaň.',
       'firefoxDnsCustomIncomplete': 'Ýörite DoH salgysy nädogry; dogry salgy ýatda saklanýança ulgam DNS ulanylýar.',
+      'firefoxDnsHelloSplit': 'TLS islegini ibermek usuly',
+      'firefoxDnsHelloSplitOff': 'Öçürilen',
+      'firefoxDnsHelloSplitSNI': 'Serwer adyň içinden',
+      'firefoxDnsHelloSplitFirstByte': 'Ilkinji baýt',
+      'firefoxDnsHelloSplitRecord': 'Iki ýazgy',
+      'firefoxDnsHelloSplitDesc': 'TLS-iň başynda serwer adyny okaýan we baglanyşygy kesýän ulgamlar üçin; serwer deň bahalaryny alýar, hiç zat üýtgemeýär.',
+      'firefoxAccountLoading': 'Hasap barlanýar…',
+      'firefoxBrowserTabLoading': 'Brauzer taýýarlanylýar…',
+      'firefoxBrowserTabFailed': 'Giriş sahypasy ýüklenmedi.',
+      'firefoxBrowserTabRetry': 'Gaýtadan synanyş',
+      'firefoxBrowserTabHint': 'Bu usul Mozilla sahypalaryny açýan ulgamy talap edýär; açylmasa «Giriş gutarnykly» bellik ulanyň.',
       'firefoxQuotaLabel': 'Galan möçber',
       'firefoxQuotaUnlimited': 'Çäksiz',
       'firefoxQuotaRefresh': 'Möçberi täzele',

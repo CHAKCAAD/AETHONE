@@ -16,7 +16,26 @@ const (
         ProviderGoogle     = "google"
         ProviderQuad9      = "quad9"
         ProviderCustom     = "custom"
+
+        // HelloSplitOff/SNI/FirstByte/Record are the reference's
+        // network.hello_split choices, carried on the SAME config line every
+        // role already ships to the engine (the dns block) so the pick rides
+        // the login, the tunnel, the webview proxy and the probe alike.
+        HelloSplitOff       = "off"
+        HelloSplitSNI       = "sni"
+        HelloSplitFirstByte = "first-byte"
+        HelloSplitRecord    = "record"
 )
+
+// ValidHelloSplit reports whether mode is one of the choices (empty is
+// the engine's own default — off, the reference's default).
+func ValidHelloSplit(mode string) bool {
+        switch mode {
+        case "", HelloSplitOff, HelloSplitSNI, HelloSplitFirstByte, HelloSplitRecord:
+                return true
+        }
+        return false
+}
 
 // AutoEndpoints is the reference project's DefaultDNSServers posture
 // (arman-vpn-client, core/internal/config): the "Automatic" choice races
@@ -39,6 +58,12 @@ type Config struct {
         BootstrapIPs           []string `json:"bootstrapIps,omitempty"`
         SystemForLocalDomains  bool     `json:"systemForLocalDomains,omitempty"`
         SystemDomainExceptions []string `json:"systemDomainExceptions,omitempty"`
+        // HelloSplit is how the TLS ClientHello of the process's direct
+        // connections to Mozilla goes out (the reference's network.hello_split,
+        // applied by the pinned upstream's control plane and the direct data
+        // plane). Empty means off — the reference's own default; the HOST's
+        // default pick is sni.
+        HelloSplit string `json:"helloSplit,omitempty"`
 }
 
 func DefaultConfig() Config {
@@ -51,8 +76,14 @@ func DefaultConfig() Config {
 
 func (c Config) Validate() (Config, error) {
         c.Mode = strings.ToLower(strings.TrimSpace(c.Mode))
+        c.HelloSplit = strings.ToLower(strings.TrimSpace(c.HelloSplit))
+        if !ValidHelloSplit(c.HelloSplit) {
+                return c, fmt.Errorf("unsupported hello split mode %q", c.HelloSplit)
+        }
         if c.Mode == "" {
-                return DefaultConfig(), nil
+                def := DefaultConfig()
+                def.HelloSplit = c.HelloSplit
+                return def, nil
         }
         switch c.Mode {
         case ModeSystem:

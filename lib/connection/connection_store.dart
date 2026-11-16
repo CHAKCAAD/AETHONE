@@ -381,7 +381,22 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   String firefoxDnsProvider = 'auto';
   String firefoxDnsEndpoint = '';
   List<String> firefoxDnsBootstrapIps = const [];
+
+  /// 2.0.0 — the reference's hello split (network.hello_split): how the
+  /// TLS ClientHello of the engine's direct connections to Mozilla goes
+  /// out, for a network that filters by server name. The reference's
+  /// own default is off; OUR default pick is `sni` (the owner's network
+  /// is exactly the filtering kind the setting exists for — the bytes
+  /// are identical, only the TCP segment boundaries differ, so it is
+  /// safe everywhere).
+  String firefoxDnsHelloSplit = 'sni';
   Future<void>? _firefoxDnsLoadFuture;
+
+  /// 2.0.0 — the location list's freshness gate (the owner's round-10
+  /// «تأخیر در باز شدن صفحه تنظیمات»): a settings-page open re-runs the
+  /// --discover walk only when the standing list is older than this;
+  /// a fresh list is never re-fetched.
+  static const _firefoxLocationsRefreshGate = Duration(minutes: 5);
 
   /// 1.7.1 — a VALID absolute HTTPS URL (the engine's own rule:
   /// scheme https, a host, no user-info, no fragment). A custom
@@ -434,7 +449,18 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
           'bootstrapIps': bootstrap,
         'systemForLocalDomains': true,
       },
+      // 2.0.0 — the hello split rides the SAME line (off/sni/
+      // first-byte/record; the engine validates it).
+      'helloSplit': _helloSplitForEngine,
     };
+  }
+
+  /// The validated hello-split pick (never a bad line — an unknown
+  /// stored value degrades to the safe default, the same rule the
+  /// provider pick follows).
+  String get _helloSplitForEngine {
+    const allowed = {'off', 'sni', 'first-byte', 'record'};
+    return allowed.contains(firefoxDnsHelloSplit) ? firefoxDnsHelloSplit : 'sni';
   }
 
   /// 1.7.1 — true when the user picked DoH + custom but the endpoint is
@@ -464,6 +490,13 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
       firefoxDnsEndpoint = prefs.getString('firefox.dns.endpoint') ?? '';
       firefoxDnsBootstrapIps =
           prefs.getStringList('firefox.dns.bootstrap_ips') ?? const [];
+      // 2.0.0 — the hello split (an unknown stored value degrades to the
+      // safe sni default; an EXPLICIT stored pick is always respected).
+      final helloSplit = prefs.getString('firefox.dns.hello_split') ?? 'sni';
+      firefoxDnsHelloSplit = const {'off', 'sni', 'first-byte', 'record'}
+              .contains(helloSplit)
+          ? helloSplit
+          : 'sni';
       notifyListeners();
     } catch (_) {
       // Preferences unavailable (e.g. a pure unit-test host): the AUTO
@@ -479,6 +512,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
       await prefs.setString('firefox.dns.endpoint', firefoxDnsEndpoint);
       await prefs.setStringList(
           'firefox.dns.bootstrap_ips', firefoxDnsBootstrapIps);
+      await prefs.setString('firefox.dns.hello_split', firefoxDnsHelloSplit);
     } catch (_) {
       // A persistence failure must not silently change the active resolver.
     }
@@ -506,6 +540,17 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
       firefoxDnsEndpoint = '';
       firefoxDnsBootstrapIps = const [];
     }
+    unawaited(_persistFirefoxDnsSettings());
+    notifyListeners();
+  }
+
+  /// 2.0.0 — the hello split pick (the reference's network.hello_split
+  /// choices; an unknown value degrades to the safe sni default).
+  void setFirefoxDnsHelloSplit(String mode) {
+    const allowed = {'off', 'sni', 'first-byte', 'record'};
+    final pick = allowed.contains(mode) ? mode : 'sni';
+    if (firefoxDnsHelloSplit == pick) return;
+    firefoxDnsHelloSplit = pick;
     unawaited(_persistFirefoxDnsSettings());
     notifyListeners();
   }
@@ -655,6 +700,14 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   bool firefoxLocationsRefreshing = false;
   void refreshFirefoxLocations() {
     if (firefoxLocationsRefreshing) return;
+    // 2.0.0 — the freshness gate (the owner's round-10 settings-page
+    // delay): a list fetched within the gate is fresh enough; only an
+    // older one (or none at all) re-runs the --discover walk.
+    final fetchedAt = firefoxLocationsFetchedAt;
+    if (fetchedAt != null &&
+        DateTime.now().difference(fetchedAt) < _firefoxLocationsRefreshGate) {
+      return;
+    }
     firefoxLocationsRefreshing = true;
     notifyListeners();
     unawaited(_engine.refreshFirefoxLocations().whenComplete(() {

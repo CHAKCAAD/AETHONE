@@ -123,11 +123,16 @@ func runTunnel() int {
                 })
                 return engine.ExitStartup
         }
+        // 2.0.0 — the reference's hello split rides the SAME config line:
+        // the direct control-plane and data-plane connections to Mozilla
+        // send their ClientHello the picked way.
+        vpnclient.SetHelloSplit(cfg.DNS.HelloSplit)
 
         // When Firefox runs over WARP, its control-plane requests
         // (RemoteSettings, Guardian and OAuth refresh) must use the same
         // Aether carrier as its Fastly data-plane session. The transport
-        // keeps the pinned Firefox uTLS fingerprint and fails closed.
+        // keeps the pinned Firefox uTLS fingerprint; a refused carrier
+        // CONNECT now falls back to the direct dial (2.0.0).
         // 1.6.0: in BOTH carrier modes the control plane — the initial
         // connection stages — rides this seam; the mode only picks the
         // DATA plane's path (dataPlaneCarrier below).

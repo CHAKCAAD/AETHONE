@@ -64,7 +64,7 @@ func TestLoginPasswordModeStartedShape(t *testing.T) {
         if ev["loginMode"] != "password" {
                 t.Fatalf("loginMode = %v", ev["loginMode"])
         }
-        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "1.9.0") {
+        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "2.0.0") {
                 t.Fatalf("version = %v", ev["message"])
         }
         s.closeStdin()
@@ -143,7 +143,7 @@ func TestLoginStartedEventShape(t *testing.T) {
         if ev["loginMode"] != "webchannel" {
                 t.Fatalf("loginMode = %v", ev["loginMode"])
         }
-        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "1.9.0") {
+        if ver, _ := ev["message"].(string); !strings.HasPrefix(ver, "2.0.0") {
                 t.Fatalf("version = %v", ev["message"])
         }
         s.closeStdin()

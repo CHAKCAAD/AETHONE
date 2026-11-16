@@ -35,15 +35,27 @@ class FirefoxSettingsPage extends StatefulWidget {
 }
 
 class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
+  /// 2.0.0 — the account refresh's loading affordance (the owner's
+  /// round-10 «تأخیر در باز شدن صفحه تنظیمات»): the vault check runs
+  /// async at page open; the status line carries its scan-rings until it
+  /// lands so the section never reads as a frozen blank.
+  bool _accountLoading = true;
+
   @override
   void initState() {
     super.initState();
     // The honesty-first refreshes: the live country set (labeled live vs
-    // cached) and the vault-backed signed-in state.
+    // cached) and the vault-backed signed-in state. 2.0.0 — the location
+    // walk is gated to a 5-minute freshness window inside the store, so
+    // re-opening the page no longer re-runs the ~30 s --discover walk
+    // every time.
     widget.store.loadFirefoxDnsSettings().then((_) {
       if (mounted) widget.store.refreshFirefoxLocations();
     });
     widget.store.refreshFirefoxAccount().then((_) {
+      if (mounted) {
+        setState(() => _accountLoading = false);
+      }
       // 1.7.0 — the remaining-data value lands on page open (the
       // `--usage` role through a WARP carrier; a signed-out vault is
       // an honest no-op).
@@ -102,7 +114,25 @@ class _FirefoxSettingsPageState extends State<FirefoxSettingsPage> {
             children: [
               SettingLabel(accountStatus),
               const SizedBox(height: 10),
-              if (store.firefoxAccount == FirefoxAccountStatus.signedIn) ...[
+              // 2.0.0 — the loading affordance while the vault check runs
+              // (the owner's round-10 demand: a backend operation shows
+              // its loading the moment it starts).
+              if (_accountLoading &&
+                  store.firefoxAccount == FirefoxAccountStatus.unknown)
+                Row(children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: ScanRings(
+                        color: AethColors.textSecondary, size: 14),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SettingInfoText(strings.firefoxAccountLoading),
+                  ),
+                ])
+              else if (store.firefoxAccount ==
+                  FirefoxAccountStatus.signedIn) ...[
                 // v1.7.0 — the remaining-data card (the owner's round 5:
                 // «بخش حجم باقی‌مانده رو اصلاح کن چون ظاهراً کار نمیکنه»):
                 // the live value + the on-demand refresh (the `--usage`
@@ -607,6 +637,28 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
             },
           ),
         ],
+        // 2.0.0 — the reference's hello split (network.hello_split),
+        // its own pick on the DNS card in BOTH modes: how the engine's
+        // direct TLS connections to Mozilla send their ClientHello. The
+        // default pick is sni (the owner's filtering network is what the
+        // setting exists for; the bytes are identical everywhere).
+        SizedBox(height: 16 * s),
+        SettingLabel(strings.firefoxDnsHelloSplit),
+        SizedBox(height: 10 * s),
+        SettingPills<String>(
+          keyId: 'firefox-dns-hello-split',
+          options: [
+            ('sni', strings.firefoxDnsHelloSplitSNI),
+            ('first-byte', strings.firefoxDnsHelloSplitFirstByte),
+            ('record', strings.firefoxDnsHelloSplitRecord),
+            ('off', strings.firefoxDnsHelloSplitOff),
+          ],
+          selected: store.firefoxDnsHelloSplit,
+          onSelect: (value) {
+            store.setFirefoxDnsHelloSplit(value);
+            setState(() => _probeEvents = null);
+          },
+        ),
         SizedBox(height: 14 * s),
         // 1.7.0 — the test button itself carries the scan-loading rings
         // while the probe runs (the owner's round 5: the user SEES the
@@ -661,6 +713,8 @@ class _FirefoxDnsCardState extends State<_FirefoxDnsCard> {
         ],
         const SubSectionDivider(),
         SettingInfoText(strings.firefoxDnsDesc),
+        const SubSectionDivider(),
+        SettingInfoText(strings.firefoxDnsHelloSplitDesc),
         const SubSectionDivider(),
         SettingInfoText(strings.firefoxDnsWebViewNote),
       ],

@@ -1,6 +1,9 @@
 package engine
 
-import "testing"
+import (
+        "strings"
+        "testing"
+)
 
 func TestLoginConfigVersionMismatch(t *testing.T) {
         if _, err := ParseLoginConfig([]byte(`{"version":2,"mode":"webchannel","sessionToken":"` + hex64() + `"}`)); err == nil {
@@ -154,4 +157,25 @@ func asErr(err error, target **ConfigError) bool {
                 return true
         }
         return false
+}
+
+// 2.0.0 — the hello split rides the dns block of EVERY role config; the
+// login config validates it with the rest (a bad pick is a config error,
+// the four choices + empty pass).
+func TestLoginConfigHelloSplit(t *testing.T) {
+        for _, mode := range []string{"", "off", "sni", "first-byte", "record", "SNI"} {
+                line := `{"version":1,"mode":"password","email":"a@b.example","password":"x","dns":{"helloSplit":"` + mode + `"}}`
+                cfg, err := ParseLoginConfig([]byte(line))
+                if err != nil {
+                        t.Fatalf("helloSplit %q must validate: %v", mode, err)
+                }
+                want := strings.ToLower(strings.TrimSpace(mode))
+                if cfg.DNS.HelloSplit != want {
+                        t.Fatalf("helloSplit %q normalized to %q, want %q", mode, cfg.DNS.HelloSplit, want)
+                }
+        }
+        bad := `{"version":1,"mode":"password","email":"a@b.example","password":"x","dns":{"helloSplit":"nonsense"}}`
+        if _, err := ParseLoginConfig([]byte(bad)); err == nil {
+                t.Fatal("an unknown helloSplit must be rejected")
+        }
 }

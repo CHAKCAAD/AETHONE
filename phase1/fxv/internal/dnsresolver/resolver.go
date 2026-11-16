@@ -10,6 +10,7 @@ import (
         "net/http"
         "net/url"
         "strings"
+        "sync"
         "time"
 )
 
@@ -169,7 +170,20 @@ type dohExchange struct {
         targets        []dohTarget
         systemResolver *net.Resolver
         cache          *dnsCache
+
+        // serversDownUntil is when the endpoints' last all-failed race stops
+        // suppressing the system delay (the reference's serversDownFor: for a
+        // minute after every endpoint failed, the system resolver joins the
+        // NEXT races at once — a filtering network that blackholes the DoH
+        // endpoints must not cost every lookup the full [systemAfter] wait
+        // plus the race tail). Guarded by mu.
+        mu              sync.Mutex
+        serversDownUntil time.Time
 }
+
+// serversDownFor is how long, after the endpoints all failed, the system
+// is asked at once (the reference's constant).
+const serversDownFor = time.Minute
 
 func (d *dohExchange) exchange(ctx context.Context, query []byte) ([]byte, error) {
         if len(query) < 12 || len(query) > maxDNSMessageBytes {
@@ -193,6 +207,32 @@ func (d *dohExchange) exchange(ctx context.Context, query []byte) ([]byte, error
         return response, nil
 }
 
+// systemWait is how long the endpoints race alone before the system
+// resolver is asked too — zero while the endpoints are known down (the
+// reference's lookupWithSystem timing rule).
+func (d *dohExchange) systemWait() time.Duration {
+        d.mu.Lock()
+        defer d.mu.Unlock()
+        if !d.serversDownUntil.IsZero() && time.Now().Before(d.serversDownUntil) {
+                return 0
+        }
+        return systemAfter
+}
+
+// rememberServersDown marks the endpoints as known-down for
+// [serversDownFor]; rememberServersUp clears it (a working race found).
+func (d *dohExchange) rememberServersDown() {
+        d.mu.Lock()
+        d.serversDownUntil = time.Now().Add(serversDownFor)
+        d.mu.Unlock()
+}
+
+func (d *dohExchange) rememberServersUp() {
+        d.mu.Lock()
+        d.serversDownUntil = time.Time{}
+        d.mu.Unlock()
+}
+
 // race is the reference's lookupWithSystem state machine (arman-vpn-client,
 // internal/resolver), adapted to the wire-message seam:
 //
@@ -214,10 +254,18 @@ func (d *dohExchange) race(ctx context.Context, query []byte, question dnsQuesti
         serversCh := make(chan serverOutcome, 1)
         go func() {
                 response, err := d.raceEndpoints(ctx, query, question)
+                if err != nil {
+                        // On its own time: though the system may answer first, this
+                        // still tells whether the endpoints work, and marks the
+                        // known-down window (the reference's rule).
+                        d.rememberServersDown()
+                } else {
+                        d.rememberServersUp()
+                }
                 serversCh <- serverOutcome{response: response, err: err}
         }()
 
-        timer := time.NewTimer(systemAfter)
+        timer := time.NewTimer(d.systemWait())
         defer timer.Stop()
         systemCh := make(chan sysAnswer, 1)
         asked := false

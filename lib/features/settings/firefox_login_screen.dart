@@ -49,6 +49,7 @@ import '../../../connection/firefox/firefox_web_channel.dart';
 import '../../../connection/firefox/firefox_webview_dns_proxy.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
+import '../home/widgets/hero_logo.dart' show ScanRings;
 
 /// The sign-in methods (the segmented control at the top of the page).
 enum _LoginMethod { form, browser }
@@ -123,6 +124,9 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
   FirefoxWebViewDnsProxy? _webViewDnsProxy;
   bool _webViewInitializing = true;
   bool _browserCreated = false;
+  // 2.0.0 — the main frame's load failed (the honest inline error path:
+  // a blocked network no longer reads as a silent blank page).
+  bool _pageLoadFailed = false;
   _LoginPhase _phase = _LoginPhase.browsing;
   String? _errorText;
   String _currentUrl = kFirefoxLoginUrl;
@@ -272,6 +276,23 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
     }
   }
 
+  /// 2.0.0 — the browser tab's honest retry: tear the WebView and its
+  /// proxy down and bring them up again (a blocked first load is not a
+  /// permanent state of the tab).
+  Future<void> _retryBrowser() async {
+    await _webViewDnsProxy?.stop();
+    _webViewDnsProxy = FirefoxWebViewDnsProxy();
+    if (!mounted) return;
+    setState(() {
+      _controller = null;
+      _webViewInitializing = true;
+      _pageLoadFailed = false;
+      _phase = _LoginPhase.browsing;
+      _errorText = null;
+    });
+    unawaited(_initializeLoginWebView(_webViewDnsProxy!));
+  }
+
   void _onSessionToken(String token) async {
     if (_phase == _LoginPhase.exchanging || _phase == _LoginPhase.success) {
       return;
@@ -359,11 +380,30 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
           },
           onPageStarted: (url) {
             _currentUrl = url;
+            // 2.0.0 — a new navigation resets the load-failure mark; the
+            // honest error only sticks while the failure is the current
+            // state of the page.
+            if (_pageLoadFailed) {
+              setState(() => _pageLoadFailed = false);
+            }
             _controller?.runJavaScript(FirefoxWebChannelBridge.hookScript);
           },
           onPageFinished: (url) {
             _currentUrl = url;
             _controller?.runJavaScript(FirefoxWebChannelBridge.hookScript);
+          },
+          // 2.0.0 — the main frame's failure surfaces inline (the
+          // owner's round-10 report: without a VPN the tab "never
+          // opens" — a blank WebView with no explanation). Sub-frame
+          // errors are ignored (an ad or a font failing must not read
+          // as the page failing).
+          onWebResourceError: (error) {
+            // isForMainFrame is nullable on some platforms; null means
+            // unknown — treat only an explicit true as the page failing.
+            final mainFrame = error.isForMainFrame ?? false;
+            if (mainFrame && mounted && _controller != null) {
+              setState(() => _pageLoadFailed = true);
+            }
           },
         ),
       );
@@ -888,26 +928,137 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
   Widget _browserPane(AppStrings strings) {
     final controller = _controller;
     if (controller != null) {
+      // 2.0.0 — a failed main-frame load keeps the WebView (Chromium's
+      // own error page is honest) but gains an in-pane retry bar, so a
+      // blocked network never strands the tab.
+      if (_pageLoadFailed) {
+        return Stack(
+          children: [
+            WebViewWidget(controller: controller),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                color: AethColors.bgScreen,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        strings.firefoxBrowserTabFailed,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'IRANYekanX',
+                          fontWeight: FontWeight.w500,
+                          fontSize: 11,
+                          color: AethColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    TextButton.icon(
+                      onPressed: _retryBrowser,
+                      icon: const Icon(Icons.refresh,
+                          size: 16, color: AethColors.accentConnected),
+                      label: Text(
+                        strings.firefoxBrowserTabRetry,
+                        style: TextStyle(
+                          fontFamily: 'IRANYekanX',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                          color: AethColors.accentConnected,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      }
       return WebViewWidget(controller: controller);
     }
-    // Honest: no WebView platform here (desktop builds, tests, web) —
-    // never a fake page.
-    if (_webViewInitializing && Platform.isAndroid) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          _errorText ?? strings.firefoxLoginUnavailable,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'IRANYekanX',
-            fontWeight: FontWeight.w500,
-            fontSize: 13,
-            color: AethColors.textSecondary,
+    // 2.0.0 — the honest message pane (the owner's round-10 report:
+    // «مرورگر اصلاً باز نمی‌شه»): while the WebView and its proxy come
+    // up the pane SHOWS its loading; a failed load (or no WebView
+    // platform) shows the failure, a retry button, and the honest hint
+    // that this method needs an unblocked network — never a blank
+    // silent page.
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final loading = _webViewInitializing && Platform.isAndroid;
+    return SingleChildScrollView(
+      padding: EdgeInsets.symmetric(horizontal: 24 * s, vertical: 28 * s),
+      child: Column(
+        children: [
+          SizedBox(height: 24 * s),
+          if (loading) ...[
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: ScanRings(
+                  color: AethColors.accentConnected, size: 28),
+            ),
+            SizedBox(height: 14 * s),
+            Text(
+              strings.firefoxBrowserTabLoading,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'IRANYekanX',
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: AethColors.textPrimary,
+              ),
+            ),
+          ] else ...[
+            Icon(
+              Icons.public_off_outlined,
+              size: 30 * s,
+              color: AethColors.statusDisconnected,
+            ),
+            SizedBox(height: 12 * s),
+            Text(
+              _errorText ?? strings.firefoxBrowserTabFailed,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'IRANYekanX',
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: AethColors.textPrimary,
+              ),
+            ),
+            SizedBox(height: 14 * s),
+            // The retry: bring the WebView and its proxy up again.
+            TextButton.icon(
+              onPressed: _retryBrowser,
+              icon: Icon(Icons.refresh,
+                  size: 18 * s, color: AethColors.accentConnected),
+              label: Text(
+                strings.firefoxBrowserTabRetry,
+                style: TextStyle(
+                  fontFamily: 'IRANYekanX',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: AethColors.accentConnected,
+                ),
+              ),
+            ),
+          ],
+          SizedBox(height: 18 * s),
+          Text(
+            strings.firefoxBrowserTabHint,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'IRANYekanX',
+              fontWeight: FontWeight.w400,
+              fontSize: 11,
+              color: AethColors.textSecondary,
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

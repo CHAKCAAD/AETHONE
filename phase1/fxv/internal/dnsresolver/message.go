@@ -26,8 +26,8 @@ func IsBlockPage(addr netip.Addr) bool {
                 addr.IsLinkLocalUnicast() || iranBlockPageV6.Contains(addr)
 }
 
-// isBlockPageIP is [IsBlockPage] for a net.IP answer record.
-func isBlockPageIP(ip net.IP) bool {
+// IsBlockPageIP is [IsBlockPage] for a net.IP answer record.
+func IsBlockPageIP(ip net.IP) bool {
         parsed, ok := netip.AddrFromSlice(ip)
         if !ok {
                 return false
@@ -96,10 +96,10 @@ func buildSystemResponse(ctx context.Context, query []byte, question dnsQuestion
         }
         var valid []net.IP
         for _, item := range resolved {
-                if question.qtype == 1 && item.IP.To4() != nil && !isBlockPageIP(item.IP.To4()) {
+                if question.qtype == 1 && item.IP.To4() != nil && !IsBlockPageIP(item.IP.To4()) {
                         valid = append(valid, item.IP.To4())
                 }
-                if question.qtype == 28 && item.IP.To4() == nil && !isBlockPageIP(item.IP.To16()) {
+                if question.qtype == 28 && item.IP.To4() == nil && !IsBlockPageIP(item.IP.To16()) {
                         valid = append(valid, item.IP.To16())
                 }
         }
@@ -142,7 +142,7 @@ func systemLookupResponse(ctx context.Context, query []byte, question dnsQuestio
         }
         valid := make([]net.IP, 0, len(ips))
         for _, ip := range ips {
-                if !isBlockPageIP(ip) {
+                if !IsBlockPageIP(ip) {
                         valid = append(valid, ip)
                 }
         }
@@ -209,7 +209,7 @@ func filterBlockPageAnswers(query []byte, question dnsQuestion, response []byte)
         }
         valid := make([]net.IP, 0, len(ips))
         for _, ip := range ips {
-                if !isBlockPageIP(ip) { valid = append(valid, ip) }
+                if !IsBlockPageIP(ip) { valid = append(valid, ip) }
         }
         if len(valid) == 0 {
                 return nil, false, nil // fully poisoned

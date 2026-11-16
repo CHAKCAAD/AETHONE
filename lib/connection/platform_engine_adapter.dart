@@ -2428,7 +2428,12 @@ class PlatformEngineAdapter
     final stdoutFuture = process.stdout.transform(utf8.decoder).join();
     final stderrFuture = process.stderr.transform(utf8.decoder).join();
     final code = await process.exitCode.timeout(
-      const Duration(seconds: 35),
+      // 2.0.0 — the honest budget: the engine bounds EACH domain at 15 s
+      // (a wedged resolver surfaces as that domain's error event, never
+      // a blank walk), so three domains + the raced endpoints fit inside
+      // a minute; the old 35 s cut the walk mid-flight and read as
+      // "setup failed" with no evidence at all.
+      const Duration(seconds: 60),
       onTimeout: () {
         process.kill();
         throw TimeoutException('Firefox DNS probe timed out');

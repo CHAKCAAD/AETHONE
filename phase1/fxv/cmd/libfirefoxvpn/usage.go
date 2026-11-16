@@ -110,6 +110,8 @@ func runUsageWith(
                 })
                 return engine.ExitStartup
         }
+        // 2.0.0 — the reference's hello split for the usage walk.
+        vpnclient.SetHelloSplit(cfg.DNS.HelloSplit)
 
         // The carrier seam — same as the login role: the request dials
         // through the in-process Aether core's SOCKS listener when set

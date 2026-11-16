@@ -108,7 +108,44 @@ const LoginConfigVersion = 1
 //      reference's DefaultDNSServers + fallback_to_system), never the
 //      poisonable system one; system stays an explicit pick. Additive
 //      only; a host that sends a full dns block keeps its exact pick.
-const EngineVersion = "1.9.0"
+// 2.0.0 — the reference's network posture, COMPLETED (round 10, the
+//      owner's retest of 1.9.0: «از پروژه arman-vpn-client الگو بگیر و
+//      مشکل رو حل کن» held, but the direct walk still failed — the
+//      pieces the reference carries that 1.9.0 missed):
+//        * the HELLO SPLIT (network.hello_split, ported verbatim): the
+//          TLS ClientHello of every connection whose TLS this process
+//          owns — the direct control plane AND the direct h2 data plane
+//          — goes out split across TCP segments (off/sni/first-byte/
+//          record on the dns config line; the host's default pick sni),
+//          so a network filtering by server name cannot read it;
+//        * the ONE desktop-Firefox identity (the reference's
+//          ApplyFirefoxHeaders): FxA, Guardian, Remote Settings and the
+//          Fastly solver all present desktop Firefox (Windows on
+//          Android) with Accept */* and Accept-Encoding identity — the
+//          live-measured 406 fix; the old MozillaVPN/2.35.0 split
+//          identity is gone;
+//        * the GUARDIAN 451 recovery chain (region_recovery.go +
+//          auto_relay.go, ported): the doubled leading slash retries
+//          past the edge's region rule, then the reference's own shared
+//          relay pool (arman-org/update-manifests + the jsDelivr
+//          mirror, health-checked, X-Arman-Relay validated) carries
+//          /api/v1/fpn requests;
+//        * the CARRIER FALLBACK: a SOCKS control-plane dial whose
+//          CONNECT is refused falls back to the direct dial (its own
+//          budget, same pinned hello) — the round-4 carrier-first
+//          decree keeps its order, a refused carrier no longer kills
+//          the walk (the owner's firefoxtransport:networkUnavailable in
+//          BOTH modes);
+//        * the h2 DATA plane offers the Firefox uTLS hello first with
+//          Go's as the fallback (the reference's upstream_tls posture),
+//          hello-split on the direct dial;
+//        * the resolver keeps the reference's serversDownFor window (a
+//          minute after an all-endpoints failure the system joins at
+//          once);
+//        * the DNS probe is honest per-domain: a 15 s per-domain
+//          budget, block-page-only answers labeled as the filtering
+//          page they are, never a blank walk.
+const EngineVersion = "2.0.0"
 
 // Event names (mirrored by FirefoxEngineEvents on the Dart side).
 const (

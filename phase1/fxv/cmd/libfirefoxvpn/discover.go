@@ -32,6 +32,8 @@ func runDiscover() int {
                 fmt.Fprintf(os.Stderr, "discover: DNS setup failed: %v\n", err)
                 return engine.ExitStartup
         }
+        // 2.0.0 — the reference's hello split for the discovery walk.
+        vpnclient.SetHelloSplit(dnsConfig.HelloSplit)
 
         ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
         defer cancel()
