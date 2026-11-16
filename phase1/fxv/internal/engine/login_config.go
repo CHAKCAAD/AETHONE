@@ -4,8 +4,6 @@ import (
         "encoding/hex"
         "encoding/json"
         "strings"
-
-        "aethone/fxv/internal/dnsresolver"
 )
 
 // Login mode values. `webchannel` is the browser-exchange mode (the
@@ -49,15 +47,18 @@ const (
 // LoginConfig is the --login-role stdin line (engine.LoginConfig v1).
 // 1.8.0: the password mode fills Email+Password (SessionToken stays
 // empty); the webchannel mode is byte-identical to 1.7.0.
+// 2.1.0: the DNS block is GONE from the contract — the roles resolve
+// through the platform resolver (Bionic getaddrinfo on Android, the A1
+// decree posture); an old host line still carrying `dns` parses fine
+// (unknown fields are ignored).
 type LoginConfig struct {
-        Version         int                `json:"version"`
-        Mode            string             `json:"mode"`
-        SessionToken    string             `json:"sessionToken"`
-        Email           string             `json:"email"`
-        Password        string             `json:"password"`
-        VerifyTimeoutMs int64              `json:"verifyTimeoutMs"`
-        RetryDelayMs    int64              `json:"retryDelayMs"`
-        DNS             dnsresolver.Config `json:"dns"`
+        Version         int    `json:"version"`
+        Mode            string `json:"mode"`
+        SessionToken    string `json:"sessionToken"`
+        Email           string `json:"email"`
+        Password        string `json:"password"`
+        VerifyTimeoutMs int64  `json:"verifyTimeoutMs"`
+        RetryDelayMs    int64  `json:"retryDelayMs"`
         // UpstreamSocks (1.5.0, the owner's round 2): the OPTIONAL WARP
         // carrier the login screen brought up — the token exchange rides
         // it (the pinned Firefox uTLS ClientHello kept; the Fastly edge
@@ -92,11 +93,6 @@ func ParseLoginConfig(raw []byte) (LoginConfig, error) {
                 }
         default:
                 return cfg, &ConfigError{Detail: "loginModeUnsupported"}
-        }
-        var dnsErr error
-        cfg.DNS, dnsErr = cfg.DNS.Validate()
-        if dnsErr != nil {
-                return cfg, &ConfigError{Detail: detailDNSConfigInvalid}
         }
         if err := validateLoopbackSocksURL(cfg.UpstreamSocks); err != nil {
                 return cfg, &ConfigError{Detail: detailUpstreamSocksInvalid}

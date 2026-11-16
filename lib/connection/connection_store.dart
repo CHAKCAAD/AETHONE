@@ -11,7 +11,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert' show jsonDecode, jsonEncode;
-import 'dart:io' show InternetAddress, Platform;
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -128,7 +128,7 @@ class FirefoxQuota {
   }
 }
 
-class ConnectionStore extends ChangeNotifier implements EngineConfigSource, FirefoxDnsSettingsLoader {
+class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   /// v4.32 — [scorecard] defaults ONCE (the redirecting constructor) so the
   /// store and its platform adapter always share the SAME live instance —
   /// the async disk restore later merges into it in place.
@@ -142,7 +142,6 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
     // read-only view (M2 seam — see [EngineConfigSource]).
     _engine.bind(this);
     _subscription = _engine.events.listen(_onEvent);
-    unawaited(loadFirefoxDnsSettings());
     unawaited(_loadFirefoxQuota());
   }
 
@@ -366,214 +365,18 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   @override
   String firefoxTransport = 'h2';
 
-  /// Firefox DNS preferences. They are deliberately process-scoped: they
-  /// never modify Android Private DNS or the other AETHONE engines.
-  ///
-  /// 1.9.0 — the DEFAULT is the reference's posture (arman-vpn-client's
-  /// DefaultDNSServers + fallback_to_system): DoH mode with the AUTO
-  /// provider (Cloudflare + Google + Quad9 raced at once, the first
-  /// valid answer wins, the system resolver joins after 1 s and its
-  /// answer wins only when real — the engine's own IsBlockPage rule
-  /// strips the filtering page's answers). A user who never touched the
-  /// DNS settings (no stored pick) migrates to this posture; an
-  /// EXPLICIT stored pick is always respected.
-  String firefoxDnsMode = 'doh';
-  String firefoxDnsProvider = 'auto';
-  String firefoxDnsEndpoint = '';
-  List<String> firefoxDnsBootstrapIps = const [];
-
-  /// 2.0.0 — the reference's hello split (network.hello_split): how the
-  /// TLS ClientHello of the engine's direct connections to Mozilla goes
-  /// out, for a network that filters by server name. The reference's
-  /// own default is off; OUR default pick is `sni` (the owner's network
-  /// is exactly the filtering kind the setting exists for — the bytes
-  /// are identical, only the TCP segment boundaries differ, so it is
-  /// safe everywhere).
-  String firefoxDnsHelloSplit = 'sni';
-  Future<void>? _firefoxDnsLoadFuture;
+  /// 2.1.0 — the Firefox DNS feature is GONE (the owner's decree:
+  /// «بهش dns رو به کلی از اپ حذف کن»): no DNS preferences, no DoH
+  /// policy, no per-role resolver line — every engine role resolves
+  /// through the platform resolver (Bionic getaddrinfo on Android, the
+  /// A1 decree posture). The old `firefox.dns.*` preference keys are
+  /// simply never read again (inert on disk, harmless).
 
   /// 2.0.0 — the location list's freshness gate (the owner's round-10
   /// «تأخیر در باز شدن صفحه تنظیمات»): a settings-page open re-runs the
   /// --discover walk only when the standing list is older than this;
   /// a fresh list is never re-fetched.
   static const _firefoxLocationsRefreshGate = Duration(minutes: 5);
-
-  /// 1.7.1 — a VALID absolute HTTPS URL (the engine's own rule:
-  /// scheme https, a host, no user-info, no fragment). A custom
-  /// endpoint failing this shape degrades the effective mode to system
-  /// — the round-6 lesson: a malformed endpoint (no scheme, plain
-  /// hostname, …) survived round 5's empty-only guard and killed EVERY
-  /// role at startup (dnsConfigInvalid — the login page, the DNS test
-  /// AND both carrier modes) because each installs the DNS policy
-  /// before any network work.
-  static bool _isValidDohEndpoint(String raw) {
-    final uri = Uri.tryParse(raw);
-    return uri != null &&
-        uri.isAbsolute &&
-        uri.scheme == 'https' &&
-        uri.host.isNotEmpty &&
-        uri.userInfo.isEmpty &&
-        !uri.hasFragment;
-  }
-
-  /// 1.7.1 — a real IP literal (v4 or v6) or nothing.
-  static bool _isValidIpLiteral(String raw) =>
-      InternetAddress.tryParse(raw) != null;
-
-  @override
-  Map<String, dynamic> get firefoxDnsConfig {
-    // 1.7.1 — NEVER an invalid line, against ANY garbage the store
-    // can hold (round 5 guarded only the EMPTY custom endpoint; a
-    // MALFORMED endpoint or junk bootstrap IPs — persisted by the
-    // earlier builds or typed into the free-text fields — made the
-    // engine fail dnsConfigInvalid, killing the login page, the DNS
-    // test and BOTH carrier modes at startup). The doh pick rides
-    // only when every custom piece parses; otherwise the effective
-    // mode degrades to system and the settings page says why.
-    final endpoint = firefoxDnsEndpoint.trim();
-    final endpointOk = firefoxDnsProvider != 'custom' ||
-        (endpoint.isNotEmpty && _isValidDohEndpoint(endpoint));
-    // Bootstrap IPs: only real IP literals ride the line (junk entries
-    // from the free-text field are dropped, not fatal).
-    final bootstrap = firefoxDnsBootstrapIps
-        .map((v) => v.trim())
-        .where((v) => v.isNotEmpty && _isValidIpLiteral(v))
-        .toList(growable: false);
-    final doh = firefoxDnsMode == 'doh' && endpointOk;
-    return {
-      'mode': doh ? 'doh' : 'system',
-      if (doh) ...{
-        'provider': firefoxDnsProvider,
-        if (firefoxDnsProvider == 'custom') 'endpoint': endpoint,
-        if (firefoxDnsProvider != 'auto' && bootstrap.isNotEmpty)
-          'bootstrapIps': bootstrap,
-        'systemForLocalDomains': true,
-      },
-      // 2.0.0 — the hello split rides the SAME line (off/sni/
-      // first-byte/record; the engine validates it).
-      'helloSplit': _helloSplitForEngine,
-    };
-  }
-
-  /// The validated hello-split pick (never a bad line — an unknown
-  /// stored value degrades to the safe default, the same rule the
-  /// provider pick follows).
-  String get _helloSplitForEngine {
-    const allowed = {'off', 'sni', 'first-byte', 'record'};
-    return allowed.contains(firefoxDnsHelloSplit) ? firefoxDnsHelloSplit : 'sni';
-  }
-
-  /// 1.7.1 — true when the user picked DoH + custom but the endpoint is
-  /// empty or malformed (the settings page surfaces WHY the effective
-  /// mode fell back to system instead of silently ignoring the pick).
-  bool get firefoxDnsCustomIncomplete =>
-      firefoxDnsMode == 'doh' &&
-      firefoxDnsProvider == 'custom' &&
-      !_isValidDohEndpoint(firefoxDnsEndpoint.trim());
-
-  @override
-  Future<void> loadFirefoxDnsSettings() =>
-      _firefoxDnsLoadFuture ??= _loadFirefoxDnsSettings();
-
-  Future<void> _loadFirefoxDnsSettings() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      // 1.9.0 — the never-touched default migrates to the reference's
-      // AUTO posture; an explicit stored pick is always respected.
-      final mode = prefs.getString('firefox.dns.mode') ?? 'doh';
-      final provider = prefs.getString('firefox.dns.provider') ?? 'auto';
-      firefoxDnsMode = mode == 'doh' ? 'doh' : 'system';
-      firefoxDnsProvider = const {'auto', 'cloudflare', 'google', 'quad9', 'custom'}
-              .contains(provider)
-          ? provider
-          : 'auto';
-      firefoxDnsEndpoint = prefs.getString('firefox.dns.endpoint') ?? '';
-      firefoxDnsBootstrapIps =
-          prefs.getStringList('firefox.dns.bootstrap_ips') ?? const [];
-      // 2.0.0 — the hello split (an unknown stored value degrades to the
-      // safe sni default; an EXPLICIT stored pick is always respected).
-      final helloSplit = prefs.getString('firefox.dns.hello_split') ?? 'sni';
-      firefoxDnsHelloSplit = const {'off', 'sni', 'first-byte', 'record'}
-              .contains(helloSplit)
-          ? helloSplit
-          : 'sni';
-      notifyListeners();
-    } catch (_) {
-      // Preferences unavailable (e.g. a pure unit-test host): the AUTO
-      // racing posture remains the safe default.
-    }
-  }
-
-  Future<void> _persistFirefoxDnsSettings() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('firefox.dns.mode', firefoxDnsMode);
-      await prefs.setString('firefox.dns.provider', firefoxDnsProvider);
-      await prefs.setString('firefox.dns.endpoint', firefoxDnsEndpoint);
-      await prefs.setStringList(
-          'firefox.dns.bootstrap_ips', firefoxDnsBootstrapIps);
-      await prefs.setString('firefox.dns.hello_split', firefoxDnsHelloSplit);
-    } catch (_) {
-      // A persistence failure must not silently change the active resolver.
-    }
-  }
-
-  void setFirefoxDnsMode(String mode) {
-    final pick = mode == 'doh' ? 'doh' : 'system';
-    if (firefoxDnsMode == pick) return;
-    firefoxDnsMode = pick;
-    unawaited(_persistFirefoxDnsSettings());
-    notifyListeners();
-  }
-
-  void setFirefoxDnsProvider(String provider) {
-    const allowed = {'auto', 'cloudflare', 'google', 'quad9', 'custom'};
-    final pick = allowed.contains(provider) ? provider : 'auto';
-    if (firefoxDnsProvider == pick) return;
-    // 1.7.0 — switching providers RESETS the endpoint/bootstrap fields:
-    // a stale custom endpoint must never ride the newly picked provider
-    // (the built-in providers' IP-literal defaults apply instead).
-    final switchToBuiltin =
-        pick != 'custom' && firefoxDnsProvider == 'custom';
-    firefoxDnsProvider = pick;
-    if (switchToBuiltin) {
-      firefoxDnsEndpoint = '';
-      firefoxDnsBootstrapIps = const [];
-    }
-    unawaited(_persistFirefoxDnsSettings());
-    notifyListeners();
-  }
-
-  /// 2.0.0 — the hello split pick (the reference's network.hello_split
-  /// choices; an unknown value degrades to the safe sni default).
-  void setFirefoxDnsHelloSplit(String mode) {
-    const allowed = {'off', 'sni', 'first-byte', 'record'};
-    final pick = allowed.contains(mode) ? mode : 'sni';
-    if (firefoxDnsHelloSplit == pick) return;
-    firefoxDnsHelloSplit = pick;
-    unawaited(_persistFirefoxDnsSettings());
-    notifyListeners();
-  }
-
-  void setFirefoxDnsCustom(String endpoint, String bootstrapIps) {
-    // 1.7.1 — sanitize at SET time too: only real IP literals persist
-    // (the free-text field accepts anything; junk never reaches the
-    // engine line even before the getter's filter sees it).
-    final nextIps = bootstrapIps
-        .split(RegExp(r'[\s,;]+'))
-        .map((v) => v.trim())
-        .where((v) => v.isNotEmpty && _isValidIpLiteral(v))
-        .take(8)
-        .toList(growable: false);
-    if (firefoxDnsEndpoint == endpoint.trim() &&
-        listEquals(firefoxDnsBootstrapIps, nextIps)) {
-      return;
-    }
-    firefoxDnsEndpoint = endpoint.trim();
-    firefoxDnsBootstrapIps = nextIps;
-    unawaited(_persistFirefoxDnsSettings());
-    notifyListeners();
-  }
 
   /// The LIVE firefox country set (the engine's --discover role; null
   /// until the first refresh — the wheel falls back to the standing
@@ -764,11 +567,6 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource, Fire
   /// PHASE-2 — cancels an in-flight login exchange (the login screen's
   /// dispose path): stdin close → grace → kill; no orphan survives.
   Future<void> firefoxLoginCancel() => _engine.firefoxLoginCancel();
-
-  /// Tests the selected Firefox resolver against the control-plane domains.
-  /// This is DNS evidence only, not an OAuth or VPN-connectivity test.
-  Future<List<Map<String, dynamic>>?> firefoxDnsProbe() =>
-      _engine.firefoxDnsProbe(firefoxDnsConfig);
 
   /// v4.22 — direct setters for the SETTINGS pages (the Psiphon/Tor pages
   /// write their own family field regardless of the currently selected

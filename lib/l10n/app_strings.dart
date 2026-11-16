@@ -357,45 +357,11 @@ class AppStrings {
   String get firefoxModeDirectDesc => _v['firefoxModeDirectDesc']!;
   String get firefoxTransportDirectDesc =>
       _v['firefoxTransportDirectDesc']!;
-  String get secFirefoxDns => _v['secFirefoxDns']!;
-  String get firefoxDnsMode => _v['firefoxDnsMode']!;
-  String get firefoxDnsSystem => _v['firefoxDnsSystem']!;
-  String get firefoxDnsDoH => _v['firefoxDnsDoH']!;
-  String get firefoxDnsProvider => _v['firefoxDnsProvider']!;
-
-  /// 1.9.0 — the AUTO racing provider (the reference's DefaultDNSServers).
-  String get firefoxDnsProviderAuto => _v['firefoxDnsProviderAuto']!;
-  String get firefoxDnsCustom => _v['firefoxDnsCustom']!;
-  String get firefoxDnsEndpoint => _v['firefoxDnsEndpoint']!;
-  String get firefoxDnsBootstrap => _v['firefoxDnsBootstrap']!;
-  String get firefoxDnsSave => _v['firefoxDnsSave']!;
-  String get firefoxDnsDesc => _v['firefoxDnsDesc']!;
-  String get firefoxDnsWebViewNote => _v['firefoxDnsWebViewNote']!;
-
-  // 2.0.0 — the reference's hello split (network.hello_split), exposed
-  // as its own pill on the Firefox DNS card.
-  String get firefoxDnsHelloSplit => _v['firefoxDnsHelloSplit']!;
-  String get firefoxDnsHelloSplitOff => _v['firefoxDnsHelloSplitOff']!;
-  String get firefoxDnsHelloSplitSNI => _v['firefoxDnsHelloSplitSNI']!;
-  String get firefoxDnsHelloSplitFirstByte => _v['firefoxDnsHelloSplitFirstByte']!;
-  String get firefoxDnsHelloSplitRecord => _v['firefoxDnsHelloSplitRecord']!;
-  String get firefoxDnsHelloSplitDesc => _v['firefoxDnsHelloSplitDesc']!;
   String get firefoxAccountLoading => _v['firefoxAccountLoading']!;
   String get firefoxBrowserTabLoading => _v['firefoxBrowserTabLoading']!;
   String get firefoxBrowserTabFailed => _v['firefoxBrowserTabFailed']!;
   String get firefoxBrowserTabRetry => _v['firefoxBrowserTabRetry']!;
   String get firefoxBrowserTabHint => _v['firefoxBrowserTabHint']!;
-  String get firefoxDnsTesting => _v['firefoxDnsTesting']!;
-  String get firefoxDnsTestButton => _v['firefoxDnsTestButton']!;
-  String get firefoxDnsTestSuccess => _v['firefoxDnsTestSuccess']!;
-  String get firefoxDnsTestFailed => _v['firefoxDnsTestFailed']!;
-  /// 1.7.0 — the DNS role never produced events (a setup failure or a
-  /// timeout): its own message, distinct from the per-domain one.
-  String get firefoxDnsSetupFailed => _v['firefoxDnsSetupFailed']!;
-  /// 1.7.0 — DoH + custom with no endpoint saved: the effective mode
-  /// falls back to system until one is.
-  String get firefoxDnsCustomIncomplete =>
-      _v['firefoxDnsCustomIncomplete']!;
   /// 1.7.0 — the on-demand quota refresh (the `--usage` role).
   String get firefoxQuotaRefresh => _v['firefoxQuotaRefresh']!;
   String get firefoxQuotaRefreshing => _v['firefoxQuotaRefreshing']!;
@@ -409,6 +375,14 @@ class AppStrings {
   String get firefoxLoginRejected => _v['firefoxLoginRejected']!;
   String get firefoxLoginTimeout => _v['firefoxLoginTimeout']!;
   String get firefoxLoginUnavailable => _v['firefoxLoginUnavailable']!;
+
+  /// 2.1.0 — the standing disruption notice on the login screen (the
+  /// owner's decree: «توی بخش ورود بنویس در صورت اینکه ورود اختلال
+  /// داشت از یک فیلترشکن دیگه استفاده کنن») — the sign-in needs an
+  /// unblocked route to the account server; on a filtering network
+  /// that route is another VPN.
+  String get firefoxLoginDisruptionNotice =>
+      _v['firefoxLoginDisruptionNotice']!;
 
   // 1.8.0 — the arman-pattern round: the DIRECT email+password sign-in
   // (the form tab) and its granular failure texts.
@@ -443,10 +417,6 @@ class AppStrings {
   /// The email-2fa step's strip text (the code went to [email]).
   String firefoxLoginCodeSent(String email) =>
       _v['firefoxLoginCodeSent']!.replaceAll('{email}', email);
-
-  // 1.8.0 — the DNS test's path labels (through the tunnel vs direct).
-  String get firefoxDnsViaCarrier => _v['firefoxDnsViaCarrier']!;
-  String get firefoxDnsViaDirect => _v['firefoxDnsViaDirect']!;
 
   // PHASE B (Part 2) — the login-failure classes (firefox_errors.dart).
   // Static per-class text; the engine's raw chain is never rendered.
@@ -703,30 +673,6 @@ class AppStrings {
       'firefoxTransportH2': 'H2 (پیش‌فرض)',
       'firefoxTransportH3': 'H3 (کوئیک)',
       'firefoxTransportDesc': 'H2 روی TCP+TLS و H3 روی QUIC کار می‌کند. اگر مطمئن نیستید همان H2 بماند.',
-      'secFirefoxDns': 'DNS فایرفاکس',
-      'firefoxDnsMode': 'حالت DNS',
-      'firefoxDnsSystem': 'DNS سیستم اندروید',
-      'firefoxDnsDoH': 'DNS رمزگذاری‌شده (DoH)',
-      'firefoxDnsProvider': 'ارائه‌دهنده DNS',
-      'firefoxDnsProviderAuto': 'خودکار (همهً)',
-      'firefoxDnsCustom': 'سفارشی',
-      'firefoxDnsEndpoint': 'نشانی DoH (HTTPS)',
-      'firefoxDnsBootstrap': 'IPهای اولیه (اختیاری، جداشده با ویرگول)',
-      'firefoxDnsSave': 'ذخیره تنظیمات DNS',
-      'firefoxDnsDesc': 'این DNS برای فرایندهای مستقل Firefox، مثل ورود حساب و کشف اولیهٔ سرورها، استفاده می‌شود. در نشست Firefox over WARP، نام سرورهای تونل از مسیر DNS هستهٔ Aether حل می‌شود. خطای DoH در این فرایندها پنهانی به DNS معمولی برنمی‌گردد.',
-      'firefoxDnsWebViewNote': 'درخواست‌های واقعی HTTPS صفحه ورود از پراکسی محلی عبور می‌کنند و نام مقصد با DNS انتخاب‌شده حل می‌شود. پیش‌واکشی DNS در Chromium ممکن است همچنان از DNS سیستم اندروید استفاده کند.',
-      'firefoxDnsTestButton': 'آزمایش DNS',
-      'firefoxDnsTesting': 'در حال آزمایش DNS…',
-      'firefoxDnsTestSuccess': 'DNS برای همه دامنه‌های آزمایش‌شده پاسخ داد.',
-      'firefoxDnsTestFailed': 'برخی درخواست‌های DNS ناموفق بودند.',
-      'firefoxDnsSetupFailed': 'راه‌اندازی DNS انتخاب‌شده ناموفق بود؛ تنظیمات را بررسی کنید.',
-      'firefoxDnsCustomIncomplete': 'نشانی DoH سفارشی معتبر نیست؛ تا ذخیرهٔ نشانی معتبر، DNS سیستم اعمال می‌شود.',
-      'firefoxDnsHelloSplit': 'شیوهٔ ارسال درخواست TLS',
-      'firefoxDnsHelloSplitOff': 'خاموش',
-      'firefoxDnsHelloSplitSNI': 'داخل نام سرور',
-      'firefoxDnsHelloSplitFirstByte': 'بایت اول',
-      'firefoxDnsHelloSplitRecord': 'دو رکورد',
-      'firefoxDnsHelloSplitDesc': 'برای شبکه‌هایی که نام سرور را در آغاز TLS می‌خوانند و اتصال را قطع می‌کنند؛ سرور همان بایت‌ها را دریافت می‌کند و چیزی تغییر نمی‌کند.',
       'firefoxAccountLoading': 'در حال بررسی حساب…',
       'firefoxBrowserTabLoading': 'در حال آماده‌سازی مرورگر…',
       'firefoxBrowserTabFailed': 'صفحهٔ ورود بارگذاری نشد.',
@@ -749,6 +695,7 @@ class AppStrings {
       'firefoxLoginExchanging': 'در حال تکمیل ورود و دریافت نشست…',
       'firefoxLoginSuccess': 'ورود با موفقیت انجام شد',
       'firefoxLoginFailed': 'ورود ناموفق بود',
+      'firefoxLoginDisruptionNotice': 'در صورت بروز اختلال در ورود، یک فیلترشکن دیگر را روشن کنید و دوباره تلاش کنید.',
       'firefoxLoginRejected': 'نشست ورود پذیرفته نشد؛ دوباره وارد شوید',
       'firefoxLoginTimeout': 'تأیید ورود بیش از حد طول کشید؛ دوباره تلاش کنید',
       'firefoxLoginUnavailable': 'صفحهٔ ورود روی این دستگاه در دسترس نیست',
@@ -780,8 +727,6 @@ class AppStrings {
       'firefoxLoginCodeAttempts': 'تلاش‌های ناموفق برای کد زیاد بود؛ دوباره وارد شوید',
       'firefoxLoginStartOver': 'شروع دوباره',
       'firefoxLoginCodeSent': 'کد تأیید به {email} ارسال شد',
-      'firefoxDnsViaCarrier': 'از مسیر تونل',
-      'firefoxDnsViaDirect': 'مستقیم (بدون تونل)',
       // PHASE B (Part 2) — the login-failure classes.
       'firefoxErrDns': 'نام سرور حساب حل نشد (DNS)؛ اتصال دستگاه را بررسی کنید',
       'firefoxErrNetwork': 'سرور حساب در دسترس نبود؛ اتصال شبکه را بررسی کنید',
@@ -1112,30 +1057,6 @@ class AppStrings {
       'firefoxTransportH2': 'H2 (default)',
       'firefoxTransportH3': 'H3 (QUIC)',
       'firefoxTransportDesc': 'H2 runs over TCP+TLS; H3 runs over QUIC. Keep H2 if unsure.',
-      'secFirefoxDns': 'Firefox DNS',
-      'firefoxDnsMode': 'DNS mode',
-      'firefoxDnsSystem': 'Android System DNS',
-      'firefoxDnsDoH': 'Encrypted DNS (DoH)',
-      'firefoxDnsProvider': 'DNS provider',
-      'firefoxDnsProviderAuto': 'Auto (all)',
-      'firefoxDnsCustom': 'Custom',
-      'firefoxDnsEndpoint': 'DoH endpoint (HTTPS)',
-      'firefoxDnsBootstrap': 'Bootstrap IPs (optional, comma-separated)',
-      'firefoxDnsSave': 'Save DNS settings',
-      'firefoxDnsDesc': 'This resolver is used by Firefox\'s separate pre-connect roles, such as account sign-in and initial server discovery. In an active Firefox-over-WARP session, tunnel server names are resolved by the Aether core\'s DNS. DoH failures in these Firefox roles do not silently fall back to plain DNS.',
-      'firefoxDnsWebViewNote': 'Actual HTTPS requests from the sign-in page use a local proxy and resolve destination names with the selected DNS. Chromium DNS prefetch may still use Android System DNS.',
-      'firefoxDnsTestButton': 'Test DNS',
-      'firefoxDnsTesting': 'Testing DNS…',
-      'firefoxDnsTestSuccess': 'DNS answered for every tested domain.',
-      'firefoxDnsTestFailed': 'Some DNS lookups failed.',
-      'firefoxDnsSetupFailed': 'The selected DNS failed to start; check the settings.',
-      'firefoxDnsCustomIncomplete': 'The custom DoH endpoint is not valid; system DNS applies until a valid one is saved.',
-      'firefoxDnsHelloSplit': 'TLS request delivery',
-      'firefoxDnsHelloSplitOff': 'Off',
-      'firefoxDnsHelloSplitSNI': 'Inside server name',
-      'firefoxDnsHelloSplitFirstByte': 'First byte',
-      'firefoxDnsHelloSplitRecord': 'Two records',
-      'firefoxDnsHelloSplitDesc': 'For networks that read the server name at the start of TLS and cut the connection; the server receives the same bytes and nothing changes.',
       'firefoxAccountLoading': 'Checking the account…',
       'firefoxBrowserTabLoading': 'Preparing the browser…',
       'firefoxBrowserTabFailed': 'The sign-in page did not load.',
@@ -1158,6 +1079,7 @@ class AppStrings {
       'firefoxLoginExchanging': 'Finishing sign-in and minting the session…',
       'firefoxLoginSuccess': 'Signed in successfully',
       'firefoxLoginFailed': 'Sign-in failed',
+      'firefoxLoginDisruptionNotice': 'If sign-in is disrupted, turn on another VPN and try again.',
       'firefoxLoginRejected': 'The sign-in session was rejected; sign in again',
       'firefoxLoginTimeout': 'Sign-in confirmation took too long; try again',
       'firefoxLoginUnavailable': 'The sign-in page is not available on this device',
@@ -1189,8 +1111,6 @@ class AppStrings {
       'firefoxLoginCodeAttempts': 'Too many wrong codes; sign in again',
       'firefoxLoginStartOver': 'Start over',
       'firefoxLoginCodeSent': 'The verification code was sent to {email}',
-      'firefoxDnsViaCarrier': 'through the tunnel',
-      'firefoxDnsViaDirect': 'direct (no tunnel)',
       // PHASE B (Part 2) — the login-failure classes.
       'firefoxErrDns': 'The account server name could not be resolved (DNS); check the connection',
       'firefoxErrNetwork': 'The account server was unreachable; check the network connection',
@@ -1519,30 +1439,6 @@ class AppStrings {
       'firefoxTransportH2': 'H2 (по умолчанию)',
       'firefoxTransportH3': 'H3 (QUIC)',
       'firefoxTransportDesc': 'H2 работает поверх TCP+TLS; H3 — поверх QUIC. Если сомневаетесь, оставьте H2.',
-      'secFirefoxDns': 'DNS Firefox',
-      'firefoxDnsMode': 'Режим DNS',
-      'firefoxDnsSystem': 'Системный DNS Android',
-      'firefoxDnsDoH': 'Зашифрованный DNS (DoH)',
-      'firefoxDnsProvider': 'Поставщик DNS',
-      'firefoxDnsProviderAuto': 'Авто (все)',
-      'firefoxDnsCustom': 'Другой',
-      'firefoxDnsEndpoint': 'Адрес DoH (HTTPS)',
-      'firefoxDnsBootstrap': 'Начальные IP (необязательно, через запятую)',
-      'firefoxDnsSave': 'Сохранить настройки DNS',
-      'firefoxDnsDesc': 'Этот DNS используется отдельными предварительными процессами Firefox — входом в аккаунт и первоначальным поиском серверов. В активном режиме Firefox over WARP имена серверов туннеля разрешает DNS ядра Aether. При сбое DoH в этих процессах скрытого перехода на обычный DNS нет.',
-      'firefoxDnsWebViewNote': 'Фактические HTTPS-запросы страницы входа проходят через локальный прокси и используют выбранный DNS для разрешения имён. Предварительное разрешение DNS в Chromium всё ещё может обращаться к системному DNS Android.',
-      'firefoxDnsTestButton': 'Проверить DNS',
-      'firefoxDnsTesting': 'Проверка DNS…',
-      'firefoxDnsTestSuccess': 'DNS ответил для всех проверенных доменов.',
-      'firefoxDnsTestFailed': 'Некоторые DNS-запросы завершились ошибкой.',
-      'firefoxDnsSetupFailed': 'Не удалось запустить выбранный DNS; проверьте настройки.',
-      'firefoxDnsCustomIncomplete': 'Пользовательский DoH-адрес недействителен; до сохранения корректного адреса применяется системный DNS.',
-      'firefoxDnsHelloSplit': 'Способ отправки TLS-запроса',
-      'firefoxDnsHelloSplitOff': 'Выключено',
-      'firefoxDnsHelloSplitSNI': 'Внутри имени сервера',
-      'firefoxDnsHelloSplitFirstByte': 'Первый байт',
-      'firefoxDnsHelloSplitRecord': 'Две записи',
-      'firefoxDnsHelloSplitDesc': 'Для сетей, которые читают имя сервера в начале TLS и обрывают соединение; сервер получает те же байты, ничего не меняется.',
       'firefoxAccountLoading': 'Проверка аккаунта…',
       'firefoxBrowserTabLoading': 'Подготовка браузера…',
       'firefoxBrowserTabFailed': 'Страница входа не загрузилась.',
@@ -1565,6 +1461,7 @@ class AppStrings {
       'firefoxLoginExchanging': 'Завершение входа и получение сессии…',
       'firefoxLoginSuccess': 'Вход выполнен',
       'firefoxLoginFailed': 'Не удалось войти',
+      'firefoxLoginDisruptionNotice': 'Если вход не удаётся, включите другой VPN и попробуйте снова.',
       'firefoxLoginRejected': 'Сессия входа отклонена; войдите снова',
       'firefoxLoginTimeout': 'Подтверждение входа заняло слишком много времени; попробуйте снова',
       'firefoxLoginUnavailable': 'Страница входа недоступна на этом устройстве',
@@ -1596,8 +1493,6 @@ class AppStrings {
       'firefoxLoginCodeAttempts': 'Слишком много неверных кодов; войдите заново',
       'firefoxLoginStartOver': 'Начать заново',
       'firefoxLoginCodeSent': 'Код подтверждения отправлен на {email}',
-      'firefoxDnsViaCarrier': 'через туннель',
-      'firefoxDnsViaDirect': 'напрямую (без туннеля)',
       // PHASE B (Part 2) — the login-failure classes.
       'firefoxErrDns': 'Не удалось разрешить имя сервера аккаунтов (DNS); проверьте подключение',
       'firefoxErrNetwork': 'Сервер аккаунтов недоступен; проверьте сетевое подключение',
@@ -1924,30 +1819,6 @@ class AppStrings {
       'firefoxTransportH2': 'H2（默认）',
       'firefoxTransportH3': 'H3（QUIC）',
       'firefoxTransportDesc': 'H2 基于 TCP+TLS；H3 基于 QUIC。不确定时保持 H2。',
-      'secFirefoxDns': 'Firefox DNS',
-      'firefoxDnsMode': 'DNS 模式',
-      'firefoxDnsSystem': 'Android 系统 DNS',
-      'firefoxDnsDoH': '加密 DNS (DoH)',
-      'firefoxDnsProvider': 'DNS 服务商',
-      'firefoxDnsProviderAuto': '自动（全部）',
-      'firefoxDnsCustom': '自定义',
-      'firefoxDnsEndpoint': 'DoH 地址 (HTTPS)',
-      'firefoxDnsBootstrap': '引导 IP（可选，逗号分隔）',
-      'firefoxDnsSave': '保存 DNS 设置',
-      'firefoxDnsDesc': '此解析器用于 Firefox 的独立预连接流程，例如账户登录和初始服务器发现。Firefox over WARP 会话建立后，隧道服务器域名由 Aether 核心的 DNS 解析。上述 Firefox 流程中的 DoH 失败不会静默回退到普通 DNS。',
-      'firefoxDnsWebViewNote': '登录页的实际 HTTPS 请求会通过本地代理，并使用所选 DNS 解析目标域名。Chromium 的 DNS 预解析仍可能使用 Android 系统 DNS。',
-      'firefoxDnsTestButton': '测试 DNS',
-      'firefoxDnsTesting': '正在测试 DNS…',
-      'firefoxDnsTestSuccess': '所有测试域名均获得 DNS 响应。',
-      'firefoxDnsTestFailed': '部分 DNS 查询失败。',
-      'firefoxDnsSetupFailed': '所选 DNS 启动失败；请检查设置。',
-      'firefoxDnsCustomIncomplete': '自定义 DoH 地址无效；保存有效地址前将使用系统 DNS。',
-      'firefoxDnsHelloSplit': 'TLS 请求发送方式',
-      'firefoxDnsHelloSplitOff': '关闭',
-      'firefoxDnsHelloSplitSNI': '服务器名内',
-      'firefoxDnsHelloSplitFirstByte': '首字节',
-      'firefoxDnsHelloSplitRecord': '两条记录',
-      'firefoxDnsHelloSplitDesc': '针对在 TLS 开始时读取服务器名并切断连接的网络；服务器收到的字节完全相同，不会有任何改变。',
       'firefoxAccountLoading': '正在检查账户…',
       'firefoxBrowserTabLoading': '正在准备浏览器…',
       'firefoxBrowserTabFailed': '登录页未能加载。',
@@ -1970,6 +1841,7 @@ class AppStrings {
       'firefoxLoginExchanging': '正在完成登录并获取会话…',
       'firefoxLoginSuccess': '登录成功',
       'firefoxLoginFailed': '登录失败',
+      'firefoxLoginDisruptionNotice': '如果登录受阻，请开启其他 VPN 后重试。',
       'firefoxLoginRejected': '登录会话被拒绝；请重新登录',
       'firefoxLoginTimeout': '登录确认超时；请重试',
       'firefoxLoginUnavailable': '此设备上无法打开登录页面',
@@ -2001,8 +1873,6 @@ class AppStrings {
       'firefoxLoginCodeAttempts': '错误验证码次数过多；请重新登录',
       'firefoxLoginStartOver': '重新开始',
       'firefoxLoginCodeSent': '验证码已发送至 {email}',
-      'firefoxDnsViaCarrier': '经由隧道',
-      'firefoxDnsViaDirect': '直连（无隧道）',
       // PHASE B (Part 2) — the login-failure classes.
       'firefoxErrDns': '无法解析账户服务器域名（DNS）；请检查网络连接',
       'firefoxErrNetwork': '无法连接账户服务器；请检查网络',
@@ -2335,30 +2205,6 @@ class AppStrings {
       'firefoxTransportH2': 'H2 (adaty)',
       'firefoxTransportH3': 'H3 (QUIC)',
       'firefoxTransportDesc': 'H2 TCP+TLS üstünde, H3 QUIC üstünde işleýär. Ynamyňyz ýok bolsa H2 galsyn.',
-      'secFirefoxDns': 'Firefox DNS',
-      'firefoxDnsMode': 'DNS tertibi',
-      'firefoxDnsSystem': 'Android ulgam DNS-i',
-      'firefoxDnsDoH': 'Şifrlenen DNS (DoH)',
-      'firefoxDnsProvider': 'DNS üpjünçisi',
-      'firefoxDnsProviderAuto': 'Awtomatik (hemmesi)',
-      'firefoxDnsCustom': 'Ýörite',
-      'firefoxDnsEndpoint': 'DoH salgysy (HTTPS)',
-      'firefoxDnsBootstrap': 'Başlangyç IP-ler (islege görä, otur bilen)',
-      'firefoxDnsSave': 'DNS sazlamalaryny ýatda sakla',
-      'firefoxDnsDesc': 'Bu çözüji Firefox-yň aýratyn öňünden birikme proseslerinde, meselem hasaba girmekde we ilkinji serwer gözleginde ulanylýar. Işjeň Firefox over WARP sessiýasynda tunel serwerleriniň atlaryny Aether ýadrosynyň DNS-i çözýär. Bu Firefox proseslerinde DoH şowsuz bolsa, adaty DNS-e sessiz geçilmeýär.',
-      'firefoxDnsWebViewNote': 'Giriş sahypasynyň hakyky HTTPS islegleri ýerli proksi arkaly geçýär we maksat atlaryny saýlanan DNS bilen çözýär. Chromium DNS öňünden çözmesi henizem Android ulgam DNS-ini ulanyp biler.',
-      'firefoxDnsTestButton': 'DNS-i barla',
-      'firefoxDnsTesting': 'DNS barlanýar…',
-      'firefoxDnsTestSuccess': 'Synag edilen ähli domenler üçin DNS jogap berdi.',
-      'firefoxDnsTestFailed': 'Käbir DNS gözlegleri şowsuz boldy.',
-      'firefoxDnsSetupFailed': 'Saýlanan DNS başlanmady; sazlamalary barlaň.',
-      'firefoxDnsCustomIncomplete': 'Ýörite DoH salgysy nädogry; dogry salgy ýatda saklanýança ulgam DNS ulanylýar.',
-      'firefoxDnsHelloSplit': 'TLS islegini ibermek usuly',
-      'firefoxDnsHelloSplitOff': 'Öçürilen',
-      'firefoxDnsHelloSplitSNI': 'Serwer adyň içinden',
-      'firefoxDnsHelloSplitFirstByte': 'Ilkinji baýt',
-      'firefoxDnsHelloSplitRecord': 'Iki ýazgy',
-      'firefoxDnsHelloSplitDesc': 'TLS-iň başynda serwer adyny okaýan we baglanyşygy kesýän ulgamlar üçin; serwer deň bahalaryny alýar, hiç zat üýtgemeýär.',
       'firefoxAccountLoading': 'Hasap barlanýar…',
       'firefoxBrowserTabLoading': 'Brauzer taýýarlanylýar…',
       'firefoxBrowserTabFailed': 'Giriş sahypasy ýüklenmedi.',
@@ -2381,6 +2227,7 @@ class AppStrings {
       'firefoxLoginExchanging': 'Giriş tamamlanýar we sessiýa alynýar…',
       'firefoxLoginSuccess': 'Giriş üstünlikli tamamlandy',
       'firefoxLoginFailed': 'Giriş şowsuz boldy',
+      'firefoxLoginDisruptionNotice': 'Eger giriş näsazlyk etse, beýleki bir VPN-i açyň we gaýtadan synanyşyň.',
       'firefoxLoginRejected': 'Giriş sessiýasy kabul edilmedi; ýene gir',
       'firefoxLoginTimeout': 'Girişi tassyklamak wagtynyň üstünden geçdi; ýene synanyş',
       'firefoxLoginUnavailable': 'Bu enjamda giriş sahypasy elýeterli däl',
@@ -2412,8 +2259,6 @@ class AppStrings {
       'firefoxLoginCodeAttempts': 'Nädogry köp kod; gaýtadan gir',
       'firefoxLoginStartOver': 'Täzeden başla',
       'firefoxLoginCodeSent': 'Tassyklyk kody {email} salgyna iberildi',
-      'firefoxDnsViaCarrier': 'tunelden',
-      'firefoxDnsViaDirect': 'gowak (tunelsiz)',
       // PHASE B (Part 2) — the login-failure classes.
       'firefoxErrDns': 'Hasap serweriniň ady çözülmedi (DNS); birikmegi barlaň',
       'firefoxErrNetwork': 'Hasap serweri elýeterli däldi; tor birikmesini barlaň',

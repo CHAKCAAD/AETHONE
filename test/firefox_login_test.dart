@@ -281,31 +281,9 @@ void main() {
       store.setFirefoxTransport('quic'); // unknown → h2
       expect(store.firefoxTransport, 'h2');
 
-      // 1.9.0 — the never-touched default is the reference's AUTO
-      // racing posture (doh + auto; the bootstrap list stays absent).
-      // 2.0.0 — the hello split rides the SAME line (the default pick
-      // sni; the reference's network.hello_split seam).
-      expect(store.firefoxDnsConfig, {
-        'mode': 'doh',
-        'provider': 'auto',
-        'systemForLocalDomains': true,
-        'helloSplit': 'sni',
-      });
-      store.setFirefoxDnsProvider('quad9');
-      expect(store.firefoxDnsConfig, {
-        'mode': 'doh',
-        'provider': 'quad9',
-        'systemForLocalDomains': true,
-        'helloSplit': 'sni',
-      });
-      // 2.0.0 — the hello-split pick: valid values ride, unknown values
-      // degrade to the safe sni default.
-      store.setFirefoxDnsHelloSplit('record');
-      expect(store.firefoxDnsConfig['helloSplit'], 'record');
-      store.setFirefoxDnsHelloSplit('nonsense');
-      expect(store.firefoxDnsHelloSplit, 'sni');
-      store.setFirefoxDnsMode('unknown');
-      expect(store.firefoxDnsMode, 'system');
+      // 2.1.0 — the DNS feature is GONE: no dns getter, no provider
+      // pick, no hello-split seam. The legacy `firefox.dns.*` prefs a
+      // device may still hold are never read (inert on disk).
     });
 
     test('applyFirefoxLocations swaps the live set and labels it', () {

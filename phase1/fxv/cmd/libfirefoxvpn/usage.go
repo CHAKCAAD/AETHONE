@@ -10,7 +10,8 @@ package main
 //
 // The request rides the WARP carrier when upstreamSocks is set (the
 // control-plane transport seam — the same uTLS Firefox ClientHello
-// posture the login uses), and the process-local DNS policy otherwise.
+// posture the login uses). 2.1.0: no process-local DNS policy anymore —
+// the platform resolver carries the direct walk.
 
 import (
         "context"
@@ -24,7 +25,6 @@ import (
 
         vpnclient "firefox-vpn-client"
 
-        "aethone/fxv/internal/dnsresolver"
         "aethone/fxv/internal/engine"
         "aethone/fxv/internal/redact"
         "aethone/fxv/internal/upstream"
@@ -103,15 +103,9 @@ func runUsageWith(
                 return engine.ExitStartup
         }
 
-        if _, dnsErr := dnsresolver.Install(cfg.DNS); dnsErr != nil {
-                _ = emit.Emit(engine.Event{
-                        Name: engine.EvUsageFailed, FailCode: engine.ErrBadConfig,
-                        Message: "dnsConfigInvalid", Code: engine.ExitStartup,
-                })
-                return engine.ExitStartup
-        }
-        // 2.0.0 — the reference's hello split for the usage walk.
-        vpnclient.SetHelloSplit(cfg.DNS.HelloSplit)
+        // 2.1.0 — no process-local resolver is installed (the DNS-removal
+        // decree): the platform resolver carries the direct walk; the
+        // carrier seam below is unchanged.
 
         // The carrier seam — same as the login role: the request dials
         // through the in-process Aether core's SOCKS listener when set

@@ -48,9 +48,8 @@ const LoginConfigVersion = 1
 //      upstreamProxy pair (one loopback-only socks5:// URL routes BOTH
 //      planes — TCP CONNECT for h2 AND UDP ASSOCIATE for h3, so the
 //      transport pick is free again); the process-local `dns` block
-//      (system | DoH) on the tunnel and login config lines; the
-//      `--webview-proxy` role (the DNS-aware CONNECT proxy for the sign-in
-//      WebView — the login-page fix); and the quota events now carry
+//      (system | DoH) joined the tunnel and login config lines (RETIRED
+//      again in 2.1.0); the quota events now carry
 //      `quotaMax` beside quotaLeft/quotaReset. A host that sends none of
 //      the new fields keeps the exact 1.2.0 direct behavior.
 // 1.6.0 — the direct DATA plane (2026-11-15, the owner's round 4:
@@ -145,7 +144,24 @@ const LoginConfigVersion = 1
 //        * the DNS probe is honest per-domain: a 15 s per-domain
 //          budget, block-page-only answers labeled as the filtering
 //          page they are, never a blank walk.
-const EngineVersion = "2.0.0"
+// 2.1.0 — the DNS REMOVAL round (2026-11-17, the owner's decree:
+//      «بهش dns رو به کلی از اپ حذف کن» — after three rounds of the
+//      DoH machinery failing to start on the owner's network, DNS as a
+//      FEATURE is gone): every role resolves through the PLATFORM
+//      resolver (Bionic getaddrinfo via the CGO builds — the A1 decree
+//      posture, which never produced a startup failure); the `dns`
+//      config block is RETIRED from the tunnel/login/usage lines (an
+//      old host line carrying it still parses — unknown fields are
+//      ignored); the `--dns-probe` and `--webview-proxy` roles and the
+//      internal dnsresolver package are DELETED; the hello split
+//      (which rode the dns config line) returns to its default OFF —
+//      through a working carrier or another VPN the split is
+//      unnecessary, and on a filtering network nothing local helps
+//      anyway (the login screen now tells the user to use another
+//      VPN). The password mode's OWN login step gains a 150 s budget
+//      so a wedged network fails with the classified error in minutes,
+//      never the full 600 s "not confirmed in time" hang.
+const EngineVersion = "2.1.0"
 
 // Event names (mirrored by FirefoxEngineEvents on the Dart side).
 const (
@@ -227,7 +243,6 @@ const (
         // 1.5.0 — the merged-carrier config details (badConfig family;
         // static English, never secrets).
         detailUpstreamSocksInvalid = "upstreamSocksInvalid"
-        detailDNSConfigInvalid     = "dnsConfigInvalid"
         // 1.6.0 — the direct-data-plane detail (same family).
         detailDataPlaneDirectWithoutCarrier = "dataPlaneDirectWithoutCarrier"
 )

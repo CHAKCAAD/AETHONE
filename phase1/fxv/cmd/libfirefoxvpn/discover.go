@@ -1,8 +1,9 @@
 package main
 
 // The --discover role fetches the live Mozilla Remote Settings list.
-// It accepts an optional DNS config on stdin; empty stdin preserves the
-// backward-compatible Android system resolver behavior.
+// 2.1.0: it reads NOTHING from stdin anymore (the DNS config block is
+// retired); the platform resolver carries the walk. The host may still
+// close stdin immediately — the role ignores it.
 
 import (
         "context"
@@ -14,7 +15,6 @@ import (
         vpnclient "firefox-vpn-client"
 
         "aethone/fxv/internal/discovery"
-        "aethone/fxv/internal/dnsresolver"
         "aethone/fxv/internal/engine"
 )
 
@@ -23,18 +23,6 @@ type discoverPayload struct {
 }
 
 func runDiscover() int {
-        dnsConfig, err := readOptionalDNSConfig(os.Stdin)
-        if err != nil {
-                fmt.Fprintf(os.Stderr, "discover: invalid DNS configuration: %v\n", err)
-                return engine.ExitStartup
-        }
-        if _, err := dnsresolver.Install(dnsConfig); err != nil {
-                fmt.Fprintf(os.Stderr, "discover: DNS setup failed: %v\n", err)
-                return engine.ExitStartup
-        }
-        // 2.0.0 — the reference's hello split for the discovery walk.
-        vpnclient.SetHelloSplit(dnsConfig.HelloSplit)
-
         ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
         defer cancel()
         countries, err := vpnclient.FetchServerList(ctx)

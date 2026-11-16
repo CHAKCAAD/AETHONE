@@ -140,34 +140,22 @@ void main() {
       expect(cfg.transport, 'h2');
       expect(cfg.toJson()['version'], 1);
       // The WARP carrier seam (upstreamSocks) is ABSENT by default (the
-      // additive contract: an older host's line stays valid), and the
-      // process-local DNS defaults to the reference's AUTO racing
-      // posture (1.9.0 — never the poisonable system resolver).
+      // additive contract: an older host's line stays valid), and —
+      // 2.1.0, the DNS-removal decree — NO dns block is written at all
+      // (the engine's platform resolver carries every lookup).
       expect(cfg.toJson().containsKey('upstreamSocks'), isFalse);
-      expect(
-        cfg.toJson()['dns'],
-        {'mode': 'doh', 'provider': 'auto'},
-      );
-      const doh = FirefoxEngineConfig(
+      expect(cfg.toJson().containsKey('dns'), isFalse);
+      const carried = FirefoxEngineConfig(
         socksListen: '127.0.0.1:1822',
         auth: FirefoxSessionAuth(accessToken: 'at'),
         upstreamSocks: 'socks5://127.0.0.1:1819',
-        dns: {
-          'mode': 'doh',
-          'provider': 'quad9',
-          'systemForLocalDomains': true,
-        },
       );
-      final dohBlob = doh.toJson();
-      expect(dohBlob['upstreamSocks'], 'socks5://127.0.0.1:1819');
-      expect(dohBlob['dns'], {
-        'mode': 'doh',
-        'provider': 'quad9',
-        'systemForLocalDomains': true,
-      });
+      final carriedBlob = carried.toJson();
+      expect(carriedBlob['upstreamSocks'], 'socks5://127.0.0.1:1819');
+      expect(carriedBlob.containsKey('dns'), isFalse);
       // The carrier URL never carries the tokens — the auth block stays
       // the only secret carrier on the stdin line.
-      expect(jsonEncode(dohBlob).contains('at-secret'), isFalse);
+      expect(jsonEncode(carriedBlob).contains('at-secret'), isFalse);
     });
   });
 

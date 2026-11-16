@@ -59,7 +59,6 @@ import (
 
         vpnclient "firefox-vpn-client"
 
-        "aethone/fxv/internal/dnsresolver"
         "aethone/fxv/internal/engine"
         "aethone/fxv/internal/upstream"
         "aethone/fxv/internal/fferr"
@@ -149,23 +148,6 @@ func runLogin() int {
                 return engine.ExitStartup
         }
 
-        if _, dnsErr := dnsresolver.Install(cfg.DNS); dnsErr != nil {
-                _ = emit.Emit(engine.Event{
-                        Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
-                        Message: "dnsConfigInvalid", Code: engine.ExitStartup,
-                })
-                return engine.ExitStartup
-        }
-        // 2.0.0 — the reference's hello split for the direct sign-in's
-        // control plane.
-        vpnclient.SetHelloSplit(cfg.DNS.HelloSplit)
-
-        // 1.5.0 (the owner's round 2) — the WARP-carried exchange: with
-        // an upstreamSocks carrier the token exchange dials through the
-        // in-process Aether core's SOCKS listener (the pinned Firefox
-        // uTLS ClientHello kept; the Fastly edge sees the WARP egress,
-        // not the blocked region's). A refused carrier CONNECT now
-        // falls back to the direct dial (2.0.0).
         if cfg.UpstreamSocks != "" {
                 vpnclient.SetControlPlaneTransport(
                         upstream.NewSOCKS5ControlPlaneTransport(cfg.UpstreamSocks))
@@ -183,6 +165,18 @@ func runLogin() int {
         }
         return runLoginWebChannel(emit, cfg)
 }
+
+// loginStepBudget bounds ONE network step of the password walk (the
+// login POST itself, or one verify POST). 2.1.0 (the owner's retest:
+// «تایید ورود بیش از حد طول کشید» — the no-VPN walk sat the FULL
+// 600 s budget before surfacing anything): the 600 s verify budget is
+// for the HUMAN part (fetching the emailed code at reading speed), not
+// for a wedged network — a login POST that cannot complete inside this
+// budget fails with its CLASSIFIED error in minutes, which the UI maps
+// to an honest message (and the login screen's notice points at
+// another VPN). The step ctx derives from the walk's cancel ctx, so
+// the clean cancel still aborts an in-flight call instantly.
+const loginStepBudget = 150 * time.Second
 
 // runLoginWebChannel is the Phase-2 walk — byte-identical behavior to
 // 1.7.0 (extracted verbatim when the password mode joined the role).
@@ -260,14 +254,18 @@ func runLoginPassword(emit *engine.Emitter, cfg engine.LoginConfig, br *bufio.Re
         // 1. the password login itself (email-2fa: the confirmation code
         // is EMAILED to the account, not a link — a headless client can
         // finish it). Runs async so the CLEAN CANCEL (stdin EOF) fires
-        // instantly, exactly like the webchannel exchange walk.
+        // instantly, exactly like the webchannel exchange walk. The step
+        // carries its OWN budget (loginStepBudget) — a wedged network
+        // fails classified inside minutes, never the full 600 s hang.
         type loginOutcome struct {
                 resp *vpnclient.LoginResponse
                 err  error
         }
         loginCh := make(chan loginOutcome, 1)
         go func() {
-                resp, err := vpnclient.FxaLogin(ctx, cfg.Email, password)
+                stepCtx, stepCancel := context.WithTimeout(ctx, loginStepBudget)
+                defer stepCancel()
+                resp, err := vpnclient.FxaLogin(stepCtx, cfg.Email, password)
                 loginCh <- loginOutcome{resp, err}
         }()
         var loginResp *vpnclient.LoginResponse
@@ -367,7 +365,10 @@ func runLoginPassword(emit *engine.Emitter, cfg engine.LoginConfig, br *bufio.Re
                         continue
                 }
 
-                if err := vpnclient.FxaVerifySession(ctx, sessionToken, code); err != nil {
+                verifyCtx, verifyCancel := context.WithTimeout(ctx, loginStepBudget)
+                err := vpnclient.FxaVerifySession(verifyCtx, sessionToken, code)
+                verifyCancel()
+                if err != nil {
                         kind, retryable := classifyVerifyCodeError(err)
                         switch kind {
                         case "wrongCode":

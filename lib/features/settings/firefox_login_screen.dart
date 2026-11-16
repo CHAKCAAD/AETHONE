@@ -13,10 +13,16 @@
 ///  * BROWSER (the alternative): the REAL accounts.firefox.com page
 ///    inside an embedded WebView, bridged by the WebChannel hook
 ///    (firefox_web_channel.dart; the protocol is Mozilla's). Created
-///    LAZILY — switching to this tab is what boots the WebView and its
-///    DNS-aware proxy; the direct path never pays for it (the
-///    round-5/6 «بسته شدن برنامه» memory pressure had its heaviest
-///    page here).
+///    LAZILY — switching to this tab is what boots the WebView; the
+///    direct path never pays for it (the round-5/6 «بسته شدن برنامه»
+///    memory pressure had its heaviest page here).
+///
+///    2.1.0 — the WebView loads PLAIN: the DNS-aware loopback proxy that
+///    used to boot before it is GONE with the whole DNS feature (the
+///    owner's decree «بهش dns رو به کلی از اپ حذف کن"). The page rides
+///    the system network — through another VPN when one is up, honestly
+///    blocked when the network blocks it (the inline error + retry bar
+///    + the disruption notice below carry that case).
 ///
 /// 1.9.0 — the reference's OWN network posture, end to end: NOTHING is
 /// booted for the sign-in. Both methods walk DIRECT on the engine's
@@ -46,7 +52,6 @@ import '../../../connection/connection_store.dart';
 import '../../../connection/firefox/firefox_errors.dart';
 import '../../../connection/firefox/firefox_protocol.dart';
 import '../../../connection/firefox/firefox_web_channel.dart';
-import '../../../connection/firefox/firefox_webview_dns_proxy.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 import '../home/widgets/hero_logo.dart' show ScanRings;
@@ -121,7 +126,6 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
   // ---- the browser tab's state (created LAZILY) ----
   final FirefoxWebChannelBridge _bridge = FirefoxWebChannelBridge();
   WebViewController? _controller;
-  FirefoxWebViewDnsProxy? _webViewDnsProxy;
   bool _webViewInitializing = true;
   bool _browserCreated = false;
   // 2.0.0 — the main frame's load failed (the honest inline error path:
@@ -136,26 +140,20 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
     super.initState();
     // 1.9.0 — NOTHING boots at screen open (the reference posture): no
     // carrier, no core, no proxy. The form submits direct; the browser
-    // tab brings up its own WebView + loopback proxy lazily when the
-    // user switches to it. The screen is as light as the reference's.
+    // tab brings up its own WebView lazily when the user switches to
+    // it. The screen is as light as the reference's.
   }
 
   @override
   void dispose() {
-    // Cancel any in-flight login (either method) and stop the browser
-    // tab's proxy if it was ever created.
-    unawaited(_teardownLoginNetwork());
+    // Cancel any in-flight login (either method).
+    unawaited(widget.store.firefoxLoginCancel());
     _email.dispose();
     _password.dispose();
     _code.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
     super.dispose();
-  }
-
-  Future<void> _teardownLoginNetwork() async {
-    await widget.store.firefoxLoginCancel();
-    await _webViewDnsProxy?.stop();
   }
 
   // ---- the DIRECT form (the arman default) -----------------------------
@@ -266,22 +264,20 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
     }
   }
 
-  // ---- the BROWSER tab (lazy — today's flow, unchanged) ----------------
+  // ---- the BROWSER tab (lazy — 2.1.0: plain WebView, no proxy) ------
 
   void _switchToBrowser() {
     setState(() => _method = _LoginMethod.browser);
     if (!_browserCreated) {
       _browserCreated = true;
-      unawaited(_initializeLoginWebView(_webViewDnsProxy = FirefoxWebViewDnsProxy()));
+      unawaited(_initializeLoginWebView());
     }
   }
 
-  /// 2.0.0 — the browser tab's honest retry: tear the WebView and its
-  /// proxy down and bring them up again (a blocked first load is not a
-  /// permanent state of the tab).
+  /// 2.0.0 — the browser tab's honest retry: tear the WebView down and
+  /// bring it up again (a blocked first load is not a permanent state
+  /// of the tab).
   Future<void> _retryBrowser() async {
-    await _webViewDnsProxy?.stop();
-    _webViewDnsProxy = FirefoxWebViewDnsProxy();
     if (!mounted) return;
     setState(() {
       _controller = null;
@@ -290,7 +286,7 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
       _phase = _LoginPhase.browsing;
       _errorText = null;
     });
-    unawaited(_initializeLoginWebView(_webViewDnsProxy!));
+    unawaited(_initializeLoginWebView());
   }
 
   void _onSessionToken(String token) async {
@@ -322,24 +318,16 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
     }
   }
 
-  /// Brings up the selected DNS resolver and the loopback CONNECT proxy
-  /// BEFORE creating/loading Chromium's WebView (the reference's
-  /// sign-in proxy: the core's own resolver, no account, no tunnel).
-  /// The AndroidX callback is awaited by [FirefoxWebViewDnsProxy.start],
-  /// so the first navigation cannot race the process-scoped WebView
-  /// proxy installation.
-  Future<void> _initializeLoginWebView(FirefoxWebViewDnsProxy proxy) async {
+  /// 2.1.0 — the DNS-removal decree («بهش dns رو به کلی از اپ حذف کن»):
+  /// the WebView loads PLAIN — no loopback CONNECT proxy, no process-local
+  /// resolver, nothing to start (and nothing to fail with «راه‌اندازی DNS
+  /// ناموفق بود"). The page rides the system network exactly like any
+  /// other app WebView: through another VPN when one is up (the case that
+  /// always worked), honestly blocked when the network blocks it (the
+  /// onWebResourceError inline path + the retry bar + the disruption
+  /// notice carry that case).
+  Future<void> _initializeLoginWebView() async {
     try {
-      await widget.store.loadFirefoxDnsSettings();
-      await proxy.start(
-        Map<String, dynamic>.from(widget.store.firefoxDnsConfig),
-        upstreamSocks: null,
-      );
-      if (!mounted) {
-        await proxy.stop();
-        return;
-      }
-
       final controller = WebViewController();
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
       await controller.setUserAgent(
@@ -408,17 +396,13 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
         ),
       );
 
-      if (!mounted) {
-        await proxy.stop();
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _controller = controller;
         _webViewInitializing = false;
       });
       await controller.loadRequest(Uri.parse(kFirefoxLoginUrl));
     } catch (_) {
-      await proxy.stop();
       if (!mounted) return;
       setState(() {
         _webViewInitializing = false;
@@ -498,11 +482,52 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
             // ---- The status strip ----
             SizedBox(height: 6 * s),
             _statusStrip(strings, s),
+            // ---- 2.1.0 — the disruption notice (the owner's decree:
+            // «توی بخش ورود بنویس در صورت اینکه ورود اختلال داشت از یک
+            // فیلترشکن دیگه استفاده کنن»): BOTH methods see it — the
+            // sign-in needs an unblocked route to the account server,
+            // and on a filtering network that route is another VPN.
+            _disruptionNotice(strings, s),
             // ---- The page body ----
             Expanded(
               child: _method == _LoginMethod.form
                   ? _formPane(strings, s)
                   : _browserPane(strings),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 2.1.0 — the standing notice under the status strip: if the sign-in
+  /// is disrupted, use another VPN and try again. Rendered in BOTH
+  /// methods (it is the network route that breaks, not one method).
+  Widget _disruptionNotice(AppStrings strings, double s) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16 * s, 2 * s, 16 * s, 4 * s),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
+        decoration: BoxDecoration(
+          color: AethColors.accentConnected.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(10 * s),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.vpn_key_outlined,
+                size: 15 * s, color: AethColors.accentConnected),
+            SizedBox(width: 8 * s),
+            Expanded(
+              child: Text(
+                strings.firefoxLoginDisruptionNotice,
+                style: TextStyle(
+                  fontFamily: 'IRANYekanX',
+                  fontWeight: FontWeight.w500,
+                  fontSize: 10.5 * s,
+                  height: 1.5,
+                  color: AethColors.textSecondary,
+                ),
+              ),
             ),
           ],
         ),
@@ -604,8 +629,8 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
 
   (String, Color) _browserStrip(AppStrings strings) {
     final (label, color) = switch (_phase) {
-      // While the WebView and its loopback proxy come up the strip says
-      // what is really happening: connecting.
+      // While the WebView comes up the strip says what is really
+      // happening: connecting.
       _LoginPhase.browsing => _webViewInitializing
           ? (strings.statusConnecting, AethColors.accentConnected)
           : (strings.firefoxLoginWaiting, AethColors.textSecondary),
@@ -983,11 +1008,10 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
       return WebViewWidget(controller: controller);
     }
     // 2.0.0 — the honest message pane (the owner's round-10 report:
-    // «مرورگر اصلاً باز نمی‌شه»): while the WebView and its proxy come
-    // up the pane SHOWS its loading; a failed load (or no WebView
-    // platform) shows the failure, a retry button, and the honest hint
-    // that this method needs an unblocked network — never a blank
-    // silent page.
+    // «مرورگر اصلاً باز نمی‌شه»): while the WebView comes up the pane
+    // SHOWS its loading; a failed load (or no WebView platform) shows
+    // the failure, a retry button, and the honest hint that this method
+    // needs an unblocked network — never a blank silent page.
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final loading = _webViewInitializing && Platform.isAndroid;
     return SingleChildScrollView(
@@ -1031,7 +1055,7 @@ class _FirefoxLoginScreenState extends State<FirefoxLoginScreen> {
               ),
             ),
             SizedBox(height: 14 * s),
-            // The retry: bring the WebView and its proxy up again.
+            // The retry: bring the WebView up again.
             TextButton.icon(
               onPressed: _retryBrowser,
               icon: Icon(Icons.refresh,

@@ -163,6 +163,11 @@ void main() {
       await tester.enterText(
           find.byKey(const ValueKey('field-firefox-login-password')),
           'pw-test-1');
+      // 2.1.0 — the standing disruption notice under the status strip
+      // shifted the form down; the default 800x600 test viewport needs
+      // the scrollable pane to bring the submit button into view (a
+      // real phone's 402x874 has room to spare).
+      await tester.ensureVisible(find.text('ورود'));
       await tester.tap(find.text('ورود'));
       await tester.pumpAndSettle();
 

@@ -187,20 +187,13 @@ func TestConfigLineBound(t *testing.T) {
         }
 }
 
-func TestConfigDNSDefaultAndValidation(t *testing.T) {
-        c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","auth":{"accessToken":"a"}}`)
-        v, err := c.Validate()
-        if err != nil { t.Fatalf("default DNS config must remain compatible: %v", err) }
-        // 1.9.0 — the default is the reference posture (arman-vpn-client's
-        // DefaultDNSServers): the AUTO racing resolver, never the poisonable
-        // system one. System stays an explicit pick.
-        if v.DNS.Mode != "doh" || v.DNS.Provider != "auto" {
-                t.Fatalf("DNS default = %q/%q, want doh/auto", v.DNS.Mode, v.DNS.Provider)
-        }
-
-        bad := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","dns":{"mode":"doh","provider":"custom","endpoint":"http://dns.example/dns-query"},"auth":{"accessToken":"a"}}`)
-        if _, err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "dnsConfigInvalid") {
-                t.Fatalf("invalid DoH endpoint must be rejected as dnsConfigInvalid, got %v", err)
+// 2.1.0 — the DNS block is RETIRED from the tunnel config: an old host
+// line still carrying `dns` must parse and validate fine (unknown fields
+// are ignored), and no resolver policy is read from the line anymore.
+func TestConfigDNSBlockRetiredButTolerated(t *testing.T) {
+        c := cfgLine(t, `{"version":1,"socksListen":"127.0.0.1:1822","dns":{"mode":"doh","provider":"custom","endpoint":"http://dns.example/dns-query"},"auth":{"accessToken":"a"}}`)
+        if _, err := c.Validate(); err != nil {
+                t.Fatalf("a legacy dns block must be tolerated (ignored), got %v", err)
         }
 }
 

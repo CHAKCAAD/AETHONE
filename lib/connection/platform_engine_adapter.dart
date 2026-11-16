@@ -536,7 +536,6 @@ fake_ip = true
 class PlatformEngineAdapter
     implements
         EngineAdapter,
-        FirefoxDnsProbeCapable,
         FirefoxQuotaRefreshCapable {
   PlatformEngineAdapter({
     Duration? statsInterval,
@@ -2223,21 +2222,17 @@ class PlatformEngineAdapter
     String sessionToken, {
     void Function(String line)? onLog,
   }) async {
-    final source = _config;
-    final dnsLoader = source as FirefoxDnsSettingsLoader?;
-    if (dnsLoader != null) {
-      await dnsLoader.loadFirefoxDnsSettings();
-    }
     final paths = await _paths();
     final client = _firefoxLogin = FirefoxLoginClient(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
       onLog: onLog ?? _debugLog,
-      dnsConfig: _config?.firefoxDnsConfig ?? const {'mode': 'doh', 'provider': 'auto'},
+      // 2.1.0 — no dnsConfig anymore (the DNS-removal decree): the
+      // engine's default resolver policy is the PLATFORM resolver
+      // (Bionic getaddrinfo), and no line is written for it.
       // 1.9.0 — the reference posture (arman-vpn-client): the sign-in
-      // walks DIRECT on the engine's own hardened control plane (the
-      // raced DoH resolver + the uTLS Firefox ClientHello). No carrier
-      // is booted for the login — the in-process core + the WebView
-      // together were the memory pressure the owner felt as
+      // walks DIRECT on the engine's own hardened control plane. No
+      // carrier is booted for the login — the in-process core + the
+      // WebView together were the memory pressure the owner felt as
       // «بسته شدن برنامه», and the carrier walk never made the sign-in
       // work anyway. The upstreamSocks seam stays for a future
       // explicit user pick.
@@ -2280,16 +2275,12 @@ class PlatformEngineAdapter
     String password, {
     void Function(String line)? onLog,
   }) async {
-    final source = _config;
-    final dnsLoader = source as FirefoxDnsSettingsLoader?;
-    if (dnsLoader != null) {
-      await dnsLoader.loadFirefoxDnsSettings();
-    }
     final paths = await _paths();
     final client = _firefoxLogin = FirefoxLoginClient(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
       onLog: onLog ?? _debugLog,
-      dnsConfig: _config?.firefoxDnsConfig ?? const {'mode': 'doh', 'provider': 'auto'},
+      // 2.1.0 — no dnsConfig anymore (the DNS-removal decree): the
+      // platform resolver carries the walk.
       upstreamSocks: null,
     );
     try {
@@ -2376,19 +2367,11 @@ class PlatformEngineAdapter
   /// wheel list + honesty labels follow (the phase-2 location picker
   /// binds to the store's copy).
   Future<FirefoxLocationList?> firefoxLocations() async {
-    final source = _config;
-    final dnsLoader = source as FirefoxDnsSettingsLoader?;
-    if (dnsLoader != null) {
-      await dnsLoader.loadFirefoxDnsSettings();
-    }
     final paths = await _paths();
     final discovery = _firefoxDiscovery ??= FirefoxDiscovery(
       binaryPath: '${paths.nativeLibraryDir}/libfirefoxvpn.so',
       cachePath: '${paths.filesDir}/firefox/serverlist.json',
-      dnsConfig: _config?.firefoxDnsConfig ?? const {'mode': 'doh', 'provider': 'auto'},
     );
-    discovery.dnsConfig =
-        Map<String, dynamic>.from(_config?.firefoxDnsConfig ?? const {'mode': 'doh', 'provider': 'auto'});
     final list = await discovery.refresh();
     if (list != null) {
       _emit(EngineFirefoxLocations(
@@ -2398,64 +2381,6 @@ class PlatformEngineAdapter
       ));
     }
     return list;
-  }
-
-  /// Runs the same process-local resolver used by login, discovery and
-  /// the tunnel. The probe has no account data and never validates
-  /// traffic.
-  ///
-  /// 1.9.0 — the reference's `/api/dns/test` posture (arman-vpn-client):
-  /// the probe is PURELY DIRECT through the engine's own resolver (the
-  /// raced DoH endpoints + the system fallback + the block-page filter)
-  /// — the honest signal the owner needs ("does MY resolver answer the
-  /// control-plane names on THIS network"), never a ride on the
-  /// tunnel's carrier (which would always answer and prove nothing
-  /// about the DNS settings). No carrier is booted; nothing else in the
-  /// app is touched by the explicit user press.
-  @override
-  Future<List<Map<String, dynamic>>?> firefoxDnsProbe(
-    Map<String, dynamic> dnsConfig,
-  ) async {
-    final paths = await _paths();
-    final process = await Process.start(
-      '${paths.nativeLibraryDir}/libfirefoxvpn.so',
-      const ['--dns-probe'],
-      environment: const {},
-      includeParentEnvironment: false,
-    );
-    process.stdin.writeln(jsonEncode({'dns': dnsConfig}));
-    await process.stdin.close();
-    final stdoutFuture = process.stdout.transform(utf8.decoder).join();
-    final stderrFuture = process.stderr.transform(utf8.decoder).join();
-    final code = await process.exitCode.timeout(
-      // 2.0.0 — the honest budget: the engine bounds EACH domain at 15 s
-      // (a wedged resolver surfaces as that domain's error event, never
-      // a blank walk), so three domains + the raced endpoints fit inside
-      // a minute; the old 35 s cut the walk mid-flight and read as
-      // "setup failed" with no evidence at all.
-      const Duration(seconds: 60),
-      onTimeout: () {
-        process.kill();
-        throw TimeoutException('Firefox DNS probe timed out');
-      },
-    );
-    final stdout = await stdoutFuture;
-    await stderrFuture;
-    final events = <Map<String, dynamic>>[];
-    for (final line in const LineSplitter().convert(stdout)) {
-      try {
-        final decoded = jsonDecode(line);
-        if (decoded is Map<String, dynamic>) events.add(decoded);
-      } catch (_) {
-        // Ignore non-JSON diagnostic noise; the summary remains authoritative.
-      }
-    }
-    if (events.isEmpty) return null;
-    if (code != 0) {
-      // Preserve per-domain evidence on failure; the summary carries ok=false.
-      return events;
-    }
-    return events;
   }
 
   /// 1.7.0 (the owner's round 5) — the on-demand quota refresh: the
@@ -2518,7 +2443,8 @@ class PlatformEngineAdapter
       },
       if (upstreamSocks != null && upstreamSocks.isNotEmpty)
         'upstreamSocks': upstreamSocks,
-      'dns': _config?.firefoxDnsConfig ?? const {'mode': 'doh', 'provider': 'auto'},
+      // 2.1.0 — no 'dns' block anymore (the DNS-removal decree): the
+      // engine's platform resolver carries the direct walk.
     }));
     await process.stdin.close();
     final stdoutFuture = process.stdout.transform(utf8.decoder).join();
@@ -2605,10 +2531,6 @@ class PlatformEngineAdapter
   /// The firefox walk (the aether skeleton, engine swapped in).
   Future<bool> _connectFirefox(int gen, EngineConfigSource config) async {
     void fail(String code, String msg) => _emitFail(code, msg);
-    final dnsLoader = config as FirefoxDnsSettingsLoader?;
-    if (dnsLoader != null) {
-      await dnsLoader.loadFirefoxDnsSettings();
-    }
 
     // Firefox is always carried by an Aether/WARP outer session. The two
     // local SOCKS listeners are deliberately distinct:
@@ -2893,9 +2815,9 @@ class PlatformEngineAdapter
         // the engine keeps only the control plane on the carrier.
         upstreamSocks: 'socks5://127.0.0.1:$warpPort',
         dataPlaneDirect: dataDirect,
-        // The process-local resolver policy for the engine's own
-        // pre-carrier lookups (bootstrap of the DoH endpoint itself).
-        dns: config.firefoxDnsConfig,
+        // 2.1.0 — no dns policy on the engine line anymore (the
+        // DNS-removal decree): the platform resolver carries the
+        // engine's own pre-carrier lookups.
       ),
       onAuthRefreshed: (refreshed) {
         unawaited(vault.save(refreshed));

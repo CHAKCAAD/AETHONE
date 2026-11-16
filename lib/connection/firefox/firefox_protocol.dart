@@ -51,7 +51,6 @@ class FirefoxEngineConfig {
     this.upstreamSocks = '',
     this.dataPlaneDirect = false,
     this.logLevel = 'normal',
-    this.dns = const {'mode': 'doh', 'provider': 'auto'},
   });
 
   /// Loopback listener ONLY (the engine refuses anything else).
@@ -86,9 +85,6 @@ class FirefoxEngineConfig {
 
   final String logLevel;
 
-  /// Process-scoped DNS policy; defaults to Android System DNS.
-  final Map<String, dynamic> dns;
-
   Map<String, dynamic> toJson() => {
         'version': 1,
         'socksListen': socksListen,
@@ -99,7 +95,8 @@ class FirefoxEngineConfig {
         if (upstreamSocks.isNotEmpty) 'upstreamSocks': upstreamSocks,
         if (dataPlaneDirect) 'dataPlaneDirect': true,
         'logLevel': logLevel,
-        'dns': dns,
+        // 2.1.0 — no 'dns' block on the engine line anymore (the
+        // DNS-removal decree): the platform resolver carries the walk.
         'auth': {
           'accessToken': auth.accessToken,
           'refreshToken': auth.refreshToken,

@@ -1,15 +1,15 @@
 // The owner's round 10 tests (2026-11-16) — the reference's network
-// posture, completed:
+// posture, completed, carried into 2.1.0 (the DNS removal):
 //
-//   * the hello-split pick persists and rides the dns config line
-//     (the reference's network.hello_split; the default is sni);
 //   * the settings-page location refresh is GATED to a 5-minute
 //     freshness window (the owner's «تأخیر در باز شدن صفحه تنظیمات»):
 //     a fresh list never re-runs the --discover walk, a stale one does;
 //   * the Firefox settings page shows the account section's loading
 //     affordance while the vault check runs (the owner's «اگه تاخیر
 //     قابل حل نیست باید براش لودینگ گزاشته بشه»);
-//   * the DNS card exposes the hello-split pill in BOTH dns modes.
+//   * 2.1.0 — the hello-split pick is GONE with the whole DNS feature
+//     (the owner's removal decree): the settings page renders no DNS
+//     card and no hello-split pill in any mode.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -53,38 +53,30 @@ class _HangingAccountEngine extends EngineNotWiredAdapter {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('round 10: the hello-split pick', () {
-    test('the default is sni and the unknown value degrades to it', () {
-      final store = ConnectionStore(engine: EngineNotWiredAdapter());
-      expect(store.firefoxDnsHelloSplit, 'sni');
-      expect(store.firefoxDnsConfig['helloSplit'], 'sni');
-      store.setFirefoxDnsHelloSplit('first-byte');
-      expect(store.firefoxDnsHelloSplit, 'first-byte');
-      expect(store.firefoxDnsConfig['helloSplit'], 'first-byte');
-      store.setFirefoxDnsHelloSplit('nope');
-      expect(store.firefoxDnsHelloSplit, 'sni');
-    });
+  group('round 10 → 2.1.0: the hello-split pick is GONE with DNS', () {
+    testWidgets('the settings page renders no DNS card and no hello-split pill',
+        (tester) async {
+      SharedPreferences.setMockInitialValues(const {
+        // Legacy keys a device may still hold — ignored entirely.
+        'firefox.dns.hello_split': 'sni',
+        'firefox.dns.mode': 'doh',
+      });
+      tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
 
-    test('the pick survives a settings reload (persisted)', () async {
-      // The store persists through SharedPreferences; await the ctor's
-      // own restore first (the real app does), then pin the pick, let
-      // the write land, reload, and expect it back.
-      SharedPreferences.setMockInitialValues(const {});
       final store = ConnectionStore(engine: EngineNotWiredAdapter());
-      await store.loadFirefoxDnsSettings();
-      store.setFirefoxDnsHelloSplit('record');
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-      final reloaded = ConnectionStore(engine: EngineNotWiredAdapter());
-      await reloaded.loadFirefoxDnsSettings();
-      expect(reloaded.firefoxDnsHelloSplit, 'record');
-    });
-
-    test('the pick rides the config line in SYSTEM mode too', () {
-      final store = ConnectionStore(engine: EngineNotWiredAdapter());
-      store.setFirefoxDnsMode('system');
-      expect(store.firefoxDnsConfig['mode'], 'system');
-      expect(store.firefoxDnsConfig['helloSplit'], 'sni');
+      await tester.pumpWidget(_booth(FirefoxSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('pill-firefox-dns-hello-split')),
+        findsNothing,
+        reason: 'the hello-split pill is gone with the whole DNS card',
+      );
+      expect(find.byKey(const ValueKey('pill-firefox-dns-mode')),
+          findsNothing);
+      expect(find.byKey(const ValueKey('action-firefox-dns-test')),
+          findsNothing);
     });
   });
 
@@ -163,29 +155,6 @@ void main() {
         findsNothing,
         reason: 'the loading is gone once the state is known',
       );
-    });
-
-    testWidgets('the DNS card exposes the hello-split pill in system mode',
-        (tester) async {
-      SharedPreferences.setMockInitialValues(const {});
-      tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-      tester.view.devicePixelRatio = 3.0;
-      addTearDown(tester.view.reset);
-
-      final store = ConnectionStore(engine: EngineNotWiredAdapter());
-      store.setFirefoxDnsMode('system');
-      await tester.pumpWidget(_booth(FirefoxSettingsPage(store: store)));
-      await tester.pumpAndSettle();
-      expect(
-        find.text('داخل نام سرور'),
-        findsOneWidget,
-        reason: 'the hello split applies to the direct TLS posture in '
-            'BOTH dns modes — it must render in system mode too',
-      );
-      // All four choices render.
-      expect(find.text('بایت اول'), findsOneWidget);
-      expect(find.text('دو رکورد'), findsOneWidget);
-      expect(find.text('خاموش'), findsOneWidget);
     });
   });
 }

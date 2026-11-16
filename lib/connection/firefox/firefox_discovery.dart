@@ -136,7 +136,6 @@ class FirefoxDiscovery {
     required this.cachePath,
     this.ttl = const Duration(hours: 6),
     this.fetchTimeout = const Duration(seconds: 30),
-    this.dnsConfig = const {'mode': 'doh', 'provider': 'auto'},
   });
 
   final String binaryPath;
@@ -147,8 +146,8 @@ class FirefoxDiscovery {
   final Duration ttl;
   final Duration fetchTimeout;
 
-  /// Process-scoped DNS policy; updated from the current settings before fetch.
-  Map<String, dynamic> dnsConfig;
+  /// 2.1.0 — the dnsConfig field is GONE (the DNS-removal decree): the
+  /// --discover child resolves through the platform resolver.
 
   FirefoxLocationList? _memory;
 
@@ -186,7 +185,10 @@ class FirefoxDiscovery {
         environment: const {},
         includeParentEnvironment: false,
       );
-      process.stdin.writeln(jsonEncode({'dns': dnsConfig}));
+      // 2.1.0 — no dns config line is written anymore (the DNS-removal
+      // decree); the role reads nothing from stdin and the pipe closes
+      // right away (its shutdown gesture is a close, which is what this
+      // always was for the one-shot role).
       await process.stdin.close();
       final stdoutFuture = process.stdout.transform(utf8.decoder).join();
       final stderrFuture = process.stderr.transform(utf8.decoder).join();

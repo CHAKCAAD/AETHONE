@@ -1,7 +1,6 @@
 package engine
 
 import (
-        "strings"
         "testing"
 )
 
@@ -159,23 +158,14 @@ func asErr(err error, target **ConfigError) bool {
         return false
 }
 
-// 2.0.0 — the hello split rides the dns block of EVERY role config; the
-// login config validates it with the rest (a bad pick is a config error,
-// the four choices + empty pass).
-func TestLoginConfigHelloSplit(t *testing.T) {
-        for _, mode := range []string{"", "off", "sni", "first-byte", "record", "SNI"} {
-                line := `{"version":1,"mode":"password","email":"a@b.example","password":"x","dns":{"helloSplit":"` + mode + `"}}`
-                cfg, err := ParseLoginConfig([]byte(line))
-                if err != nil {
-                        t.Fatalf("helloSplit %q must validate: %v", mode, err)
+// 2.1.0 — the dns block (with its helloSplit) is RETIRED from the login
+// config: an old host line still carrying it must parse fine (unknown
+// fields are ignored); no resolver policy is read from the line anymore.
+func TestLoginConfigDNSBlockRetiredButTolerated(t *testing.T) {
+        for _, mode := range []string{"", "off", "sni", "first-byte", "record", "SNI", "nonsense"} {
+                line := `{"version":1,"mode":"password","email":"a@b.example","password":"x","dns":{"helloSplit":"` + mode + `","mode":"doh","provider":"auto"}}`
+                if _, err := ParseLoginConfig([]byte(line)); err != nil {
+                        t.Fatalf("a legacy dns block (helloSplit %q) must be tolerated (ignored): %v", mode, err)
                 }
-                want := strings.ToLower(strings.TrimSpace(mode))
-                if cfg.DNS.HelloSplit != want {
-                        t.Fatalf("helloSplit %q normalized to %q, want %q", mode, cfg.DNS.HelloSplit, want)
-                }
-        }
-        bad := `{"version":1,"mode":"password","email":"a@b.example","password":"x","dns":{"helloSplit":"nonsense"}}`
-        if _, err := ParseLoginConfig([]byte(bad)); err == nil {
-                t.Fatal("an unknown helloSplit must be rejected")
         }
 }

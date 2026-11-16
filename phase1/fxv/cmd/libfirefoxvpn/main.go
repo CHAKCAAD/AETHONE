@@ -9,16 +9,15 @@
 //                                    JSON-lines events, SOCKS5 on 1822)
 //      libfirefoxvpn --discover      print the live RemoteSettings
 //                                    location model as ONE JSON line
-//      libfirefoxvpn --login         the FxA WebChannel exchange (Phase 2)
-//      libfirefoxvpn --dns-probe     resolve the control-plane domains
-//                                    through THIS process (the multi-arch
-//                                    DNS evidence role — no secrets)
-//      libfirefoxvpn --webview-proxy loopback HTTP CONNECT proxy for the
-//                                    Firefox login WebView; destination DNS
-//                                    uses the selected process-local resolver
+//      libfirefoxvpn --login         the FxA WebChannel + password
+//                                    exchanges (Phase 2 + round 8)
 //      libfirefoxvpn --usage         the account's Guardian quota WITHOUT
 //                                    minting a pass (the remaining-data
 //                                    round, contract 1.7.0)
+//
+// 2.1.0 — the `--dns-probe` and `--webview-proxy` roles are GONE (the
+// owner's DNS-removal decree); every role resolves through the platform
+// resolver (Bionic getaddrinfo on the CGO Android builds).
 //
 // Spawn discipline (the Dart host): bare argv, EMPTY environment —
 // every secret travels on the stdin pipe only.
@@ -39,7 +38,6 @@ import (
         vpnclient "firefox-vpn-client"
 
         "aethone/fxv/internal/discovery"
-        "aethone/fxv/internal/dnsresolver"
         "aethone/fxv/internal/engine"
         "aethone/fxv/internal/fferr"
         "aethone/fxv/internal/redact"
@@ -60,17 +58,13 @@ func run() int {
                         return runDiscover()
                 case "--login":
                         return runLogin()
-                case "--dns-probe":
-                        return runDNSProbe()
-                case "--webview-proxy":
-                        return runWebViewProxy()
                 case "--usage":
                         return runUsage()
                 case "--help", "-h":
-                        fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--dns-probe|--webview-proxy|--usage]\n")
+                        fmt.Fprintf(os.Stderr, "usage: libfirefoxvpn [--discover|--login|--usage]\n")
                         return 0
                 default:
-                        fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--dns-probe|--webview-proxy|--usage])\n", arg)
+                        fmt.Fprintf(os.Stderr, "unknown argument %q (usage: libfirefoxvpn [--discover|--login|--usage])\n", arg)
                         return engine.ExitStartup
                 }
         }
@@ -116,17 +110,11 @@ func runTunnel() int {
                 return engine.ExitStartup
         }
 
-        if _, dnsErr := dnsresolver.Install(cfg.DNS); dnsErr != nil {
-                _ = emit.Emit(engine.Event{
-                        Name: engine.EvFailed, FailCode: engine.ErrBadConfig,
-                        Message: "dnsConfigInvalid", Code: engine.ExitStartup,
-                })
-                return engine.ExitStartup
-        }
-        // 2.0.0 — the reference's hello split rides the SAME config line:
-        // the direct control-plane and data-plane connections to Mozilla
-        // send their ClientHello the picked way.
-        vpnclient.SetHelloSplit(cfg.DNS.HelloSplit)
+        // 2.1.0 — no process-local resolver is installed: the platform
+        // resolver (Bionic getaddrinfo on the CGO Android builds — the A1
+        // decree posture) carries every lookup this child makes. The
+        // `dns` config block is retired; an old host line still carrying
+        // it parses fine (unknown fields are ignored).
 
         // When Firefox runs over WARP, its control-plane requests
         // (RemoteSettings, Guardian and OAuth refresh) must use the same

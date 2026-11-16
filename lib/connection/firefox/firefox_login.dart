@@ -44,7 +44,6 @@ class FirefoxLoginClient {
     required this.binaryPath,
     this.shutdownGrace = const Duration(seconds: 3),
     this.onLog,
-    this.dnsConfig = const {'mode': 'doh', 'provider': 'auto'},
     this.upstreamSocks,
   });
 
@@ -57,8 +56,8 @@ class FirefoxLoginClient {
   /// Redacted diagnostics sink (NEVER receives tokens or the password).
   final void Function(String line)? onLog;
 
-  /// Same process-local resolver policy used by the Firefox engine.
-  final Map<String, dynamic> dnsConfig;
+  /// 2.1.0 — the dnsConfig field is GONE (the DNS-removal decree): the
+  /// login child resolves through the platform resolver.
 
   /// 1.5.0 (fix 5) — the WARP carrier the login screen brought up
   /// ('socks5://127.0.0.1:1819'): the token exchange rides it (the
@@ -93,9 +92,10 @@ class FirefoxLoginClient {
         'version': 1,
         'mode': 'webchannel',
         'sessionToken': sessionToken,
-        'dns': dnsConfig,
         if (upstreamSocks != null && upstreamSocks!.isNotEmpty)
           'upstreamSocks': upstreamSocks,
+        // 2.1.0 — no 'dns' block on the line anymore (the DNS-removal
+        // decree): the platform resolver carries the walk.
       },
       timeout: timeout,
     );
@@ -124,9 +124,10 @@ class FirefoxLoginClient {
         // default fits the browser exchange, not a person reading
         // their email.
         'verifyTimeoutMs': 600000,
-        'dns': dnsConfig,
         if (upstreamSocks != null && upstreamSocks!.isNotEmpty)
           'upstreamSocks': upstreamSocks,
+        // 2.1.0 — no 'dns' block on the line anymore (the DNS-removal
+        // decree): the platform resolver carries the walk.
       },
       timeout: timeout,
     );
