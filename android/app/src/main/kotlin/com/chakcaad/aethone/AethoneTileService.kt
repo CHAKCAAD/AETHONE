@@ -56,11 +56,12 @@ class AethoneTileService : TileService() {
         refresh()
     }
 
-    override fun onClick(isLocked: Boolean) {
-        super.onClick(isLocked)
+    override fun onClick() {
+        super.onClick()
         // A connect from the lock screen would open the app behind the
         // lock — and the first connect may need the VPN-consent dialog.
-        // Honest no-op; unlock and tap again.
+        // Honest no-op; unlock and tap again. (isLocked() is the API-24
+        // way; the onClick(isLocked) overload is gone from SDK 36.)
         if (isLocked) return
 
         if (liveConnected()) {
