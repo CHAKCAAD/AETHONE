@@ -11,6 +11,7 @@ const ip = @import("ip.zig");
 const icmp = @import("icmp.zig");
 const dns = @import("dns.zig");
 const handler_mod = @import("../handler/handler.zig");
+const verdict = @import("../flow/verdict.zig");
 const elastic = @import("../elastic.zig");
 const config = @import("../config.zig");
 
@@ -84,26 +85,6 @@ pub fn Udp(comptime W: type) type {
             const uh = pkt.l4.udp;
             const v6 = pkt.ip.isV6();
             const al = pkt.ip.addrLen();
-            var redirect: ?addr.Endpoint = null;
-            if (uh.dst_port == dns.port and w.cfg.dnsActive() and vh.gsoKind() != gso.VirtioNetHdr.gso_udp_l4) {
-                const dst_addr = addr.Address.fromSlice(pkt.ip.dst(data));
-                const local = eqlOpt(w.cfg.dnsAddress4(), dst_addr) or eqlOpt(w.cfg.dnsAddress6(), dst_addr);
-                if (local or w.cfg.dns.hijack) {
-                    w.counters.inc(.dns_hijacked);
-                    const upstream = w.cfg.dns.upstream;
-                    if (w.handler.fake) |t| {
-                        switch (dns.reply(w, t, b, pkt, upstream != null)) {
-                            .reply => {
-                                w.counters.inc(.dns_fake_answers);
-                                return;
-                            },
-                            .drop => return,
-                            .forward => {},
-                        }
-                    }
-                    redirect = upstream orelse return;
-                }
-            }
             var key: parse.FlowKey = .{ .proto = parse.proto.udp, .v6 = @intFromBool(v6), .src_port = uh.src_port };
             @memcpy(key.src[0..al], pkt.ip.src(data));
             switch (w.cfg.stack.udp_nat) {
@@ -114,8 +95,62 @@ pub fn Udp(comptime W: type) type {
                     key.dst_port = uh.dst_port;
                 },
             }
+            // The session lookup runs BEFORE the DNS branch so the flow-owner
+            // callback fires only on the FIRST packet of a flow (a session
+            // that already exists has its route decision cached in its
+            // handler state — never a per-packet callback).
+            const existing = u.sessions.find(&key);
+            var redirect: ?addr.Endpoint = null;
+            // Stage 2 per-app routing: the flow-owner decision for this NEW
+            // flow's tuple, computed at most once — the DNS branch below and
+            // the session-open branch further down share it (a DNS query is
+            // itself a UDP flow of the app that asked it, so the app's route
+            // must decide how the query is answered).
+            var decided: ?verdict.Decision = null;
+            if (uh.dst_port == dns.port and w.cfg.dnsActive() and vh.gsoKind() != gso.VirtioNetHdr.gso_udp_l4) {
+                const dst_addr = addr.Address.fromSlice(pkt.ip.dst(data));
+                const local = eqlOpt(w.cfg.dnsAddress4(), dst_addr) or eqlOpt(w.cfg.dnsAddress6(), dst_addr);
+                if (local or w.cfg.dns.hijack) {
+                    w.counters.inc(.dns_hijacked);
+                    const upstream = w.cfg.dns.upstream;
+                    // A direct-routed app must receive REAL addresses, not
+                    // fake-IP answers (its connections dial directly and
+                    // cannot resolve the fake range): forward its query to the
+                    // real resolver instead of answering locally. Only possible
+                    // when a dns.upstream is configured (validation rejects a
+                    // direct route otherwise).
+                    var force_forward = false;
+                    if (w.judge().active() and existing == null) {
+                        w.counters.inc(.route_asked);
+                        decided = w.judge().ask(parse.proto.udp, v6, pkt.ip.src(data), uh.src_port, pkt.ip.dst(data), uh.dst_port);
+                        if (decided.?.route != 0 and upstream != null) {
+                            if (w.routeResolve(decided.?.route)) |entry| {
+                                if (entry.kind == .direct) {
+                                    // route_assigned is counted once per flow
+                                    // at session-open below — this branch only
+                                    // decides HOW the query is answered.
+                                    force_forward = true;
+                                }
+                            }
+                        }
+                    }
+                    if (!force_forward) {
+                        if (w.handler.fake) |t| {
+                            switch (dns.reply(w, t, b, pkt, upstream != null)) {
+                                .reply => {
+                                    w.counters.inc(.dns_fake_answers);
+                                    return;
+                                },
+                                .drop => return,
+                                .forward => {},
+                            }
+                        }
+                    }
+                    redirect = upstream orelse return;
+                }
+            }
             const now = w.now();
-            const idx = u.sessions.find(&key) orelse blk: {
+            const idx = existing orelse blk: {
                 if (w.elasticLive()) {
                     if (w.peerOwner(.udp, &key) orelse w.newFlowTarget(key.hash())) |owner| {
                         handed = true;
@@ -134,8 +169,14 @@ pub fn Udp(comptime W: type) type {
                     }
                 }
                 var bypass = false;
+                var upstream: ?addr.Endpoint = null;
+                var strict = false;
                 if (w.judge().active()) {
-                    switch (w.judge().ask(parse.proto.udp, v6, pkt.ip.src(data), uh.src_port, pkt.ip.dst(data), uh.dst_port)) {
+                    const decision = decided orelse ask: {
+                        w.counters.inc(.route_asked);
+                        break :ask w.judge().ask(parse.proto.udp, v6, pkt.ip.src(data), uh.src_port, pkt.ip.dst(data), uh.dst_port);
+                    };
+                    switch (decision.action) {
                         .proxy => {},
                         .direct => bypass = true,
                         .drop => return,
@@ -143,6 +184,37 @@ pub fn Udp(comptime W: type) type {
                             icmp.sendUnreachable(w, data, pkt, true);
                             return;
                         },
+                    }
+                    if (decision.route != 0) {
+                        if (w.routeResolve(decision.route)) |entry| {
+                            w.counters.inc(.route_assigned);
+                            switch (entry.kind) {
+                                .direct => {
+                                    // Direct-routed UDP cannot carry a
+                                    // fake-IP destination (undialable outside
+                                    // the socks5 path): fail closed, counted.
+                                    // The redirected DNS flow of a direct app
+                                    // is exempt — its destination is the real
+                                    // upstream resolver, never a fake address.
+                                    if (redirect == null) {
+                                        if (w.handler.fake) |ftab| {
+                                            if (ftab.indexOf(addr.Address.fromSlice(pkt.ip.dst(data))) != null) {
+                                                w.counters.inc(.route_direct_fake);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                    bypass = true;
+                                },
+                                .socks5 => {
+                                    upstream = entry.server;
+                                    strict = entry.strict;
+                                },
+                                .passthrough => {},
+                            }
+                        } else {
+                            w.counters.inc(.route_fallback);
+                        }
                     }
                 }
                 const i = u.sessions.insert(key, .{}) catch return;
@@ -153,7 +225,7 @@ pub fn Udp(comptime W: type) type {
                 };
                 w.counters.inc(.udp_opened);
                 w.counters.inc(.udp_active);
-                if (!w.handler.udpOpen(w, &s.handler, if (v6) .v6 else .v4, pkt.ip.tos, bypass)) {
+                if (!w.handler.udpOpen(w, &s.handler, if (v6) .v6 else .v4, pkt.ip.tos, bypass, upstream, strict)) {
                     s.closing = true;
                     u.release(w, s);
                     icmp.sendUnreachable(w, data, pkt, true);

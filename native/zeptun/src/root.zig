@@ -84,4 +84,5 @@ test {
     _ = flow.slab;
     _ = @import("tests/engine_tests.zig");
     _ = @import("tests/tcp_sim.zig");
+    _ = @import("tests/route_tests.zig");
 }

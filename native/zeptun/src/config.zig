@@ -348,6 +348,62 @@ pub const DirectConfig = struct {
     bind6: ?addr.Address = null,
 };
 
+/// Per-application routing (Stage 2 PoC): a route table layered on top of the
+/// single global handler. Route 0 is always the default — the existing
+/// `[handler]` section, unchanged — and entries are numbered 1..N in document
+/// order. The flow-owner callback returns `(route_number << 2) | action`, so
+/// legacy verdicts 0..3 stay byte-compatible (they all mean route 0).
+pub const max_routes = 8;
+
+pub const RouteEntry = struct {
+    /// Stable identifier used by the controller (Kotlin) when it builds the
+    /// package → route assignment map. Unique, non-empty, no whitespace.
+    id: Name = .{},
+    /// `socks5` (per-route upstream server) or `direct` (zeptun's own direct
+    /// handler — in-TUN, protect()-guarded, no proxy). `passthrough` is
+    /// rejected: it is not a selectable per-app route.
+    kind: HandlerKind = .socks5,
+    /// SOCKS5 upstream of this route (required, port != 0, when kind is
+    /// socks5; ignored for direct).
+    server: addr.Endpoint = .{},
+    /// Sequential SOCKS5 handshake for this route (pipeline/optimistic data
+    /// off) — required by strict upstreams such as goptlib servers.
+    strict: bool = false,
+};
+
+pub const RouteTable = struct {
+    entries: []const RouteEntry = &.{},
+
+    pub fn isEmpty(t: *const RouteTable) bool {
+        return t.entries.len == 0;
+    }
+};
+
+/// Validation shared by the initial config and live `zeptun_update_routes`
+/// documents. `dns` is the ACTIVE dns config: a direct route is only valid
+/// when fake-IP DNS answers can be replaced by a real resolver for the
+/// direct-routed apps (dns.upstream), otherwise their flows would carry
+/// undialable fake addresses.
+pub fn validateRoutes(entries: []const RouteEntry, dns: *const DnsConfig) !void {
+    if (entries.len > max_routes) return error.InvalidArgument;
+    for (entries, 0..) |r, i| {
+        if (r.id.isEmpty()) return error.InvalidArgument;
+        if (std.mem.indexOfAny(u8, r.id.slice(), " \t\r\n") != null) return error.InvalidArgument;
+        for (entries[0..i]) |prev| {
+            if (std.mem.eql(u8, prev.id.slice(), r.id.slice())) return error.InvalidArgument;
+        }
+        switch (r.kind) {
+            .socks5 => {
+                if (r.server.port == 0) return error.InvalidArgument;
+            },
+            .direct => {
+                if (dns.fake_ip and dns.upstream == null) return error.InvalidArgument;
+            },
+            .passthrough => return error.NotSupported,
+        }
+    }
+}
+
 pub const HandlerConfig = struct {
     kind: HandlerKind = .direct,
     socks5: Socks5Config = .{},
@@ -442,6 +498,7 @@ pub const Config = struct {
     io: IoConfig = .{},
     memory: MemoryConfig = .{},
     handler: HandlerConfig = .{},
+    routes: RouteTable = .{},
     route: RouteConfig = .{},
     dns: DnsConfig = .{},
     dns_resolved: AutoMode = .auto,
@@ -507,6 +564,7 @@ pub const Config = struct {
         if (c.route.auto_redirect and !build_options.enable_system_stack) return error.NotSupported;
         if (c.dns.fake_ip and c.handler.kind != .socks5) return error.InvalidArgument;
         if (c.dns.fake_ip and c.dns.fake_range4 == null and c.dns.fake_range6 == null) return error.InvalidArgument;
+        try validateRoutes(c.routes.entries, &c.dns);
     }
 };
 

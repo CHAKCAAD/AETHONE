@@ -147,8 +147,20 @@ mkdir -p "$SRC_CACHE" "$OUT"
 
 # ---------------------------------------------------------------- zeptun ----
 echo "== [1/4] zeptun @ $ZEPTUN_SHA (Zig $("$ZIG" version 2>/dev/null || echo unknown)) =="
-ZEPTUN_SRC="$SRC_CACHE/zeptun"
-clone_pin "$ZEPTUN_REPO" "$ZEPTUN_SHA" "$ZEPTUN_SRC"
+# Stage 2 per-app routing (PoC): ZEPTUN_LOCAL_SRC builds the zeptun stage
+# from a LOCAL source tree (the vendored native/zeptun/ carrying the PoC
+# patch) instead of the frozen upstream pin — the default path (variable
+# unset) is byte-for-byte the original CI recipe; nothing about the frozen
+# supply chain changes unless the variable is explicitly provided (see
+# scripts/build_native_poc.sh).
+if [ -n "${ZEPTUN_LOCAL_SRC:-}" ]; then
+  ZEPTUN_SRC="$ZEPTUN_LOCAL_SRC"
+  [ -d "$ZEPTUN_SRC/src" ] || { echo "ZEPTUN_LOCAL_SRC is not a zeptun source tree: $ZEPTUN_SRC" >&2; exit 1; }
+  echo "== [1/4] LOCAL SOURCE OVERRIDE (per-app-routing PoC): $ZEPTUN_SRC =="
+else
+  ZEPTUN_SRC="$SRC_CACHE/zeptun"
+  clone_pin "$ZEPTUN_REPO" "$ZEPTUN_SHA" "$ZEPTUN_SRC"
+fi
 # Cache hygiene: zig-out persists inside the cached source tree; wipe it so a
 # restored cache can never export a stale or wrong-ABI library (see v2 note 2).
 rm -rf "$ZEPTUN_SRC/zig-out"

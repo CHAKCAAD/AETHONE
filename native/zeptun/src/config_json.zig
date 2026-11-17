@@ -71,6 +71,21 @@ pub const Document = struct {
             bind_interface: ?[]const u8 = null,
         } = null,
     } = null,
+    /// Per-app routing (Stage 2 PoC). Parallel lists — index i describes
+    /// route number i+1 (route 0 is the default/global handler and is never
+    /// listed). TOML has no array-of-tables in this parser, so the lists keep
+    /// one document shape for both TOML and JSON:
+    ///   [routes]
+    ///   ids     = ["psiphon", "direct"]
+    ///   kinds   = ["socks5", "direct"]
+    ///   servers = ["127.0.0.1:1821", ""]
+    ///   strict  = [true, false]
+    routes: ?struct {
+        ids: ?[]const []const u8 = null,
+        kinds: ?[]const config.HandlerKind = null,
+        servers: ?[]const []const u8 = null,
+        strict: ?[]const bool = null,
+    } = null,
     route: ?struct {
         auto_route: ?bool = null,
         table: ?u32 = null,
@@ -297,6 +312,38 @@ pub const State = struct {
             if (hd.direct) |d| {
                 set(&c.handler.direct.fwmark, d.fwmark);
                 if (d.bind_interface) |bi| c.handler.direct.bind_interface = .init(bi);
+            }
+        }
+        if (doc.routes) |rs| {
+            const ids = rs.ids orelse &[_][]const u8{};
+            const kinds = rs.kinds orelse &[_]config.HandlerKind{};
+            const servers = rs.servers orelse &[_][]const u8{};
+            if (ids.len != kinds.len or ids.len != servers.len) return error.ConfigError;
+            if (rs.strict) |list| {
+                if (list.len != ids.len) return error.ConfigError;
+            }
+            if (ids.len > config.max_routes) return error.ConfigError;
+            if (ids.len == 0) {
+                c.routes = .{};
+            } else {
+                const entries = arena.alloc(config.RouteEntry, ids.len) catch return error.OutOfMemory;
+                for (entries, ids, kinds, servers) |*entry, id, kind, server| {
+                    entry.* = .{ .id = .init(id), .kind = kind };
+                    switch (kind) {
+                        .socks5 => {
+                            if (server.len == 0) return error.ConfigError;
+                            entry.server = addr.Endpoint.parse(server) catch return error.ConfigError;
+                        },
+                        .direct => {
+                            if (server.len != 0) return error.ConfigError;
+                        },
+                        .passthrough => return error.ConfigError,
+                    }
+                }
+                if (rs.strict) |list| {
+                    for (entries, list) |*entry, strict_val| entry.strict = strict_val;
+                }
+                c.routes = .{ .entries = entries };
             }
         }
         if (doc.route) |r| {

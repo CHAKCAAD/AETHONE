@@ -463,9 +463,16 @@ pub fn Tcp(comptime W: type) type {
             defer w.pool.put(b);
             const data = b.bytes();
             var bypass = false;
+            // Stage 2 per-app routing: the flow-owner decision carries both
+            // the legacy verdict and a route number. A route entry resolves to
+            // either a per-flow SOCKS5 upstream or zeptun's direct handler.
+            var upstream: ?addr.Endpoint = null;
+            var strict = false;
             if (w.judge().active()) {
                 const tcph0 = pkt.l4.tcp;
-                switch (w.judge().ask(parse.proto.tcp, pkt.ip.isV6(), pkt.ip.src(data), tcph0.src_port, pkt.ip.dst(data), tcph0.dst_port)) {
+                w.counters.inc(.route_asked);
+                const decision = w.judge().ask(parse.proto.tcp, pkt.ip.isV6(), pkt.ip.src(data), tcph0.src_port, pkt.ip.dst(data), tcph0.dst_port);
+                switch (decision.action) {
                     .proxy => {},
                     .direct => bypass = true,
                     .drop => return,
@@ -473,6 +480,38 @@ pub fn Tcp(comptime W: type) type {
                         t.sendRstFor(w, data, pkt);
                         return;
                     },
+                }
+                if (decision.route != 0) {
+                    if (w.routeResolve(decision.route)) |entry| {
+                        w.counters.inc(.route_assigned);
+                        switch (entry.kind) {
+                            .direct => {
+                                // A direct-routed flow cannot dial a fake-IP
+                                // destination (its app's DNS was not forwarded
+                                // to a real resolver — e.g. UDP attribution
+                                // failed): fail CLOSED, visibly, never tunnel
+                                // it through another route (privacy rule).
+                                if (w.handler.fake) |ftab| {
+                                    if (ftab.indexOf(addr.Address.fromSlice(pkt.ip.dst(data))) != null) {
+                                        w.counters.inc(.route_direct_fake);
+                                        log.debug("tcp direct route refused a fake-ip destination", .{});
+                                        t.sendRstFor(w, data, pkt);
+                                        return;
+                                    }
+                                }
+                                bypass = true;
+                            },
+                            .socks5 => {
+                                upstream = entry.server;
+                                strict = entry.strict;
+                            },
+                            .passthrough => {},
+                        }
+                    } else {
+                        // Stale/unknown route number: default route, counted —
+                        // never a silent fallback to another app's route.
+                        w.counters.inc(.route_fallback);
+                    }
                 }
             }
             if (t.conns.isFull()) {
@@ -546,6 +585,8 @@ pub fn Tcp(comptime W: type) type {
             }
             c.up.dial.tos = pkt.ip.tos;
             c.up.dial.bypass = bypass;
+            c.up.dial.upstream = upstream;
+            c.up.dial.strict = strict;
             w.handler.dialTcp(w, &c.up.dial, c.target, .tcp);
         }
 

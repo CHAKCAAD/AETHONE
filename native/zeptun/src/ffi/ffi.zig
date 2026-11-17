@@ -77,7 +77,7 @@ comptime {
     std.debug.assert(@offsetOf(Config, "memory_budget_bytes") == 800);
     std.debug.assert(@sizeOf(stats.Snapshot) == 8 + 8 * stats.count);
     std.debug.assert(@offsetOf(stats.Snapshot, "rx_packets") == 8);
-    std.debug.assert(@offsetOf(stats.Snapshot, "udp_migrated") == 8 + 8 * (stats.count - 1));
+    std.debug.assert(@offsetOf(stats.Snapshot, "route_direct_fake") == 8 + 8 * (stats.count - 1));
 }
 
 const Handle = struct {
@@ -293,6 +293,29 @@ export fn zeptun_set_flow_callback(tun: ?*anyopaque, cb: ?zeptun.flow.verdict.Fn
     const h = handleOf(tun) orelse return code(.invalid_argument);
     if (h.started.load(.acquire)) return code(.already_running);
     h.engine.setJudge(cb, ctx);
+    return code(.ok);
+}
+
+/// Stage 2 per-app routing: atomically replace the route table of a RUNNING
+/// engine. `doc` is a TOML or JSON document (auto-detected) whose `[routes]`
+/// section is parsed exactly like at create time; every other section in the
+/// document is ignored. The document is fully parsed and validated BEFORE
+/// anything is swapped — an invalid update leaves the active table untouched.
+/// Existing flows keep their established handlers/sockets; only flows opened
+/// after the swap re-resolve against the new table. Returns ZEPTUN_OK, or
+/// ZEPTUN_ERR_CONFIG for a malformed/rejected document.
+export fn zeptun_update_routes(tun: ?*anyopaque, doc: ?[*]const u8, len: usize) callconv(.c) c_int {
+    const h = handleOf(tun) orelse return code(.invalid_argument);
+    const text = doc orelse return code(.invalid_argument);
+    var arena = std.heap.ArenaAllocator.init(h.allocator);
+    defer arena.deinit();
+    var st: zeptun.config_json.State = .{};
+    const copy = arena.allocator().dupe(u8, text[0..len]) catch return code(.out_of_memory);
+    st.applyDocument(arena.allocator(), copy) catch |err| return code(switch (err) {
+        error.OutOfMemory => .out_of_memory,
+        error.ConfigError => .config_error,
+    });
+    h.engine.updateRoutes(st.cfg.routes.entries) catch |err| return code(errors.fromError(err));
     return code(.ok);
 }
 

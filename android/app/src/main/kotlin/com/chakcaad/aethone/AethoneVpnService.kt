@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -106,6 +107,21 @@ class AethoneVpnService : VpnService() {
         /// fallback stops the TUN itself if no engine answers (the app
         /// process was killed) — no orphaned tunnel.
         const val ACTION_DISCONNECT = "com.chakcaad.aethone.DISCONNECT"
+
+        /// Stage 2 per-app routing (PoC) — the adb-driven route table +
+        /// package assignments, as a JSON document (see PoCRoutes.kt for the
+        /// exact format and the positional route numbering). Present only on
+        /// instrumented starts (`adb shell am start-foreground-service ...`);
+        /// every normal Flutter-driven start leaves it absent and the tunnel
+        /// config stays byte-identical to the pre-PoC document.
+        const val EXTRA_POC_ROUTES = "poc_routes"
+
+        /// PoC — the per-instance token guarding the update broadcast
+        /// (generated in onCreate, printed to logcat when a PoC tunnel
+        /// starts; see PoCRoutesReceiver).
+        @Volatile
+        private var pocToken: String = ""
+
         private const val TAG = "AethoneVpn"
         private const val CHANNEL_ID = "aethone_vpn"
         private const val NOTIFICATION_ID = 1
@@ -170,6 +186,24 @@ class AethoneVpnService : VpnService() {
                 "txBytes" to svc.readCounter(STATS_TX_BYTES),
             )
         }
+
+        /// PoC — entry point of the update broadcast (PoCRoutesReceiver).
+        fun applyPocRoutesLive(json: String, token: String): String {
+            val svc = instance ?: return "no live service instance"
+            return svc.applyPocRoutes(json, token)
+        }
+
+        /// PoC — diagnostics dump for the stats broadcast.
+        fun dumpPocStats(token: String): String {
+            if (token != pocToken) return "bad token"
+            val svc = instance ?: return "no live service instance"
+            val resolver = svc.pocResolver ?: return "per-app routing not active (no poc start)"
+            return resolver.stats() +
+                " | native route_asked=" + svc.readCounter(PerAppRouteResolver.STATS_ROUTE_ASKED) +
+                " route_assigned=" + svc.readCounter(PerAppRouteResolver.STATS_ROUTE_ASSIGNED) +
+                " route_fallback=" + svc.readCounter(PerAppRouteResolver.STATS_ROUTE_FALLBACK) +
+                " route_direct_fake=" + svc.readCounter(PerAppRouteResolver.STATS_ROUTE_DIRECT_FAKE)
+        }
     }
 
     private var descriptor: ParcelFileDescriptor? = null
@@ -195,9 +229,29 @@ class AethoneVpnService : VpnService() {
     /// e.g. an external start); echoed on EVERY event this instance emits.
     private var sessionId: Int = 0
 
+    /// Stage 2 per-app routing (PoC) — the flow-owner resolver. Non-null
+    /// only while a tunnel started with [EXTRA_POC_ROUTES] is up; the JNI
+    /// flow callback consults it through [flowRoute].
+    private var pocResolver: PerAppRouteResolver? = null
+
+    /// PoC — whether the live route table contains a direct route (which
+    /// required a start-time dns.upstream; a live update may only keep or
+    /// drop direct, never introduce it — native validation is the
+    /// authority, this is the friendly pre-check).
+    private var livePocHasDirect: Boolean = false
+
+    /// PoC — the raw poc_routes JSON the CURRENT tunnel was started with
+    /// (part of the restart key, exactly like the per-app set: a changed
+    /// table restarts the tunnel because the flow callback's initial table
+    /// is fixed at start).
+    private var livePocKey: String = ""
+
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // PoC — a fresh token per service instance guards the update
+        // broadcast (printed when a PoC tunnel starts, tag AethonePoC).
+        pocToken = Integer.toUnsignedString(java.security.SecureRandom().nextInt(), 16)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -232,6 +286,23 @@ class AethoneVpnService : VpnService() {
         @Suppress("UNCHECKED_CAST")
         val apps = (intent?.getStringArrayListExtra(EXTRA_APPS) ?: arrayListOf())
             .filter { it.isNotBlank() }
+
+        // Stage 2 PoC — the adb-driven route document. A malformed document
+        // is an honest failure (the tunnel never comes up half-configured).
+        val pocRoutesJson = intent?.getStringExtra(EXTRA_POC_ROUTES)
+        val pocRoutes: PoCRoutes? =
+            if (pocRoutesJson.isNullOrBlank()) {
+                null
+            } else {
+                try {
+                    PoCRoutes.parse(pocRoutesJson)
+                } catch (e: Exception) {
+                    Log.e(TAG, "poc_routes parse failed: ${e.message}")
+                    EngineBridge.emit(downEvent("poc-routes-invalid:${e.message?.take(120)}"))
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+            }
 
         // v4.26 — the straggler gate: this start was superseded by a stop
         // (a `stopVpn` processed while the start delivery was still in
@@ -290,7 +361,7 @@ class AethoneVpnService : VpnService() {
             // Each stage now names itself: consent/establish failures stay
             // "establish-failed", a nativeStart rc≠0 is
             // "zeptun-start-failed:rc=N".
-            val failReason = startTunnel(port, tcpOnly, socksStrict, appMode, apps)
+            val failReason = startTunnel(port, tcpOnly, socksStrict, appMode, apps, pocRoutes)
             if (failReason != null) {
                 EngineBridge.emit(downEvent(failReason))
                 stopSelf()
@@ -350,6 +421,7 @@ class AethoneVpnService : VpnService() {
         socksStrict: Boolean,
         appMode: String,
         apps: List<String>,
+        pocRoutes: PoCRoutes?,
     ): String? {
         if (zeptunUp) {
             // v4.20: a mode switch (e.g. 1819 → 1820) between connects used
@@ -366,9 +438,13 @@ class AethoneVpnService : VpnService() {
             // v4.41 — the per-app set counts as part of the target too:
             // an established TUN cannot be re-scoped, so a changed app
             // mode/list restarts it (same semantics as a port change).
+            // Stage 2 PoC — the poc_routes document counts as well: the
+            // initial route table + flow callback are fixed at nativeStart.
             val appsKey = "$appMode|${apps.sorted().joinToString(",")}"
+            val pocKey = pocRoutes?.toString() ?: ""
             if (port != socksPort || tcpOnly != socksTcpOnly ||
-                socksStrict != socksStrictLive || appsKey != liveAppsKey
+                socksStrict != socksStrictLive || appsKey != liveAppsKey ||
+                pocKey != livePocKey
             ) {
                 Log.i(
                     TAG,
@@ -484,7 +560,21 @@ class AethoneVpnService : VpnService() {
         // reply, `optimistic_data = false` keeps the client's payload off
         // the request write — the fully sequential handshake goptlib
         // accepts. Same ?bool value form as `udp`.
-        val toml = """
+        // Stage 2 PoC — resolve the real DNS BEFORE building the document:
+        // a direct route under fake-IP DNS needs it (zeptun validation D12)
+        // and a missing resolver must fail honestly WITHOUT leaking the
+        // established TUN descriptor.
+        var pocDnsUpstream: String? = null
+        if (pocRoutes?.hasDirect == true) {
+            pocDnsUpstream = systemDnsV4()
+            if (pocDnsUpstream == null) {
+                fd.close()
+                descriptor = null
+                return "poc-no-system-dns"
+            }
+        }
+        val toml = StringBuilder(
+            """
             preset = "mobile"
 
             [handler]
@@ -498,11 +588,42 @@ class AethoneVpnService : VpnService() {
 
             [dns]
             fake_ip = true
-        """.trimIndent()
+            """.trimIndent(),
+        ).apply {
+            // Stage 2 PoC — the optional route table + real resolver for
+            // direct-routed apps. Everything below is appended ONLY on an
+            // instrumented start: a normal start's document stays
+            // byte-identical to the pre-PoC config.
+            if (pocRoutes != null) {
+                pocDnsUpstream?.let {
+                    appendLine()
+                    appendLine("upstream = \"$it\"")
+                }
+                val section = pocRoutesToml(pocRoutes.routes)
+                if (section.isNotEmpty()) {
+                    appendLine()
+                    append(section.trimEnd())
+                }
+            }
+        }.toString()
 
-        val rc = Zeptun.nativeStart(this, fd.fd, toml)
+        // The resolver must be live BEFORE nativeStart: the engine thread
+        // starts attributing flows the moment zeptun_run begins, before
+        // nativeStart returns.
+        val resolver: PerAppRouteResolver? =
+            if (pocRoutes != null) {
+                PerAppRouteResolver(this, pocRoutes.routes.size).also {
+                    it.swapAssignments(pocRoutes.assignmentNumbers(), pocRoutes.routes.size)
+                }
+            } else {
+                null
+            }
+        pocResolver = resolver
+        val rc = Zeptun.nativeStart(this, fd.fd, toml, pocRoutes != null)
         if (rc != 0) {
             Log.e(TAG, "zeptun nativeStart failed rc=$rc (port=$port)")
+            resolver?.close()
+            pocResolver = null
             fd.close()
             descriptor = null
             return "zeptun-start-failed:rc=$rc"
@@ -511,14 +632,83 @@ class AethoneVpnService : VpnService() {
         socksTcpOnly = tcpOnly
         socksStrictLive = socksStrict
         liveAppsKey = "$appMode|${apps.sorted().joinToString(",")}"
+        livePocKey = pocRoutes?.toString() ?: ""
+        livePocHasDirect = pocRoutes?.hasDirect ?: false
         Log.i(
             TAG,
             "zeptun up on socks 127.0.0.1:$port udp=${if (tcpOnly) "disabled" else "enabled"} " +
                 "strict=${if (socksStrict) "sequential" else "pipelined"} " +
                 "apps=$liveAppsKey (protect callback installed)",
         )
+        if (pocRoutes != null) {
+            Log.i(
+                "AethonePoC",
+                "per-app routing active: ${pocRoutes.routes.size} route(s), " +
+                    "${pocRoutes.assignments.size} assignment(s), " +
+                    "direct=${pocRoutes.hasDirect} — token=$pocToken",
+            )
+        }
         EngineBridge.emit(upEvent(port))
         return null
+    }
+
+    /// Stage 2 PoC — the flow-owner callback target (invoked from JNI on
+    /// the zeptun engine thread; see dev/zeptun/Zeptun.kt). The resolver
+    /// bounds itself with a query timeout and answers 0 (default route)
+    /// whenever attribution is unavailable. Returning 0 when no resolver
+    /// exists keeps a non-PoC engine (callback never installed) safe even
+    /// if a future caller flips the flag.
+    fun flowRoute(
+        protocol: Int,
+        family: Int,
+        source: ByteArray,
+        sourcePort: Int,
+        destination: ByteArray,
+        destinationPort: Int,
+    ): Int = pocResolver?.resolve(
+        protocol,
+        family,
+        source,
+        sourcePort,
+        destination,
+        destinationPort,
+    ) ?: 0
+
+    /// Stage 2 PoC — the live-update path (PoCRoutesReceiver). Swaps the
+    /// zeptun route table WITHOUT touching the TUN, then the Kotlin
+    /// assignment map. Order note: a flow opened in the tiny window between
+    /// the two swaps resolves its number against the NEW table and its uid
+    /// against the OLD map — an out-of-range number degrades to the DEFAULT
+    /// route (counted), never to another app's route.
+    private fun applyPocRoutes(json: String, token: String): String {
+        if (token != pocToken) return "rejected: bad token"
+        if (!zeptunUp) return "rejected: tunnel not up"
+        val resolver = pocResolver
+            ?: return "rejected: flow callback not installed — restart the tunnel with poc_routes"
+        val parsed = try {
+            PoCRoutes.parse(json)
+        } catch (e: Exception) {
+            return "rejected: parse failed: ${e.message}"
+        }
+        if (parsed.hasDirect && !livePocHasDirect) {
+            return "rejected: a direct route requires a start-time dns.upstream — restart the tunnel with a direct route present"
+        }
+        val rc = Zeptun.nativeUpdateRoutes(pocRoutesToml(parsed.routes))
+        if (rc != 0) return "rejected: nativeUpdateRoutes rc=$rc"
+        resolver.swapAssignments(parsed.assignmentNumbers(), parsed.routes.size)
+        livePocHasDirect = parsed.hasDirect
+        return "ok: ${parsed.routes.size} route(s), ${parsed.assignments.size} assignment(s) — established flows keep their routes"
+    }
+
+    /// PoC — the active network's first IPv4 DNS (the real resolver a
+    /// direct-routed app's queries are forwarded to; protected like every
+    /// other zeptun upstream socket).
+    private fun systemDnsV4(): String? {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
+        val net = cm.activeNetwork ?: return null
+        val servers = cm.getLinkProperties(net)?.dnsServers ?: return null
+        return servers.firstOrNull { it.address.size == 4 }?.hostAddress
+            ?: servers.firstOrNull()?.hostAddress
     }
 
     private fun stopTunnel(reason: String) {
@@ -531,6 +721,11 @@ class AethoneVpnService : VpnService() {
             }
             zeptunUp = false
         }
+        // Stage 2 PoC — the resolver dies with the tunnel; no callback can
+        // outlive the engine (nativeStop joins the engine thread first).
+        pocResolver?.close()
+        pocResolver = null
+        livePocHasDirect = false
         descriptor?.close()
         descriptor = null
         Log.i(TAG, "tunnel down ($reason)")

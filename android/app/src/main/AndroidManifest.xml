@@ -62,6 +62,18 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="core-holder"/>
         </service>
+        <!-- Stage 2 per-app routing (PoC) — adb-only instrumentation for
+             live route-table updates and diagnostics while a PoC tunnel is
+             up (token-guarded; see PoCRoutesReceiver). Not part of any
+             product flow; Stage 3 replaces it with the real UI path. -->
+        <receiver
+            android:name=".PoCRoutesReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.chakcaad.aethone.POC_UPDATE_ROUTES"/>
+                <action android:name="com.chakcaad.aethone.POC_ROUTES_STATS"/>
+            </intent-filter>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -39,6 +39,12 @@ pub const Counter = enum(u8) {
     dns_hijacked,
     tcp_migrated,
     udp_migrated,
+    // Stage 2 per-app routing counters (appended: existing ZeptunStats field
+    // indices used through the JNI counter bridge stay valid).
+    route_asked, // flow-owner callback invocations at flow-open (incl. DNS)
+    route_assigned, // decisions resolved to a non-default route entry
+    route_fallback, // route numbers that resolved to nothing -> default route
+    route_direct_fake, // direct-routed flows dropped: fake-IP destination
 };
 
 pub const count = @typeInfo(Counter).@"enum".fields.len;

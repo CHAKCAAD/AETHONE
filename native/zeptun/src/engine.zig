@@ -271,6 +271,14 @@ pub fn Worker(comptime L: type) type {
             return &w.engine.judge;
         }
 
+        /// Stage 2 per-app routing: resolve a route number against the
+        /// engine-owned table (null = default / unknown / no table). The
+        /// stacks call THIS, never `engine` directly, so alternative worker
+        /// types (tcp_sim's SimWorker) keep compiling with their own version.
+        pub inline fn routeResolve(w: *const Self, number: u16) ?Engine.RouteView {
+            return w.engine.routeResolve(number);
+        }
+
         pub inline fn caps(w: *const Self) device.Capabilities {
             return w.dev_caps;
         }
@@ -884,6 +892,16 @@ pub const Engine = struct {
     passthrough_shared: ?*device.external.Shared = null,
     protect: handler_mod.direct.Protect = .{},
     judge: verdict.Judge = .{},
+    /// Stage 2 per-app routing: the engine-owned route table. `null` means
+    /// "no table installed" — every route number resolves to nothing and the
+    /// flow uses the default (global handler). Swapped only through
+    /// [updateRoutes] under `routes_lock`; readers copy entries under the same
+    /// lock so a swapped-out table is freed safely.
+    routes: ?*config.RouteTable = null,
+    /// House-style spin lock (dns.Table's pattern): the critical sections
+    /// are copy-in/copy-out of a few dozen bytes at flow-open and a rare
+    /// table swap — nanoseconds, never held across the flow-owner callback.
+    routes_lock: RouteLock = .{},
     route_state: route.State = .{},
     netns: route.netns.Handle = .{},
     workers: ?Workers = null,
@@ -908,6 +926,15 @@ pub const Engine = struct {
         const e = try allocator.create(Engine);
         errdefer allocator.destroy(e);
         e.* = .{ .allocator = allocator, .cfg = cfg, .device_kind = cfg.device.kind };
+        // Stage 2: materialize the initial route table into engine-owned
+        // memory so the FFI arena (which owns the parsed TOML strings) can be
+        // swapped/replaced independently of live updates.
+        if (cfg.routes.entries.len > 0) {
+            const rt = try allocator.create(config.RouteTable);
+            errdefer allocator.destroy(rt);
+            rt.entries = try allocator.dupe(config.RouteEntry, cfg.routes.entries);
+            e.routes = rt;
+        }
         if (cfg.dnsActive() and e.cfg.route.dns.len == 0) {
             if (cfg.dnsAddress4()) |a| e.cfg.route.dns.append(.{ .addr = a, .bits = 32 }) catch {};
             if (cfg.dnsAddress6()) |a| e.cfg.route.dns.append(.{ .addr = a, .bits = 128 }) catch {};
@@ -955,6 +982,78 @@ pub const Engine = struct {
 
     pub fn setJudge(e: *Engine, f: ?verdict.Fn, ctx: ?*anyopaque) void {
         e.judge = .{ .call = f, .ctx = ctx };
+    }
+
+    /// A copied route entry — value semantics so callers never hold a
+    /// pointer into the (swappable) table.
+    pub const RouteView = struct {
+        id: config.Name,
+        kind: config.HandlerKind,
+        server: addr.Endpoint,
+        strict: bool,
+    };
+
+    const RouteLock = struct {
+        locked: std.atomic.Value(bool) = .init(false),
+
+        fn lock(l: *RouteLock) void {
+            var spins: u32 = 0;
+            while (l.locked.cmpxchgWeak(false, true, .acquire, .monotonic) != null) {
+                spins += 1;
+                if (spins < 64) {
+                    std.atomic.spinLoopHint();
+                } else {
+                    spins = 0;
+                    std.Thread.yield() catch {};
+                }
+            }
+        }
+
+        fn unlock(l: *RouteLock) void {
+            l.locked.store(false, .release);
+        }
+    };
+
+    /// Resolve a route number (1..N) against the active table. Returns null
+    /// for 0 (the default — callers treat it as "no override"), for a table
+    /// that has no entries, and for out-of-range numbers (stale callback,
+    /// counted by the caller as a fallback, never a different app's route).
+    pub fn routeResolve(e: *Engine, number: u16) ?RouteView {
+        if (number == 0) return null;
+        e.routes_lock.lock();
+        defer e.routes_lock.unlock();
+        const rt = e.routes orelse return null;
+        if (number > rt.entries.len) return null;
+        const r = &rt.entries[number - 1];
+        return .{ .id = r.id, .kind = r.kind, .server = r.server, .strict = r.strict };
+    }
+
+    pub fn routeCount(e: *Engine) usize {
+        e.routes_lock.lock();
+        defer e.routes_lock.unlock();
+        return if (e.routes) |rt| rt.entries.len else 0;
+    }
+
+    /// Atomically replace the route table (live update). The new entries are
+    /// validated against the ACTIVE dns config first — an invalid document
+    /// leaves the current table untouched. Existing flows keep their already
+    /// established sockets/handlers; only new flows re-resolve. The old table
+    /// is freed after the swap, outside the lock: readers copy entries under
+    /// the lock, so no reader can still be inside the old table once the
+    /// mutex is released.
+    pub fn updateRoutes(e: *Engine, entries: []const config.RouteEntry) !void {
+        try config.validateRoutes(entries, &e.cfg.dns);
+        const rt = try e.allocator.create(config.RouteTable);
+        errdefer e.allocator.destroy(rt);
+        rt.entries = try e.allocator.dupe(config.RouteEntry, entries);
+        e.routes_lock.lock();
+        const old = e.routes;
+        e.routes = rt;
+        e.routes_lock.unlock();
+        if (old) |o| {
+            e.allocator.free(o.entries);
+            e.allocator.destroy(o);
+        }
     }
 
     pub fn setProtect(e: *Engine, f: ?*const fn (ctx: ?*anyopaque, fd: c_int) callconv(.c) bool, ctx: ?*anyopaque) void {
@@ -1486,6 +1585,14 @@ pub const Engine = struct {
         if (e.external) |s| s.deinit();
         if (e.passthrough_shared) |s| s.deinit();
         if (e.fake_dns) |t| t.deinit();
+        e.routes_lock.lock();
+        const rt = e.routes;
+        e.routes = null;
+        e.routes_lock.unlock();
+        if (rt) |r| {
+            e.allocator.free(r.entries);
+            e.allocator.destroy(r);
+        }
         if (e.counters.len > 0) e.allocator.free(e.counters);
         if (e.gauges.len > 0) e.allocator.free(e.gauges);
         e.allocator.destroy(e);

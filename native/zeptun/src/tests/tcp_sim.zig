@@ -135,6 +135,14 @@ const SimWorker = struct {
         return &w.sim.judge;
     }
 
+    /// Stage 2 per-app routing: the simulation harness carries no route
+    /// table — every route number resolves to nothing (default route).
+    pub inline fn routeResolve(w: *const SimWorker, number: u16) ?@import("../engine.zig").Engine.RouteView {
+        _ = w;
+        _ = number;
+        return null;
+    }
+
     pub fn transmitParts(w: *SimWorker, header: []const u8, vh: gso.VirtioNetHdr, parts: []const device.PayloadRef) void {
         w.sim.captureOutput(header, vh, parts);
     }

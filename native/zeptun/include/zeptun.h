@@ -90,6 +90,12 @@ typedef struct {
 #define ZEPTUN_FLOW_DROP 2u
 #define ZEPTUN_FLOW_REJECT 3u
 
+/* Return value packing (per-app routing): the low two bits are the action
+ * above; the remaining bits are a route number — (route << 2) | action.
+ * Route 0 is the default (the global [handler]); 1..N address the [routes]
+ * entries in document order. Plain action values 0..3 remain valid and mean
+ * "default route", so legacy callbacks are byte-compatible. An out-of-range
+ * route number resolves to nothing and the flow uses the default route. */
 typedef uint32_t (*zeptun_flow_cb)(void *ctx, const ZeptunFlow *flow);
 typedef void (*zeptun_log_cb)(void *ctx, int level, const char *message, size_t len);
 
@@ -172,6 +178,11 @@ typedef struct ZeptunStats {
     uint64_t dns_hijacked;
     uint64_t tcp_migrated;
     uint64_t udp_migrated;
+    /* Stage 2 per-app routing (appended; existing field indices unchanged) */
+    uint64_t route_asked;
+    uint64_t route_assigned;
+    uint64_t route_fallback;
+    uint64_t route_direct_fake;
 } ZeptunStats;
 
 typedef struct ZeptunMemory {
@@ -202,6 +213,14 @@ int zeptun_set_protect_callback(Zeptun *tun, zeptun_protect_cb callback, void *c
 int zeptun_set_flow_callback(Zeptun *tun, zeptun_flow_cb callback, void *ctx);
 int zeptun_set_device_fd(Zeptun *tun, int fd);
 int zeptun_set_adapter_guid(Zeptun *tun, const char *guid);
+
+/* Stage 2 per-app routing: atomically replace the route table of a RUNNING
+ * engine. `doc` is a TOML or JSON document whose [routes] section is parsed
+ * exactly like at create time (other sections ignored). The document is fully
+ * validated before the swap — an invalid update leaves the active table
+ * untouched. Existing flows keep their handlers; new flows re-resolve.
+ * Returns ZEPTUN_OK, or ZEPTUN_ERR_CONFIG for a malformed/rejected document. */
+int zeptun_update_routes(Zeptun *tun, const char *doc, size_t len);
 
 int zeptun_start(Zeptun *tun);
 int zeptun_run(Zeptun *tun);

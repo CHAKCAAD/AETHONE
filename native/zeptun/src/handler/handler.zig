@@ -28,6 +28,14 @@ pub fn Dial(comptime W: type) type {
         fd: sys.fd_t = sys.invalid_fd,
         buf: ?*DialBuf(W) = null,
         bypass: bool = false,
+        /// Stage 2 per-app routing: the SOCKS5 upstream this flow was assigned
+        /// (a copy of the route entry's server, taken at flow-open under the
+        /// route lock — safe across live table swaps). null = the default
+        /// global handler. Only meaningful when `bypass` is false.
+        upstream: ?addr.Endpoint = null,
+        /// Stage 2 per-app routing: sequential SOCKS5 handshake for this flow
+        /// (route entry `strict`) — no pipelining, no optimistic data.
+        strict: bool = false,
         target: addr.Endpoint = .{},
         bound: ?addr.Endpoint = null,
         owner: Owner = .tcp,
@@ -204,6 +212,10 @@ pub fn UdpState(comptime W: type) type {
 
         fd: sys.fd_t = sys.invalid_fd,
         family: addr.Family = .v4,
+        /// Stage 2 per-app routing: this session dials OUTSIDE the socks5
+        /// upstream (direct route / bypass verdict) — its datagrams are RAW,
+        /// never SOCKS-framed, in either direction.
+        bypass: bool = false,
         rx_c: W.Loop.Completion = .{},
         rx_buf: ?*pool.Buffer = null,
         ctrl: if (build_options.enable_socks5) Dial(W) else void = if (build_options.enable_socks5) .{ .owner = .udp, .cmd = .udp_associate } else {},
@@ -374,7 +386,7 @@ pub fn Handler(comptime W: type) type {
 
         fn openFresh(h: *Self, w: *W, d: *D) sys.Errno {
             const b = d.buf.?;
-            const server = if (h.socksMode() and !d.bypass) h.cfg.handler.socks5.server else d.target;
+            const server = if (h.socksMode() and !d.bypass) (d.upstream orelse h.cfg.handler.socks5.server) else d.target;
             const e = h.openSocket(w, server.addr.family, &d.fd);
             if (e != .success) return e;
             if (h.cfg.handler.preserve_dscp) direct.setDscp(d.fd, server.addr.family, d.tos);
@@ -420,7 +432,7 @@ pub fn Handler(comptime W: type) type {
                     }
                 }
             }
-            if (h.socksMode() and !d.bypass and h.warm_size > 0 and owner != .udp) {
+            if (h.socksMode() and !d.bypass and d.upstream == null and h.warm_size > 0 and owner != .udp) {
                 h.noteDemand(.tcp, w.now());
                 if (h.takeWarm(w, .tcp)) |taken| {
                     const fd = taken.fd;
@@ -445,7 +457,10 @@ pub fn Handler(comptime W: type) type {
             if (e != .success) return h.finish(w, d, e);
             w.loop.submit(&b.c);
             w.wheel.schedule(&b.timer, w.now() + h.connect_timeout_ms);
-            if (h.socksMode() and !d.bypass and h.warm_size > 0 and owner != .udp) h.refill(w);
+            // The warm pool only ever holds connections to the DEFAULT
+            // server; route-assigned dials (upstream != null) never touch it
+            // and never trigger refills — pools must not mix routes.
+            if (h.socksMode() and !d.bypass and d.upstream == null and h.warm_size > 0 and owner != .udp) h.refill(w);
         }
 
         fn addrEql(a: ?addr.Address, b: addr.Address) bool {
@@ -476,7 +491,7 @@ pub fn Handler(comptime W: type) type {
         fn sendWithEarly(h: *Self, w: *W, d: *D, c: *Loop.Completion) void {
             d.early_len = 0;
             d.early_sent = 0;
-            if ((d.pipelined or d.expect == .reply) and h.cfg.handler.socks5.optimistic_data and d.cmd == .connect) {
+            if ((d.pipelined or d.expect == .reply) and !d.strict and h.cfg.handler.socks5.optimistic_data and d.cmd == .connect) {
                 const b = d.buf.?;
                 const early = W.dialEarlyData(w, d, b.iov[1..]);
                 if (early > 0) {
@@ -508,7 +523,7 @@ pub fn Handler(comptime W: type) type {
                 return;
             }
             d.phase = .receiving;
-            d.streaming = d.cmd == .connect and h.cfg.handler.socks5.optimistic_data and (d.pipelined or d.expect == .reply);
+            d.streaming = d.cmd == .connect and !d.strict and h.cfg.handler.socks5.optimistic_data and (d.pipelined or d.expect == .reply);
             if (d.streaming) W.dialStream(w, d);
             c.op = .{ .recv = .{ .fd = d.fd, .buf = b.rbuf[d.rlen..] } };
         }
@@ -882,7 +897,7 @@ pub fn Handler(comptime W: type) type {
             if (result < 0) {
                 const e = sys.toErrno(result);
                 if ((e == .again or e == .intr) and d.phase != .connecting) return .rearm;
-                if (h.socksMode() and !d.bypass and proxyRefused(e)) h.proxyBusy(w);
+                if (h.socksMode() and !d.bypass and d.upstream == null and proxyRefused(e)) h.proxyBusy(w);
                 if (h.canRetry(d)) return h.retryFresh(w, d);
                 h.finish(w, d, e);
                 return .disarm;
@@ -895,7 +910,7 @@ pub fn Handler(comptime W: type) type {
                     }
                     h.noteProxyRtt(d.fd);
                     const s5 = &h.cfg.handler.socks5;
-                    d.pipelined = switch (s5.pipeline) {
+                    d.pipelined = if (d.strict) false else switch (s5.pipeline) {
                         .on => true,
                         .off => false,
                         .auto => s5.username.slice().len == 0,
@@ -1038,12 +1053,17 @@ pub fn Handler(comptime W: type) type {
             return .disarm;
         }
 
-        pub fn udpOpen(h: *Self, w: *W, s: *U, family: addr.Family, tos: u8, bypass: bool) bool {
-            s.* = .{ .family = family, .tos = if (h.cfg.handler.preserve_dscp) tos else 0 };
+        /// `upstream` (Stage 2 per-app routing): the route-assigned SOCKS5
+        /// server for this UDP flow's control connection; null = the default
+        /// global handler. `strict` mirrors the route entry's handshake mode.
+        pub fn udpOpen(h: *Self, w: *W, s: *U, family: addr.Family, tos: u8, bypass: bool, upstream: ?addr.Endpoint, strict: bool) bool {
+            s.* = .{ .family = family, .tos = if (h.cfg.handler.preserve_dscp) tos else 0, .bypass = bypass };
             if (h.kind == .socks5 and !bypass and build_options.enable_socks5) {
                 if (h.cfg.handler.socks5.udp == .disabled) return false;
                 s.ctrl.tos = s.tos;
-                if (h.warm_size > 0) {
+                s.ctrl.upstream = upstream;
+                s.ctrl.strict = strict;
+                if (h.warm_size > 0 and upstream == null) {
                     h.noteDemand(.udp, w.now());
                     const taken = h.takeWarm(w, .udp);
                     defer h.refill(w);
@@ -1053,7 +1073,8 @@ pub fn Handler(comptime W: type) type {
                         return true;
                     }
                 }
-                h.dialTcp(w, &s.ctrl, .{ .addr = h.cfg.handler.socks5.server.addr, .port = 0 }, .udp);
+                const server = upstream orelse h.cfg.handler.socks5.server;
+                h.dialTcp(w, &s.ctrl, .{ .addr = server.addr, .port = 0 }, .udp);
                 return true;
             }
             const fd = sys.socket(family, .udp) catch return false;
@@ -1102,8 +1123,8 @@ pub fn Handler(comptime W: type) type {
                 h.armRecv(w, s);
                 return;
             }
-            var relay = s.ctrl.bound orelse h.cfg.handler.socks5.server;
-            if (relay.addr.isUnspecified()) relay.addr = h.cfg.handler.socks5.server.addr;
+            var relay = s.ctrl.bound orelse (s.ctrl.upstream orelse h.cfg.handler.socks5.server);
+            if (relay.addr.isUnspecified()) relay.addr = (s.ctrl.upstream orelse h.cfg.handler.socks5.server).addr;
             if (h.cfg.handler.socks5.udp_address) |ua| {
                 if (ua.family == relay.addr.family) relay.addr = ua;
             }
@@ -1595,7 +1616,7 @@ pub fn Handler(comptime W: type) type {
                     continue;
                 }
                 const gro: u16 = if (s.gro and m.hdr.controllen > 0) direct.readUdpGro(rb.controls[i][0..@min(m.hdr.controllen, rb.controls[i].len)]) else 0;
-                if (h.kind == .socks5 and build_options.enable_socks5) {
+                if (h.kind == .socks5 and !s.bypass and build_options.enable_socks5) {
                     if (gro != 0 and b.len > gro) {
                         run.flush(w, s);
                         h.splitSocksGro(w, s, b, gro, coalesce);
@@ -1710,7 +1731,7 @@ pub fn Handler(comptime W: type) type {
             if (sys.is_linux and (gso == 0 or len <= gso) and h.queueTx(w, s, dst, b, off, len)) return;
             h.flushTx(w, s);
             const payload = b.ptr[off..][0..len];
-            if (h.kind == .socks5 and build_options.enable_socks5) {
+            if (h.kind == .socks5 and !s.bypass and build_options.enable_socks5) {
                 var name: [dns.max_name]u8 = undefined;
                 var target: socks5.Target = .{ .ip = dst };
                 if (h.fake) |t| {
@@ -1855,7 +1876,7 @@ pub fn Handler(comptime W: type) type {
                 w.counters.add(.udp_dropped, n);
                 return;
             }
-            const socks = h.kind == .socks5 and build_options.enable_socks5;
+            const socks = h.kind == .socks5 and !s.bypass and build_options.enable_socks5;
             var plan: TxPlan = .{};
             var name: [dns.max_name]u8 = undefined;
             var v: usize = 0;
