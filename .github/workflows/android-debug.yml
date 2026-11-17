@@ -353,7 +353,6 @@ jobs:
             echo "# tools (exact pins)"
             echo "flutter=${FLUTTER_VERSION}"
             echo "dart=${DART_V}"
-            echo "go=${GO_LINE#build_engine: toolchain: }"
             echo "jdk=${JDK_VERSION} (temurin)"
             echo "gradle_wrapper=${GRADLE_VERSION} agp=${AGP_VERSION} build_tools=${BUILD_TOOLS_VERSION}"
             echo "ndk_cores=${NDK_PKG_REVISION} (r26d — the frozen native recipe)"
