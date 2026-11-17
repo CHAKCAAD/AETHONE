@@ -12,4 +12,16 @@
     <string name="core_channel_name">AETHONE proxy</string>
     <string name="core_notification_title">AETHONE</string>
     <string name="core_notification_text">Proxy service is running</string>
+    <!-- v1.0.1 — the Quick Settings (control centre) tile. -->
+    <string name="tile_label">AETHONE</string>
+    <string name="tile_state_connected">Connected</string>
+    <string name="tile_state_idle">Disconnected</string>
+    <!-- v1.0.1 — the phone home-screen widget. -->
+    <string name="widget_label">AETHONE</string>
+    <string name="widget_description">Connect and disconnect AETHONE from your home screen</string>
+    <string name="widget_status_connected">Protected — the tunnel is up</string>
+    <string name="widget_status_connecting">Connecting…</string>
+    <string name="widget_status_idle">You are not connected</string>
+    <string name="widget_action_connect">Connect</string>
+    <string name="widget_action_disconnect">Disconnect</string>
 </resources>

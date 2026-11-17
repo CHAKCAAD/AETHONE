@@ -10,4 +10,16 @@
     <string name="core_channel_name">پروکسی AETHONE</string>
     <string name="core_notification_title">AETHONE</string>
     <string name="core_notification_text">سرویس پروکسی در حال اجراست</string>
+<!-- v1.0.1 — ویجت کنترل سنتر (کاشک تنظیمات سریع). -->
+    <string name="tile_label">AETHONE</string>
+    <string name="tile_state_connected">متصل</string>
+    <string name="tile_state_idle">قطع است</string>
+    <!-- v1.0.1 — ویجت صفحه اصلی گوشی. -->
+    <string name="widget_label">AETHONE</string>
+    <string name="widget_description">اتصال و قطع اتصال AETHONE از صفحه اصلی گوشی</string>
+    <string name="widget_status_connected">تحت حفاظت — تونل برقرار است</string>
+    <string name="widget_status_connecting">در حال اتصال…</string>
+    <string name="widget_status_idle">متصل نیستید</string>
+    <string name="widget_action_connect">اتصال</string>
+    <string name="widget_action_disconnect">قطع اتصال</string>
 </resources>

@@ -62,7 +62,7 @@ void main() {
     // retired, the card shows the protocol itself).
     expect(find.text('ON'), findsOneWidget);
     expect(find.text('Iran'), findsOneWidget);
-    expect(find.text('وایرگارد'), findsOneWidget); // default protocol name
+    expect(find.text('ماسک'), findsOneWidget); // v1.0.1 default protocol name
 
     // Server pills.
     expect(find.text('Zeptun Tunnel'), findsOneWidget);
@@ -78,7 +78,7 @@ void main() {
     // Defaults — the protocol card renders the SELECTED protocol's own
     // name (v4.40: the AUTO/SMART mode row is retired by decree).
     expect(find.text('ON'), findsOneWidget);
-    expect(find.text('وایرگارد'), findsOneWidget);
+    expect(find.text('ماسک'), findsOneWidget); // v1.0.1 default protocol name
 
     // Flip every preference — the cards must re-render.
     store.setKillSwitch(false);

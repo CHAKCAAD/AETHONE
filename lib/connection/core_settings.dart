@@ -133,7 +133,10 @@ class CoreSettings {
     // now the OPT-IN. Existing installs keep their persisted pick.
     this.h2Transport = true,
     this.quicV2 = true,
-    this.dns = '1.1.1.1,1.0.0.1',
+    // v1.0.1 — `dns` is RETIRED (the WireGuard round): the user-set tunnel
+    // resolver was what the exit-location trace inside the fresh netstack
+    // could not answer on some networks, killing verified tunnels. The
+    // core's built-in resolver (1.1.1.1 / 1.0.0.1) serves every tunnel now.
     // v4.34 — the obfuscation profile defaults to متعادل (owner round
     // 10: «پروفایل دیفالت حالت اغتشاش رو بزار روی متعادل»); the core's
     // own per-protocol choice is now the OPT-IN.
@@ -152,8 +155,11 @@ class CoreSettings {
     this.torDirectSecs = 75,
     this.torBridgeSecs = 360,
     this.torLog = TorLogLevel.info,
-    this.torLegProtocol = AetherLegProtocol.wireguard,
-    this.psiphonLegProtocol = AetherLegProtocol.wireguard,
+    // v1.0.1 — the combined Tor and Psiphon modes' AETHER leg defaults to
+    // MASQUE (owner decree: «پروتکل دیفالت حالت های ترکیبی سایفون و تور
+    // رو هم ماسک قرار بده») — the v4.31c WireGuard leg default retired.
+    this.torLegProtocol = AetherLegProtocol.masque,
+    this.psiphonLegProtocol = AetherLegProtocol.masque,
     this.ipVersion = IpVersion.v4,
     this.upstreamProxy = '',
     this.echMode = EchMode.off,
@@ -194,7 +200,6 @@ class CoreSettings {
   // ---- transport ----
   bool h2Transport; // true ⇒ `--h2` (HTTP/2 over TCP); false = H3/QUIC
   bool quicV2; // false ⇒ `--no-quic-v2`
-  String dns; // ≠ default ⇒ `--dns`
 
   // ---- engine-wide ----
   NoizeProfile noize; // ≠ default ⇒ `--noize`
@@ -329,7 +334,6 @@ class CoreSettings {
         'masqueSni': masqueSni,
         'h2Transport': h2Transport,
         'quicV2': quicV2,
-        'dns': dns,
         'noize': noize.name,
         'perf': perf.name,
         'logLevel': logLevel.name,
@@ -393,7 +397,9 @@ class CoreSettings {
     if (m['masqueSni'] is String) s.masqueSni = m['masqueSni'];
     if (m['h2Transport'] is bool) s.h2Transport = m['h2Transport'];
     if (m['quicV2'] is bool) s.quicV2 = m['quicV2'];
-    if (m['dns'] is String) s.dns = m['dns'];
+    // v1.0.1 — a legacy `dns` key (v1.0.0 installs persisted one) is
+    // deliberately IGNORED: the field is retired and the core's built-in
+    // resolver serves every tunnel.
     s.noize = pickEnum(NoizeProfile.values, m['noize']) ?? s.noize;
     s.perf = pickEnum(PerfProfile.values, m['perf']) ?? s.perf;
     s.logLevel = pickEnum(CoreLogLevel.values, m['logLevel']) ?? s.logLevel;

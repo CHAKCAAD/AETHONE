@@ -518,6 +518,9 @@ class AethoneVpnService : VpnService() {
                 "apps=$liveAppsKey (protect callback installed)",
         )
         EngineBridge.emit(upEvent(port))
+        // v1.0.1 — the home widget + the QS tile flip with the real thing:
+        // zeptun is serving the TUN now, so the surfaces say CONNECTED.
+        AethoneHomeWidget.pushNamed(this, AethoneHomeWidget.STATE_CONNECTED)
         return null
     }
 
@@ -534,6 +537,10 @@ class AethoneVpnService : VpnService() {
         descriptor?.close()
         descriptor = null
         Log.i(TAG, "tunnel down ($reason)")
+        // v1.0.1 — every teardown road (user stop, revoke, destroy, refused
+        // straggler start) runs through here: the surfaces say IDLE. A
+        // mode-switch restart overwrites this with CONNECTED at its own up.
+        AethoneHomeWidget.pushNamed(this, AethoneHomeWidget.STATE_IDLE)
     }
 
     /// The user (or the system) revoked the VPN — never keep zeptun running

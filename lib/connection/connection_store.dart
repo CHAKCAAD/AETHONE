@@ -349,19 +349,16 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
-  /// v4.19 — the app's DEFAULT protocol is WireGuard (owner device-test
-  /// decree #4: «حالا که هنوز بخش تنظیمات رو طراحی نکردیم حالت دیفالت تور
-  /// اور وارپ رو بزار روی پروتکل وایرگارد»). The sheet's AUTO tile still
-  /// selects the core's own default (MASQUE) explicitly — only the cold
-  /// default changed.
+  /// v1.0.1 — the app's DEFAULT protocol is MASQUE (owner decree:
+  /// «پروتکل دیفالت اپ رو ماسک قرار بده»). The v4.19 cold default was
+  /// WireGuard; the fresh install and the factory reset now both land on
+  /// MASQUE — Aether's own default protocol.
   ///
   /// v4.21 — SINGLE KNOB again (owner: the v4.20 chain/leg split was not
   /// good UX — «لطفا به حالت قبل برشگردون»): the field holds the committed
-  /// mode directly — a plain tile OR a family member. The WARP leg under a
-  /// family mode is the fixed WireGuard default (v4.19 decree) until the
-  /// promised "AETHER core protocol" option lands.
+  /// mode directly — a plain tile OR a family member.
   @override
-  ProtocolId selectedProtocol = ProtocolId.wireguard;
+  ProtocolId selectedProtocol = ProtocolId.masque;
 
   /// The mode the engine runs and the UI shows — with the single-knob
   /// revert this is simply the committed selection.
@@ -547,7 +544,8 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     themeMode = AethThemeMode.night;
     closeBehavior = CloseBehavior.ask;
     scanSpeed = 5;
-    selectedProtocol = ProtocolId.auto;
+    // v1.0.1 — the factory default follows the cold default (MASQUE).
+    selectedProtocol = ProtocolId.masque;
     protocolModeSmart = false;
     connectionMode = ConnectionMode.proxy;
     selectedCountryCode = null;

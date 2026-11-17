@@ -523,10 +523,11 @@ void main() {
       });
       expect(perFamily.torLegProtocol, AetherLegProtocol.mim);
       expect(perFamily.psiphonLegProtocol, AetherLegProtocol.masque);
-      // A no-legacy, no-new-keys blob keeps the WireGuard default.
+      // A no-legacy, no-new-keys blob keeps the MASQUE default (v1.0.1:
+      // «پروتکل دیفالت حالت های ترکیبی سایفون و تور رو هم ماسک قرار بده»).
       final bare = CoreSettings.fromJson({'v': 1});
-      expect(bare.torLegProtocol, AetherLegProtocol.wireguard);
-      expect(bare.psiphonLegProtocol, AetherLegProtocol.wireguard);
+      expect(bare.torLegProtocol, AetherLegProtocol.masque);
+      expect(bare.psiphonLegProtocol, AetherLegProtocol.masque);
     });
   });
 
@@ -851,7 +852,8 @@ void main() {
           await adapter2.disconnect();
           await pumpEventQueue();
 
-          // Defaults stay the v4.19 fixed WireGuard leg per family.
+          // v1.0.1 — the family legs' factory default is MASQUE (owner:
+          // «پروتکل دیفالت حالت های ترکیبی سایفون و تور رو هم ماسک قرار بده»).
           final core3 = _FakeCore();
           final adapter3 = PlatformEngineAdapter(coreFactory: () => core3);
           adapter3.events.listen(events.add);
@@ -865,7 +867,7 @@ void main() {
           await pumpEventQueue();
           expect(
             core3.startedArgs.single,
-            containsAllInOrder(['--protocol', 'wg', '--psiphon']),
+            containsAllInOrder(['--protocol', 'masque', '--psiphon']),
           );
           await adapter3.disconnect();
           await pumpEventQueue();
@@ -1143,10 +1145,10 @@ void main() {
         expect(statesOf(events), [VpnState.connecting, VpnState.connected]);
         final stats = events.whereType<EngineStatsUpdated>().first;
         expect(stats.exitCountryCode, 'de');
-        // v4.21 — the single-knob selection with the FIXED WireGuard leg
-        // under the family mode: `--protocol wg --psiphon` (the adapter's
-        // leg+overlay seam stays ready for the promised AETHER-leg option).
-        expect(core.startedArgs.single, containsAllInOrder(['--protocol', 'wg']));
+        // v1.0.1 — the single-knob selection with the family leg default
+        // now MASQUE (owner: «پروتکل دیفالت حالت های ترکیبی سایفون و تور
+        // رو هم ماسک قرار بده»): `--protocol masque --psiphon`.
+        expect(core.startedArgs.single, containsAllInOrder(['--protocol', 'masque']));
         expect(core.startedArgs.single, contains('--psiphon'));
         expect(core.startedArgs.single, containsAllInOrder([
           '--psiphon-bin', '/data/test/lib/libpsiphon.so',

@@ -80,13 +80,47 @@ class MainActivity : FlutterActivity() {
         /// disconnect actually cancels the core.
         @Volatile
         private var coreJobId: Int? = null
+
+        /// v1.0.1 — the quick-connect launch action (owner: the home-screen
+        /// widget + the QS tile). The engine walk (core spawn, endpoint
+        /// scan, TUN establish) lives in the Flutter process, so those
+        /// surfaces delegate to the app: they launch MainActivity with
+        /// [EXTRA_QUICK_CONNECT] and the Dart side PULLS the flag over the
+        /// engine channel (`takeQuickConnect`) — the same pull-don't-push
+        /// discipline as coreJobId, so a Dart handler that is not yet
+        /// registered never loses the request.
+        const val EXTRA_QUICK_CONNECT = "aethone.QUICK_CONNECT"
+
+        @Volatile
+        private var pendingQuickConnect = false
+
+        /// Records the launch intent's quick-connect ask (cold start AND
+        /// singleTop re-launch while the app runs in the background).
+        fun noteLaunchIntent(intent: Intent?) {
+            if (intent?.getBooleanExtra(EXTRA_QUICK_CONNECT, false) == true) {
+                pendingQuickConnect = true
+            }
+        }
     }
 
     private var pendingPermissionResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        noteLaunchIntent(intent)
         installCoreLogRedirect()
+        // v1.0.1 — reconcile the home widget with the LIVE holders (a
+        // process death while connected left the card stale; this cold
+        // start is the first moment the truth is readable again).
+        AethoneHomeWidget.syncFromServices(this)
+    }
+
+    /// v1.0.1 — the singleTop re-launch (the widget/tile tapped while the
+    /// app process was already alive in the background): record the
+    /// quick-connect ask; Dart pulls it on its next resume tick.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        noteLaunchIntent(intent)
     }
 
     /// v4.34 — owner round 10: «هنوز هم داده های زیادی تولید میکنه اپ که
@@ -339,6 +373,22 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "vpnStatus" -> result.success(AethoneVpnService.status())
+                // v1.0.1 — the quick-connect pull (see EXTRA_QUICK_CONNECT):
+                // consumed exactly once by the Dart shell.
+                "takeQuickConnect" -> {
+                    val consume = pendingQuickConnect
+                    pendingQuickConnect = false
+                    result.success(mapOf("connect" to consume))
+                }
+                // v1.0.1 — the transient walk phases for the home widget
+                // ("connecting" while the engine walks, "idle" on a failed
+                // walk); the steady states come from the holder services.
+                "widgetState" -> {
+                    val state = call.argument<String>("state")
+                        ?: AethoneHomeWidget.STATE_IDLE
+                    AethoneHomeWidget.pushNamed(this, state)
+                    result.success(null)
+                }
                 // v4.41 (round 17, item 4) — the launchable-app list for
                 // the per-app tunneling picker (label + package, the app
                 // itself excluded). Apps with a launcher activity are

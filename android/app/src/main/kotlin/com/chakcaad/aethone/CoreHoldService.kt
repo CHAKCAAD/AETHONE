@@ -67,6 +67,9 @@ class CoreHoldService : Service() {
         heldPort = intent?.getIntExtra(EXTRA_PORT, 1819) ?: 1819
         startForegroundCompat()
         instance = this
+        // v1.0.1 — the proxy session is live (the core serves SOCKS in
+        // this very process): the home widget + QS tile say CONNECTED.
+        AethoneHomeWidget.pushNamed(this, AethoneHomeWidget.STATE_CONNECTED)
         // The core lives in the app process — there is nothing to do here
         // beyond existing in the foreground.
         return START_NOT_STICKY
@@ -74,6 +77,8 @@ class CoreHoldService : Service() {
 
     override fun onDestroy() {
         instance = null
+        // v1.0.1 — the hold is gone: the surfaces say IDLE.
+        AethoneHomeWidget.pushNamed(this, AethoneHomeWidget.STATE_IDLE)
         super.onDestroy()
     }
 

@@ -62,6 +62,33 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="core-holder"/>
         </service>
+        <!-- v1.0.1 — the CONTROL-CENTRE (Quick Settings) tile (owner:
+             «ویجت کنترل سنتر گوشی»). The system binds it; state is read
+             LIVE from the holder services on every shade-open. -->
+        <service
+            android:name=".AethoneTileService"
+            android:exported="true"
+            android:label="@string/tile_label"
+            android:icon="@drawable/ic_stat_aethone"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+        </service>
+        <!-- v1.0.1 — the PHONE HOME-SCREEN widget (owner: «ویجت صفحه اصلی
+             گوشی» — the launcher, not the in-app home page). Push-updated
+             by the holder services and the Dart walk; no periodic alarm. -->
+        <receiver
+            android:name=".AethoneHomeWidget"
+            android:exported="false"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aethone_home_widget_info"/>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

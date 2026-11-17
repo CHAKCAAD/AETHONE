@@ -17,8 +17,10 @@ The project aims to make sophisticated networking technologies more accessible t
 - Tor Integration — Multiple connection arrangements powered by Aether.
 - Psiphon Integration — Additional transport options through the Psiphon ecosystem.
 - VPN & Proxy Modes — Android VPN tunneling and local SOCKS5 proxy functionality.
+- Per-App Tunneling — Route the whole device or only the apps you pick through the tunnel.
+- Home-Screen Widget & Control-Centre Tile — Connect and disconnect straight from the launcher and Android's Quick Settings (v1.0.1).
 - Advanced Routing — Configurable traffic routing and direct/block rules.
-- Connection Configuration — Scan profiles, obfuscation settings, DNS and IP configuration.
+- Connection Configuration — Scan profiles, obfuscation settings, and IP version selection.
 - Connection Monitoring — Connection status, latency and available traffic statistics.
 - Multilingual Interface — Persian, English, Russian, Chinese, and Turkmen.
 - Custom Interface — Dedicated visual assets, protocol icons, themes, and animated backgrounds.
@@ -163,7 +165,7 @@ Open-source software makes projects like AETHONE possible. Thank you! ❤️
 
 📜 Licensing
 
-AETHONE currently does not declare a project-wide license. No root-level "LICENSE" file is present in this repository.
+AETHONE is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)** — see the [LICENSE](LICENSE) file at the repository root. The embedded Aether core is itself AGPL-3.0, so the combined work follows the same terms.
 
 Third-party components retain their respective licenses:
 
@@ -172,8 +174,6 @@ Third-party components retain their respective licenses:
 - Other bundled components and design assets may have separate licensing requirements.
 
 Please consult the original license files before copying, modifying, or redistributing any component.
-
-The project's overall licensing and redistribution terms will need to be explicitly established.
 
 ---
 
@@ -195,8 +195,10 @@ AETHONE یک برنامه آزمایشی در حوزه شبکه و عبور از
 - یکپارچه‌سازی تور: حالت‌های مختلف اتصال مبتنی بر هسته Aether.
 - یکپارچه‌سازی سایفون: پشتیبانی از ترنسپورت‌های مبتنی بر اکوسیستم Psiphon.
 - حالت VPN و Proxy: تونل‌سازی ترافیک دستگاه اندرویدی و پروکسی محلی SOCKS5.
+- مسیریابی برنامه‌ها: تونل‌سازی کل دستگاه یا فقط برنامه‌های انتخابی شما.
+- ویجت صفحه اصلی و کاشک کنترل سنتر: اتصال و قطع اتصال مستقیم از لانچر و تنظیمات سریع اندروید (v1.0.1).
 - مسیریابی پیشرفته: قوانین مسدودسازی، اتصال مستقیم و تنظیم مسیر ترافیک.
-- تنظیمات اتصال: پروفایل‌های اسکن، تنظیمات مبهم‌سازی، DNS و نسخه IP.
+- تنظیمات اتصال: پروفایل‌های اسکن، تنظیمات مبهم‌سازی و نسخه IP.
 - نمایش اطلاعات اتصال: وضعیت ارتباط، تأخیر و آمار ترافیک در بخش‌های پشتیبانی‌شده.
 - رابط کاربری چندزبانه: فارسی، انگلیسی، روسی، چینی و ترکمنی.
 - طراحی اختصاصی: آیکون‌های اختصاصی پروتکل‌ها، تم‌های مختلف و پس‌زمینه‌های متحرک.
@@ -329,7 +331,7 @@ AETHONE یک پروژه در حال توسعه است و هنوز نباید آ�
 
 📜 مجوز و لایسنس
 
-در حال حاضر AETHONE لایسنس کلی مشخصی ندارد و فایل "LICENSE" در ریشه مخزن موجود نیست.
+AETHONE تحت **لایسنس GNU Affero General Public License نسخه ۳ (AGPL-3.0)** منتشر می‌شود — متن کامل در فایل [LICENSE](LICENSE) در ریشه مخزن موجود است. هسته Aether خودش تحت AGPL-3.0 است و اثر ترکیبی نیز با همان شرایط منتشر می‌شود.
 
 مؤلفه‌های شخص ثالث همچنان تحت لایسنس اصلی خودشان قرار دارند:
 
@@ -338,6 +340,4 @@ AETHONE یک پروژه در حال توسعه است و هنوز نباید آ�
 - سایر هسته‌ها، وابستگی‌ها، فونت‌ها و فایل‌های طراحی ممکن است لایسنس‌های مستقل داشته باشند.
 
 پیش از کپی، تغییر یا بازنشر هر مؤلفه، فایل لایسنس اصلی آن را بررسی کنید.
-
-تعیین لایسنس نهایی AETHONE و شرایط بازنشر آن نیازمند بررسی و اعلام رسمی جداگانه است.
 </div>

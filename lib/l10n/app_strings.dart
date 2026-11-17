@@ -162,8 +162,6 @@ class AppStrings {
   String get h2TransportDesc => _v['h2TransportDesc']!;
   String get quicV2 => _v['quicV2']!;
   String get quicV2Desc => _v['quicV2Desc']!;
-  String get dnsLabel => _v['dnsLabel']!;
-  String get dnsHint => _v['dnsHint']!;
 
   // engine
   String get secEngine => _v['secEngine']!;
@@ -605,8 +603,6 @@ class AppStrings {
       'h2TransportDesc': 'انتقال MASQUE روی HTTP/2 (TCP) — پیش‌فرض جدید اپ؛ برای شبکه‌هایی که UDP را می‌بندند',
       'quicV2': 'مذاکرهٔ QUIC v2',
       'quicV2Desc': 'بازکردن مسیر HTTP/3 روی شبکه‌هایی که QUIC v1 را می‌بندند',
-      'dnsLabel': 'DNS داخل تونل',
-      'dnsHint': 'با کاما جدا شود — مثلاً 1.1.1.1,1.0.0.1',
       'secEngine': 'موتور',
       'noizeLabel': 'پروفایل اغتشاش (Noize)',
       'noizeDesc': 'پیش‌فرض جدید اپ: متعادل؛ برای شبکه‌های سخت‌گیر GFW یا تهاجمی را امتحان کنید',
@@ -905,8 +901,6 @@ class AppStrings {
       'h2TransportDesc': 'MASQUE over HTTP/2 (TCP) — the new app default; for networks that block UDP',
       'quicV2': 'QUIC v2 negotiation',
       'quicV2Desc': 'Opens a path for HTTP/3 where QUIC v1 is blocked',
-      'dnsLabel': 'DNS inside the tunnel',
-      'dnsHint': 'comma-separated — e.g. 1.1.1.1,1.0.0.1',
       'secEngine': 'Engine',
       'noizeLabel': 'Obfuscation profile (Noize)',
       'noizeDesc': 'New app default: Balanced; try GFW or Aggressive on strict networks',
@@ -1203,8 +1197,6 @@ class AppStrings {
       'h2TransportDesc': 'MASQUE по HTTP/2 (TCP) — новый стандарт приложения; для сетей, блокирующих UDP',
       'quicV2': 'Согласование QUIC v2',
       'quicV2Desc': 'Открывает путь для HTTP/3 там, где QUIC v1 заблокирован',
-      'dnsLabel': 'DNS внутри туннеля',
-      'dnsHint': 'через запятую — напр. 1.1.1.1,1.0.0.1',
       'secEngine': 'Движок',
       'noizeLabel': 'Профиль обфускации (Noize)',
       'noizeDesc': 'Новый стандарт приложения: Balanced; на строгих сетях попробуйте GFW или Aggressive',
@@ -1500,8 +1492,6 @@ class AppStrings {
       'h2TransportDesc': 'MASQUE 走 HTTP/2（TCP）— 应用新默认；适合封锁 UDP 的网络',
       'quicV2': 'QUIC v2 协商',
       'quicV2Desc': '在封锁 QUIC v1 的网络上打开 HTTP/3 通路',
-      'dnsLabel': '隧道内 DNS',
-      'dnsHint': '逗号分隔 — 如 1.1.1.1,1.0.0.1',
       'secEngine': '引擎',
       'noizeLabel': '混淆配置（Noize）',
       'noizeDesc': '应用新默认：均衡（balanced）；严格网络可试 GFW 或激进',
@@ -1804,8 +1794,6 @@ class AppStrings {
       'h2TransportDesc': 'MASQUE HTTP/2 (TCP) üstünden — programmanyň täze defaulty; UDP-i bloklaýan ulaglar üçin',
       'quicV2': 'QUIC v2 ylalaşygy',
       'quicV2Desc': 'QUIC v1 bloklanan ýerde HTTP/3 üçin ýol açýar',
-      'dnsLabel': 'Tuneliň içindeki DNS',
-      'dnsHint': 'vergül bilen aýrylan — m. 1.1.1.1,1.0.0.1',
       'secEngine': 'Motor',
       'noizeLabel': 'Gizleniş profili (Noize)',
       'noizeDesc': 'Programmanyň täze defaulty: Denzag; gysga ulaglarda GFW ýa-da Agresiw-i synap görüň',

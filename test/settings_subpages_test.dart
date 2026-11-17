@@ -95,7 +95,7 @@ void main() {
       // باید باشه»); the repo / Telegram / Instagram link rows are back
       // from the beta-window drop (this round's decree).
       expect(find.byKey(const ValueKey('nav-app-version')), findsOneWidget);
-      expect(find.text(appVersion), findsOneWidget); // == '1.0.0' (fa)
+      expect(find.text(appVersion), findsOneWidget); // == '1.0.1' (fa)
       expect(find.byKey(const ValueKey('nav-repository')), findsOneWidget);
       expect(find.byKey(const ValueKey('nav-telegram')), findsOneWidget);
       expect(find.byKey(const ValueKey('nav-instagram')), findsOneWidget);
@@ -542,7 +542,6 @@ void main() {
       final c = CoreSettings()
         ..h2Transport = true
         ..quicV2 = false
-        ..dns = '8.8.8.8'
         ..noize = NoizeProfile.gfw
         ..perf = PerfProfile.low
         ..logLevel = CoreLogLevel.debug
@@ -550,7 +549,9 @@ void main() {
       final args = AetherArguments.coreArgs(c, ProtocolId.wireguard, null);
       expect(args, contains('--h2'));
       expect(args, contains('--no-quic-v2'));
-      expect(args, containsAllInOrder(['--dns', '8.8.8.8']));
+      // v1.0.1 — the `--dns` override is RETIRED: the core's built-in
+      // resolver serves every tunnel and the flag must never appear.
+      expect(args, isNot(contains('--dns')));
       expect(args, containsAllInOrder(['--noize', 'gfw']));
       expect(args, containsAllInOrder(['--perf', 'low']));
       expect(args, containsAllInOrder(['--log-level', 'debug']));
@@ -655,7 +656,6 @@ void main() {
         c.disableGrease = true;
         c.ciphers13 = 'TLS_AES_128_GCM_SHA256';
         c.h2Transport = true;
-        c.dns = '8.8.8.8,8.8.4.4';
         c.noize = NoizeProfile.gfw;
         c.perf = PerfProfile.low;
         c.keepalive = 25;
@@ -677,7 +677,6 @@ void main() {
       expect(b.coreSettings.disableGrease, isTrue);
       expect(b.coreSettings.ciphers13, 'TLS_AES_128_GCM_SHA256');
       expect(b.coreSettings.h2Transport, isTrue);
-      expect(b.coreSettings.dns, '8.8.8.8,8.8.4.4');
       expect(b.coreSettings.noize, NoizeProfile.gfw);
       expect(b.coreSettings.perf, PerfProfile.low);
       expect(b.coreSettings.keepalive, 25);
@@ -787,19 +786,19 @@ void main() {
 
       expect(
         store.coreSettings.torLegProtocol,
-        AetherLegProtocol.wireguard,
+        AetherLegProtocol.masque,
       );
       await tester.ensureVisible(
-        find.byKey(const ValueKey('pill-tor-leg-ماسک')),
+        find.byKey(const ValueKey('pill-tor-leg-گول')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('pill-tor-leg-ماسک')));
+      await tester.tap(find.byKey(const ValueKey('pill-tor-leg-گول')));
       await tester.pumpAndSettle();
-      expect(store.coreSettings.torLegProtocol, AetherLegProtocol.masque);
+      expect(store.coreSettings.torLegProtocol, AetherLegProtocol.gool);
       // The OTHER family's leg is untouched — per family, not shared.
       expect(
         store.coreSettings.psiphonLegProtocol,
-        AetherLegProtocol.wireguard,
+        AetherLegProtocol.masque,
       );
     });
 
@@ -811,18 +810,18 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.ensureVisible(
-        find.byKey(const ValueKey('pill-psiphon-leg-ماسک')),
+        find.byKey(const ValueKey('pill-psiphon-leg-گول')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('pill-psiphon-leg-ماسک')));
+      await tester.tap(find.byKey(const ValueKey('pill-psiphon-leg-گول')));
       await tester.pumpAndSettle();
       expect(
         store.coreSettings.psiphonLegProtocol,
-        AetherLegProtocol.masque,
+        AetherLegProtocol.gool,
       );
       expect(
         store.coreSettings.torLegProtocol,
-        AetherLegProtocol.wireguard,
+        AetherLegProtocol.masque,
       );
     });
 

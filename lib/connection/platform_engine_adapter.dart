@@ -254,10 +254,12 @@ class AetherArguments {
       a.add('--h3');
     }
     if (!core.quicV2) a.add('--no-quic-v2');
-    final dns = core.dns.trim();
-    if (dns.isNotEmpty && dns != '1.1.1.1,1.0.0.1') {
-      a.addAll(['--dns', dns]);
-    }
+    // v1.0.1 — the `--dns` tunnel-resolver override is RETIRED (the WireGuard
+    // round): a user-set resolver is exactly what the exit-location trace
+    // inside the freshly-established netstack could not answer on some
+    // networks, killing verified tunnels (owner log 2026-11-17). The core's
+    // built-in resolver (1.1.1.1 / 1.0.0.1) now serves every tunnel; a stale
+    // persisted `dns` value is ignored on restore (core_settings.fromJson).
 
     // -- v4.31 dial layer: the IP version (#11-13; v4 = the core's own
     // default — pass nothing) and the upstream proxy (#3, PLAIN modes
@@ -798,6 +800,37 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// exactly like the desktop tray toggle. Wired in main().
   static void Function()? onNotificationDisconnect;
 
+  // ---- v1.0.1: the phone surfaces (QS tile + home-screen widget) -------
+
+  /// The launch-intent quick-connect ask (the widget's «اتصال» button and
+  /// the QS tile launch MainActivity with the extra; the activity parks it
+  /// in its companion and Dart PULLS it — the coreJobId discipline, so a
+  /// handler that is not yet registered never loses the request).
+  /// False on the desktop runners and test hosts (unknown method →
+  /// notImplemented → the catch).
+  static Future<bool> takeQuickConnect() async {
+    try {
+      final answer = await _channel
+          .invokeMethod<Map<Object?, Object?>>('takeQuickConnect');
+      return answer?['connect'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The transient phases for the Android home widget: "connecting" while
+  /// the walk runs, "idle" when it fails. The steady states are pushed by
+  /// the holder services themselves (zeptun up / core-hold up / teardown);
+  /// a failed call (desktop, tests, no engine) is silently dropped — the
+  /// widget then simply keeps the services' truth.
+  static Future<void> pushWidgetState(String state) async {
+    try {
+      await _channel.invokeMethod<void>('widgetState', {'state': state});
+    } catch (_) {
+      // Surface-only — never fail an engine walk over a widget.
+    }
+  }
+
   @override
   Future<void> connect() async {
     // v4.26 — a fresh user intent supersedes ANY residue: the generation
@@ -811,6 +844,10 @@ class PlatformEngineAdapter implements EngineAdapter {
     _connecting = true;
     _probeStrikes = 0;
     _coreFailureDuringStart = null;
+    // v1.0.1 — the home widget rides along: the walk started, so the card
+    // shows the amber «در حال اتصال…» phase until a holder service flips
+    // it CONNECTED or the walk fails and [_emitFail] flips it back.
+    unawaited(pushWidgetState('connecting'));
     try {
       // v4.32 — SMART AUTO (app-layer, SMART_AUTO_SPEC.md): when the user
       // opted into SMART and the committed tile is AUTO, the candidates
@@ -1871,6 +1908,10 @@ class PlatformEngineAdapter implements EngineAdapter {
       _emit(EngineStateChanged(state));
 
   void _emitFail(String code, String? message) {
+    // v1.0.1 — a failed walk leaves the home widget's amber phase stuck;
+    // every failure road runs through here, so the card goes back to the
+    // idle truth (the services push their own steady states on top).
+    unawaited(pushWidgetState('idle'));
     // v4.28 — even a failed psiphon walk may have already received the
     // network's egress-region notice (it fires before establishment); a
     // failed connect must not lose the freshest real list we have.

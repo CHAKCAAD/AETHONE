@@ -121,15 +121,11 @@ class CoreSettingsPage extends StatelessWidget {
                 value: core.quicV2,
                 onChanged: (v) => store.updateCore((c) => c.quicV2 = v),
               ),
-              const SubSectionDivider(),
-              SettingField(
-                keyId: 'dns',
-                label: strings.dnsLabel,
-                hint: strings.dnsHint,
-                initial: core.dns,
-                onChanged: (v) =>
-                    store.updateCore((c) => c.dns = v.trim()),
-              ),
+              // v1.0.1 — the tunnel DNS field is RETIRED (the WireGuard
+              // round): the core's built-in resolver (1.1.1.1 / 1.0.0.1)
+              // serves every tunnel; a user-set resolver is what the
+              // exit-location trace could not answer through on some
+              // networks, killing verified tunnels.
             ],
           ),
         ),

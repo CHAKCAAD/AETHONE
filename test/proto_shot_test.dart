@@ -102,7 +102,9 @@ void main() {
       final store = ConnectionStore(engine: ScriptedEngine());
       await tester.pumpWidget(_shot(HomeScreen(store: store)));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('وایرگارد').first);
+      // v1.0.1 — the cold default protocol is MASQUE, so the home card
+      // carries its name; tapping it opens the protocol page.
+      await tester.tap(find.text('ماسک').first);
       await tester.pump();
       await tester.pumpAndSettle();
       await _capture(tester, 'proto_sheet');

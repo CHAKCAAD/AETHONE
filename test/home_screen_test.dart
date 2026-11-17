@@ -276,8 +276,8 @@ void main() {
 
       // The protocol card shows the SELECTED protocol's name, not the generic
       // word (owner prompt: the chosen protocol's logo/name shows on the card).
-      // v4.19: the cold default is WireGuard, so the card renders وایرگارد.
-      expect(find.text('وایرگارد'), findsOneWidget);
+      // v1.0.1: the cold default is MASQUE, so the card renders ماسک.
+      expect(find.text('ماسک'), findsOneWidget);
       expect(find.text('پروتکل'), findsNothing);
     },
   );

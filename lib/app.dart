@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'connection/connection_store.dart';
 import 'connection/desktop_window.dart';
+import 'connection/platform_engine_adapter.dart';
 import 'core/app_theme.dart';
 import 'core/design_tokens.dart';
 import 'features/home/home_screen.dart';
@@ -48,7 +49,7 @@ class AethoneApp extends StatefulWidget {
 }
 
 class _AethoneAppState extends State<AethoneApp>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   /// The mode tween: 0.0 = night, 1.0 = light. Driven linearly; the easing
   /// curve is applied when the palette is read (the curve shapes the COLORS,
   /// the controller stays a plain clock — a mid-flight reversal simply
@@ -85,14 +86,39 @@ class _AethoneAppState extends State<AethoneApp>
     widget.store.addListener(_onStoreChanged);
     _clockTarget = widget.store.themeMode;
     _armAutoThemeTick();
+    // v1.0.1 — the phone surfaces' quick-connect ask (home-screen widget
+    // «اتصال» button / QS tile): the launch intent parked it on the
+    // activity; pull it now and again on every resume (the singleTop
+    // re-launch path while the app sat in the background).
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_consumeQuickConnect());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _autoThemeTick?.cancel();
     widget.store.removeListener(_onStoreChanged);
     _themeClock.dispose();
     super.dispose();
+  }
+
+  /// v1.0.1 — the widget/tile connect delegation. The flag is CONSUMED
+  /// unconditionally (a wizard-owned first run must not leave an armed
+  /// surprise for the next resume); the connect itself runs the store's
+  /// normal single-flight path — exactly the in-app button's flow.
+  Future<void> _consumeQuickConnect() async {
+    final asked = await PlatformEngineAdapter.takeQuickConnect();
+    if (!asked) return;
+    if (!widget.store.onboardingComplete) return; // consumed, not armed
+    unawaited(widget.store.connect());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_consumeQuickConnect());
+    }
   }
 
   /// (Re-)arms the per-minute AUTO check. Armed ONLY on a pick CHANGE —
