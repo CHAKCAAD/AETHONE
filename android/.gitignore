@@ -16,3 +16,8 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+# v1.0.1 — the PERMANENT release key is committed ON PURPOSE (see
+# android/app/build.gradle.kts): signature continuity for a
+# sideload-distributed app — every CI run and clone must sign identically
+# so updates install in place. This key exists for continuity, not secrecy.
+!aethone-release.keystore
