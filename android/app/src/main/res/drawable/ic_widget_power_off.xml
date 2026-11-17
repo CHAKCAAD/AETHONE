@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v2.1.0 — the widget's IDLE power glyph: the same «Off.svg» mark with
+     the muted ink (the disconnected pose — the home FAB's own state
+     colour, mirrored for RemoteViews). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="#FF8CA095"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M18,4C20.3903,5.8273 22,8.75893 22,12C22,17.5228 17.5228,22 12,22C6.47715,22 2,17.5228 2,12C2,8.72852 3.57131,5.82443 6,4M12,2V9" />
+</vector>

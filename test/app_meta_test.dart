@@ -77,8 +77,6 @@ void main() {
       s.h2TransportDesc;
       s.quicV2;
       s.quicV2Desc;
-      s.dnsLabel;
-      s.dnsHint;
       s.secEngine;
       s.noizeLabel;
       s.noizeDesc;

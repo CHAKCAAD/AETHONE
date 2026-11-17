@@ -51,6 +51,16 @@ abstract final class DesktopWindowChannel {
     }
   }
 
+  /// v2.1.0 — a plain-boolean ask (the tile/widget quick-connect poll);
+  /// null = the host has no such method (a test host).
+  static Future<bool?> invokeRawBool(String method) async {
+    try {
+      return await _channel.invokeMethod<bool>(method);
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
   static Future<void> invokeVoid(String method, Map<String, Object?> args) async {
     try {
       await _channel.invokeMethod<void>(method, args);

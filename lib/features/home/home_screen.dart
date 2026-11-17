@@ -27,6 +27,7 @@ import 'widgets/hero_logo.dart';
 import 'widgets/location_header.dart';
 import 'widgets/pattern_sides.dart';
 import 'widgets/top_bar.dart';
+import 'widgets/widget_deck.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, required this.store});
@@ -254,6 +255,13 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                     ),
+                    // v2.1.0 (the owner's decree: «برای صفحه اصلی چندتا
+                    // ویجت خلاقانه اضافه کن») — THE HOME WIDGET DECK: the
+                    // live session timer, the ping sparkline and the session
+                    // data card, riding the hero band's flexible space
+                    // (every value honest — placeholders while idle).
+                    HomeWidgetDeck(store: store, style: style),
+                    SizedBox(height: AethGeometry.gapSpeedToPill * s),
                     // Speed Test entry — connected only, animated. Its slot
                     // stays reserved when hidden so the hero never moves
                     // (both reference frames pin the logo at y≈293).

@@ -61,20 +61,6 @@ enum PsiphonFronting { auto, cdn, direct }
 /// `Bridges::Manual`).
 enum TorBridgePolicy { auto, off, custom }
 
-/// The outer Aether/WARP carrier protocol used by combined Tor/Psiphon
-/// modes and by Firefox-over-WARP. Firefox has its own per-protocol
-/// [CoreSettings.firefoxLegProtocol] selection; fresh and migrated settings
-/// default it to WireGuard. Reverse Tor/Psiphon modes still map UDP-needing
-/// legs to MASQUE because their carrier only supports TCP.
-/// v1.5.0 (the owner's round 3) — HOW the Firefox VPN engine reaches the
-/// internet: over the in-process Aether core's WARP carrier (the owner's
-/// standing default — the WHOLE engine conversation rides it), or DIRECT
-/// (1.6.0, the owner's round 4 — arman's relay posture: the initial
-/// connection stages still ride the Aether carrier, then the data
-/// connection dials the Fastly edge itself; the engine's dataPlaneDirect
-/// seam).
-enum FirefoxCarrierMode { overWarp, direct }
-
 enum AetherLegProtocol { wireguard, masque, gool, goolClassic, mim }
 
 /// v4.31 — the IP version the core dials with (`-4` default / `-6` /
@@ -135,7 +121,12 @@ class CoreSettings {
     // now the OPT-IN. Existing installs keep their persisted pick.
     this.h2Transport = true,
     this.quicV2 = true,
-    this.dns = '1.1.1.1,1.0.0.1',
+    // v2.1.0 — the custom-resolver field is RETIRED (the owner's
+    // decree: DNS is gone from the app entirely). The core's own
+    // built-in resolver (1.1.1.1 / 1.0.0.1) serves every tunnel; a
+    // user-selected resolver could never answer from inside the WARP
+    // tunnel and poisoned the exit-location check (the WireGuard
+    // reconnect loop of 2026-11-17).
     // v4.34 — the obfuscation profile defaults to متعادل (owner round
     // 10: «پروفایل دیفالت حالت اغتشاش رو بزار روی متعادل»); the core's
     // own per-protocol choice is now the OPT-IN.
@@ -156,8 +147,6 @@ class CoreSettings {
     this.torLog = TorLogLevel.info,
     this.torLegProtocol = AetherLegProtocol.wireguard,
     this.psiphonLegProtocol = AetherLegProtocol.wireguard,
-    this.firefoxLegProtocol = AetherLegProtocol.wireguard,
-    this.firefoxCarrierMode = FirefoxCarrierMode.overWarp,
     this.ipVersion = IpVersion.v4,
     this.upstreamProxy = '',
     this.echMode = EchMode.off,
@@ -198,7 +187,6 @@ class CoreSettings {
   // ---- transport ----
   bool h2Transport; // true ⇒ `--h2` (HTTP/2 over TCP); false = H3/QUIC
   bool quicV2; // false ⇒ `--no-quic-v2`
-  String dns; // ≠ default ⇒ `--dns`
 
   // ---- engine-wide ----
   NoizeProfile noize; // ≠ default ⇒ `--noize`
@@ -257,18 +245,6 @@ class CoreSettings {
   /// v4.31c — the Aether protocol under the PSIPHON family's combined
   /// modes. Default = the v4.19 fixed WireGuard leg.
   AetherLegProtocol psiphonLegProtocol;
-
-  /// Aether carrier protocol used underneath Firefox VPN (Firefox over
-  /// WARP, the owner's decree: the firefox protocol connects through Warp
-  /// first, like psiphon-over-warp; the user picks the core protocol on
-  /// the firefox settings page). Defaults to WireGuard, matching the
-  /// existing Psiphon/Tor combined modes.
-  AetherLegProtocol firefoxLegProtocol;
-
-  /// v1.5.0 — the direct/over-WARP pick (the owner's round 3). Default
-  /// overWarp (the standing «دیفالت اور وارپ» decree); legacy blobs with
-  /// no field migrate to it.
-  FirefoxCarrierMode firefoxCarrierMode;
 
   /// The IP version of the dial (`-4`/`-6`/`--dual`); default = the
   /// core's own v4.
@@ -345,7 +321,6 @@ class CoreSettings {
         'masqueSni': masqueSni,
         'h2Transport': h2Transport,
         'quicV2': quicV2,
-        'dns': dns,
         'noize': noize.name,
         'perf': perf.name,
         'logLevel': logLevel.name,
@@ -363,8 +338,6 @@ class CoreSettings {
         'torLog': torLog.name,
         'torLegProtocol': torLegProtocol.name,
         'psiphonLegProtocol': psiphonLegProtocol.name,
-        'firefoxLegProtocol': firefoxLegProtocol.name,
-        'firefoxCarrierMode': firefoxCarrierMode.name,
         'ipVersion': ipVersion.name,
         'upstreamProxy': upstreamProxy,
         'echMode': echMode.name,
@@ -411,7 +384,9 @@ class CoreSettings {
     if (m['masqueSni'] is String) s.masqueSni = m['masqueSni'];
     if (m['h2Transport'] is bool) s.h2Transport = m['h2Transport'];
     if (m['quicV2'] is bool) s.quicV2 = m['quicV2'];
-    if (m['dns'] is String) s.dns = m['dns'];
+    // v2.1.0 — the retired custom-resolver key ('dns') is deliberately
+    // ignored: a legacy blob carrying a poisoned resolver must NOT keep
+    // breaking the core after the field's removal.
     s.noize = pickEnum(NoizeProfile.values, m['noize']) ?? s.noize;
     s.perf = pickEnum(PerfProfile.values, m['perf']) ?? s.perf;
     s.logLevel = pickEnum(CoreLogLevel.values, m['logLevel']) ?? s.logLevel;
@@ -451,15 +426,6 @@ class CoreSettings {
         pickEnum(AetherLegProtocol.values, m['psiphonLegProtocol']) ??
         legacyLeg ??
         s.psiphonLegProtocol;
-    // The firefox family's own leg (the legacy single-field pick seeds it
-    // until the user picks on the firefox page itself).
-    s.firefoxLegProtocol =
-        pickEnum(AetherLegProtocol.values, m['firefoxLegProtocol']) ??
-        legacyLeg ??
-        s.firefoxLegProtocol;
-    s.firefoxCarrierMode =
-        pickEnum(FirefoxCarrierMode.values, m['firefoxCarrierMode']) ??
-            s.firefoxCarrierMode;
     s.ipVersion = pickEnum(IpVersion.values, m['ipVersion']) ?? s.ipVersion;
     if (m['upstreamProxy'] is String) s.upstreamProxy = m['upstreamProxy'];
     s.echMode = pickEnum(EchMode.values, m['echMode']) ?? s.echMode;

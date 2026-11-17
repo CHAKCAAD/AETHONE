@@ -12,7 +12,6 @@ library;
 import 'package:flutter/widgets.dart';
 
 import '../connection/core_settings.dart';
-import '../connection/firefox/firefox_errors.dart';
 import '../core/app_assets.dart';
 
 class AppStrings {
@@ -88,6 +87,12 @@ class AppStrings {
 
   /// v4.20 — the failed-state caption + details sheet.
   String get failureCodeLabel => _v['failureCodeLabel']!;
+
+  // ---- v2.1.0 — the home widget deck («برای صفحه اصلی چندتا ویجت
+  // خلاقانه اضافه کن»): the three cards' labels. ----
+  String get homeWidgetTimer => _v['homeWidgetTimer']!;
+  String get homeWidgetPing => _v['homeWidgetPing']!;
+  String get homeWidgetData => _v['homeWidgetData']!;
   String get failureDetailsTitle => _v['failureDetailsTitle']!;
   String get failureDetailsCopy => _v['failureDetailsCopy']!;
 
@@ -163,8 +168,6 @@ class AppStrings {
   String get h2TransportDesc => _v['h2TransportDesc']!;
   String get quicV2 => _v['quicV2']!;
   String get quicV2Desc => _v['quicV2Desc']!;
-  String get dnsLabel => _v['dnsLabel']!;
-  String get dnsHint => _v['dnsHint']!;
 
   // engine
   String get secEngine => _v['secEngine']!;
@@ -325,122 +328,16 @@ class AppStrings {
   String get cdnIpsLabel => _v['cdnIpsLabel']!;
   String get cdnIpsHint => _v['cdnIpsHint']!;
 
-  // firefox page (phase-2)
-  String get settingsFirefox => _v['settingsFirefox']!;
-  String get secFirefoxAccount => _v['secFirefoxAccount']!;
-  String get firefoxSignedIn => _v['firefoxSignedIn']!;
-  String get firefoxSignedOut => _v['firefoxSignedOut']!;
-  String get firefoxSignIn => _v['firefoxSignIn']!;
-  String get firefoxSignOut => _v['firefoxSignOut']!;
-  String get firefoxAccountDesc => _v['firefoxAccountDesc']!;
-  String get firefoxLocationDesc => _v['firefoxLocationDesc']!;
-  String get firefoxLocationsLive => _v['firefoxLocationsLive']!;
-  String get firefoxLocationsCached => _v['firefoxLocationsCached']!;
-  /// 1.5.0 — the remaining-data slots (the settings Firefox pill +
-  /// the protocol page's Firefox card).
-  String get firefoxQuotaLabel => _v['firefoxQuotaLabel']!;
-  String get firefoxQuotaUnlimited => _v['firefoxQuotaUnlimited']!;
-  /// 1.4.0-warp — the firefox settings page's WARP-carrier leg
-  /// section (the owner's per-family core-protocol pick).
-  String get secFirefoxLeg => _v['secFirefoxLeg']!;
-  String get firefoxLegDesc => _v['firefoxLegDesc']!;
-  String get firefoxTransportNote => _v['firefoxTransportNote']!;
-  String get secFirefoxTransport => _v['secFirefoxTransport']!;
-  String get firefoxTransportLabel => _v['firefoxTransportLabel']!;
-  String get firefoxTransportH2 => _v['firefoxTransportH2']!;
-  String get firefoxTransportH3 => _v['firefoxTransportH3']!;
-  String get firefoxTransportDesc => _v['firefoxTransportDesc']!;
-  String get secFirefoxMode => _v['secFirefoxMode']!;
-  String get firefoxModeOverWarp => _v['firefoxModeOverWarp']!;
-  String get firefoxModeDirect => _v['firefoxModeDirect']!;
-  String get firefoxModeOverWarpDesc => _v['firefoxModeOverWarpDesc']!;
-  String get firefoxModeDirectDesc => _v['firefoxModeDirectDesc']!;
-  String get firefoxTransportDirectDesc =>
-      _v['firefoxTransportDirectDesc']!;
-  String get firefoxAccountLoading => _v['firefoxAccountLoading']!;
-  String get firefoxBrowserTabLoading => _v['firefoxBrowserTabLoading']!;
-  String get firefoxBrowserTabFailed => _v['firefoxBrowserTabFailed']!;
-  String get firefoxBrowserTabRetry => _v['firefoxBrowserTabRetry']!;
-  String get firefoxBrowserTabHint => _v['firefoxBrowserTabHint']!;
-  /// 1.7.0 — the on-demand quota refresh (the `--usage` role).
-  String get firefoxQuotaRefresh => _v['firefoxQuotaRefresh']!;
-  String get firefoxQuotaRefreshing => _v['firefoxQuotaRefreshing']!;
-  String get firefoxQuotaResetLabel => _v['firefoxQuotaResetLabel']!;
-  String get firefoxLoginTitle => _v['firefoxLoginTitle']!;
-  String get firefoxLoginSubtitle => _v['firefoxLoginSubtitle']!;
-  String get firefoxLoginWaiting => _v['firefoxLoginWaiting']!;
-  String get firefoxLoginExchanging => _v['firefoxLoginExchanging']!;
-  String get firefoxLoginSuccess => _v['firefoxLoginSuccess']!;
-  String get firefoxLoginFailed => _v['firefoxLoginFailed']!;
-  String get firefoxLoginRejected => _v['firefoxLoginRejected']!;
-  String get firefoxLoginTimeout => _v['firefoxLoginTimeout']!;
-  String get firefoxLoginUnavailable => _v['firefoxLoginUnavailable']!;
 
-  /// 2.1.0 — the standing disruption notice on the login screen (the
-  /// owner's decree: «توی بخش ورود بنویس در صورت اینکه ورود اختلال
-  /// داشت از یک فیلترشکن دیگه استفاده کنن») — the sign-in needs an
-  /// unblocked route to the account server; on a filtering network
-  /// that route is another VPN.
-  String get firefoxLoginDisruptionNotice =>
-      _v['firefoxLoginDisruptionNotice']!;
+
 
   // 1.8.0 — the arman-pattern round: the DIRECT email+password sign-in
   // (the form tab) and its granular failure texts.
-  String get firefoxLoginMethodForm => _v['firefoxLoginMethodForm']!;
-  String get firefoxLoginMethodBrowser => _v['firefoxLoginMethodBrowser']!;
-  String get firefoxLoginSubtitleForm => _v['firefoxLoginSubtitleForm']!;
-  String get firefoxLoginFormHint => _v['firefoxLoginFormHint']!;
-  String get firefoxLoginBrowserHint => _v['firefoxLoginBrowserHint']!;
-  String get firefoxLoginEmail => _v['firefoxLoginEmail']!;
-  String get firefoxLoginPassword => _v['firefoxLoginPassword']!;
-  String get firefoxLoginSubmit => _v['firefoxLoginSubmit']!;
-  String get firefoxLoginSubmitting => _v['firefoxLoginSubmitting']!;
-  String get firefoxLoginEmailInvalid => _v['firefoxLoginEmailInvalid']!;
-  String get firefoxLoginPasswordEmpty => _v['firefoxLoginPasswordEmpty']!;
-  String get firefoxLoginCodeLabel => _v['firefoxLoginCodeLabel']!;
-  String get firefoxLoginCodeVerify => _v['firefoxLoginCodeVerify']!;
-  String get firefoxLoginCodeVerifying => _v['firefoxLoginCodeVerifying']!;
-  String get firefoxLoginWrongCode => _v['firefoxLoginWrongCode']!;
-  String get firefoxLoginNetworkRetry => _v['firefoxLoginNetworkRetry']!;
-  String get firefoxLoginNoAccount => _v['firefoxLoginNoAccount']!;
-  String get firefoxLoginWrongPassword => _v['firefoxLoginWrongPassword']!;
-  String get firefoxLoginTooManyAttempts => _v['firefoxLoginTooManyAttempts']!;
-  String get firefoxLoginRequestBlocked => _v['firefoxLoginRequestBlocked']!;
-  String get firefoxLoginSecondaryEmail => _v['firefoxLoginSecondaryEmail']!;
-  String get firefoxLoginInvalidEmail => _v['firefoxLoginInvalidEmail']!;
-  String get firefoxLoginUnverifiedAccount => _v['firefoxLoginUnverifiedAccount']!;
-  String get firefoxLoginEmailCase => _v['firefoxLoginEmailCase']!;
-  String get firefoxLoginCodeExpired => _v['firefoxLoginCodeExpired']!;
-  String get firefoxLoginCodeAttempts => _v['firefoxLoginCodeAttempts']!;
-  String get firefoxLoginStartOver => _v['firefoxLoginStartOver']!;
 
-  /// The email-2fa step's strip text (the code went to [email]).
-  String firefoxLoginCodeSent(String email) =>
-      _v['firefoxLoginCodeSent']!.replaceAll('{email}', email);
 
-  // PHASE B (Part 2) — the login-failure classes (firefox_errors.dart).
-  // Static per-class text; the engine's raw chain is never rendered.
-  String get firefoxErrDns => _v['firefoxErrDns']!;
-  String get firefoxErrNetwork => _v['firefoxErrNetwork']!;
-  String get firefoxErrTls => _v['firefoxErrTls']!;
-  String get firefoxErrTokenExchange => _v['firefoxErrTokenExchange']!;
-  String get firefoxErrInvalidToken => _v['firefoxErrInvalidToken']!;
-  String get firefoxErrServerRejected => _v['firefoxErrServerRejected']!;
+  // 1.8.0 — the DNS test's path labels (through the tunnel vs direct).
 
-  /// The localized text for a CLASSIFIED Firefox transport failure
-  /// ([FirefoxErrors.classify] output). Unknown/unmapped classes fall
-  /// back to the generic [firefoxLoginFailed] — never the raw chain.
-  String firefoxErrorText(String classifiedCode) => switch (classifiedCode) {
-        FirefoxTransportError.dnsError => firefoxErrDns,
-        FirefoxTransportError.networkUnavailable => firefoxErrNetwork,
-        FirefoxTransportError.timeout => firefoxLoginTimeout,
-        FirefoxTransportError.tlsError => firefoxErrTls,
-        FirefoxTransportError.sessionRejected => firefoxLoginRejected,
-        FirefoxTransportError.tokenExchange => firefoxErrTokenExchange,
-        FirefoxTransportError.invalidTokenResponse => firefoxErrInvalidToken,
-        FirefoxTransportError.serverRejection => firefoxErrServerRejected,
-        _ => firefoxLoginFailed,
-      };
+
 
   // tor page
   String get torLocationDesc => _v['torLocationDesc']!;
@@ -476,8 +373,6 @@ class AppStrings {
   String get aetherLegLabel => _v['aetherLegLabel']!;
   String get torLegDesc => _v['torLegDesc']!;
   String get psiphonLegDesc => _v['psiphonLegDesc']!;
-  String get secFirefoxCarrier => _v['secFirefoxCarrier']!;
-  String get firefoxCarrierLabel => _v['firefoxCarrierLabel']!;
   String get secIpVersion => _v['secIpVersion']!;
   String get ipV4 => _v['ipV4']!;
   String get ipV6 => _v['ipV6']!;
@@ -596,7 +491,6 @@ class AppStrings {
       ProtocolId.psiphonReverse ||
       ProtocolId.psiphonOnly =>
         'protoPsiphon',
-      ProtocolId.firefoxOnly => 'protoFirefox',
     };
     return _v[key] ?? _v['protoMasque']!;
   }
@@ -633,7 +527,6 @@ class AppStrings {
       'protoMim': 'میم',
       'protoTor': 'تور',
       'protoPsiphon': 'سایفون',
-      'protoFirefox': 'فایرفاکس',
       // ---- settings main page (fa verbatim from the design frame; the
       // v4.15 renames are the owner's own words — settings round #5/#8:
       // «متن تنظیمات تور و تنظیمات سایفون به تور و سایفون تغیر کند»,
@@ -654,86 +547,6 @@ class AppStrings {
       'settingsSecuritySub': 'امنیت و حریم خصوصی',
       'settingsPsiphon': 'سایفون',
       'settingsTor': 'تور',
-      // ---- phase-2 firefox page ----
-      'settingsFirefox': 'فایرفاکس',
-      'secFirefoxAccount': 'حساب فایرفاکس',
-      'firefoxSignedIn': 'حساب فایرفاکس متصل است',
-      'firefoxSignedOut': 'حساب فایرفاکس متصل نیست',
-      'firefoxSignIn': 'ورود با حساب فایرفاکس',
-      'firefoxSignOut': 'خروج از حساب',
-      'firefoxAccountDesc': 'برای استفاده از فایرفاکس ویپیان باید با حساب فایرفاکس وارد شوید. ورود در صفحهٔ خود موزیلا انجام می‌شود و رمز عبور شما هرگز وارد این اپ نمی‌شود.',
-      'firefoxLocationDesc': 'موقعیت خروج از فهرست زندهٔ سرورهای فایرفاکس انتخاب می‌شود؛ «خودکار» یعنی موقعیت پیشنهادی خود موزیلا. کشوری که پس از اتصال نمایش داده می‌شود از پروب واقعی تونل می‌آید، نه از انتخاب شما.',
-      'firefoxLocationsLive': 'فهرست زندهٔ سرورها',
-      'firefoxLocationsCached': 'فهرست ذخیره‌شده (آفلاین)',
-      'secFirefoxLeg': 'پروتکل هسته',
-      'firefoxLegDesc': 'ابتدا اتصال وارپ با پروتکل انتخابی برقرار می‌شود و مراحل اولیهٔ اتصال فایرفاکس (ورود، کشف سرورها، دریافت توکن‌ها) از همان تونل می‌گذرد. در حالت اور وارپ، تونل دادهٔ فایرفاکس هم داخل همان تونل ساخته می‌شود (مثل سایفون اُور وارپ)؛ در حالت مستقیم، فقط اتصال دادهٔ نهایی مستقیم برقرار می‌شود.',
-      'firefoxTransportNote': 'انتقال داده روی H2 (TCP+TLS) انجام می‌شود؛ H3 به‌خاطر QUIC/UDP نمی‌تواند از بستر TCP وارپ عبور کند.',
-      'secFirefoxTransport': 'انتقال داده',
-      'firefoxTransportLabel': 'حالت انتقال',
-      'firefoxTransportH2': 'H2 (پیش‌فرض)',
-      'firefoxTransportH3': 'H3 (کوئیک)',
-      'firefoxTransportDesc': 'H2 روی TCP+TLS و H3 روی QUIC کار می‌کند. اگر مطمئن نیستید همان H2 بماند.',
-      'firefoxAccountLoading': 'در حال بررسی حساب…',
-      'firefoxBrowserTabLoading': 'در حال آماده‌سازی مرورگر…',
-      'firefoxBrowserTabFailed': 'صفحهٔ ورود بارگذاری نشد.',
-      'firefoxBrowserTabRetry': 'تلاش دوباره',
-      'firefoxBrowserTabHint': 'این روش به شبکه‌ای نیاز دارد که صفحه‌های موزیلا را باز کند؛ اگر باز نشد، از تب «ورود مستقیم» استفاده کنید.',
-      'firefoxQuotaLabel': 'حجم باقی‌مانده',
-      'firefoxQuotaUnlimited': 'نامحدود',
-      'firefoxQuotaRefresh': 'به‌روزرسانی حجم',
-      'firefoxQuotaRefreshing': 'در حال به‌روزرسانی حجم…',
-      'firefoxQuotaResetLabel': 'تجدید دوره',
-      'secFirefoxMode': 'نوع اتصال',
-      'firefoxModeOverWarp': 'اور وارپ (پیش‌فرض)',
-      'firefoxModeDirect': 'مستقیم',
-      'firefoxModeOverWarpDesc': 'ابتدا تونل وارپ با هستهٔ ایتر برقرار می‌شود و بعد فایرفاکس از درون همان تونل، تونل خودش را می‌سازد (مثل سایفون اُور وارپ). مناسب شبکه‌های فیلترشده.',
-      'firefoxModeDirectDesc': 'مراحل اولیهٔ اتصال (ورود به حساب، کشف سرورها، دریافت توکن‌ها) از تونل وارپِ هستهٔ ایتر عبور می‌کنند و بعد خودِ اتصال داده (H2/H3) مستقیماً به سرورهای فایرفاکس برقرار می‌شود — همان رویکرد رله در آرمان. برای وقتی که سرورهای دادهٔ فایرفاکس مسدود نیستند.',
-      'firefoxTransportDirectDesc': 'در حالت مستقیم فقط اتصال داده مستقیم است: H2 روی TCP+TLS و H3 روی QUIC مستقیماً از اینترنت خود دستگاه به سرورهای فایرفاکس وصل می‌شوند؛ ورود به حساب و تبادل توکن‌ها همچنان از تونل وارپ می‌گذرد.',
-      'firefoxLoginTitle': 'ورود به فایرفاکس',
-      'firefoxLoginSubtitle': 'ورود در صفحهٔ رسمی موزیلا انجام می‌شود',
-      'firefoxLoginWaiting': 'در انتظار ورود شما در صفحهٔ موزیلا…',
-      'firefoxLoginExchanging': 'در حال تکمیل ورود و دریافت نشست…',
-      'firefoxLoginSuccess': 'ورود با موفقیت انجام شد',
-      'firefoxLoginFailed': 'ورود ناموفق بود',
-      'firefoxLoginDisruptionNotice': 'در صورت بروز اختلال در ورود، یک فیلترشکن دیگر را روشن کنید و دوباره تلاش کنید.',
-      'firefoxLoginRejected': 'نشست ورود پذیرفته نشد؛ دوباره وارد شوید',
-      'firefoxLoginTimeout': 'تأیید ورود بیش از حد طول کشید؛ دوباره تلاش کنید',
-      'firefoxLoginUnavailable': 'صفحهٔ ورود روی این دستگاه در دسترس نیست',
-      'firefoxLoginMethodForm': 'ورود مستقیم',
-      'firefoxLoginMethodBrowser': 'ورود با مرورگر',
-      'firefoxLoginSubtitleForm': 'ورود مستقیم با ایمیل و رمز عبور',
-      'firefoxLoginFormHint': 'برای حساب‌های ساخته‌شده با گوگل یا اپل از ورود با مرورگر استفاده کنید',
-      'firefoxLoginBrowserHint': 'رمز عبور فقط در موتور داخلی اپ پردازش می‌شود و جایی ثبت نمی‌شود',
-      'firefoxLoginEmail': 'ایمیل',
-      'firefoxLoginPassword': 'رمز عبور',
-      'firefoxLoginSubmit': 'ورود',
-      'firefoxLoginSubmitting': 'در حال ورود…',
-      'firefoxLoginEmailInvalid': 'نشانی ایمیل معتبر نیست',
-      'firefoxLoginPasswordEmpty': 'رمز عبور را وارد کنید',
-      'firefoxLoginCodeLabel': 'کد تأیید',
-      'firefoxLoginCodeVerify': 'تأیید',
-      'firefoxLoginCodeVerifying': 'در حال بررسی کد…',
-      'firefoxLoginWrongCode': 'کد واردشده درست نیست',
-      'firefoxLoginNetworkRetry': 'مشکل شبکه؛ دوباره تلاش کنید',
-      'firefoxLoginNoAccount': 'با این ایمیل حساب فایرفاکسی یافت نشد',
-      'firefoxLoginWrongPassword': 'رمز عبور نادرست است',
-      'firefoxLoginTooManyAttempts': 'تلاش‌های ناموفق زیاد بوده؛ کمی بعد دوباره امتحان کنید',
-      'firefoxLoginRequestBlocked': 'ورود به دلایل امنیتی مسدود شد؛ از تب «ورود با مرورگر» استفاده کنید',
-      'firefoxLoginSecondaryEmail': 'برای ورود باید ایمیلِ اصلی حساب را وارد کنید',
-      'firefoxLoginInvalidEmail': 'این ایمیل برای ورود قابل استفاده نیست',
-      'firefoxLoginUnverifiedAccount': 'ایمیل حساب شما هنوز تأیید نشده است؛ ابتدا ایمیل تأیید را باز کنید',
-      'firefoxLoginEmailCase': 'بزرگی و کوچکی حروف ایمیل با حساب هم‌خوانی ندارد',
-      'firefoxLoginCodeExpired': 'کد تأیید منقضی شده است؛ دوباره وارد شوید',
-      'firefoxLoginCodeAttempts': 'تلاش‌های ناموفق برای کد زیاد بود؛ دوباره وارد شوید',
-      'firefoxLoginStartOver': 'شروع دوباره',
-      'firefoxLoginCodeSent': 'کد تأیید به {email} ارسال شد',
-      // PHASE B (Part 2) — the login-failure classes.
-      'firefoxErrDns': 'نام سرور حساب حل نشد (DNS)؛ اتصال دستگاه را بررسی کنید',
-      'firefoxErrNetwork': 'سرور حساب در دسترس نبود؛ اتصال شبکه را بررسی کنید',
-      'firefoxErrTls': 'اتصال امن به سرور حساب برقرار نشد',
-      'firefoxErrTokenExchange': 'تبادل ورود با سرور حساب ناتمام ماند؛ دوباره تلاش کنید',
-      'firefoxErrInvalidToken': 'پاسخ سرور حساب معتبر نبود؛ دوباره تلاش کنید',
-      'firefoxErrServerRejected': 'سرور حساب درخواست را رد کرد',
       'settingsPillSub': 'انتخاب لوکیشن و ...',
       'settingsAdvancedStatus': 'وضعیت پیکربندی',
       'settingsRoutingArea': 'منطقهٔ مسیریابی',
@@ -742,6 +555,10 @@ class AppStrings {
           'این بخش — در گام بعدی پیاده‌سازی می‌شود',
       // ---- v4.20 failure visibility + desc-popup port notes ----
       'failureCodeLabel': 'کد خطا',
+      // v2.1.0 — the home widget deck.
+      'homeWidgetTimer': 'مدت اتصال',
+      'homeWidgetPing': 'تأخیر',
+      'homeWidgetData': 'داده جلسه',
       'failureDetailsTitle': 'جزئیات خطا',
       'failureDetailsCopy': 'کپی اطلاعات خطا',
       'portNote': 'پورت محلی SOCKS: @p',
@@ -807,8 +624,6 @@ class AppStrings {
       'h2TransportDesc': 'انتقال MASQUE روی HTTP/2 (TCP) — پیش‌فرض جدید اپ؛ برای شبکه‌هایی که UDP را می‌بندند',
       'quicV2': 'مذاکرهٔ QUIC v2',
       'quicV2Desc': 'بازکردن مسیر HTTP/3 روی شبکه‌هایی که QUIC v1 را می‌بندند',
-      'dnsLabel': 'DNS داخل تونل',
-      'dnsHint': 'با کاما جدا شود — مثلاً 1.1.1.1,1.0.0.1',
       'secEngine': 'موتور',
       'noizeLabel': 'پروفایل اغتشاش (Noize)',
       'noizeDesc': 'پیش‌فرض جدید اپ: متعادل؛ برای شبکه‌های سخت‌گیر GFW یا تهاجمی را امتحان کنید',
@@ -948,8 +763,6 @@ class AppStrings {
       'aetherLegLabel': 'پایهٔ حالت‌های ترکیبی',
       'torLegDesc': 'در حالت‌های ترکیبی تور (زنجیره و معکوس)، تونل Aether زیرین با این پروتکل برقرار می‌شود. در حالت معکوس، پایه‌های نیازمند UDP خودکار به ماسک تغییر می‌کنند (محدودیت خود هسته)',
       'psiphonLegDesc': 'در حالت‌های ترکیبی سایفون (زنجیره و معکوس)، تونل Aether زیرین با این پروتکل برقرار می‌شود. در حالت معکوس، پایه‌های نیازمند UDP خودکار به ماسک تغییر می‌کنند (محدودیت خود هسته)',
-      'secFirefoxCarrier': 'تونل پایهٔ فایرفاکس (WARP)',
-      'firefoxCarrierLabel': 'پروتکل هستهٔ Aether',
       'secIpVersion': 'نسخهٔ IP',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -1022,7 +835,6 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
-      'protoFirefox': 'FIREFOX',
       'settingsTitle': 'Settings',
       'settingsRouting': 'Routing',
       'settingsRoutingSub': 'Direct routes',
@@ -1038,86 +850,6 @@ class AppStrings {
       'settingsSecuritySub': 'Security & privacy',
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
-      // ---- phase-2 firefox page ----
-      'settingsFirefox': 'Firefox',
-      'secFirefoxAccount': 'Firefox account',
-      'firefoxSignedIn': 'A Firefox account is signed in',
-      'firefoxSignedOut': 'No Firefox account is signed in',
-      'firefoxSignIn': 'Sign in with a Firefox account',
-      'firefoxSignOut': 'Sign out',
-      'firefoxAccountDesc': 'Firefox VPN needs your Firefox account. Sign-in happens on Mozilla\'s own page — your password never enters this app.',
-      'firefoxLocationDesc': 'The exit location is picked from the live Firefox server list; "Automatic" is Mozilla\'s own recommended location. The country shown after connecting comes from the real tunnel probe, never from your pick.',
-      'firefoxLocationsLive': 'Live server list',
-      'firefoxLocationsCached': 'Saved list (offline)',
-      'secFirefoxLeg': 'Core protocol',
-      'firefoxLegDesc': 'The WARP connection comes up first on the selected protocol and carries Firefox\'s initial connection stages (sign-in, discovery, token fetches). In over-WARP the Firefox data tunnel is then built inside it too (like Psiphon over Warp); in Direct only the final data connection dials out directly.',
-      'firefoxTransportNote': 'The data plane runs on H2 (TCP+TLS); H3 (QUIC/UDP) cannot ride the TCP WARP carrier.',
-      'secFirefoxTransport': 'Data transport',
-      'firefoxTransportLabel': 'Transport mode',
-      'firefoxTransportH2': 'H2 (default)',
-      'firefoxTransportH3': 'H3 (QUIC)',
-      'firefoxTransportDesc': 'H2 runs over TCP+TLS; H3 runs over QUIC. Keep H2 if unsure.',
-      'firefoxAccountLoading': 'Checking the account…',
-      'firefoxBrowserTabLoading': 'Preparing the browser…',
-      'firefoxBrowserTabFailed': 'The sign-in page did not load.',
-      'firefoxBrowserTabRetry': 'Try again',
-      'firefoxBrowserTabHint': 'This method needs a network that opens Mozilla pages; if it does not open, use the Direct sign-in tab.',
-      'firefoxQuotaLabel': 'Remaining data',
-      'firefoxQuotaUnlimited': 'Unlimited',
-      'firefoxQuotaRefresh': 'Refresh data',
-      'firefoxQuotaRefreshing': 'Refreshing data…',
-      'firefoxQuotaResetLabel': 'Renews',
-      'secFirefoxMode': 'Connection mode',
-      'firefoxModeOverWarp': 'Over WARP (default)',
-      'firefoxModeDirect': 'Direct',
-      'firefoxModeOverWarpDesc': 'The WARP tunnel comes up on the Aether core first, then Firefox builds its own tunnel inside it (like Psiphon over Warp). For filtered networks.',
-      'firefoxModeDirectDesc': 'The initial connection stages (sign-in, server discovery, token fetches) ride the Aether core\'s WARP tunnel first; the data connection (H2/H3) is then established directly to the Firefox servers — Arman\'s relay posture. For networks that have not blocked Firefox\'s data servers.',
-      'firefoxTransportDirectDesc': 'In Direct mode only the data plane is direct: H2 (TCP+TLS) and H3 (QUIC) dial the Firefox servers from this device\'s own internet; sign-in and the token exchanges still ride the WARP tunnel.',
-      'firefoxLoginTitle': 'Sign in to Firefox',
-      'firefoxLoginSubtitle': 'Sign-in happens on Mozilla\'s official page',
-      'firefoxLoginWaiting': 'Waiting for you to sign in on Mozilla\'s page…',
-      'firefoxLoginExchanging': 'Finishing sign-in and minting the session…',
-      'firefoxLoginSuccess': 'Signed in successfully',
-      'firefoxLoginFailed': 'Sign-in failed',
-      'firefoxLoginDisruptionNotice': 'If sign-in is disrupted, turn on another VPN and try again.',
-      'firefoxLoginRejected': 'The sign-in session was rejected; sign in again',
-      'firefoxLoginTimeout': 'Sign-in confirmation took too long; try again',
-      'firefoxLoginUnavailable': 'The sign-in page is not available on this device',
-      'firefoxLoginMethodForm': 'Direct sign-in',
-      'firefoxLoginMethodBrowser': 'Browser sign-in',
-      'firefoxLoginSubtitleForm': 'Sign in directly with email and password',
-      'firefoxLoginFormHint': 'Accounts created with Google or Apple need the browser sign-in',
-      'firefoxLoginBrowserHint': 'Your password is processed only inside the app engine and never stored',
-      'firefoxLoginEmail': 'Email',
-      'firefoxLoginPassword': 'Password',
-      'firefoxLoginSubmit': 'Sign in',
-      'firefoxLoginSubmitting': 'Signing in…',
-      'firefoxLoginEmailInvalid': 'The email address is not valid',
-      'firefoxLoginPasswordEmpty': 'Enter your password',
-      'firefoxLoginCodeLabel': 'Verification code',
-      'firefoxLoginCodeVerify': 'Verify',
-      'firefoxLoginCodeVerifying': 'Verifying the code…',
-      'firefoxLoginWrongCode': 'The code you entered is not correct',
-      'firefoxLoginNetworkRetry': 'A network problem; try again',
-      'firefoxLoginNoAccount': 'No Firefox Account has this email',
-      'firefoxLoginWrongPassword': 'The password is incorrect',
-      'firefoxLoginTooManyAttempts': 'Too many attempts; try again later',
-      'firefoxLoginRequestBlocked': 'The sign-in was blocked for security reasons; use the browser tab',
-      'firefoxLoginSecondaryEmail': 'The primary account email is required for sign-in',
-      'firefoxLoginInvalidEmail': 'This email cannot be used to sign in',
-      'firefoxLoginUnverifiedAccount': "Your account's email has not been verified yet; open the verification email first",
-      'firefoxLoginEmailCase': "The email's letter case does not match the account",
-      'firefoxLoginCodeExpired': 'The verification code has expired; sign in again',
-      'firefoxLoginCodeAttempts': 'Too many wrong codes; sign in again',
-      'firefoxLoginStartOver': 'Start over',
-      'firefoxLoginCodeSent': 'The verification code was sent to {email}',
-      // PHASE B (Part 2) — the login-failure classes.
-      'firefoxErrDns': 'The account server name could not be resolved (DNS); check the connection',
-      'firefoxErrNetwork': 'The account server was unreachable; check the network connection',
-      'firefoxErrTls': 'A secure connection to the account server could not be established',
-      'firefoxErrTokenExchange': 'The sign-in exchange with the account server did not complete; try again',
-      'firefoxErrInvalidToken': 'The account server response was invalid; try again',
-      'firefoxErrServerRejected': 'The account server rejected the request',
       'settingsPillSub': 'Location & more …',
       'settingsAdvancedStatus': 'Configuration status',
       'settingsRoutingArea': 'Routing region',
@@ -1125,6 +857,10 @@ class AppStrings {
       'settingsSubpageComingNext': 'This section — coming in the next step',
       // ---- v4.20 failure visibility + desc-popup port notes ----
       'failureCodeLabel': 'Error code',
+      // v2.1.0 — the home widget deck.
+      'homeWidgetTimer': 'Session',
+      'homeWidgetPing': 'Latency',
+      'homeWidgetData': 'Session data',
       'failureDetailsTitle': 'Error details',
       'failureDetailsCopy': 'Copy error details',
       'portNote': 'Local SOCKS port: @p',
@@ -1190,8 +926,6 @@ class AppStrings {
       'h2TransportDesc': 'MASQUE over HTTP/2 (TCP) — the new app default; for networks that block UDP',
       'quicV2': 'QUIC v2 negotiation',
       'quicV2Desc': 'Opens a path for HTTP/3 where QUIC v1 is blocked',
-      'dnsLabel': 'DNS inside the tunnel',
-      'dnsHint': 'comma-separated — e.g. 1.1.1.1,1.0.0.1',
       'secEngine': 'Engine',
       'noizeLabel': 'Obfuscation profile (Noize)',
       'noizeDesc': 'New app default: Balanced; try GFW or Aggressive on strict networks',
@@ -1332,8 +1066,6 @@ class AppStrings {
       'aetherLegLabel': 'Base of the combined modes',
       'torLegDesc': 'In the combined tor modes (chain and reverse) the underlying Aether tunnel runs this protocol. On the reverse mode the UDP-needing legs map to MASQUE automatically (a core limit)',
       'psiphonLegDesc': 'In the combined psiphon modes (chain and reverse) the underlying Aether tunnel runs this protocol. On the reverse mode the UDP-needing legs map to MASQUE automatically (a core limit)',
-      'secFirefoxCarrier': 'Firefox outer carrier (WARP)',
-      'firefoxCarrierLabel': 'Aether carrier protocol',
       'secIpVersion': 'IP version',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -1404,7 +1136,6 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
-      'protoFirefox': 'FIREFOX',
       'settingsTitle': 'Настройки',
       'settingsRouting': 'Маршрутизация',
       'settingsRoutingSub': 'Прямые маршруты',
@@ -1420,92 +1151,16 @@ class AppStrings {
       'settingsSecuritySub': 'Безопасность и приватность',
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
-      // ---- phase-2 firefox page ----
-      'settingsFirefox': 'Firefox',
-      'secFirefoxAccount': 'Аккаунт Firefox',
-      'firefoxSignedIn': 'Аккаунт Firefox подключён',
-      'firefoxSignedOut': 'Аккаунт Firefox не подключён',
-      'firefoxSignIn': 'Войти с аккаунтом Firefox',
-      'firefoxSignOut': 'Выйти',
-      'firefoxAccountDesc': 'Для Firefox VPN нужен аккаунт Firefox. Вход происходит на официальной странице Mozilla — пароль никогда не попадает в это приложение.',
-      'firefoxLocationDesc': 'Локация выхода выбирается из живого списка серверов Firefox; «Автоматически» — рекомендуемая локация самой Mozilla. Страна после подключения берётся из реальной проверки туннеля, а не из вашего выбора.',
-      'firefoxLocationsLive': 'Живой список серверов',
-      'firefoxLocationsCached': 'Сохранённый список (офлайн)',
-      'secFirefoxLeg': 'Протокол ядра',
-      'firefoxLegDesc': 'Сначала поднимается WARP-соединение на выбранном протоколе и несёт начальные этапы подключения Firefox (вход, обнаружение, получение токенов). В режиме over-WARP туннель данных Firefox также строится внутри него (как Psiphon over Warp); в режиме «Напрямую» напрямую устанавливается только само подключение данных.',
-      'firefoxTransportNote': 'Плоскость данных работает на H2 (TCP+TLS); H3 (QUIC/UDP) не может проходить через TCP-носитель WARP.',
-      'secFirefoxTransport': 'Транспорт данных',
-      'firefoxTransportLabel': 'Режим транспорта',
-      'firefoxTransportH2': 'H2 (по умолчанию)',
-      'firefoxTransportH3': 'H3 (QUIC)',
-      'firefoxTransportDesc': 'H2 работает поверх TCP+TLS; H3 — поверх QUIC. Если сомневаетесь, оставьте H2.',
-      'firefoxAccountLoading': 'Проверка аккаунта…',
-      'firefoxBrowserTabLoading': 'Подготовка браузера…',
-      'firefoxBrowserTabFailed': 'Страница входа не загрузилась.',
-      'firefoxBrowserTabRetry': 'Повторить',
-      'firefoxBrowserTabHint': 'Этот способ требует сеть, открывающую страницы Mozilla; если не открывается, используйте вкладку прямого входа.',
-      'firefoxQuotaLabel': 'Остаток трафика',
-      'firefoxQuotaUnlimited': 'Без ограничений',
-      'firefoxQuotaRefresh': 'Обновить данные о трафике',
-      'firefoxQuotaRefreshing': 'Обновление данных о трафике…',
-      'firefoxQuotaResetLabel': 'Обновление периода',
-      'secFirefoxMode': 'Режим подключения',
-      'firefoxModeOverWarp': 'Через WARP (по умолчанию)',
-      'firefoxModeDirect': 'Напрямую',
-      'firefoxModeOverWarpDesc': 'Сначала поднимается WARP-туннель на ядре Aether, затем Firefox строит свой туннель внутри него (как Psiphon over Warp). Для фильтруемых сетей.',
-      'firefoxModeDirectDesc': 'Начальные этапы подключения (вход, обнаружение серверов, получение токенов) сначала идут через WARP-туннель ядра Aether, затем само подключение данных (H2/H3) устанавливается напрямую к серверам Firefox — как релей в Arman VPN. Для сетей, где серверы данных Firefox не заблокированы.',
-      'firefoxTransportDirectDesc': 'В режиме «Напрямую» напрямую работает только плоскость данных: H2 (TCP+TLS) и H3 (QUIC) подключаются к серверам Firefox напрямую через интернет устройства; вход и обмен токенами по-прежнему идут через WARP-туннель.',
-      'firefoxLoginTitle': 'Вход в Firefox',
-      'firefoxLoginSubtitle': 'Вход выполняется на официальной странице Mozilla',
-      'firefoxLoginWaiting': 'Ожидание входа на странице Mozilla…',
-      'firefoxLoginExchanging': 'Завершение входа и получение сессии…',
-      'firefoxLoginSuccess': 'Вход выполнен',
-      'firefoxLoginFailed': 'Не удалось войти',
-      'firefoxLoginDisruptionNotice': 'Если вход не удаётся, включите другой VPN и попробуйте снова.',
-      'firefoxLoginRejected': 'Сессия входа отклонена; войдите снова',
-      'firefoxLoginTimeout': 'Подтверждение входа заняло слишком много времени; попробуйте снова',
-      'firefoxLoginUnavailable': 'Страница входа недоступна на этом устройстве',
-      'firefoxLoginMethodForm': 'Прямой вход',
-      'firefoxLoginMethodBrowser': 'Вход через браузер',
-      'firefoxLoginSubtitleForm': 'Прямой вход по электронной почте и паролю',
-      'firefoxLoginFormHint': 'Для аккаунтов Google или Apple используйте вход через браузер',
-      'firefoxLoginBrowserHint': 'Пароль обрабатывается только внутри движка приложения и нигде не сохраняется',
-      'firefoxLoginEmail': 'Электронная почта',
-      'firefoxLoginPassword': 'Пароль',
-      'firefoxLoginSubmit': 'Войти',
-      'firefoxLoginSubmitting': 'Выполняется вход…',
-      'firefoxLoginEmailInvalid': 'Недопустимый адрес электронной почты',
-      'firefoxLoginPasswordEmpty': 'Введите пароль',
-      'firefoxLoginCodeLabel': 'Код подтверждения',
-      'firefoxLoginCodeVerify': 'Подтвердить',
-      'firefoxLoginCodeVerifying': 'Проверка кода…',
-      'firefoxLoginWrongCode': 'Введён неверный код',
-      'firefoxLoginNetworkRetry': 'Проблема сети; попробуйте ещё раз',
-      'firefoxLoginNoAccount': 'Аккаунта Firefox с такой почтой нет',
-      'firefoxLoginWrongPassword': 'Неверный пароль',
-      'firefoxLoginTooManyAttempts': 'Слишком много попыток; попробуйте позже',
-      'firefoxLoginRequestBlocked': 'Вход заблокирован по соображениям безопасности; используйте вкладку браузера',
-      'firefoxLoginSecondaryEmail': 'Для входа нужен основной адрес аккаунта',
-      'firefoxLoginInvalidEmail': 'Эта почта не может использоваться для входа',
-      'firefoxLoginUnverifiedAccount': 'Почта аккаунта ещё не подтверждена; сначала откройте письмо с подтверждением',
-      'firefoxLoginEmailCase': 'Регистр букв почты не совпадает с аккаунтом',
-      'firefoxLoginCodeExpired': 'Код подтверждения истёк; войдите заново',
-      'firefoxLoginCodeAttempts': 'Слишком много неверных кодов; войдите заново',
-      'firefoxLoginStartOver': 'Начать заново',
-      'firefoxLoginCodeSent': 'Код подтверждения отправлен на {email}',
-      // PHASE B (Part 2) — the login-failure classes.
-      'firefoxErrDns': 'Не удалось разрешить имя сервера аккаунтов (DNS); проверьте подключение',
-      'firefoxErrNetwork': 'Сервер аккаунтов недоступен; проверьте сетевое подключение',
-      'firefoxErrTls': 'Не удалось установить защищённое соединение с сервером аккаунтов',
-      'firefoxErrTokenExchange': 'Обмен входа с сервером аккаунтов не завершился; попробуйте снова',
-      'firefoxErrInvalidToken': 'Ответ сервера аккаунтов был недействительным; попробуйте снова',
-      'firefoxErrServerRejected': 'Сервер аккаунтов отклонил запрос',
       'settingsPillSub': 'Локация и другое …',
       'settingsAdvancedStatus': 'Статус конфигурации',
       'settingsRoutingArea': 'Регион маршрутизации',
       'settingsMainServer': 'Адреса ядер',
       'settingsSubpageComingNext': 'Этот раздел — на следующем шаге',
       'failureCodeLabel': 'Код ошибки',
+      // v2.1.0 — the home widget deck.
+      'homeWidgetTimer': 'Сессия',
+      'homeWidgetPing': 'Задержка',
+      'homeWidgetData': 'Данные сессии',
       'failureDetailsTitle': 'Детали ошибки',
       'failureDetailsCopy': 'Копировать детали ошибки',
       'portNote': 'Локальный порт SOCKS: @p',
@@ -1571,8 +1226,6 @@ class AppStrings {
       'h2TransportDesc': 'MASQUE по HTTP/2 (TCP) — новый стандарт приложения; для сетей, блокирующих UDP',
       'quicV2': 'Согласование QUIC v2',
       'quicV2Desc': 'Открывает путь для HTTP/3 там, где QUIC v1 заблокирован',
-      'dnsLabel': 'DNS внутри туннеля',
-      'dnsHint': 'через запятую — напр. 1.1.1.1,1.0.0.1',
       'secEngine': 'Движок',
       'noizeLabel': 'Профиль обфускации (Noize)',
       'noizeDesc': 'Новый стандарт приложения: Balanced; на строгих сетях попробуйте GFW или Aggressive',
@@ -1712,8 +1365,6 @@ class AppStrings {
       'aetherLegLabel': 'Основа комбинированных режимов',
       'torLegDesc': 'В комбинированных режимах tor (цепочка и обратный) туннель Aether работает по этому протоколу. В обратном режиме ветки с UDP автоматически переходят на MASQUE (ограничение ядра)',
       'psiphonLegDesc': 'В комбинированных режимах psiphon (цепочка и обратный) туннель Aether работает по этому протоколу. В обратном режиме ветки с UDP автоматически переходят на MASQUE (ограничение ядра)',
-      'secFirefoxCarrier': 'Внешний туннель Firefox (WARP)',
-      'firefoxCarrierLabel': 'Протокол ядра Aether',
       'secIpVersion': 'Версия IP',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -1784,7 +1435,6 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
-      'protoFirefox': 'FIREFOX',
       'settingsTitle': '设置',
       'settingsRouting': '路由规则',
       'settingsRoutingSub': '直连路由',
@@ -1800,92 +1450,16 @@ class AppStrings {
       'settingsSecuritySub': '安全与隐私',
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
-      // ---- phase-2 firefox page ----
-      'settingsFirefox': 'Firefox',
-      'secFirefoxAccount': 'Firefox 账户',
-      'firefoxSignedIn': '已连接 Firefox 账户',
-      'firefoxSignedOut': '未连接 Firefox 账户',
-      'firefoxSignIn': '使用 Firefox 账户登录',
-      'firefoxSignOut': '退出登录',
-      'firefoxAccountDesc': 'Firefox VPN 需要您的 Firefox 账户。登录在 Mozilla 官方页面完成——密码绝不会进入本应用。',
-      'firefoxLocationDesc': '出口位置从 Firefox 实时服务器列表中选择；“自动”即 Mozilla 官方推荐位置。连接后显示的国家来自真实隧道探测，绝非来自您的选择。',
-      'firefoxLocationsLive': '实时服务器列表',
-      'firefoxLocationsCached': '已保存列表（离线）',
-      'secFirefoxLeg': '核心协议',
-      'firefoxLegDesc': '先以所选协议建立 WARP 连接，承载 Firefox 的初始连接阶段（登录、发现、令牌获取）。在“经 WARP”模式下，Firefox 数据隧道也在其中建立（类似 Psiphon over Warp）；在直连模式下，仅最终的数据连接直接拨出。',
-      'firefoxTransportNote': '数据面运行在 H2（TCP+TLS）；H3（QUIC/UDP）无法穿越 TCP 的 WARP 载体。',
-      'secFirefoxTransport': '数据传输',
-      'firefoxTransportLabel': '传输模式',
-      'firefoxTransportH2': 'H2（默认）',
-      'firefoxTransportH3': 'H3（QUIC）',
-      'firefoxTransportDesc': 'H2 基于 TCP+TLS；H3 基于 QUIC。不确定时保持 H2。',
-      'firefoxAccountLoading': '正在检查账户…',
-      'firefoxBrowserTabLoading': '正在准备浏览器…',
-      'firefoxBrowserTabFailed': '登录页未能加载。',
-      'firefoxBrowserTabRetry': '重试',
-      'firefoxBrowserTabHint': '此方式需要能打开 Mozilla 页面的网络；打不开时请使用「直接登录」标签页。',
-      'firefoxQuotaLabel': '剩余流量',
-      'firefoxQuotaUnlimited': '不限量',
-      'firefoxQuotaRefresh': '刷新流量',
-      'firefoxQuotaRefreshing': '正在刷新流量…',
-      'firefoxQuotaResetLabel': '周期更新',
-      'secFirefoxMode': '连接模式',
-      'firefoxModeOverWarp': '经 WARP（默认）',
-      'firefoxModeDirect': '直连',
-      'firefoxModeOverWarpDesc': '先由 Aether 核心建立 WARP 隧道，然后 Firefox 在其中建立自己的隧道（类似 Psiphon over Warp）。适合被过滤的网络。',
-      'firefoxModeDirectDesc': '初始连接阶段（登录、服务器发现、令牌获取）先经由 Aether 核心的 WARP 隧道，随后数据连接（H2/H3）直接连向 Firefox 服务器——即 Arman 的中继思路。适用于未封锁 Firefox 数据服务器的网络。',
-      'firefoxTransportDirectDesc': '直连模式下仅数据面直连：H2（TCP+TLS）与 H3（QUIC）从设备自身网络直接连接 Firefox 服务器；登录与令牌交换仍经由 WARP 隧道。',
-      'firefoxLoginTitle': '登录 Firefox',
-      'firefoxLoginSubtitle': '登录在 Mozilla 官方页面进行',
-      'firefoxLoginWaiting': '等待您在 Mozilla 页面完成登录…',
-      'firefoxLoginExchanging': '正在完成登录并获取会话…',
-      'firefoxLoginSuccess': '登录成功',
-      'firefoxLoginFailed': '登录失败',
-      'firefoxLoginDisruptionNotice': '如果登录受阻，请开启其他 VPN 后重试。',
-      'firefoxLoginRejected': '登录会话被拒绝；请重新登录',
-      'firefoxLoginTimeout': '登录确认超时；请重试',
-      'firefoxLoginUnavailable': '此设备上无法打开登录页面',
-      'firefoxLoginMethodForm': '直接登录',
-      'firefoxLoginMethodBrowser': '浏览器登录',
-      'firefoxLoginSubtitleForm': '使用电子邮箱和密码直接登录',
-      'firefoxLoginFormHint': '使用 Google 或 Apple 创建的账户请用浏览器登录',
-      'firefoxLoginBrowserHint': '密码只在应用引擎内处理，绝不会被存储',
-      'firefoxLoginEmail': '电子邮箱',
-      'firefoxLoginPassword': '密码',
-      'firefoxLoginSubmit': '登录',
-      'firefoxLoginSubmitting': '正在登录…',
-      'firefoxLoginEmailInvalid': '电子邮箱地址无效',
-      'firefoxLoginPasswordEmpty': '请输入密码',
-      'firefoxLoginCodeLabel': '验证码',
-      'firefoxLoginCodeVerify': '验证',
-      'firefoxLoginCodeVerifying': '正在验证验证码…',
-      'firefoxLoginWrongCode': '输入的验证码不正确',
-      'firefoxLoginNetworkRetry': '网络问题；请重试',
-      'firefoxLoginNoAccount': '没有使用此邮箱的 Firefox 账户',
-      'firefoxLoginWrongPassword': '密码不正确',
-      'firefoxLoginTooManyAttempts': '尝试次数过多；请稍后再试',
-      'firefoxLoginRequestBlocked': '登录因安全原因被阻止；请使用浏览器标签页',
-      'firefoxLoginSecondaryEmail': '登录需要账户的主邮箱地址',
-      'firefoxLoginInvalidEmail': '此邮箱无法用于登录',
-      'firefoxLoginUnverifiedAccount': '您的账户邮箱尚未验证；请先打开验证邮件',
-      'firefoxLoginEmailCase': '邮箱的大小写与账户不匹配',
-      'firefoxLoginCodeExpired': '验证码已过期；请重新登录',
-      'firefoxLoginCodeAttempts': '错误验证码次数过多；请重新登录',
-      'firefoxLoginStartOver': '重新开始',
-      'firefoxLoginCodeSent': '验证码已发送至 {email}',
-      // PHASE B (Part 2) — the login-failure classes.
-      'firefoxErrDns': '无法解析账户服务器域名（DNS）；请检查网络连接',
-      'firefoxErrNetwork': '无法连接账户服务器；请检查网络',
-      'firefoxErrTls': '无法与账户服务器建立安全连接',
-      'firefoxErrTokenExchange': '与账户服务器的登录交换未完成；请重试',
-      'firefoxErrInvalidToken': '账户服务器响应无效；请重试',
-      'firefoxErrServerRejected': '账户服务器拒绝了请求',
       'settingsPillSub': '位置等 …',
       'settingsAdvancedStatus': '配置状态',
       'settingsRoutingArea': '路由区域',
       'settingsMainServer': '内核地址',
       'settingsSubpageComingNext': '此部分 — 将在下一步实现',
       'failureCodeLabel': '错误代码',
+      // v2.1.0 — the home widget deck.
+      'homeWidgetTimer': '会话',
+      'homeWidgetPing': '延迟',
+      'homeWidgetData': '会话数据',
       'failureDetailsTitle': '错误详情',
       'failureDetailsCopy': '复制错误详情',
       'portNote': '本地 SOCKS 端口：@p',
@@ -1951,8 +1525,6 @@ class AppStrings {
       'h2TransportDesc': 'MASQUE 走 HTTP/2（TCP）— 应用新默认；适合封锁 UDP 的网络',
       'quicV2': 'QUIC v2 协商',
       'quicV2Desc': '在封锁 QUIC v1 的网络上打开 HTTP/3 通路',
-      'dnsLabel': '隧道内 DNS',
-      'dnsHint': '逗号分隔 — 如 1.1.1.1,1.0.0.1',
       'secEngine': '引擎',
       'noizeLabel': '混淆配置（Noize）',
       'noizeDesc': '应用新默认：均衡（balanced）；严格网络可试 GFW 或激进',
@@ -2092,8 +1664,6 @@ class AppStrings {
       'aetherLegLabel': '组合模式的底层',
       'torLegDesc': '在 Tor 组合模式（链式与反向）中，底层 Aether 隧道使用此协议。反向模式下需要 UDP 的分支会自动映射为 MASQUE（内核自身的限制）',
       'psiphonLegDesc': '在 Psiphon 组合模式（链式与反向）中，底层 Aether 隧道使用此协议。反向模式下需要 UDP 的分支会自动映射为 MASQUE（内核自身的限制）',
-      'secFirefoxCarrier': 'Firefox 外层隧道（WARP）',
-      'firefoxCarrierLabel': 'Aether 核心协议',
       'secIpVersion': 'IP 版本',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',
@@ -2170,7 +1740,6 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
-      'protoFirefox': 'FIREFOX',
       'settingsTitle': 'Sazlamalar',
       'settingsRouting': 'Marşrutizasiýa',
       'settingsRoutingSub': 'Göni marşrutlar',
@@ -2186,86 +1755,6 @@ class AppStrings {
       'settingsSecuritySub': 'Howpsuzlyk we gizlinlik',
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
-      // ---- phase-2 firefox page ----
-      'settingsFirefox': 'Firefox',
-      'secFirefoxAccount': 'Firefox hasaby',
-      'firefoxSignedIn': 'Firefox hasaby birikdirilen',
-      'firefoxSignedOut': 'Firefox hasaby birikdirilen däl',
-      'firefoxSignIn': 'Firefox hasaby bilen gir',
-      'firefoxSignOut': 'Hasapdan çyk',
-      'firefoxAccountDesc': 'Firefox VPN üçin Firefox hasabyňyz gerek. Giriş Mozillanyň resmi sahyponda geçýär — parolyňyz bu programa hiç wagt girmeýär.',
-      'firefoxLocationDesc': 'Çykyş ýeri Firefox-yň göni ýaýlym serwer sanawyndan saýlanýar; «Awtomatiki» Mozillanyň öz maslahat berýän ýeri. Birikdirilenden soň görkezilýän ýurt hakyky tunnel barlagyndan gelýär, siziniň saýlawyňyzdan däl.',
-      'firefoxLocationsLive': 'Göni ýaýlym serwer sanawy',
-      'firefoxLocationsCached': 'Ýazylan sanaw (oflaýn)',
-      'secFirefoxLeg': 'Çekirdek protokoly',
-      'firefoxLegDesc': 'Ilki saýlanan protokol bilen WARP birikmesi dikeldilýär we Firefox-üň ilkinji birikme ädimlerini (giriş, serwerleriň tapylmagy, tokenleriň alynmagy) göterýär. WARP arkaly tertibinde Firefox-üň maglumat tuneli hem şol tuneliň içinde gurnaýar (Psiphon over Warp ýaly); göni tertipte diňe soňky maglumat birikmesi göni dikeldilýär.',
-      'firefoxTransportNote': 'Maglumat geçirişi H2 (TCP+TLS) üstünde işleýär; H3 (QUIC/UDP) WARP-nyň TCP göterijisinden geçip bilmeýär.',
-      'secFirefoxTransport': 'Maglumat geçirişi',
-      'firefoxTransportLabel': 'Geçiriş tertibi',
-      'firefoxTransportH2': 'H2 (adaty)',
-      'firefoxTransportH3': 'H3 (QUIC)',
-      'firefoxTransportDesc': 'H2 TCP+TLS üstünde, H3 QUIC üstünde işleýär. Ynamyňyz ýok bolsa H2 galsyn.',
-      'firefoxAccountLoading': 'Hasap barlanýar…',
-      'firefoxBrowserTabLoading': 'Brauzer taýýarlanylýar…',
-      'firefoxBrowserTabFailed': 'Giriş sahypasy ýüklenmedi.',
-      'firefoxBrowserTabRetry': 'Gaýtadan synanyş',
-      'firefoxBrowserTabHint': 'Bu usul Mozilla sahypalaryny açýan ulgamy talap edýär; açylmasa «Giriş gutarnykly» bellik ulanyň.',
-      'firefoxQuotaLabel': 'Galan möçber',
-      'firefoxQuotaUnlimited': 'Çäksiz',
-      'firefoxQuotaRefresh': 'Möçberi täzele',
-      'firefoxQuotaRefreshing': 'Möçber täzelenýär…',
-      'firefoxQuotaResetLabel': 'Döwür täzelenmesi',
-      'secFirefoxMode': 'Birikme tertibi',
-      'firefoxModeOverWarp': 'WARP arkaly (adaty)',
-      'firefoxModeDirect': 'Göni',
-      'firefoxModeOverWarpDesc': 'Ilki Aether öňdebaryjynda WARP tuneli dikeldilýär, soň Firefox öz tuneliiniňi şol tuneliň içinde gurnaýar (Psiphon over Warp ýaly). Süzlenen torlar üçin.',
-      'firefoxModeDirectDesc': 'Ilkinji birikme ädimleri (giriş, serwerleriň tapylmagy, tokenleriň alynmagy) ilki Aether öňdebaryjynyň WARP tuneli arkaly geçýär, soň maglumat birikmesi (H2/H3) Firefox serwerlerine göni dikeldilýär — Arman VPN-üň relä ýagdaýy ýaly. Firefox-üň maglumat serwerleri baglanmadyk torlar üçin.',
-      'firefoxTransportDirectDesc': 'Göni tertipte diňe maglumat düzümesi göni: H2 (TCP+TLS) we H3 (QUIC) enjamyň öz internetinden Firefox serwerlerine göni birikýär; giriş we token çalşyklary ýene-de WARP tuneli arkaly geçýär.',
-      'firefoxLoginTitle': 'Firefox-a gir',
-      'firefoxLoginSubtitle': 'Giriş Mozillanyň resmi sahyponda geçýär',
-      'firefoxLoginWaiting': 'Mozillanyň sahyponda girişiňizi garaşýarys…',
-      'firefoxLoginExchanging': 'Giriş tamamlanýar we sessiýa alynýar…',
-      'firefoxLoginSuccess': 'Giriş üstünlikli tamamlandy',
-      'firefoxLoginFailed': 'Giriş şowsuz boldy',
-      'firefoxLoginDisruptionNotice': 'Eger giriş näsazlyk etse, beýleki bir VPN-i açyň we gaýtadan synanyşyň.',
-      'firefoxLoginRejected': 'Giriş sessiýasy kabul edilmedi; ýene gir',
-      'firefoxLoginTimeout': 'Girişi tassyklamak wagtynyň üstünden geçdi; ýene synanyş',
-      'firefoxLoginUnavailable': 'Bu enjamda giriş sahypasy elýeterli däl',
-      'firefoxLoginMethodForm': 'Giriş göni',
-      'firefoxLoginMethodBrowser': 'Brauzer arkaly giriş',
-      'firefoxLoginSubtitleForm': 'E-poçta we parol bilen göni giriş',
-      'firefoxLoginFormHint': 'Google ýa-da Apple bilen döredilen hasaplar brauzer girişini talap edýär',
-      'firefoxLoginBrowserHint': 'Parol diňe programmanyň motorunda işlenilýär we hiç ýerde saklanmaýar',
-      'firefoxLoginEmail': 'E-poçta',
-      'firefoxLoginPassword': 'Parol',
-      'firefoxLoginSubmit': 'Gir',
-      'firefoxLoginSubmitting': 'Girilýär…',
-      'firefoxLoginEmailInvalid': 'E-poçta salgy ýalňyş',
-      'firefoxLoginPasswordEmpty': 'Paroly giriziň',
-      'firefoxLoginCodeLabel': 'Tassyklyk kody',
-      'firefoxLoginCodeVerify': 'Tassykla',
-      'firefoxLoginCodeVerifying': 'Kod barlanýar…',
-      'firefoxLoginWrongCode': 'Girizilen kod dogry däl',
-      'firefoxLoginNetworkRetry': 'Torynda mesele; gaýtadan synanyşyň',
-      'firefoxLoginNoAccount': 'Bu e-poçta bilen Firefox hasaby tapylmady',
-      'firefoxLoginWrongPassword': 'Parol nädogry',
-      'firefoxLoginTooManyAttempts': 'Örän köp synanyşyk; soňrak gaýtadan synanyşyň',
-      'firefoxLoginRequestBlocked': 'Giriş howpsuzlyk sebäpli bloklandy; brauzer goşmasyny ulanyň',
-      'firefoxLoginSecondaryEmail': 'Giriş üçin hasabyň esasy e-poçtasy gerek',
-      'firefoxLoginInvalidEmail': 'Bu e-poçta giriş üçin ulanylyp bilinmez',
-      'firefoxLoginUnverifiedAccount': 'Hasabyň e-poçtasy entek tassyklanmady; ilki tassyklyk hatyny açyň',
-      'firefoxLoginEmailCase': 'E-poçtanyň harp ölçegi hasaba laýyk gelmeýär',
-      'firefoxLoginCodeExpired': 'Tassyklyk kodyň möhuti gutardy; gaýtadan gir',
-      'firefoxLoginCodeAttempts': 'Nädogry köp kod; gaýtadan gir',
-      'firefoxLoginStartOver': 'Täzeden başla',
-      'firefoxLoginCodeSent': 'Tassyklyk kody {email} salgyna iberildi',
-      // PHASE B (Part 2) — the login-failure classes.
-      'firefoxErrDns': 'Hasap serweriniň ady çözülmedi (DNS); birikmegi barlaň',
-      'firefoxErrNetwork': 'Hasap serweri elýeterli däldi; tor birikmesini barlaň',
-      'firefoxErrTls': 'Hasap serweri bilen howpsuz birikme düzülmedi',
-      'firefoxErrTokenExchange': 'Hasap serweri bilen giriş çalşygy tamamlanmady; ýene synanyş',
-      'firefoxErrInvalidToken': 'Hasap serweriniň jogaby nädogrydy; ýene synanyş',
-      'firefoxErrServerRejected': 'Hasap serweri sowaly ret etdi',
       'settingsPillSub': 'Ýerleşýän ýer we başgalar …',
       'settingsAdvancedStatus': 'Konfigurasiýa ýagdaýy',
       'settingsRoutingArea': 'Marşrutizasiýa sebiti',
@@ -2273,6 +1762,10 @@ class AppStrings {
       'settingsSubpageComingNext': 'Bu bölek — indiki ädimde',
       // ---- v4.20 failure visibility ----
       'failureCodeLabel': 'Ýalňyşlyk kody',
+      // v2.1.0 — the home widget deck.
+      'homeWidgetTimer': 'Sessiýa',
+      'homeWidgetPing': 'Gijikme',
+      'homeWidgetData': 'Sessiýa maglumaty',
       'failureDetailsTitle': 'Ýalňyşlygyň jikme-jigi',
       'failureDetailsCopy': 'Ýalňyşlyk jikme-jiklerini göçür',
       'portNote': 'Ýerli SOCKS porty: @p',
@@ -2338,8 +1831,6 @@ class AppStrings {
       'h2TransportDesc': 'MASQUE HTTP/2 (TCP) üstünden — programmanyň täze defaulty; UDP-i bloklaýan ulaglar üçin',
       'quicV2': 'QUIC v2 ylalaşygy',
       'quicV2Desc': 'QUIC v1 bloklanan ýerde HTTP/3 üçin ýol açýar',
-      'dnsLabel': 'Tuneliň içindeki DNS',
-      'dnsHint': 'vergül bilen aýrylan — m. 1.1.1.1,1.0.0.1',
       'secEngine': 'Motor',
       'noizeLabel': 'Gizleniş profili (Noize)',
       'noizeDesc': 'Programmanyň täze defaulty: Denzag; gysga ulaglarda GFW ýa-da Agresiw-i synap görüň',
@@ -2482,8 +1973,6 @@ class AppStrings {
       'aetherLegLabel': 'Birleşdirilen režimleriň esasy',
       'torLegDesc': 'Birleşdirilen tor režimlerinde (zelze we ters) aşaky Aether tuneli şu protokoly ulanýar. Ters režimde UDP isleg edýän protokollar awtomatiki MASQUE-e geçirilýär (çekirdegiň çäklenmesi)',
       'psiphonLegDesc': 'Birleşdirilen psiphon režimlerinde (zelze we ters) aşaky Aether tuneli şu protokoly ulanýar. Ters režimde UDP isleg edýän protokollar awtomatiki MASQUE-e geçirilýär (çekirdegiň çäklenmesi)',
-      'secFirefoxCarrier': 'Firefox daşaýjy tuneli (WARP)',
-      'firefoxCarrierLabel': 'Aether çekirdek protokoly',
       'secIpVersion': 'IP wersiýasy',
       'ipV4': 'IPv4',
       'ipV6': 'IPv6',

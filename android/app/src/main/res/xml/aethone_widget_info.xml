@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v2.1.0 — the widget provider info: a compact 2×1 resizable card;
+     the preview is the app's own launcher icon (the owner's own
+     artwork — no synthetic preview). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="1"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:initialLayout="@layout/aethone_widget"
+    android:previewLayout="@layout/aethone_widget"
+    android:description="@string/widget_description" />

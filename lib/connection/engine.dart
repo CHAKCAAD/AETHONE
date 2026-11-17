@@ -21,7 +21,6 @@ import '../core/app_assets.dart';
 import 'app_tunnel.dart';
 import 'connection_state.dart';
 import 'core_settings.dart';
-import 'firefox/firefox_protocol.dart';
 
 /// Minimal `ProxyEndpoint` model (prompt §7): filled only from the real
 /// listener configuration — never guessed.
@@ -88,43 +87,6 @@ class EngineStatsUpdated extends EngineEvent {
 class EngineEgressRegions extends EngineEvent {
   const EngineEgressRegions(this.regions);
   final List<String> regions;
-}
-
-/// PHASE-2 (firefox-vpn) — the live/cached Firefox VPN location set from
-/// the engine's `--discover` role (the adapter emits it after every
-/// [EngineAdapter.refreshFirefoxLocations]; the store swaps it into the
-/// wheel's firefox list). [live] is the honesty label: false = served
-/// from the disk cache (offline start) — the UI surfaces which one it
-/// got, never presenting a cache as live data.
-class EngineFirefoxLocations extends EngineEvent {
-  const EngineFirefoxLocations(this.countries, this.live, this.fetchedAt);
-  final List<String> countries;
-  final bool live;
-  final DateTime fetchedAt;
-}
-
-/// 1.5.0 — the Guardian quota facts of the signed-in Firefox account,
-/// surfacing on every passAcquired / renewed engine event (the owner's
-/// round 2: the remaining-data slots on the settings Firefox pill and the
-/// protocol page's Firefox card). The strings are the engine's own (byte
-/// counts as ASCII strings; empty = no metered quota — the unlimited
-/// case; the reset stamp is RFC3339 or Unix seconds).
-///
-/// 1.7.0 (the owner's round 5): the `--usage` role also emits this event
-/// on demand (right after sign-in, from the settings page's refresh) —
-/// and [quotaUnlimited] carries the explicit X-Quota-Unlimited flag the
-/// pass-minting path never surfaces.
-class EngineFirefoxQuota extends EngineEvent {
-  const EngineFirefoxQuota(this.quotaMax, this.quotaLeft, this.quotaReset,
-      {this.quotaUnlimited = false});
-  final String quotaMax;
-  final String quotaLeft;
-  final String quotaReset;
-
-  /// 1.7.0 — the explicit Guardian unlimited flag (the `--usage` role);
-  /// false on the pass events (which infer unlimited from the empty
-  /// pair instead).
-  final bool quotaUnlimited;
 }
 
 /// v4.31 — the REAL exit country of a pseudo-country exit, resolved
@@ -203,16 +165,6 @@ abstract class EngineConfigSource {
   String get psiphonLocation;
   String get torLocation;
 
-  /// PHASE-2 (firefox-vpn) — the firefox family's own pick: 'auto' (the
-  /// engine's AUTO = Mozilla's REC anycast) or an ISO-3166 alpha-2
-  /// lowercase code from the LIVE RemoteSettings list (never the static
-  /// flag manifest). Persisted like the family picks above.
-  String get firefoxLocation;
-
-  /// PHASE-2 — the firefox data-plane transport: 'h2' (default, TCP +
-  /// TLS 1.3) or 'h3' (QUIC). Fed verbatim to the engine config.
-  String get firefoxTransport;
-
   /// «سرعت اسکن» 1..5 (protocol sheet; feeds the core scan profile).
   int get scanSpeed;
 
@@ -261,85 +213,6 @@ abstract class EngineAdapter {
   /// Called once by the store right after construction; default no-op
   /// (preview / not-wired adapters never read user config).
   void bind(EngineConfigSource config) {}
-
-  // ---- PHASE-2 (firefox-vpn) — the firefox engine surface. Defaults
-  // keep the preview/not-wired adapters honest (no engine = no
-  // locations, no session, a failed login) without special-casing them
-  // everywhere.
-
-  /// Asks the adapter to refresh the Firefox location list through the
-  /// engine's `--discover` role; the result arrives as an
-  /// [EngineFirefoxLocations] event. Default: no-op.
-  Future<void> refreshFirefoxLocations() async {}
-
-  /// Runs the WebChannel login exchange (the engine's `--login` role).
-  /// Default: the honest not-wired failure.
-  Future<FirefoxLoginResult> firefoxWebChannelLogin(
-    String sessionToken, {
-    void Function(String line)? onLog,
-  }) async =>
-      FirefoxLoginResult.failed(
-        'engineNotWired',
-        'the Firefox VPN engine is not available on this platform',
-      );
-
-  /// 1.8.0 (the owner's round 8 — the arman-vpn-client pattern): the
-  /// DIRECT email+password sign-in (the engine's `--login` password
-  /// mode). Default: the honest not-wired failure.
-  Future<FirefoxLoginResult> firefoxPasswordLogin(
-    String email,
-    String password, {
-    void Function(String line)? onLog,
-  }) async =>
-      FirefoxLoginResult.failed(
-        'engineNotWired',
-        'the Firefox VPN engine is not available on this platform',
-      );
-
-  /// 1.8.0 — answers the engine's emailed-code ask (the second stdin
-  /// line on the SAME child [firefoxPasswordLogin] spawned). Default:
-  /// the honest not-wired failure.
-  Future<FirefoxLoginResult> firefoxPasswordLoginCode(
-    String code, {
-    void Function(String line)? onLog,
-  }) async =>
-      FirefoxLoginResult.failed(
-        'engineNotWired',
-        'the Firefox VPN engine is not available on this platform',
-      );
-
-  /// Whether a session pair lives in the Keystore vault. Default: absent.
-  Future<bool> firefoxHasSession() async => false;
-
-  /// The sign-out vault wipe. Default: no-op.
-  Future<void> firefoxClearSession() async {}
-
-  /// Cancels an in-flight login exchange. Default: no-op.
-  Future<void> firefoxLoginCancel() async {}
-
-}
-
-/// 1.7.0 (the owner's round 5) — the on-demand quota refresh capability:
-/// the engine's `--usage` role (the account's Guardian quota without
-/// minting a pass), riding a live WARP carrier when one is already up.
-/// Implemented only by the real Firefox platform adapter.
-abstract interface class FirefoxQuotaRefreshCapable {
-  /// Fetches the signed-in account's quota; emits [EngineFirefoxQuota]
-  /// through the event stream on success. Returns whether the fetch
-  /// completed (false = no session / the walk failed).
-  Future<bool> refreshFirefoxQuota();
-}
-
-/// Safe extension: adapters without the capability report no refresh —
-/// the quota slots keep their last known values.
-extension EngineAdapterQuotaRefresh on EngineAdapter {
-  Future<bool> refreshFirefoxQuota() async {
-    final adapter = this;
-    if (adapter is FirefoxQuotaRefreshCapable) {
-      return adapter.refreshFirefoxQuota();
-    }
-    return false;
-  }
 }
 
 /// Default adapter until the native service lands (M2): fails honestly.

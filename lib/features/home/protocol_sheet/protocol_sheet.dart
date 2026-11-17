@@ -20,11 +20,12 @@
 ///  * LIVE BINDING: the page listens to [ConnectionStore] — «حالت اتصال»
 ///    segments apply visually the moment they are tapped, INDEPENDENT of
 ///    protocol selection (the v4.16 sheet only rebuilt when a protocol
-///    tap's setState ran). PHASE-2 REBUILD (2026-11-09): the «سرعت اسکن»
-///    pills MOVED to Connection Settings — they no longer live here.
+///    tap's setState ran). v2.1.0 (the owner's decree): the «سرعت اسکن»
+///    pills are BACK on this page — the Firefox card that replaced them
+///    is retired with the whole Firefox protocol.
 ///  * Headings: «پروتکل» badge = Swap 1.svg, «حالت اتصال» keeps Password
 ///    1.svg; badges 20 → 26 and the text moved next to its icon
-///    (gap 26 → 12). The «سرعت اسکن» heading is gone with its section.
+///    (gap 26 → 12). The «سرعت اسکن» heading keeps Scan 1.svg.
 ///  * Tiles/family cards: radius 16 → 21 (the settings cards' corners);
 ///    family cards breathe (h 116, subtile gaps 20, vertically centred).
 ///  * v4.33 (owner round 9): the ⓘ info badges and the WHOLE protocol
@@ -154,9 +155,7 @@ class _ProtocolPageState extends State<ProtocolPage> {
                 SafeArea(
                   child: SingleChildScrollView(
                     child: SizedBox(
-                      // PHASE B (Part 1): the page's own column — taller than
-                      // the frame (refHeight) for the Firefox card; scrolls.
-                      height: AethGeometry.protoPageContentH * s,
+                      height: AethGeometry.refHeight * s,
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
@@ -318,39 +317,36 @@ class _ProtocolPageState extends State<ProtocolPage> {
                               ),
                             ),
                           ),
-                          // ---- PHASE B (Part 1): the FIREFOX account card —
-                          // the third full-width card, the standard
-                          // single-knob selection path (no parallel
-                          // channel: the card only COMMITS the protocol
-                          // like every tile; the account state is a
-                          // READ-ONLY chip fed by the existing Firefox
-                          // service surface, and signing in stays on the
-                          // existing login screen / settings page).
+                          // ---- v2.1.0 (the owner's decree): the
+                          // «سرعت اسکن» section is BACK on the protocol
+                          // page, in the Firefox card's place — the
+                          // pre-PHASE-2 geometry, restored verbatim.
                           _enter(
                             t,
                             7,
                             Positioned(
-                              top: AethGeometry.protoCardTopFirefox * s,
-                              left: AethGeometry.protoRightInset * s,
-                              right: AethGeometry.protoRightInset * s,
-                              child: _FirefoxAccountCard(
-                                label: strings
-                                    .protocolName(ProtocolId.firefoxOnly),
-                                account: widget.store.firefoxAccount,
-                                quota: widget.store.firefoxQuota,
-                                isSelected: widget.store.selectedProtocol ==
-                                    ProtocolId.firefoxOnly,
-                                pulsing: _pulseId == ProtocolId.firefoxOnly,
-                                onSelect: _select),
+                              top: AethGeometry.protoPageHeadingScanTop * s,
+                              left: 0,
+                              right: 0,
+                              child: _SheetHeadingRow(
+                                text: strings.sheetHeadingScanSpeed,
+                                badge: AppAssets.iconScan1,
+                              ),
                             ),
                           ),
-                          // ---- PHASE-2 REBUILD (2026-11-09, the owner's
-                          // decree): the «سرعت اسکن» section is GONE from
-                          // the protocol page — it lives in Connection
-                          // Settings now (lib/features/settings/
-                          // connection_page.dart). Nothing follows the
-                          // Firefox card; the content column shrinks to
-                          // its real geometry (protoPageContentH 903).
+                          _enter(
+                            t,
+                            7,
+                            Positioned(
+                              top: AethGeometry.protoPillTop * s,
+                              left: 0,
+                              right: 0,
+                              child: _ScanPills(
+                                selected: widget.store.scanSpeed,
+                                onSelect: widget.store.setScanSpeed,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1046,252 +1042,66 @@ class _SubTileState extends State<_SubTile>
 }
 
 // ---------------------------------------------------------------------------
-// PHASE B (Part 1) — the FIREFOX account card: the FamilyCard chrome
-// (h116 r21) as a SINGLE-MEMBER card. The main block (logo + «فایرفاکس»)
-// mirrors the family cards exactly; the right zone carries the
-// account-state chip — a READ-ONLY display of the existing Firefox
-// service's signed-in state (vault presence; unknown renders as the
-// signed-out wording, the settings page's own convention). The ONLY
-// action is the standard selection tap (commit + pulse + auto-pop);
-// signing in/out stays on the existing Firefox settings page — no new
-// channel, no second process, and the chip NEVER claims a connection
-// (connection states come solely from the engine's effective events).
 // ---------------------------------------------------------------------------
-class _FirefoxAccountCard extends StatefulWidget {
-  const _FirefoxAccountCard({
-    required this.label,
-    required this.account,
-    required this.quota,
-    required this.isSelected,
-    required this.pulsing,
-    required this.onSelect,
-  });
+// «سرعت اسکن» pills: 5 increasing widths 28/47/64/77/87, h36 r8 gap8,
+// CENTERED (the row spans x33..367). The widest (rightmost) is selected
+// in the frame.
+// ---------------------------------------------------------------------------
 
-  final String label;
-  final FirefoxAccountStatus account;
+class _ScanPills extends StatelessWidget {
+  const _ScanPills({required this.selected, required this.onSelect});
 
-  /// v1.5.0 (the owner's round 2, fix 4) — the LAST KNOWN Guardian quota
-  /// of the signed-in account (null = never known — the honest dash).
-  final FirefoxQuota? quota;
-  final bool isSelected;
-  final bool pulsing;
-  final void Function(ProtocolId) onSelect;
+  final int selected;
+  final void Function(int) onSelect;
 
-  @override
-  State<_FirefoxAccountCard> createState() => _FirefoxAccountCardState();
-}
-
-class _FirefoxAccountCardState extends State<_FirefoxAccountCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 300),
-    lowerBound: 0.97,
-  );
-
-  @override
-  void didUpdateWidget(covariant _FirefoxAccountCard old) {
-    super.didUpdateWidget(old);
-    if (widget.pulsing && !old.pulsing) _pulse.forward();
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
+  static const List<double> _w = [
+    AethGeometry.protoPillW1,
+    AethGeometry.protoPillW2,
+    AethGeometry.protoPillW3,
+    AethGeometry.protoPillW4,
+    AethGeometry.protoPillW5,
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final strings = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    // The chip wording mirrors the Firefox settings page's account row
-    // (unknown degrades to the signed-out text — the same convention).
-    final chipText = widget.account == FirefoxAccountStatus.signedIn
-        ? strings.firefoxSignedIn
-        : strings.firefoxSignedOut;
+    final h = AethGeometry.protoPillH * s;
+    final r = AethGeometry.protoPillRadius * s;
 
-    // v1.5.0 (fix 4) — the remaining-data value: «نامحدود» when the
-    // account carries no metered quota; the app's own bytes grammar
-    // (Latin digits + MB/GB, the bottom panel's precedent); «—» until
-    // the first connect reports it (never a made-up number).
-    final quota = widget.quota;
-    final String quotaValue;
-    if (quota == null) {
-      quotaValue = '—';
-    } else if (quota.unlimited) {
-      quotaValue = strings.firefoxQuotaUnlimited;
-    } else {
-      quotaValue = _formatQuotaBytes(quota.remainingBytes ?? 0);
-    }
-
-    return SizedBox(
-      key: const ValueKey('proto-card-firefox'),
-      height: AethGeometry.protoCardH * s,
-      child: ScaleTransition(
-        scale: _pulse,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => widget.onSelect(ProtocolId.firefoxOnly),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOut,
-            decoration: BoxDecoration(
-              // The tile/subtile selection grammar: the committed
-              // protocol renders on the accent green.
-              color: widget.isSelected
-                  ? AethColors.accentConnected
-                  : AethColors.cardDark,
-              borderRadius:
-                  BorderRadius.circular(AethGeometry.protoCardRadius * s),
-            ),
-            child: Directionality(
-              // LTR like the family cards: the main block at the visual
-              // LEFT, the account chip to its right.
-              textDirection: TextDirection.ltr,
-              child: Row(
-                children: [
-                  // ---- main block (the family cards' own geometry)
-                  SizedBox(
-                    width: AethGeometry.protoMainBlockW * s,
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          top: (AethGeometry.protoMainLogoCenterY - 35 / 2) * s,
-                          child: Center(
-                            child: ProtocolGlyph(
-                              id: ProtocolId.firefoxOnly,
-                              // v4.41 rhythm: 35 ink-height, like the
-                              // family main logos.
-                              size: 35 * s,
-                              white: widget.isSelected,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          top: (AethGeometry.protoMainLabelCenterY - 6) * s,
-                          child: Center(
-                            child: Text(
-                              widget.label,
-                              style: TextStyle(
-                                fontFamily: 'IRANYekanX',
-                                fontWeight: FontWeight.w500,
-                                fontSize: AethGeometry.protoTileLabelSize * s,
-                                color: AethColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // ---- the account-state chip (read-only display)
-                  Expanded(
-                    child: Center(
-                      child: Container(
-                        key: const ValueKey('proto-card-firefox-chip'),
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 14 * s,
-                          vertical: 9 * s,
-                        ),
-                        decoration: BoxDecoration(
-                          // The subtile fill stays legible on both the
-                          // dark and the selected green card.
-                          color: AethColors.sheetSubtile,
-                          borderRadius: BorderRadius.circular(
-                              AethGeometry.protoSubtileRadius * s),
-                        ),
-                        child: Text(
-                          chipText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: 'IRANYekanX',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 11 * s,
-                            color: AethColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  // ---- v1.5.0 (fix 4): the remaining-data block at the
-                  // visual-RIGHT edge — the page's own subtile grammar
-                  // (the account chip's twin: sheetSubtile fill, r14),
-                  // the muted label over the value, theme-aware fill on
-                  // both the dark and the selected green card. ----
-                  SizedBox(width: 10 * s),
-                  Container(
-                    key: const ValueKey('proto-card-firefox-quota'),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 12 * s,
-                      vertical: 8 * s,
-                    ),
+    return Center(
+      child: Directionality(
+        // RTL with children 5→1: the FIRST child (the widest, level 5)
+        // lands at the visual RIGHT — the frame's reading (87 selected at
+        // x281..367, then 77/64/47/28 toward the left).
+        textDirection: TextDirection.rtl,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var level = 5; level >= 1; level--)
+              Padding(
+                padding: EdgeInsets.only(
+                  left: level == 1 ? 0 : AethGeometry.protoPillGap * s,
+                ),
+                child: GestureDetector(
+                  key: ValueKey('proto-pill-$level'),
+                  onTap: () => onSelect(level),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 260),
+                    curve: Curves.easeOut,
+                    width: _w[level - 1] * s,
+                    height: h,
                     decoration: BoxDecoration(
-                      color: AethColors.sheetSubtile,
-                      borderRadius: BorderRadius.circular(
-                          AethGeometry.protoSubtileRadius * s),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(
-                          strings.firefoxQuotaLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textDirection: TextDirection.rtl,
-                          style: TextStyle(
-                            fontFamily: 'IRANYekanX',
-                            fontWeight: FontWeight.w400,
-                            fontSize: 9 * s,
-                            color: AethColors.textSecondary,
-                          ),
-                        ),
-                        SizedBox(height: 3 * s),
-                        Directionality(
-                          // The value (GB/MB / نامحدود) never bidi-flips.
-                          textDirection: TextDirection.ltr,
-                          child: Text(
-                            quotaValue,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: 'IRANYekanX',
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12 * s,
-                              color: AethColors.textPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
+                      color: selected == level
+                          ? AethColors.accentConnected
+                          : AethColors.cardDark,
+                      borderRadius: BorderRadius.circular(r),
                     ),
                   ),
-                  SizedBox(width: 12 * s),
-                ],
+                ),
               ),
-            ),
-          ),
+          ],
         ),
       ),
     );
-  }
-
-  /// The app's own bytes grammar (the bottom panel's precedent: Latin
-  /// digits + MB/GB; GB gets one decimal under 10).
-  static String _formatQuotaBytes(int bytes) {
-    const gb = 1024 * 1024 * 1024;
-    const mb = 1024 * 1024;
-    if (bytes >= gb) {
-      final v = (bytes / gb)
-          .toStringAsFixed(bytes >= gb * 10 ? 0 : 1)
-          .replaceFirst(RegExp(r'\.0$'), '');
-      return '$v GB';
-    }
-    return '${bytes ~/ mb} MB';
   }
 }

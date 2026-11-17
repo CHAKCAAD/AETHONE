@@ -222,6 +222,13 @@ pub async fn lookup(stack: &StackHandle) -> Result<String> {
         .ok_or_else(|| AetherError::Other("the trace answer carried no location".into()))
 }
 
+/// How many times `settle` re-reads the trace before it gives up and
+/// serves the tunnel unverified (the owner's 2026-11-17 WireGuard log:
+/// the data plane was validated, then the one-shot 10 s read failure
+/// tore the tunnel down every ~10 s — an endless reconnect loop).
+const SETTLE_ATTEMPTS: usize = 3;
+const SETTLE_RETRY_PAUSE: Duration = Duration::from_secs(2);
+
 pub async fn settle(stack: &StackHandle, policy: &Option<Policy>, what: &str) -> Result<()> {
     let Some(policy) = policy else {
         let stack = stack.clone();
@@ -232,22 +239,37 @@ pub async fn settle(stack: &StackHandle, policy: &Option<Policy>, what: &str) ->
         return Ok(());
     };
 
-    let Some(exit) = report(stack, what).await else {
-        return Err(AetherError::Other(
-            "the exit location could not be read, so the policy cannot be honoured".into(),
-        ));
-    };
+    for attempt in 1..=SETTLE_ATTEMPTS {
+        if let Some(exit) = report(stack, what).await {
+            let loc = exit.country.unwrap_or_default();
+            if policy.accepts(&loc) {
+                log::info!("[+] exit location {loc} accepted ({})", policy.describe());
+                return Ok(());
+            }
 
-    let loc = exit.country.unwrap_or_default();
-    if policy.accepts(&loc) {
-        log::info!("[+] exit location {loc} accepted ({})", policy.describe());
-        return Ok(());
+            log::warn!("[-] exit location {loc} rejected ({})", policy.describe());
+            return Err(AetherError::Other(format!(
+                "exit location {loc} does not satisfy the requested policy"
+            )));
+        }
+
+        log::warn!(
+            "[*] {what}: the exit location could not be read (attempt {attempt}/{SETTLE_ATTEMPTS})"
+        );
+        if attempt < SETTLE_ATTEMPTS {
+            tokio::time::sleep(SETTLE_RETRY_PAUSE).await;
+        }
     }
 
-    log::warn!("[-] exit location {loc} rejected ({})", policy.describe());
-    Err(AetherError::Other(format!(
-        "exit location {loc} does not satisfy the requested policy"
-    )))
+    // The tunnel's data plane was already validated before we got here;
+    // an unreadable trace is a DIAGNOSTIC failure, not a tunnel failure.
+    // Serve anyway and let the periodic policy guard below keep checking:
+    // it reconnects the moment it can READ a location that violates the
+    // policy, and tolerates unreadable checks without tearing the tunnel.
+    log::warn!(
+        "[-] {what}: the exit location stayed unreadable; serving unverified — the policy guard keeps watching"
+    );
+    Ok(())
 }
 
 pub async fn watch(stack: &StackHandle, policy: &Policy) -> AetherError {

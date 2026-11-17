@@ -10,14 +10,11 @@
 library;
 
 import 'dart:async';
-import 'dart:convert' show jsonDecode, jsonEncode;
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../core/app_assets.dart';
 import '../core/app_theme.dart';
 import '../core/motion.dart';
@@ -25,7 +22,6 @@ import 'connection_state.dart';
 import 'core_settings.dart';
 import 'egress_locations.dart';
 import 'engine.dart';
-import 'firefox/firefox_protocol.dart';
 import 'app_tunnel.dart';
 import 'platform_engine_adapter.dart';
 import 'smart_scorecard.dart';
@@ -34,99 +30,6 @@ import 'transport_modes.dart';
 /// The two selectable home-screen looks (owner: identical logic, different
 /// layout — report §11.2).
 enum HomeLook { one, two }
-
-/// PHASE-2 (firefox-vpn) — the Firefox account's signed-in state, from
-/// the Keystore vault's presence (honest: unknown until the first check,
-/// then signedIn / signedOut; nothing simulated).
-enum FirefoxAccountStatus { unknown, signedIn, signedOut }
-
-/// 1.5.0 — the Guardian quota of the signed-in Firefox account (the
-/// owner's round 2: the remaining-data slots). Parsed from the engine's
-/// quotaMax/quotaLeft/quotaReset event strings with ARMAN's ProxyUsage
-/// semantics adapted (core/internal/guardian/usage.go): both byte counts
-/// present and non-negative → a METERED account (remaining = quotaLeft);
-/// BOTH empty → the account carries NO metered quota — the UNLIMITED
-/// case (Guardian sends the X-Quota-* trio only to metered accounts);
-/// anything else → unknown (null — the UI shows its honest placeholder,
-/// never a made-up number).
-class FirefoxQuota {
-  const FirefoxQuota({
-    required this.unlimited,
-    this.limitBytes,
-    this.remainingBytes,
-    this.resetAt,
-    required this.checkedAt,
-  });
-
-  final bool unlimited;
-  final int? limitBytes;
-  final int? remainingBytes;
-  final DateTime? resetAt;
-  final DateTime checkedAt;
-
-  /// Parses the engine's event strings; null when they carry no usable
-  /// quota (the unknown case — never a guess). The 1.7.0 [quotaUnlimited]
-  /// flag (the `--usage` role's X-Quota-Unlimited) wins alone; otherwise
-  /// both counts present and non-negative → metered, both empty → the
-  /// account carries no metered quota (unlimited).
-  static FirefoxQuota? parse(
-    String quotaMax,
-    String quotaLeft,
-    String quotaReset, {
-    bool quotaUnlimited = false,
-  }) {
-    if (quotaUnlimited) {
-      return FirefoxQuota(unlimited: true, checkedAt: DateTime.now());
-    }
-    final max = int.tryParse(quotaMax.trim());
-    final left = int.tryParse(quotaLeft.trim());
-    if (max == null && left == null) {
-      return FirefoxQuota(unlimited: true, checkedAt: DateTime.now());
-    }
-    if (max == null || left == null || max < 0 || left < 0 || left > max) {
-      return null;
-    }
-    DateTime? reset;
-    final raw = quotaReset.trim();
-    if (raw.isNotEmpty) {
-      final secs = int.tryParse(raw);
-      reset = DateTime.tryParse(raw) ??
-          (secs != null && secs > 0
-              ? DateTime.fromMillisecondsSinceEpoch(secs * 1000)
-              : null);
-    }
-    return FirefoxQuota(
-      unlimited: false,
-      limitBytes: max,
-      remainingBytes: left,
-      resetAt: reset,
-      checkedAt: DateTime.now(),
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'unlimited': unlimited,
-        if (limitBytes != null) 'limitBytes': limitBytes,
-        if (remainingBytes != null) 'remainingBytes': remainingBytes,
-        if (resetAt != null) 'resetAt': resetAt!.millisecondsSinceEpoch,
-        'checkedAt': checkedAt.millisecondsSinceEpoch,
-      };
-
-  static FirefoxQuota? fromJson(Map<String, dynamic> j) {
-    if (j['unlimited'] is! bool) return null;
-    return FirefoxQuota(
-      unlimited: j['unlimited'] as bool,
-      limitBytes: (j['limitBytes'] as num?)?.toInt(),
-      remainingBytes: (j['remainingBytes'] as num?)?.toInt(),
-      resetAt: j['resetAt'] is num
-          ? DateTime.fromMillisecondsSinceEpoch((j['resetAt'] as num).toInt())
-          : null,
-      checkedAt: j['checkedAt'] is num
-          ? DateTime.fromMillisecondsSinceEpoch((j['checkedAt'] as num).toInt())
-          : DateTime.now(),
-    );
-  }
-}
 
 class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   /// v4.32 — [scorecard] defaults ONCE (the redirecting constructor) so the
@@ -142,7 +45,6 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     // read-only view (M2 seam — see [EngineConfigSource]).
     _engine.bind(this);
     _subscription = _engine.events.listen(_onEvent);
-    unawaited(_loadFirefoxQuota());
   }
 
   /// v4.32 — the SMART scorecard the adapter orders its candidates by
@@ -353,221 +255,6 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
-  // ---- PHASE-2 (firefox-vpn) — the firefox family's own surface ----
-
-  /// The firefox location pick ('auto' = Mozilla's REC anycast, else a
-  /// lowercase ISO code from the LIVE RemoteSettings list) — remembered
-  /// and persisted like the family picks above.
-  @override
-  String firefoxLocation = LocationWheelPolicy.autoCode;
-
-  /// The firefox data-plane transport ('h2' default / 'h3' optional).
-  @override
-  String firefoxTransport = 'h2';
-
-  /// 2.1.0 — the Firefox DNS feature is GONE (the owner's decree:
-  /// «بهش dns رو به کلی از اپ حذف کن»): no DNS preferences, no DoH
-  /// policy, no per-role resolver line — every engine role resolves
-  /// through the platform resolver (Bionic getaddrinfo on Android, the
-  /// A1 decree posture). The old `firefox.dns.*` preference keys are
-  /// simply never read again (inert on disk, harmless).
-
-  /// 2.0.0 — the location list's freshness gate (the owner's round-10
-  /// «تأخیر در باز شدن صفحه تنظیمات»): a settings-page open re-runs the
-  /// --discover walk only when the standing list is older than this;
-  /// a fresh list is never re-fetched.
-  static const _firefoxLocationsRefreshGate = Duration(minutes: 5);
-
-  /// The LIVE firefox country set (the engine's --discover role; null
-  /// until the first refresh — the wheel falls back to the standing
-  /// seed, firefoxCountrySnapshot). Engine truth, never a preference.
-  List<String>? liveFirefoxCountries;
-
-  /// The honesty label of the last location refresh: true = live fetch,
-  /// false = disk cache (offline start). The settings page surfaces it —
-  /// a cache is never presented as live data.
-  bool firefoxLocationsLive = false;
-  DateTime? firefoxLocationsFetchedAt;
-
-  /// The signed-in state of the Firefox account (vault presence —
-  /// honest: no session = signedOut, nothing simulated).
-  FirefoxAccountStatus firefoxAccount = FirefoxAccountStatus.unknown;
-
-  /// 1.5.0 — the LAST KNOWN Guardian quota of the signed-in Firefox
-  /// account (null = never known — the honest placeholder). Refreshed on
-  /// every passAcquired/renewed engine event and persisted beside the
-  /// DNS settings so the cards survive an app restart.
-  FirefoxQuota? firefoxQuota;
-
-  /// Consumes the adapter's [EngineFirefoxQuota] event: parses the
-  /// engine's strings, keeps the last usable value and persists it.
-  void applyFirefoxQuota(
-    String quotaMax,
-    String quotaLeft,
-    String quotaReset, {
-    bool quotaUnlimited = false,
-  }) {
-    final next = FirefoxQuota.parse(quotaMax, quotaLeft, quotaReset,
-        quotaUnlimited: quotaUnlimited);
-    if (next == null) return; // garbage is not a quota — keep the last one
-    final old = firefoxQuota;
-    final changed = old == null ||
-        old.unlimited != next.unlimited ||
-        old.remainingBytes != next.remainingBytes ||
-        old.limitBytes != next.limitBytes;
-    firefoxQuota = next;
-    unawaited(_persistFirefoxQuota(next));
-    if (changed) notifyListeners();
-  }
-
-  /// 1.7.0 (the owner's round 5) — whether a quota refresh is in flight
-  /// (the settings page's refresh button shows the scan-loading rings
-  /// while this is true).
-  bool firefoxQuotaRefreshing = false;
-  Future<void>? _firefoxQuotaRefreshInFlight;
-
-  /// 1.7.0 — fetches the signed-in account's quota NOW (the engine's
-  /// `--usage` role through a WARP carrier; no pass minted). Called
-  /// after a successful sign-in, when the Firefox settings page opens,
-  /// and from the refresh button. Single-flight: a second call while
-  /// one runs awaits the same walk.
-  Future<bool> refreshFirefoxQuota() {
-    final existing = _firefoxQuotaRefreshInFlight;
-    if (existing != null) {
-      // Best-effort join: the caller learns nothing new from a joined
-      // walk (the event stream carries the result either way).
-      return existing.then((_) => false);
-    }
-    final future = _runFirefoxQuotaRefresh();
-    _firefoxQuotaRefreshInFlight = future;
-    return future;
-  }
-
-  Future<bool> _runFirefoxQuotaRefresh() async {
-    if (firefoxQuotaRefreshing) return false;
-    firefoxQuotaRefreshing = true;
-    notifyListeners();
-    try {
-      return await _engine.refreshFirefoxQuota();
-    } catch (_) {
-      return false; // honest: no quota facts, the slots keep the last known
-    } finally {
-      firefoxQuotaRefreshing = false;
-      _firefoxQuotaRefreshInFlight = null;
-      notifyListeners();
-    }
-  }
-
-  Future<void> _persistFirefoxQuota(FirefoxQuota quota) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('firefox.quota', jsonEncode(quota.toJson()));
-    } catch (_) {
-      // Persistence is best-effort; the in-memory value stays.
-    }
-  }
-
-  Future<void> _loadFirefoxQuota() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('firefox.quota');
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is Map<String, dynamic>) {
-        firefoxQuota = FirefoxQuota.fromJson(decoded);
-      }
-    } catch (_) {
-      // A corrupt record is absent.
-    }
-  }
-
-  /// Consumes the adapter's [EngineFirefoxLocations] event: swaps in the
-  /// sanitized live set + its honesty labels. A no-change swap does not
-  /// wake the listeners.
-  void applyFirefoxLocations(List<String> codes, bool live, DateTime fetchedAt) {
-    final clean = EgressLocations.sanitizeCodes(codes);
-    if (clean == null) return; // garbage is not a live set — keep the seed
-    final changed = !listEquals(clean, liveFirefoxCountries) ||
-        firefoxLocationsLive != live;
-    liveFirefoxCountries = clean;
-    firefoxLocationsLive = live;
-    firefoxLocationsFetchedAt = fetchedAt;
-    if (changed) notifyListeners();
-  }
-
-  /// PHASE-2 — asks the adapter for the live Firefox location list (the
-  /// engine's --discover role; the result arrives as an event — see
-  /// [applyFirefoxLocations]). Fire-and-forget: the picker renders the
-  /// standing seed until the refresh lands. 1.7.0 — [firefoxLocationsRefreshing]
-  /// rides along so the settings page can show its scan-loading rings.
-  bool firefoxLocationsRefreshing = false;
-  void refreshFirefoxLocations() {
-    if (firefoxLocationsRefreshing) return;
-    // 2.0.0 — the freshness gate (the owner's round-10 settings-page
-    // delay): a list fetched within the gate is fresh enough; only an
-    // older one (or none at all) re-runs the --discover walk.
-    final fetchedAt = firefoxLocationsFetchedAt;
-    if (fetchedAt != null &&
-        DateTime.now().difference(fetchedAt) < _firefoxLocationsRefreshGate) {
-      return;
-    }
-    firefoxLocationsRefreshing = true;
-    notifyListeners();
-    unawaited(_engine.refreshFirefoxLocations().whenComplete(() {
-      // The event lands through the stream; the flag clears when the
-      // walk ends (success or failure alike — no event, no spin).
-      firefoxLocationsRefreshing = false;
-      notifyListeners();
-    }));
-  }
-
-  /// PHASE-2 — refreshes the signed-in state from the vault. Called at
-  /// app start and after every login/logout.
-  Future<void> refreshFirefoxAccount() async {
-    final has = await _engine.firefoxHasSession();
-    final next = has ? FirefoxAccountStatus.signedIn : FirefoxAccountStatus.signedOut;
-    if (firefoxAccount == next) return;
-    firefoxAccount = next;
-    notifyListeners();
-  }
-
-  /// PHASE-2 — the sign-out: if a firefox session is LIVE it is
-  /// disconnected first (the store owns user intent), then the vault is
-  /// wiped (the logout-grade clear) and the state refreshed.
-  Future<void> firefoxSignOut() async {
-    if (state == VpnState.connected &&
-        effectiveProtocol.isFirefox) {
-      await disconnect();
-    }
-    await _engine.firefoxClearSession();
-    await refreshFirefoxAccount();
-  }
-
-  /// PHASE-2 — runs the WebChannel login exchange (the login screen's
-  /// captured token → the engine's --login role → the Keystore vault).
-  Future<FirefoxLoginResult> firefoxCompleteLogin(String sessionToken) {
-    return _engine.firefoxWebChannelLogin(sessionToken);
-  }
-
-  /// 1.8.0 (the owner's round 8 — the arman pattern): the DIRECT
-  /// email+password sign-in. The engine child runs the whole FxA flow;
-  /// the result is terminal or the emailed-code ask.
-  Future<FirefoxLoginResult> firefoxPasswordLogin(
-    String email,
-    String password,
-  ) {
-    return _engine.firefoxPasswordLogin(email, password);
-  }
-
-  /// 1.8.0 — the emailed code's answer (the SAME engine child).
-  Future<FirefoxLoginResult> firefoxPasswordLoginCode(String code) {
-    return _engine.firefoxPasswordLoginCode(code);
-  }
-
-  /// PHASE-2 — cancels an in-flight login exchange (the login screen's
-  /// dispose path): stdin close → grace → kill; no orphan survives.
-  Future<void> firefoxLoginCancel() => _engine.firefoxLoginCancel();
-
   /// v4.22 — direct setters for the SETTINGS pages (the Psiphon/Tor pages
   /// write their own family field regardless of the currently selected
   /// protocol; [selectLocation] stays the home-wheel path).
@@ -591,28 +278,6 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
-  /// PHASE-2 — the firefox settings page's direct setter (same contract
-  /// as the family setters: 'auto' or a lowercase ISO-2 pick; anything
-  /// else falls back to auto — the LIVE list is the source of truth, an
-  /// unknown code would fail inside the engine honestly anyway).
-  void setFirefoxLocation(String code) {
-    final pick = LocationWheelPolicy.autoCode == code ||
-            (code.length == 2 && code == code.toLowerCase())
-        ? code
-        : LocationWheelPolicy.autoCode;
-    if (firefoxLocation == pick) return;
-    firefoxLocation = pick;
-    notifyListeners();
-  }
-
-  /// PHASE-2 — the transport pick ('h2' | 'h3'; anything else → 'h2').
-  void setFirefoxTransport(String transport) {
-    final pick = transport == 'h3' ? 'h3' : 'h2';
-    if (firefoxTransport == pick) return;
-    firefoxTransport = pick;
-    notifyListeners();
-  }
-
   /// v4.21 — ONE commit path for every wheel settle/tap: routes the pick
   /// into the current family's field (psiphon / tor), or the plain wheel
   /// pick for non-family protocols. Never fires while a transition is in
@@ -628,10 +293,6 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
       if (torLocation == code) return;
       torLocation = code;
       notifyListeners();
-    } else if (effective.isFirefox) {
-      if (firefoxLocation == code) return;
-      firefoxLocation = code;
-      notifyListeners();
     } else {
       selectCountry(code);
     }
@@ -645,7 +306,6 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     final effective = effectiveProtocol;
     if (effective.isPsiphon) return psiphonLocation;
     if (effective.isTor) return torLocation;
-    if (effective.isFirefox) return firefoxLocation;
     return selectedCountryCode ?? 'ir';
   }
 
@@ -670,7 +330,6 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         effectiveProtocol,
         psiphonRegions: livePsiphonRegions,
         torExits: liveTorExitCountries,
-        firefoxCountries: liveFirefoxCountries,
       );
 
   /// v4.21 — true when the wheel runs on the FULL manifest with the AUTO
@@ -1073,15 +732,6 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         if (exitCountryCode != null) this.exitCountryCode = exitCountryCode;
       case EngineEgressRegions(:final regions):
         applyPsiphonEgressRegions(regions);
-      case EngineFirefoxLocations(:final countries, :final live, :final fetchedAt):
-        applyFirefoxLocations(countries, live, fetchedAt);
-      case EngineFirefoxQuota(
-          :final quotaMax,
-          :final quotaLeft,
-          :final quotaReset,
-          :final quotaUnlimited):
-        applyFirefoxQuota(quotaMax, quotaLeft, quotaReset,
-            quotaUnlimited: quotaUnlimited);
       case EngineExitCountryResolved(:final code):
         // v4.31 — the REAL country behind a Tor exit (the trace only says
         // T1): apply it while — and only while — a session is actually

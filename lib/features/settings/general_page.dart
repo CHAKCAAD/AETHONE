@@ -160,44 +160,6 @@ class _GeneralSettingsPageState extends State<GeneralSettingsPage> {
           ),
         ),
 
-        // ---- Section: core addresses (v1.5.0, the owner's round 2 fix 1:
-        // «قسمت آدرس هسته ها رو به صفحه تنظیمات عمومی انتقال بده و آدرس
-        // هسته هارو هم درونش قرار بده» — the section MOVED from the
-        // settings main page; the addresses themselves now ride the rows:
-        // each opens the core's own GitHub repository externally, the
-        // openTelegramChannel precedent) ----
-        SizedBox(height: 24 * s),
-        SubSectionHeading(
-          icon: AppAssets.iconSituation1,
-          title: strings.settingsMainServer,
-        ),
-        const SubSectionGap.headingToCard(),
-        SubSectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SettingNavRow(
-                keyId: 'core-zeptun',
-                icon: AppAssets.logoGithub,
-                title: 'Zeptun Tunnel',
-                trailingValue: 'Noisemux/zeptun',
-                chevron: false,
-                onTap: () => _openLink('https://github.com/Noisemux/zeptun'),
-              ),
-              const SubSectionDivider(),
-              SettingNavRow(
-                keyId: 'core-aether',
-                icon: AppAssets.logoGithub,
-                title: 'Aether Core',
-                trailingValue: 'CluvexStudio/Aether',
-                chevron: false,
-                onTap: () =>
-                    _openLink('https://github.com/CluvexStudio/Aether'),
-              ),
-            ],
-          ),
-        ),
-
         // ---- Section: notifications (owner round 17, item 12) ----
         // «این قابلیت رو اضافه کن که کاربر بتونه از نوتیفیکشن اتصال رو
         // قطع کنه» — the connection notification now carries the

@@ -82,14 +82,15 @@ class MainActivity : FlutterActivity() {
         @Volatile
         private var coreJobId: Int? = null
 
-        /// The Firefox Go child PID survives a Flutter-engine recreation.
-        /// The executable path is retained too so a reused PID is never
-        /// signalled unless /proc/<pid>/cmdline still names our native binary.
-        @Volatile
-        private var firefoxEnginePid: Int? = null
+
+        /// v2.1.0 — the control-center surfaces' (QS tile / widget)
+        /// quick-connect hand-off: the launch intent carries the flag,
+        /// the engine channel consumes it. Set by [onCreate]/
+        /// [onNewIntent] before the Flutter side can ask.
+        const val EXTRA_QUICK_CONNECT = "com.chakcaad.aethone.QUICK_CONNECT"
 
         @Volatile
-        private var firefoxEngineBinary: String? = null
+        private var pendingQuickConnect: Boolean = false
     }
 
     private var pendingPermissionResult: MethodChannel.Result? = null
@@ -97,6 +98,21 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         installCoreLogRedirect()
+        // v2.1.0 — the tile/widget launch path: remember the ask; the
+        // Flutter side polls it once the channel is live.
+        pendingQuickConnect =
+            intent?.getBooleanExtra(EXTRA_QUICK_CONNECT, false) == true
+    }
+
+    /// v2.1.0 — the singleTop relaunch (the tile/widget tapped while
+    /// the activity is alive): capture the new intent's flag and, when
+    /// the engine channel is already up, hand it over directly.
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_QUICK_CONNECT, false)) {
+            pendingQuickConnect = true
+            EngineBridge.channel?.invokeMethod("quickConnect", null)
+        }
     }
 
     /// v4.34 — owner round 10: «هنوز هم داده های زیادی تولید میکنه اپ که
@@ -277,31 +293,6 @@ class MainActivity : FlutterActivity() {
                         "nativeLibraryDir" to applicationInfo.nativeLibraryDir,
                     ),
                 )
-                // PHASE-1 (firefox-vpn): the session-vault crypto. The
-                // OAuth pair is stored ONLY as Android-Keystore AES/GCM
-                // ciphertext (docs/FIREFOX_VPN_SECURITY.md); plaintext
-                // exists in memory and on the engine's private stdin
-                // pipe only.
-                "firefoxEncrypt" -> {
-                    try {
-                        val plaintext =
-                            call.argument<ByteArray>("plaintext") ?: ByteArray(0)
-                        result.success(FirefoxKeystore.encrypt(plaintext))
-                    } catch (t: Throwable) {
-                        result.error("firefoxVault", t.message, null)
-                    }
-                }
-                "firefoxDecrypt" -> {
-                    try {
-                        val ciphertext =
-                            call.argument<ByteArray>("ciphertext") ?: ByteArray(0)
-                        result.success(FirefoxKeystore.decrypt(ciphertext))
-                    } catch (t: Throwable) {
-                        // A Keystore reset makes old vaults undecryptable —
-                        // the Dart store treats this as ABSENT and wipes.
-                        result.error("firefoxVault", t.message, null)
-                    }
-                }
                 "prepareVpn" -> prepareVpn(result)
                 "startVpn" -> {
                     val port = call.argument<Int>("port") ?: 1819
@@ -373,52 +364,15 @@ class MainActivity : FlutterActivity() {
                     coreJobId = null
                     result.success(null)
                 }
-                // Firefox child ownership survives Flutter-engine recreation.
-                // The binary path is checked before SIGTERM to guard against PID reuse.
-                "setFirefoxPid" -> {
-                    val pid = call.argument<Int>("pid") ?: 0
-                    val binary = call.argument<String>("binaryPath") ?: ""
-                    val expected = File(applicationInfo.nativeLibraryDir, "libfirefoxvpn.so").absolutePath
-                    if (pid <= 1 || binary != expected) {
-                        result.error("firefoxPidInvalid", "Firefox child identity is invalid", null)
-                    } else {
-                        firefoxEnginePid = pid
-                        firefoxEngineBinary = binary
-                        result.success(null)
-                    }
-                }
-                "clearFirefoxPid" -> {
-                    firefoxEnginePid = null
-                    firefoxEngineBinary = null
-                    result.success(null)
-                }
-                "stopFirefoxProcess" -> {
-                    val pid = firefoxEnginePid
-                    val binary = firefoxEngineBinary
-                    firefoxEnginePid = null
-                    firefoxEngineBinary = null
-                    if (pid != null && binary != null) {
-                        val pidUid = runCatching {
-                            File("/proc/$pid/status").readLines()
-                                .firstOrNull { it.startsWith("Uid:") }
-                                ?.substringAfter(':')
-                                ?.trim()
-                                ?.split(Regex("\\s+"))
-                                ?.firstOrNull()
-                                ?.toIntOrNull()
-                        }.getOrNull() ?: -1
-                        val command = runCatching {
-                            File("/proc/$pid/cmdline").readBytes()
-                                .toString(Charsets.UTF_8)
-                                .substringBefore(0.toChar())
-                        }.getOrDefault("")
-                        if (pidUid == applicationInfo.uid && command == binary) {
-                            runCatching { Os.kill(pid, OsConstants.SIGTERM) }
-                        }
-                    }
-                    result.success(null)
-                }
                 "vpnStatus" -> result.success(AethoneVpnService.status())
+                // v2.1.0 — the tile/widget quick-connect hand-off: the
+                // Flutter side asks once at startup; the flag clears as
+                // it is read (a stale ask never re-fires).
+                "takeQuickConnect" -> {
+                    val ask = pendingQuickConnect
+                    pendingQuickConnect = false
+                    result.success(ask)
+                }
                 // v4.41 (round 17, item 4) — the launchable-app list for
                 // the per-app tunneling picker (label + package, the app
                 // itself excluded). Apps with a launcher activity are

@@ -62,6 +62,43 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="core-holder"/>
         </service>
+        <!-- v2.1.0 (the owner's decree, 2026-11-17: «برای بخش کنترل سنتر
+             گوشی هم ویجت اضافه کن») — THE QUICK SETTINGS TILE: the brand
+             mark with the honest service state; tap disconnects a LIVE
+             tunnel natively (the service's own ACTION_DISCONNECT) or opens
+             the app to connect. -->
+        <service
+            android:name=".AethoneTileService"
+            android:label="@string/tile_label"
+            android:icon="@drawable/ic_stat_aethone"
+            android:exported="true"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false"/>
+        </service>
+        <!-- v2.1.0 — THE HOME SCREEN WIDGET: the connection card (the app's
+             own mark + the power glyph); the body opens the app, the power
+             slot toggles like the tile. State is pushed by the service
+             itself on start/stop (never a stale reading). -->
+        <receiver
+            android:name=".AethoneWidgetProvider"
+            android:label="@string/tile_label"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aethone_widget_info"/>
+        </receiver>
+        <!-- v2.1.0 — the widget power button's toggle receiver. -->
+        <receiver
+            android:name=".WidgetToggleReceiver"
+            android:exported="false"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

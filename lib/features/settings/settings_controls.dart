@@ -699,9 +699,9 @@ class FlagPickStrip extends StatelessWidget {
   }
 }
 
-/// PHASE-2 (firefox-vpn) — a full-width action button in the sub-page
-/// card language (the sign-in / sign-out rows): the accent-green pill
-/// fill of a SELECTED SettingPill entry, stretched to the card width.
+/// A full-width action button in the sub-page card language: the
+/// accent-green pill fill of a SELECTED SettingPill entry, stretched to
+/// the card width.
 ///
 /// 1.7.0 (the owner's round 5: «وقتی روی دکمه‌ای کلیک میشه که یک عملیات
 /// بک‌اند بعدش انجام میگیره … باید لودینگ نمایش داده بشه») — the optional

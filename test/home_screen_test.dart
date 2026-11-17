@@ -686,5 +686,60 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.exitCountryCode, isNull);
     });
+
+    // ----------------------------------------------------------------
+    // v2.1.0 (the owner's decree: «برای صفحه اصلی چندتا ویجت خلاقانه
+    // اضافه کن») — THE HOME WIDGET DECK: the three cards render, live
+    // honestly while connected, and hold their idle placeholders while
+    // disconnected.
+    // ----------------------------------------------------------------
+    testWidgets('v2.1.0: the home widget deck renders all three cards '
+        '(idle placeholders while disconnected)', (tester) async {
+      await useReferenceSurface(tester);
+      final engine = ScriptedEngine();
+      final store = ConnectionStore(engine: engine);
+      await tester.pumpWidget(_booth(HomeScreen(store: store)));
+      await tester.pumpAndSettle();
+
+      // The three labels (the Persian set).
+      expect(find.text('مدت اتصال'), findsOneWidget);
+      expect(find.text('تأخیر'), findsOneWidget);
+      expect(find.text('داده جلسه'), findsOneWidget);
+
+      // Idle: every value is the honest dash — nothing invented.
+      expect(find.text('—'), findsNWidgets(3));
+    });
+
+    testWidgets('v2.1.0: connected, the deck shows live values '
+        '(a ticking timer, the ping, the session data)', (tester) async {
+      await useReferenceSurface(tester);
+      final engine = ScriptedEngine();
+      final store = ConnectionStore(engine: engine);
+      await tester.pumpWidget(_booth(HomeScreen(store: store)));
+      await tester.pumpAndSettle();
+
+      await store.connect();
+      engine.emit(const EngineStateChanged(VpnState.connecting));
+      await tester.pump(const Duration(milliseconds: 300));
+      engine.emit(const EngineStateChanged(VpnState.connected));
+      engine.emit(const EngineStatsUpdated(
+        pingMs: 146,
+        downBytes: 2 * 1024 * 1024,
+        upBytes: 1 * 1024 * 1024,
+        exitCountryCode: 'ir',
+      ));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // The timer started at the engine's own Connected moment.
+      expect(find.text('0:00'), findsOneWidget);
+      // A second later it ticks (bounded pumps — the ticker repeats).
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('0:01'), findsOneWidget);
+
+      // The ping card names the live sample; the data card totals it.
+      expect(find.text('146'), findsOneWidget);
+      expect(find.text('3 MB'), findsOneWidget);
+    });
   });
 }

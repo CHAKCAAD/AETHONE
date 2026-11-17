@@ -55,9 +55,11 @@ void main() {
     // Section heading — v4.15 #5: «وضعیت پیشرفته» → «وضعیت پیکربندی».
     expect(find.text('وضعیت پیکربندی'), findsOneWidget);
 
-    // v1.5.0 (fix 1) — the «آدرس هسته ها» section MOVED to the general
-    // settings page: neither the heading nor the pills live here anymore.
-    expect(find.text('آدرس هسته ها'), findsNothing);
+    // v2.1.0 (the owner's decree) — the «آدرس هسته ها» section is BACK
+    // on the main settings page, its previous look restored.
+    expect(find.text('آدرس هسته ها'), findsOneWidget);
+    expect(find.text('Zeptun Tunnel'), findsOneWidget);
+    expect(find.text('Aether Core'), findsOneWidget);
 
     // Status values — the REAL store defaults (ON / Iran / the selected
     // protocol's own name — v4.40: the AUTO/SMART protocol-mode row is
@@ -66,10 +68,8 @@ void main() {
     expect(find.text('Iran'), findsOneWidget);
     expect(find.text('وایرگارد'), findsOneWidget); // default protocol name
 
-    // The Firefox pill's remaining-data slot (fix 3): never-known quota
-    // renders the honest placeholder, never a made-up number.
-    expect(find.text('حجم باقی‌مانده'), findsOneWidget);
-    expect(find.text('—'), findsOneWidget);
+    // v2.1.0 — the Firefox pill is RETIRED with the whole protocol.
+    expect(find.text('فایرفاکس'), findsNothing);
   });
 
   testWidgets('status cards follow the REAL store state', (tester) async {
@@ -110,7 +110,7 @@ void main() {
     expect(tester.takeException(), isNull);
 
     // The core-log entry exists below the fold — drag up to reveal it
-    // (v1.5.0: the server pills moved to the general settings page).
+    // (v2.1.0: the «آدرس هسته ها» server pills are back on this page).
     await tester.drag(find.byType(SettingsScreen), const Offset(0, -400));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -118,28 +118,20 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('the Firefox pill quota slot follows the store state '
-      '(fix 3: metered / unlimited / re-render)', (tester) async {
+  testWidgets('v2.1.0: the «آدرس هسته ها» server pills are back on the '
+      'main settings page (the previous look, Zeptun Tunnel + Aether Core)',
+      (tester) async {
     await useReferenceSurface(tester);
     final store = makeStore();
     await tester.pumpWidget(_booth(SettingsScreen(store: store)));
     await tester.pumpAndSettle();
 
-    // Metered: 5 GB of 10 GB left → «5 GB» in the accent-green value.
-    store.applyFirefoxQuota('10737418240', '5368709120', '1735689600');
-    await tester.pumpAndSettle();
-    expect(find.text('حجم باقی‌مانده'), findsOneWidget);
-    expect(find.text('5 GB'), findsOneWidget);
+    // The section heading + the two pills (the pre-Firefox look).
+    expect(find.text('آدرس هسته ها'), findsOneWidget);
+    expect(find.text('Zeptun Tunnel'), findsOneWidget);
+    expect(find.text('Aether Core'), findsOneWidget);
 
-    // Unlimited: the empty pair is the no-metered-quota case.
-    store.applyFirefoxQuota('', '', '');
-    await tester.pumpAndSettle();
-    expect(find.text('نامحدود'), findsOneWidget);
-    expect(find.text('5 GB'), findsNothing);
-
-    // Sub-GB metering renders MB (the bottom panel's own grammar).
-    store.applyFirefoxQuota('536870912', '268435456', '');
-    await tester.pumpAndSettle();
-    expect(find.text('256 MB'), findsOneWidget);
+    // The Firefox row is GONE with the whole protocol.
+    expect(find.text('فایرفاکس'), findsNothing);
   });
 }

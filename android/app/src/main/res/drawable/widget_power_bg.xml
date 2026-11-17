@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v2.1.0 — the power button slot: the subtile fill (#161F18) with the
+     subtile radius (r14 ≈ 12dp), the home deck's own chip grammar. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#161F18" />
+    <corners android:radius="12dp" />
+</shape>

@@ -1,20 +1,21 @@
 # =============================================================================
-# AETHONE DA — Firefox Debug APK (PHASE 2, owner decree 2026-11-09)
+# AETHONE DA — Debug APK (v2.1.0 — the Firefox protocol is RETIRED)
 # =============================================================================
 # What this workflow IS:
 #   * The device-acceptance DEBUG APK, built BY GITHUB ACTIONS ONLY — never
 #     in the agent's constrained sandbox (the owner's explicit rule).
-#   * Everything from SOURCE at the frozen pins: the Firefox engine
-#     (phase1/fxv, Go + CGO + NDK r28c — the A1 decree, all three Android
-#     ABIs through Bionic getaddrinfo) AND the four native cores
-#     (aether/lyrebird/psiphon/zeptun-jni — the project's own frozen
-#     native-ci recipe, NDK r26d). jniLibs stay gitignored; binaries are
-#     built here, staged here, packaged here.
+#   * The four native cores (aether/lyrebird/psiphon/zeptun-jni — the
+#     project's own frozen native-ci recipe, NDK r26d), built from source
+#     at the frozen pins. jniLibs stay gitignored; binaries are built
+#     here, staged here, packaged here.
 #   * Package id com.chakcaad.aethone.da (the DA debug variant,
 #     applicationIdSuffix) so the test APK installs BESIDE the main app.
-#   * Light pre-build checks: go vet + go test (engine module),
-#     flutter analyze, flutter test (incl. the real-engine --login suite
-#     against the host binary built in the engine job).
+#   * Light pre-build checks: flutter analyze + flutter test.
+#
+# v2.1.0 (the owner's decree, 2026-11-17): the Firefox VPN protocol is
+# REMOVED from the app entirely (engine, Kotlin bridge, UI, docs). The
+# firefox-engine job, the phase1/ tree and every packaging gate that
+# referenced libfirefoxvpn.so are retired with it.
 #
 # What this workflow is NOT:
 #   * NOT a device test: a green build proves the TOOLCHAIN, not the
@@ -24,30 +25,20 @@
 #   * NOT a traffic validation: VPN traffic was never in this phase's
 #     scope (the owner did not request it).
 #
-# Containment (upstream license UNRESOLVED — phase1/fxv/ORIGIN.md): this
-# workflow runs only on the explicit Firefox debug branches below,
-# delivers expiring Actions artifacts only (14 days), and creates
-# nothing public. The default branch and public releases are untouched.
-#
 # Pins mirror .github/workflows/native-ci.yml (the project's frozen
-# recipe, decisions N1/N8) plus the phase-1 Firefox decrees. Actions are
-# pinned by FULL COMMIT SHA with the raw tag->SHA proof recorded in
-# evidence/actions_pins_raw_evidence.txt.
+# recipe, decisions N1/N8). Actions are pinned by FULL COMMIT SHA with
+# the raw tag->SHA proof recorded in evidence/actions_pins_raw_evidence.txt.
 # =============================================================================
-name: AETHONE DA — Firefox Debug APK
+name: AETHONE DA — Debug APK
 
 # Trigger policy: GitHub indexes workflow_dispatch targets from the
 # DEFAULT branch only (ci-bootstrap/v4.4), which remains untouched.
-# Push builds are limited to the three explicit Firefox development
-# branches; they produce expiring debug artifacts only.
+# Push builds are limited to the explicit development branch below;
+# they produce expiring debug artifacts only.
 on:
   workflow_dispatch:
   push:
     branches:
-      - feature/firefox-guardian-psiphon-bootstrap
-      - integration/firefox-vpn-debug
-      - update/firefox-vpn-core
-      - feature/firefox-over-warp
       - fix/owner-round-2
 
 permissions:
@@ -65,10 +56,6 @@ env:
   AGP_VERSION:          "9.4.0"
   BUILD_TOOLS_VERSION:  "36.0.0"
   DA_PACKAGE_ID:        "com.chakcaad.aethone.da"
-
-  # ---------- Firefox engine pins (phase-1 decree) ----------
-  FXV_GO_VERSION:       "1.25.0"        # asserted by build_engine.sh
-  FXV_NDK_PIN:          "28.2.13676358" # r28c — the engine's own NDK pin
 
   # ---------- native cores — the project's frozen pins (native-ci N1/N8) ----------
   AETHER_REPO:  https://github.com/CluvexStudio/Aether.git
@@ -88,112 +75,10 @@ env:
 
 jobs:
   # ===========================================================================
-  # Job 1 — the Firefox engine: fetch the pinned upstream, light checks
-  # (go vet + go test), then the OFFICIAL build script for every Android
-  # ABI (CGO + NDK r28c — the A1 decree) + the host test vehicle.
-  # ===========================================================================
-  firefox-engine:
-    name: "Firefox engine (Go 1.25.0 — CGO + NDK r28c, all ABIs)"
-    runs-on: ubuntu-24.04
-    timeout-minutes: 40
-    steps:
-      - name: Checkout (integration branch, exact commit)
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-
-      - name: Record the build basis (branch + commit, first thing)
-        run: |
-          echo "repository=${GITHUB_REPOSITORY}"
-          echo "branch=${GITHUB_REF_NAME}"
-          echo "commit=${GITHUB_SHA}"
-          echo "run_id=${GITHUB_RUN_ID}"
-          git log --oneline -3
-
-      - name: Install Go (exact pin, no silent toolchain switching)
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version: ${{ env.FXV_GO_VERSION }}
-
-      - name: Go toolchain proof (fail-closed)
-        run: |
-          set -euo pipefail
-          go env -w GOTOOLCHAIN=local
-          go version
-          actual="$(go version | awk '{print $3}')"
-          [ "$actual" = "go${FXV_GO_VERSION}" ] || { echo "::error::go $actual != pinned go${FXV_GO_VERSION}"; exit 1; }
-
-      - name: Accept Android SDK licenses (runtime-smoke precedent)
-        run: |
-          set -euo pipefail
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
-          echo "SDK license acceptance done (verified by the NDK install next)"
-
-      - name: Install Android NDK r28c (the engine's exact pin)
-        run: |
-          set -euo pipefail
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${FXV_NDK_PIN}" > /dev/null
-          NDK_DIR="$ANDROID_HOME/ndk/${FXV_NDK_PIN}"
-          [ -f "$NDK_DIR/source.properties" ] || { echo "::error::NDK ${FXV_NDK_PIN} not installed"; exit 1; }
-          grep -q "Pkg.Revision = ${FXV_NDK_PIN}" "$NDK_DIR/source.properties" \
-            || { echo "::error::NDK Pkg.Revision mismatch — expected ${FXV_NDK_PIN}"; cat "$NDK_DIR/source.properties"; exit 1; }
-          echo "NDK pin verified: ${FXV_NDK_PIN} (r28c)"
-          ls "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/" | grep -E '^aarch64-linux-android34-clang$|^armv7a-linux-androideabi34-clang$|^x86_64-linux-android34-clang$' \
-            || { echo "::error::an API-34 clang wrapper is missing — the engine script will refuse"; exit 1; }
-
-      - name: Fetch the pinned upstream core (fetch-only, never committed)
-        run: |
-          set -euo pipefail
-          bash phase1/scripts/fetch_upstream.sh
-
-      - name: Light pre-build checks (go vet + go test — the engine module)
-        run: |
-          set -euo pipefail
-          cd phase1/fxv
-          go vet ./...
-          go test ./...
-
-      - name: Build the engine — the official script, every ABI (A1 decree)
-        run: |
-          set -euo pipefail
-          # ANDROID_HOME is a runner-image variable — it exists in the shell
-          # environment, NOT in the expressions env context. Resolve here.
-          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/${FXV_NDK_PIN}"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          bash phase1/scripts/build_engine.sh all 2>&1 | tee engine-build.log
-
-      - name: Verify the engine outputs (fail-closed, per ABI + host)
-        run: |
-          set -euo pipefail
-          for abi in arm64-v8a armeabi-v7a x86_64; do
-            f="phase1/build/android/$abi/libfirefoxvpn.so"
-            [ -f "$f" ] || { echo "::error::missing $f"; exit 1; }
-            file "$f"
-            [ -f "phase1/build/android/$abi/libfirefoxvpn.so.inspection.txt" ] \
-              || { echo "::error::missing ELF inspection evidence for $abi"; exit 1; }
-          done
-          [ -f phase1/build/host/libfirefoxvpn ] || { echo "::error::missing host test vehicle"; exit 1; }
-          [ -f phase1/build/SHA256SUMS.txt ] || { echo "::error::missing SHA256SUMS manifest"; exit 1; }
-          echo "--- the build's own hash manifest ---"
-          cat phase1/build/SHA256SUMS.txt
-          echo "--- the per-ABI build lines (CGO + compiler — the A1 evidence) ---"
-          grep '^build_engine: building android/' engine-build.log
-
-      - name: Upload the engine build (binaries + evidence + log)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: firefox-engine
-          path: |
-            phase1/build/
-            engine-build.log
-          if-no-files-found: error
-          retention-days: 14
-
-  # ===========================================================================
-  # Job 2 — the four native cores, verbatim from the project's frozen
+  # Job 1 — the four native cores, verbatim from the project's frozen
   # native-ci recipe (matrix per ABI; NDK r26d; Rust 1.99.1 / Go 1.26.3 /
-  # Zig 0.16.0 / cargo-ndk 4.1.2). The Firefox work never touched native/,
-  # so these are the SAME sources that shipped in the official v1.0.0.
+  # Zig 0.16.0 / cargo-ndk 4.1.2) — the SAME sources that shipped in the
+  # official v1.0.0.
   # ===========================================================================
   native-cores:
     name: "Native cores (${{ matrix.abi }} — the frozen native-ci recipe)"
@@ -300,14 +185,14 @@ jobs:
           retention-days: 14
 
   # ===========================================================================
-  # Job 3 — assemble the DA DEBUG APK: stage the cores + the engine into
-  # jniLibs (hash-verified), analyze + test, build the universal debug APK
-  # (package id com.chakcaad.aethone.da), gate it (zipalign/apksigner/
-  # aapt/ELF presence/hash), and deliver the expiring artifact.
+  # Job 2 — assemble the DA DEBUG APK: stage the cores into jniLibs,
+  # analyze + test, build the universal debug APK (package id
+  # com.chakcaad.aethone.da), gate it (zipalign/apksigner/aapt/ELF
+  # presence), and deliver the expiring artifact.
   # ===========================================================================
-  firefox-da-debug-apk:
+  da-debug-apk:
     name: "DA debug APK (universal, all ABIs — package id .da)"
-    needs: [firefox-engine, native-cores]
+    needs: [native-cores]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -356,19 +241,13 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
-      - name: Download the Firefox engine build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: firefox-engine
-          path: fxv-engine
-
       - name: Download native artifacts (per ABI — NO merge-multiple)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: native-out
           pattern: native-*
 
-      - name: Stage jniLibs — the four cores + the Firefox engine (hash-verified)
+      - name: Stage jniLibs — the four cores (hash-verified)
         run: |
           set -euo pipefail
           JL="android/app/src/main/jniLibs"
@@ -388,31 +267,13 @@ jobs:
             cp "$d/zeptun/libzeptun-jni.so"        "$JL/$abi/libzeptun-jni.so"
           done
 
-          # --- the Firefox engine: verify against its OWN build manifest first ---
-          EB="fxv-engine/phase1/build"
-          [ -f "$EB/SHA256SUMS.txt" ] || { echo "::error::engine SHA256SUMS.txt missing"; exit 1; }
-          ( cd "$EB" && sha256sum -c --quiet SHA256SUMS.txt ) \
-            || { echo "::error::engine binaries do not match the build's own SHA256 manifest"; exit 1; }
-          for abi in arm64-v8a armeabi-v7a x86_64; do
-            src="$EB/android/$abi/libfirefoxvpn.so"
-            [ -f "$src" ] || { echo "::error::engine binary missing for $abi"; exit 1; }
-            cp "$src" "$JL/$abi/libfirefoxvpn.so"
-          done
-
-          # --- the host engine: the real-binary Dart tests resolve it at
-          #     the repo's own phase1/build/host (artifact modes are not
-          #     preserved — chmod explicitly) ---
-          mkdir -p phase1/build/host
-          cp "$EB/host/libfirefoxvpn" phase1/build/host/libfirefoxvpn
-          chmod +x phase1/build/host/libfirefoxvpn
-
           echo "staged jniLibs:"
           find "$JL" -type f -printf '%p  %s bytes\n' | sort
 
       - name: Static analysis (warnings fatal)
         run: flutter analyze
 
-      - name: Unit + widget tests (incl. the real-engine --login suite)
+      - name: Unit + widget tests
         run: flutter test
 
       - name: Build the DA debug APK (universal — all three ABIs)
@@ -450,47 +311,37 @@ jobs:
           echo "$BADGING" | grep -q "application-label:'AETHONE DA'" \
             || { echo "::error::launcher label is NOT 'AETHONE DA'"; exit 1; }
 
-          # 3) every ABI carries the Firefox engine + the four cores
+          # 3) every ABI carries the four cores
           #    (listing dumped ONCE to a file: grep -q against a FILE cannot
           #    SIGPIPE the producer the way `unzip -l | grep -q` can under
           #    pipefail — the recorded native-ci run-41438805265 lesson)
           unzip -l "$APK" > apk-contents.txt
           for abi in arm64-v8a armeabi-v7a x86_64; do
-            for so in libfirefoxvpn.so libaether.so liblyrebird.so libpsiphon.so libzeptun-jni.so; do
+            for so in libaether.so liblyrebird.so libpsiphon.so libzeptun-jni.so; do
               grep -q "lib/$abi/$so" apk-contents.txt \
                 || { echo "::error::lib/$abi/$so missing from the APK"; exit 1; }
             done
           done
 
-          # 4) the packaged engine IS the built engine (byte-identical —
-          #    sizes printed for diagnosis; keepDebugSymbols keeps AGP's
-          #    strip task away from the Firefox engine)
-          EB="fxv-engine/phase1/build"
-          for abi in arm64-v8a armeabi-v7a x86_64; do
-            in_apk="$(unzip -p "$APK" "lib/$abi/libfirefoxvpn.so" | sha256sum | cut -d' ' -f1)"
-            built="$(sha256sum "$EB/android/$abi/libfirefoxvpn.so" | cut -d' ' -f1)"
-            in_sz="$(unzip -l "$APK" "lib/$abi/libfirefoxvpn.so" | tail -2 | head -1 | awk '{print $1}')"
-            b_sz="$(stat -c%s "$EB/android/$abi/libfirefoxvpn.so")"
-            echo "engine ($abi): in-apk ${in_sz}B/$in_apk vs built ${b_sz}B/$built"
-            [ "$in_apk" = "$built" ] \
-              || { echo "::error::lib/$abi/libfirefoxvpn.so in APK ($in_apk) != built ($built)"; exit 1; }
-          done
-          echo "APK verification: ALL PASS (archive, package id, label, 3 ABIs x 5 libs, engine hashes)"
+          # 4) the retired Firefox engine must NOT ship anymore
+          if grep -q 'libfirefoxvpn' apk-contents.txt; then
+            echo "::error::libfirefoxvpn.so still in the APK — the Firefox removal is incomplete"; exit 1
+          fi
+          echo "APK verification: ALL PASS (archive, package id, label, 3 ABIs x 4 cores, no firefox engine)"
 
       - name: Dist naming + SHA256SUMS + the build report
         run: |
           set -euo pipefail
           APK="build/app/outputs/flutter-apk/app-debug.apk"
           mkdir -p dist
-          cp "$APK" dist/AETHONE-DA-Firefox-Debug.apk
+          cp "$APK" dist/AETHONE-DA-Debug.apk
 
           # (capture the tool output FIRST, then slice it — no head-in-pipe
           # under pipefail; the output is tiny so the buffered write is safe)
           FLUTTER_V_OUT="$(flutter --version)"
           DART_V="$(printf '%s\n' "$FLUTTER_V_OUT" | grep -m1 -o 'Dart [0-9.]*' | cut -d' ' -f2)"
-          GO_LINE="$(grep -m1 '^build_engine: toolchain:' fxv-engine/engine-build.log || echo 'toolchain: NOT RECORDED')"
-          APK_SIZE="$(stat -c%s dist/AETHONE-DA-Firefox-Debug.apk)"
-          APK_SHA="$(sha256sum dist/AETHONE-DA-Firefox-Debug.apk | cut -d' ' -f1)"
+          APK_SIZE="$(stat -c%s dist/AETHONE-DA-Debug.apk)"
+          APK_SHA="$(sha256sum dist/AETHONE-DA-Debug.apk | cut -d' ' -f1)"
 
           {
             echo "repository=${GITHUB_REPOSITORY}"
@@ -505,26 +356,21 @@ jobs:
             echo "go=${GO_LINE#build_engine: toolchain: }"
             echo "jdk=${JDK_VERSION} (temurin)"
             echo "gradle_wrapper=${GRADLE_VERSION} agp=${AGP_VERSION} build_tools=${BUILD_TOOLS_VERSION}"
-            echo "ndk_engine=${FXV_NDK_PIN} (r28c — CGO/Bionic, the A1 decree)"
             echo "ndk_cores=${NDK_PKG_REVISION} (r26d — the frozen native recipe)"
-            echo
-            echo "# the Firefox engine per-ABI build lines (CGO + compiler — from the engine job)"
-            grep '^build_engine: building android/' fxv-engine/engine-build.log || true
             echo
             echo "# APK"
             echo "package_id=${DA_PACKAGE_ID}"
             echo "label=AETHONE DA"
             echo "variant=debug (debug-keystore signed — TEST INSTALL ONLY, not a release signature)"
             echo "abis=arm64-v8a,armeabi-v7a,x86_64 (universal)"
-            echo "apk=AETHONE-DA-Firefox-Debug.apk"
+            echo "apk=AETHONE-DA-Debug.apk"
             echo "apk_size_bytes=${APK_SIZE}"
             echo "apk_sha256=${APK_SHA}"
             echo "archive_check=PASS (unzip -t)"
-            echo "firefox_engine_in_apk=PRESENT in all 3 ABIs, byte-identical to the built binaries (sha256-verified)"
+            echo "firefox_engine_in_apk=ABSENT (v2.1.0 — the Firefox protocol is retired)"
             echo
             echo "# tests run in this workflow"
-            echo "go_vet=PASS go_test=PASS (phase1/fxv — the engine job)"
-            echo "flutter_analyze=PASS flutter_test=PASS (this job, incl. the real-engine --login suite)"
+            echo "flutter_analyze=PASS flutter_test=PASS (this job)"
             echo
             echo "# honest scope notes"
             echo "- A GREEN BUILD IS NOT A DEVICE TEST: on-device acceptance is the owner's phase."
@@ -532,13 +378,13 @@ jobs:
             echo "- This artifact expires with the Actions retention window (14 days); it is NOT a release."
           } | tee dist/build-report.txt
 
-          sha256sum dist/AETHONE-DA-Firefox-Debug.apk | sed 's|dist/||' > dist/SHA256SUMS.txt
+          sha256sum dist/AETHONE-DA-Debug.apk | sed 's|dist/||' > dist/SHA256SUMS.txt
           cat dist/SHA256SUMS.txt
 
       - name: Upload the DA debug APK artifact (expiring — NOT a release)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: AETHONE-DA-Firefox-Debug
+          name: AETHONE-DA-Debug
           path: dist/
           retention-days: 14
           if-no-files-found: error

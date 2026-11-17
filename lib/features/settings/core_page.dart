@@ -121,15 +121,6 @@ class CoreSettingsPage extends StatelessWidget {
                 value: core.quicV2,
                 onChanged: (v) => store.updateCore((c) => c.quicV2 = v),
               ),
-              const SubSectionDivider(),
-              SettingField(
-                keyId: 'dns',
-                label: strings.dnsLabel,
-                hint: strings.dnsHint,
-                initial: core.dns,
-                onChanged: (v) =>
-                    store.updateCore((c) => c.dns = v.trim()),
-              ),
             ],
           ),
         ),

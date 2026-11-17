@@ -88,12 +88,12 @@ void main() {
     final infoX = tester.getCenter(find.byKey(const ValueKey('proto-page-info'))).dx;
     expect(backX, greaterThan(infoX));
 
-    // Section headings (verbatim frame text). PHASE-2 REBUILD
-    // (2026-11-09): «سرعت اسکن» is GONE — it lives in Connection
-    // Settings now (the settings_subpages suite covers it there).
+    // Section headings (verbatim frame text). v2.1.0 (the owner's
+    // decree): «سرعت اسکن» is BACK on this page (the Firefox card that
+    // replaced it is retired with the whole Firefox protocol).
     expect(find.text('حالت اتصال'), findsOneWidget);
     expect(find.text('پروتکل'), findsWidgets);
-    expect(find.text('سرعت اسکن'), findsNothing);
+    expect(find.text('سرعت اسکن'), findsOneWidget);
 
     // The mode segments (frame: تونل right / پروکسی left, proxy selected).
     expect(find.text('تونل'), findsOneWidget);
@@ -108,10 +108,10 @@ void main() {
     expect(find.text('میم'), findsOneWidget);
     expect(find.text('سایفون'), findsOneWidget);
     expect(find.text('تور'), findsOneWidget);
-    // PHASE-2 REBUILD: the 5 unlabeled scan pills are GONE from this
-    // page (Connection Settings owns them now).
-    expect(find.byKey(const ValueKey('proto-pill-1')), findsNothing);
-    expect(find.byKey(const ValueKey('proto-pill-5')), findsNothing);
+    // v2.1.0 — the 5 unlabeled scan pills are BACK on this page
+    // (the pre-PHASE-2 posture restored).
+    expect(find.byKey(const ValueKey('proto-pill-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('proto-pill-5')), findsOneWidget);
 
     // RTL grid order (frame row 1): اتوماتیک rightmost, وایرگارد leftmost.
     final auto = tester.getCenter(find.text('اتوماتیک'));
@@ -151,18 +151,18 @@ void main() {
       ),
     );
 
-    // PHASE-2 REBUILD (2026-11-09): the content column ends with the
-    // Firefox card (no scan section below it) — the page's own content
-    // fits the 874-logical viewport again without scrolling.
-    final fx = tester.getRect(
-      find.byKey(const ValueKey('proto-card-firefox')),
+    // v2.1.0 — the content column ends with the scan pills again
+    // (the pre-PHASE-2 posture restored); the section stays inside the
+    // 874-logical frame without scrolling.
+    final pills = tester.getRect(
+      find.byKey(const ValueKey('proto-pill-3')),
     );
-    expect(fx.top, closeTo(AethGeometry.protoCardTopFirefox, 2));
+    expect(pills.top, closeTo(AethGeometry.protoPillTop, 2));
     expect(
-      fx.bottom,
+      pills.bottom,
       lessThanOrEqualTo(AethGeometry.refHeight),
-      reason: 'the Firefox card is the LAST element; nothing renders below '
-          'the frame line anymore (the scan section moved away)',
+      reason: 'the scan pills are the LAST element; nothing renders below '
+          'the frame line',
     );
 
     // v4.19: the app's cold DEFAULT is WireGuard (owner decree #4 — until
@@ -315,8 +315,8 @@ void main() {
         reason: '«پروتکل» badge = Swap 1.svg (v4.17 #8)');
     expect(badgeLoaded(AppAssets.iconPassword1), isTrue,
         reason: '«حالت اتصال» badge = Password 1.svg');
-    expect(badgeLoaded(AppAssets.iconScan1), isFalse,
-        reason: 'the «سرعت اسکن» badge is gone with its section (2026-11-09)');
+    expect(badgeLoaded(AppAssets.iconScan1), isTrue,
+        reason: 'the «سرعت اسکن» badge is back with its section (v2.1.0)');
   });
 
   testWidgets(
@@ -345,170 +345,14 @@ void main() {
   // read-only display of the existing Firefox service state.
   // ------------------------------------------------------------------
 
-  testWidgets(
-      'PHASE B: the Firefox card renders after the Tor card and commits '
-      'firefoxOnly through the standard selection path', (tester) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
-
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
-
-    // The card exists with its label and sits in the 15-gap rhythm
-    // below the Tor card (594 + 116 + 15 = 725).
-    final card = tester.getRect(
-      find.byKey(const ValueKey('proto-card-firefox')),
-    );
-    expect(card.top, closeTo(AethGeometry.protoCardTopFirefox, 2));
-    expect(card.top,
-        closeTo(AethGeometry.protoCardTopTor + AethGeometry.protoCardH + 15, 2));
-    expect(find.text('فایرفاکس'), findsOneWidget);
-
-    // The account chip mirrors the service state (signed-out wording for
-    // the unknown/absent vault — the settings page's convention).
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('proto-card-firefox-chip')),
-        matching: find.text('حساب فایرفاکس متصل نیست'),
-      ),
-      findsOneWidget,
-    );
-
-    // Tap → commit + auto-pop (the owner's v4.16 decree path).
-    await _tapAndAutoPop(
-      tester,
-      find.byKey(const ValueKey('proto-card-firefox')),
-    );
-    expect(store.selectedProtocol, ProtocolId.firefoxOnly);
-    expect(store.effectiveProtocol, ProtocolId.firefoxOnly);
-    expect(find.byType(ProtocolPage), findsNothing);
-
-    // Selection alone NEVER claims a connection: no engine effective
-    // event arrived, so the state machine is still at rest.
-    expect(store.state, VpnState.disconnected);
-  });
-
-  testWidgets(
-      'v1.5.0 fix 4: the Firefox card carries the remaining-data block '
-      '(metered / unlimited / honest dash)', (tester) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
-
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
-
-    // Never-known quota: the honest dash (no made-up number).
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('proto-card-firefox-quota')),
-        matching: find.text('—'),
-      ),
-      findsOneWidget,
-    );
-
-    // Metered: 2 GB left → the app's own bytes grammar.
-    store.applyFirefoxQuota('10737418240', '2147483648', '');
-    await tester.pumpAndSettle();
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('proto-card-firefox-quota')),
-        matching: find.text('2 GB'),
-      ),
-      findsOneWidget,
-    );
-
-    // Unlimited: the empty pair is the no-metered-quota case.
-    store.applyFirefoxQuota('', '', '');
-    await tester.pumpAndSettle();
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('proto-card-firefox-quota')),
-        matching: find.text('نامحدود'),
-      ),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets(
-      'PHASE B: the Firefox selection REPLACES a family member (the '
-      'single-knob exclusivity) and the family cards keep their geometry',
-    (tester) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
-
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
-
-    // Commit a psiphon family member first…
-    await _tapAndAutoPop(
-      tester,
-      find.byKey(const ValueKey('proto-subtile-psiphonChain')),
-    );
-    expect(store.selectedProtocol, ProtocolId.psiphonChain);
-
-    // …then the Firefox card: the single knob moves — no dual state.
-    await tester.tap(find.text('سایفون').first);
-    await tester.pump();
-    await tester.pumpAndSettle();
-    await _tapAndAutoPop(
-      tester,
-      find.byKey(const ValueKey('proto-card-firefox')),
-    );
-    expect(store.selectedProtocol, ProtocolId.firefoxOnly);
-    expect(store.selectedProtocol.isPsiphon, isFalse);
-    expect(store.selectedProtocol.isTor, isFalse);
-
-    // And back: a plain tile replaces the Firefox selection the same way.
-    await tester.tap(find.text('فایرفاکس').first);
-    await tester.pump();
-    await tester.pumpAndSettle();
-    await _tapAndAutoPop(tester, find.byKey(const ValueKey('proto-tile-gool')));
-    expect(store.selectedProtocol, ProtocolId.gool);
-  });
-
-  testWidgets(
-      'PHASE B: the account chip follows the Firefox service state '
-      '(read-only display; a sign-in is never a connection)', (tester) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
-
-    final store = ConnectionStore(engine: ScriptedEngine());
-    // The existing service surface: a signed-in vault presence.
-    store.firefoxAccount = FirefoxAccountStatus.signedIn;
-    await _openPage(tester, store);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('proto-card-firefox-chip')),
-        matching: find.text('حساب فایرفاکس متصل است'),
-      ),
-      findsOneWidget,
-    );
-
-    // The chip NEVER claims a tunnel: with a signed-in account and the
-    // card committed, the state machine stays disconnected until the
-    // engine's own effective events say otherwise.
-    await _tapAndAutoPop(
-      tester,
-      find.byKey(const ValueKey('proto-card-firefox')),
-    );
-    expect(store.selectedProtocol, ProtocolId.firefoxOnly);
-    expect(store.state, VpnState.disconnected);
-  });
-
   // ------------------------------------------------------------------
-  // PHASE-2 REBUILD (2026-11-09) — the OFFICIAL Firefox artwork (the
-  // owner-delivered mozilla-vpn-seeklogo.svg) renders on the card: the
-  // glyph is the official file (the Shield-Tick stopgap is retired),
-  // and the monochrome mark carries the ink treatment (the theme ink
-  // unselected, the standing all-ink white on the selected green card).
+  // v2.1.0 (the owner's decree) — the «سرعت اسکن» section is BACK on
+  // the protocol page (the Firefox card that replaced it is retired
+  // with the whole Firefox protocol). The pre-PHASE-2 behavior.
   // ------------------------------------------------------------------
   testWidgets(
-      'PHASE-2 REBUILD: the Firefox card renders the OFFICIAL logo '
-      '(asset + ink treatment, both selection states)', (tester) async {
+      'v2.1.0: the scan-speed pills are back on the protocol page '
+      '(tap commits a level; the store persists it)', (tester) async {
     tester.view.physicalSize = const Size(402 * 3, 874 * 3);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
@@ -516,41 +360,23 @@ void main() {
     final store = ConnectionStore(engine: ScriptedEngine());
     await _openPage(tester, store);
 
-    SvgPicture cardGlyph() => tester.widget<SvgPicture>(
-          find.descendant(
-            of: find.byKey(const ValueKey('proto-card-firefox')),
-            matching: find.byType(SvgPicture),
-          ).first,
-        );
+    // All 5 pills render; the widest (level 5) sits at the visual RIGHT.
+    for (var level = 1; level <= 5; level++) {
+      expect(find.byKey(ValueKey('proto-pill-$level')), findsOneWidget);
+    }
+    final l5 = tester.getCenter(find.byKey(const ValueKey('proto-pill-5')));
+    final l1 = tester.getCenter(find.byKey(const ValueKey('proto-pill-1')));
+    expect(l5.dx, greaterThan(l1.dx),
+        reason: 'RTL row: the widest pill renders at the visual RIGHT');
 
-    // UNSELECTED: the official asset, tinted with the theme ink (the
-    // card label's own color — a monochrome black file would vanish on
-    // the dark card).
-    var glyph = cardGlyph();
-    expect(
-      (glyph.bytesLoader as SvgAssetLoader).assetName,
-      AppAssets.protocolFirefoxLogo,
-      reason: 'the card must render the OFFICIAL Firefox mark',
-    );
-    expect(
-      glyph.colorFilter,
-      ColorFilter.mode(AethColors.textPrimary, BlendMode.srcIn),
-      reason: 'unselected: the theme-ink treatment',
-    );
+    // The store's cold default (4) renders selected; a tap commits 2.
+    expect(store.scanSpeed, 4);
+    await tester.tap(find.byKey(const ValueKey('proto-pill-2')));
+    await tester.pumpAndSettle();
+    expect(store.scanSpeed, 2);
 
-    // SELECTED (the green card): the standing all-ink WHITE rule.
-    await tester.tap(find.byKey(const ValueKey('proto-card-firefox')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    glyph = cardGlyph();
-    expect(
-      (glyph.bytesLoader as SvgAssetLoader).assetName,
-      AppAssets.protocolFirefoxLogo,
-    );
-    expect(
-      glyph.colorFilter,
-      const ColorFilter.mode(Color(0xFFFFFFFF), BlendMode.srcIn),
-      reason: 'selected: the all-ink white rule (the v4.35 precedent)',
-    );
+    // A scan tap NEVER claims a connection: no engine event arrived, so
+    // the state machine stays at rest (the Firefox card's own rule).
+    expect(store.state, VpnState.disconnected);
   });
 }

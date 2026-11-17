@@ -11,6 +11,20 @@ import 'connection/platform_engine_adapter.dart';
 import 'connection/settings_persistence.dart';
 import 'connection/smart_scorecard.dart';
 
+/// v2.1.0 — the cold-start half of the tile/widget quick-connect: asks
+/// the activity once whether the launch intent carried the flag (the
+/// method clears it natively as it answers — a stale ask never re-fires).
+/// No method / no activity (the test hosts) stays silent.
+Future<void> _takeQuickConnectAsk(ConnectionStore store) async {
+  final asked = await DesktopWindowChannel.invokeRawBool('takeQuickConnect');
+  if (asked == true) {
+    if (store.state == VpnState.disconnected ||
+        store.state == VpnState.failed) {
+      unawaited(store.connect());
+    }
+  }
+}
+
 Future<void> main() async {
   // The ConnectionStore is constructed with the (first) app widget and its
   // platform adapter registers the aethone/engine MethodChannel handler right
@@ -64,6 +78,19 @@ Future<void> main() async {
       unawaited(store.disconnect());
     }
   };
+
+  // v2.1.0 (the owner's decree, 2026-11-17: «برای بخش کنترل سنتر گوشی هم
+  // ویجت اضافه کن») — the quick-settings tile / home widget quick-connect:
+  // the tile's connect tap launches the app with the QUICK_CONNECT flag;
+  // the activity hands it over as a `quickConnect` method call (live
+  // activity) or a one-shot `takeQuickConnect` poll (cold start). The
+  // store's own connect() runs the walk — no second engine channel.
+  PlatformEngineAdapter.onQuickConnect = () {
+    if (store.state == VpnState.disconnected || store.state == VpnState.failed) {
+      unawaited(store.connect());
+    }
+  };
+  unawaited(_takeQuickConnectAsk(store));
 
   runApp(AethoneApp(store: store));
 }

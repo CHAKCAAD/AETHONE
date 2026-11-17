@@ -12,4 +12,14 @@
     <string name="core_channel_name">AETHONE proxy</string>
     <string name="core_notification_title">AETHONE</string>
     <string name="core_notification_text">Proxy service is running</string>
+
+    <!-- v2.1.0 (the owner's decree, 2026-11-17) — the control-center
+         surfaces: the quick-settings tile + the home screen widget. -->
+    <string name="tile_label">AETHONE</string>
+    <string name="tile_state_connected">Connected</string>
+    <string name="tile_state_disconnected">Disconnected</string>
+    <string name="widget_state_connected">Connected &amp; secure</string>
+    <string name="widget_state_disconnected">Disconnected</string>
+    <string name="widget_toggle_desc">Toggle the connection</string>
+    <string name="widget_description">The AETHONE connection card</string>
 </resources>

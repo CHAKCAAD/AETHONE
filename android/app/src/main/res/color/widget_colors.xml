@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v2.1.0 — the widget palette: the app's own tokens (textPrimary,
+     textSecondary, accentConnected) mirrored for RemoteViews, which
+     cannot read the Flutter theme. -->
+<resources>
+    <color name="widgetInk">#F4FBF7</color>
+    <color name="widgetMuted">#8CA095</color>
+    <color name="widgetAccent">#1AD995</color>
+</resources>

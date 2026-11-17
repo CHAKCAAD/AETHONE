@@ -198,6 +198,9 @@ class AethoneVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // v2.1.0 — the control-center surfaces: the tile/widget read
+        // this instance's existence as their LIVE state; announce it.
+        runCatching { AethoneWidgetProvider.pushUpdate(this) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -551,6 +554,8 @@ class AethoneVpnService : VpnService() {
         stopTunnel("destroy")
         EngineBridge.emit(downEvent("destroy"))
         instance = null
+        // v2.1.0 — the tile/widget go IDLE the moment the service dies.
+        runCatching { AethoneWidgetProvider.pushUpdate(this) }
         super.onDestroy()
     }
 

@@ -529,33 +529,6 @@ void main() {
       expect(bare.psiphonLegProtocol, AetherLegProtocol.wireguard);
     });
 
-    // 1.4.0-warp — the firefox family's own leg: round-trips, migrates
-    // from the legacy key, defaults to WireGuard.
-    test('CoreSettings carries the firefox leg (the WARP carrier pick)',
-        () {
-      final roundTripped = CoreSettings()
-        ..firefoxLegProtocol = AetherLegProtocol.mim;
-      final back = CoreSettings.fromJson(
-        (jsonDecode(jsonEncode(roundTripped.toJson())) as Map)
-            .cast<String, dynamic>(),
-      );
-      expect(back.firefoxLegProtocol, AetherLegProtocol.mim);
-
-      final migrated = CoreSettings.fromJson({
-        'v': 1,
-        'aetherLegProtocol': 'gool',
-      });
-      expect(migrated.firefoxLegProtocol, AetherLegProtocol.gool);
-
-      final own = CoreSettings.fromJson({
-        'v': 1,
-        'firefoxLegProtocol': 'masque',
-      });
-      expect(own.firefoxLegProtocol, AetherLegProtocol.masque);
-
-      final bare = CoreSettings.fromJson({'v': 1});
-      expect(bare.firefoxLegProtocol, AetherLegProtocol.wireguard);
-    });
   });
 
   group('ZeptunConfigToml.build', () {
@@ -2139,11 +2112,6 @@ class _FakeCore implements AetherCoreApi {
 
 /// A config source with fixed user choices (interface getter names).
 class _FixedConfig implements EngineConfigSource {
-  // PHASE-2 (firefox-vpn) — the new config surface (defaults).
-  @override
-  String get firefoxLocation => 'auto';
-  @override
-  String get firefoxTransport => 'h2';
   /// v4.41 — the seam's new members (routing profile + per-app pick).
   @override
   String? get routingRegion => null;

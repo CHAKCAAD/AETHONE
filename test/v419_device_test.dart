@@ -618,11 +618,6 @@ void main() {
 }
 
 class _Cfg implements EngineConfigSource {
-  // PHASE-2 (firefox-vpn) — the new config surface (defaults).
-  @override
-  String get firefoxLocation => 'auto';
-  @override
-  String get firefoxTransport => 'h2';
   /// v4.41 — the seam's new members (routing profile + per-app pick).
   @override
   String? get routingRegion => null;
