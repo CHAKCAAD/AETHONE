@@ -370,3 +370,8 @@ explicit env-gated local-source path in `scripts/build_native.sh` (default behav
 unchanged), plus `scripts/build_native_poc.sh` (wrapper that copies the vendored
 patched tree to a scratch dir and invokes the recipe). No pin changes, no CI workflow
 changes, nothing committed or pushed.
+
+Stage 2.1 correction (D15): the wrapper runs the recipe as a child process (exit
+status preserved) and its cleanup removes ONLY the scratch directory the run itself
+created via mktemp — a caller-supplied `POC_SRC_CACHE` is honored as the parent
+location and never deleted. Covered by `scripts/test_build_native_poc.sh`.

@@ -203,3 +203,144 @@ fail-closed semantics, DNS handling, zero regressions on the 109-test baseline),
 the completion gate's device-dependent items remain unmet.** Stage 3 must not start
 until the device round closes the gate (or the owner explicitly accepts the host
 evidence as sufficient).
+
+---
+
+# Stage 2.1 — Android Validation & Persistent Handoff (2026-11-18)
+
+Branch `feature/per-app-routing-stage2-poc` (created from the audited baseline
+`5502d34` = Stage 2's working tree, commit `0583a34`). Remote `fix/owner-round-2`
+had advanced to `d9bcd64` (rounds 11–12, Firefox retirement v2.1.0) BEFORE this
+branch was cut — merging that line is a separate owner decision (see
+SESSION_HANDOFF.md). Environment: the analysis sandbox — Zig 0.16.0, JDK (Temurin
+17.0.21, the CI pin), Flutter 3.47.9 stable (dart 3.13.7, the CI pin), Android SDK
+platforms;android-36 + build-tools;36.0.0, NDK r26d (26.3.11579264, selective
+extract: no simpleperf/shader-tools/python/musl). 3.9 GB RAM / constrained disk —
+deviations noted per item.
+
+## Script safety audit (brief §4) — both defects CONFIRMED, FIXED, TESTED
+
+Audited the committed wrapper (`0583a34`) against a stubbed child in a sandbox:
+
+| Concern | Verdict | Evidence |
+| --- | --- | --- |
+| `exec` prevents the EXIT trap from running | **Confirmed** | old wrapper left `.zeptun_poc.*` in the repo root after a successful stubbed run (it also leaked two scratch dirs into the REAL repo root during a mis-wired demo attempt — live confirmation; both were removed) |
+| Trap deletes a caller-supplied `POC_SRC_CACHE` | **Confirmed** | stubbed run with `POC_SRC_CACHE=<pre-existing dir + sentinel file>` and an unreadable file inside the vendored tree → `cp` fails → `set -e` exit → trap fires → the directory AND its sentinel were deleted (reproduced deterministically) |
+
+Fix (small, independent, documented in the script header):
+`build_native_poc.sh` now (1) runs `build_native.sh` as a CHILD and exits with the
+child's exact status (`|| rc=$?`), so the trap runs on success AND failure; (2) only
+ever removes `POC_SCRATCH_DIR` — a directory THIS run created via `mktemp` (fresh by
+construction, ownership proven); (3) `POC_SRC_CACHE`, when set, is honored only as the
+PARENT into which the fresh scratch dir is placed (`mkdir -p`, never deleted); (4)
+INT/TERM traps chain into the cleanup.
+
+Tests: `scripts/test_build_native_poc.sh` — self-contained (stubbed child, no Android
+toolchain needed), **24/24 checks green**: success, failure (status 7 preserved),
+caller-path survival (success + failure), missing parent created-then-kept, missing
+vendored tree, SIGTERM mid-build (143 + cleanup), args/env forwarded, copy verified.
+Re-run after any change to the wrapper.
+
+## Kotlin compile in the real project configuration (brief §5.1) — PASS
+
+First compile attempt of the Stage 2 Kotlin. Command: `./gradlew
+:app:compileDebugKotlin` with the repo's wrapper (Gradle 9.8.2, AGP 9.4.0, Kotlin
+2.4.0, compileSdk 36). Sandbox deviations (none change what is compiled): `--no-daemon
+--no-parallel`, `-Dorg.gradle.jvmargs=-Xmx2g` (repo default asks 8G vs 3.9G sandbox
+RAM), in-process Kotlin compiler, and a sandbox-only stub
+`android-sdk/ndk/28.2.13676358/source.properties` satisfying AGP's configure-time NDK
+revision check (`flutter.ndkVersion`; no NDK is needed by the compile task itself).
+
+| Step | Result |
+| --- | --- |
+| First compile | **FAIL — real Stage 2 defect**: `PerAppRouteResolver.kt:198:46 Unresolved reference 'pkg'` (the bounded logging block referenced a loop variable out of scope) |
+| Fix | 6-line change inside `resolve()`: the logging block now iterates the uid's package names within scope; semantics preserved (one log line per NEW package, ≤ 64 total, package names never printed) |
+| After fix | **BUILD SUCCESSFUL** — classes emitted: `AethoneVpnService`, `PerAppRouteResolver`(+Companion), `PoCRoutes`(+Companion/Kt), `PoCRoutesReceiver`(+Companion), `dev.zeptun.Zeptun` |
+
+This closes the Stage 2 "Kotlin compile pending" item: **Automated-tested** (real
+configuration, JDK 17.0.21 + Flutter 3.47.9 exactly as CI pins them).
+
+## JNI linkage verification (brief §5.2) — PASS (static + binary)
+
+All five `external fun` declarations byte-match the `JNINativeMethod` table in
+`zeptun_jni.c`:
+
+| Kotlin (Zeptun.kt) | JNI descriptor (zeptun_jni.c) |
+| --- | --- |
+| `nativeStart(Any?, Int, String?, Boolean): Int` | `(Ljava/lang/Object;ILjava/lang/String;Z)I` |
+| `nativeStop()` | `()V` |
+| `nativeVersion(): String` | `()Ljava/lang/String;` |
+| `nativeCounter(Int): Long` | `(I)J` |
+| `nativeUpdateRoutes(String): Int` | `(Ljava/lang/String;)I` |
+
+Binary level (the ANDROID build below, not the host lib): `nm -D` on
+`libzeptun-jni.so` exports `JNI_OnLoad`, `zeptun_update_routes`,
+`zeptun_set_flow_callback` (engine statically linked in); `libzeptun.so` exports
+`zeptun_update_routes`, `zeptun_set_flow_callback`, `zeptun_start/stop/version(_string)`.
+
+## Native PoC build (brief §5.3–5.5) — zeptun stage PASS; stages 2–4 BLOCKED (environment)
+
+Exact base command of the brief (plus `taskset -c 0,1` — the first full-parallelism
+attempt was killed by the sandbox's resource limits; 2 CPUs bound zig's in-process
+parallelism and memory stayed at 3.3–3.5 GB free):
+
+```sh
+ANDROID_NDK_HOME=<r26d> ZIG=<zig-0.16.0> scripts/build_native_poc.sh \
+  --abi arm64-v8a --rust-target aarch64-linux-android --goarch arm64 \
+  --api-level 29 --src-cache <dedicated> --out <dedicated>
+```
+
+| Stage | Status | Evidence |
+| --- | --- | --- |
+| [1/4] zeptun (vendored patch, `ZEPTUN_LOCAL_SRC`) | **Pass (in-sandbox)** | ndk-build `[arm64-v8a] Compile: zeptun-jni <= zeptun_jni.c` → `libzeptun.so` (275 800 B) + `libzeptun.a` (358 152 B) + `libzeptun-jni.so` (281 848 B) in the dedicated out dir; ELF `ARM aarch64 … for Android 29, built by NDK r26d (11579264)`, 16 KiB LOAD alignment; export guard passed (exactly 3 files); intermediates wiped; **the fixed wrapper removed its scratch on the failed run** (real-run confirmation of §Script safety) |
+| [2/4] aether | **Blocked (environment)** | pin `d58f9d56` cloned fine, then `cargo: command not found` (rc 127) — no Rust 1.99.1 / cargo-ndk 4.1.2 in this sandbox (with Go 1.26.3, the toolchains + boring-sys fetch exceed the sandbox's remaining disk/memory) |
+| [3–4] lyrebird, psiphon | **Blocked (environment)** | not reached (would need Go 1.26.3) |
+| APK assembly | **Not tested (environment)** | requires all four cores staged as jniLibs — must run on CI / the owner's host via the android-debug recipe with the PoC outputs staged (the recipe itself is unchanged) |
+
+Other ABIs (armeabi-v7a, x86_64): not repeated — identical recipe, identical block
+point; arm64-v8a is the device-relevant ABI for the validation round.
+
+## Device validation matrix (brief §7) — NO DEVICE CONNECTED
+
+`adb` is not present in this environment and no physical device is attached. Per the
+brief, emulator results are NOT substituted for device results. Statuses:
+
+| Test | Status |
+| --- | --- |
+| A — UID attribution (real apps, shared UID, invalid, timeouts, latency) | **Blocked (no device)** — procedure: §Device procedure step 2 + `POC_ROUTES_STATS` |
+| B — TCP routing with independent exit-IP proof | **Blocked (no device)** — procedure: §Device procedure step 3 |
+| C — UDP attribution (raw direct, SOCKS5 ASSOCIATE, success rate vs fallback) | **Blocked (no device, no controllable UDP endpoint)** |
+| D — DNS (fake-IP default vs direct's `dns.upstream`, fail-closed leftovers) | **Blocked (no device)** |
+| E — Live update (old flow keeps route, new flow new table, invalid rejected) | **Blocked (no device)** — procedure: §Device procedure step 4 |
+| F — Failure isolation (dead route fails closed, others unaffected) | **Blocked (no device)** — procedure: §Device procedure step 5 |
+| G — Loop prevention (own uid, protected sockets, chain children) | **Blocked (no device)** |
+| H — Regression (WARP, overlays/chains, Include/Exclude, direct rules, DNS, start/stop, Kill Switch) | **Blocked (no device + no full APK here)** |
+
+## Performance / resolver metrics (brief §8) — Not measured (no device)
+
+The counters (`route_assigned`, `route_fallback`, `route_direct_fake`, resolver
+calls/attributed/timeouts/errors/avg/max latency) are implemented and reachable via
+`POC_ROUTES_STATS`; no honest measurement exists without hardware. No new
+instrumentation was added (per the brief: propose first, keep the architecture).
+
+## Supply-chain rules honored (brief §5 rules / §12 prohibitions)
+
+No pin, workflow, or `build_native.sh` default path changed (`ZEPTUN_LOCAL_SRC` unset →
+byte-identical CI recipe). No user cache deleted (dedicated `--src-cache`/`--out`).
+No `flutter clean`, no Gradle cache purges of user state. `pubspec.lock` — modified as
+a side effect of `flutter pub get` (a newer pub added a `listen` entry) — was REVERTED
+to the committed baseline; nothing Dart-side changed. No APK, keystore, or secret is
+committed; build logs stay out of the repo (excerpts above).
+
+## Stage 2.1 verdict
+
+**Partially Successful (environment-bounded).** Closed this round: script safety
+(confirmed + fixed + 24-check suite + real-run confirmation), Kotlin compile in the
+real configuration (one real defect found and fixed — the exact purpose of this
+round), JNI static + binary symbol verification, the zeptun stage of the PoC native
+build through the fixed wrapper with the new symbols present in the Android
+artifacts, and the full evidence trail persisted on the
+`feature/per-app-routing-stage2-poc` branch. Open: the aether/lyrebird/psiphon stages
+and the APK (need Rust 1.99.1 + Go 1.26.3 — CI or the owner's host), and the entire
+device round (Tests A–H). Stage 3 remains gated on the owner's review of the device
+evidence.

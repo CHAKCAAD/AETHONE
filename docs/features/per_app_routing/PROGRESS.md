@@ -2,74 +2,69 @@
 
 ## Current phase
 
-**Stage 2 (Core PoC): IMPLEMENTED — host-proven, awaiting the owner's review and the
-device round.** Nothing committed or pushed (all changes live in the working tree).
-Stage 3 must not start until the owner accepts the PoC evidence.
+**Stage 2.1 (Android validation & persistent handoff): done to the environment's
+limit — see the verdict.** Stage 2 core PoC is implemented and host-proven; the
+Stage 2.1 round added the script-safety fix, the first real Kotlin compile (one real
+defect found + fixed), JNI verification, and the zeptun stage of the Android PoC
+build. Stage 3 must not start until the owner accepts the evidence and the device
+round closes the gate.
 
 ## Repository state
 
-- Branch `fix/owner-round-2`, HEAD `5502d34` + uncommitted Stage-2 changes
-  (17 modified files, 5 new files — inventory in POC_RESULTS.md §Build).
-- Vendored `native/zeptun/` was byte-identical to pin 08a1ab0 before the patch
-  (verified by full diff against a fresh clone of the pin).
+- Working branch: `feature/per-app-routing-stage2-poc` (remote: origin/CHAKCAAD/AETHONE)
+  — created from the audited baseline `5502d34` (fix/owner-round-2) + the Stage 2
+  working tree, commit `0583a34`; Stage 2.1 commits follow on top.
+- Remote `fix/owner-round-2` has ADVANCED to `d9bcd64` (rounds 11–12: Firefox
+  retirement v2.1.0, widget work). The PoC branch does NOT contain those rounds —
+  merging them is a separate owner decision (likely conflicts in AethoneVpnService.kt).
+- Vendored `native/zeptun/` = pin 08a1ab0 + the Stage 2 patch (untracked build caches
+  `.zig-cache`/`zig-out` live inside it — never commit them).
 
-## Key facts (Stage 2, verified)
+## Verified results (latest first — Stage 2.1, 2026-11-18)
 
-1. Route table: optional `[routes]` section (parallel lists, TOML+JSON); route 0 =
-   the default/global handler; entries 1..N positional. Absent section = old behavior.
-2. Flow-owner callback: the EXISTING `zeptun_set_flow_callback`, return contract
-   extended to `(route << 2) | action` (legacy 0..3 = default route — byte-compatible).
-   Installed only on PoC starts (`nativeStart`'s new `flowCallback` flag).
-3. Callback fires once per NEW flow (TCP SYN / first UDP / first DNS of a flow) —
-   the UDP session lookup precedes the DNS branch so it is never per-packet.
-4. Per-flow selection: Dial carries `upstream`/`strict` (TCP) and UdpState
-   `bypass`/`ctrl.upstream` (UDP); warm pool serves the default route ONLY.
-5. Live updates: `zeptun_update_routes` (new C symbol) validates fully, swaps the
-   engine table under a lock; existing flows keep their exits; invalid docs rejected.
-6. Direct + fake-IP DNS: the asking app's queries are forwarded to `dns.upstream`
-   (system DNS on PoC starts); a direct flow still carrying a fake IP FAILS CLOSED
-   (`route_direct_fake`), never silently tunneled.
-7. Latent upstream bug fixed: `bypass` UDP under a socks5 handler used to
-   SOCKS-frame raw datagrams (udpSend/flushTx/deliverBatch keyed off the global kind).
-8. Kotlin: `PerAppRouteResolver` (bounded 50 ms query, deterministic shared-UID rule,
-   metrics), adb-only `EXTRA_POC_ROUTES` start extra, token-guarded
-   `PoCRoutesReceiver` (live update + stats dump). No Dart/UI changes.
-9. Tests: `zig build test` — 118/126 (8 pre-existing skips), baseline 109/117 →
-   zero regressions, 9 new tests incl. six engine-level per-flow fixtures with
-   independently observable exits. JNI C compiles clean (-Wall -Wextra -Werror).
+1. `build_native_poc.sh` safety: both owner-flagged defects CONFIRMED (exec kills the
+   EXIT trap; the trap could `rm -rf` a caller-supplied `POC_SRC_CACHE`), FIXED
+   (subprocess + preserved exit code; own-only `POC_SCRATCH_DIR` cleanup), and covered
+   by `scripts/test_build_native_poc.sh` (24/24 green, toolchain-free).
+2. Kotlin compile (real config: Gradle 9.8.2 wrapper, AGP 9.4.0, Kotlin 2.4.0,
+   compileSdk 36, JDK Temurin 17.0.21, Flutter 3.47.9): first compile FAILED on a real
+   Stage 2 defect (`PerAppRouteResolver.kt:198` — out-of-scope `pkg` reference in the
+   bounded logging block); after a 6-line fix: **BUILD SUCCESSFUL** (all Stage 2
+   classes emitted).
+3. JNI: all five `external fun` signatures byte-match the `JNINativeMethod` table;
+   `nm -D` on the ANDROID artifacts exports `zeptun_update_routes` +
+   `zeptun_set_flow_callback` (both .so files).
+4. Native PoC build via the wrapper: zeptun stage **Pass** (arm64-v8a, Android 29,
+   NDK r26d, 16 KiB alignment, exactly 3 exported files); aether stage BLOCKED at
+   `cargo: command not found` (no Rust/Go in the sandbox) → no APK here.
+5. Stage 2 host suite (unchanged since): 118/126 (8 pre-existing skips), baseline
+   109/117 — zero regressions.
 
-## Completed this stage
+## Remaining
 
-- [x] Mandatory prep: repo re-verified vs the Phase-1 audit; zeptun flow/handler/JNI/
-      protect/DNS paths re-read from source (no stale assumptions used).
-- [x] Zig: routes config + validation, verdict packing, engine route storage + atomic
-      update, per-flow dial/UDP selection, pool isolation, fail-closed, DNS forward.
-- [x] JNI bridge: flow-route callback + nativeUpdateRoutes (compile-checked).
-- [x] Kotlin: resolver, service wiring, PoC instrumentation, manifest receiver.
-- [x] Host test program green (3× repeat runs — no flakes).
-- [x] Build path: `ZEPTUN_LOCAL_SRC` gate + `build_native_poc.sh` (default CI recipe
-      untouched).
-- [x] Docs: ARCHITECTURE §8, DECISIONS D10–D14, POC_RESULTS.md (honest statuses).
-
-## Remaining (blocked on owner)
-
-- [ ] Owner review of the Stage-2 evidence (POC_RESULTS.md).
-- [ ] Device round: Tests 1–7 device items, performance measurements, regression
-      (procedure in POC_RESULTS.md §Device procedure) — no device in this environment.
-- [ ] Android compile of the Kotlin (no SDK here; CI or owner's machine).
-- [ ] Decision: fork-pin the patched zeptun or upstream it (D14) — needed before any
-      CI build of the PoC APK can ship.
+- [ ] Owner review of POC_RESULTS.md (Stage 2 + Stage 2.1 sections).
+- [ ] Full 4-stage PoC build + APK assembly on CI / owner host (needs Rust 1.99.1 +
+      cargo-ndk 4.1.2 + Go 1.26.3; stage the PoC outputs as jniLibs per the
+      android-debug recipe).
+- [ ] Device round: Tests A–H (all Blocked — no device; procedures in POC_RESULTS.md
+      §Device procedure and §Stage 2.1 device matrix), incl. resolver metrics.
+- [ ] Decision: fork-pin the patched zeptun or upstream it (D14) — required before
+      any production CI build of the PoC APK.
+- [ ] Decision: merge/rebase onto the advanced fix/owner-round-2 (d9bcd64).
 
 ## Known blockers
 
-- No physical Android device (all device tests Not tested, honestly reported).
-- No Android SDK/NDK in the analysis environment (Kotlin compile pending CI).
+- No physical Android device / adb in the analysis environment.
+- No Rust/Go toolchains and insufficient disk/memory for the full 4-stage native
+  build in the sandbox.
 - `dns.upstream` fixed at start: a live update cannot INTRODUCE a direct route
-  without one present at start (restart required) — documented D12.
+  without one present at start (restart required) — documented (D12).
 
 ## Next exact action
 
-Owner: review `POC_RESULTS.md`. If the host evidence is accepted as sufficient for
-Stage 2, run the device procedure (POC_RESULTS.md §Device procedure) on hardware with
-a PoC APK built via `scripts/build_native_poc.sh`; record the device results back
-into POC_RESULTS.md. Stage 3 (UI) starts only after the gate closes.
+Owner: review `POC_RESULTS.md`. To finish Stage 2.1 on hardware: build the PoC APK on
+a machine with the full toolchain (`scripts/build_native_poc.sh` per ABI → stage
+`<out>/<abi>/zeptun/*` + aether/lyrebird/psiphon outputs as jniLibs → the standard
+android-debug recipe), install on an Android 10+ device, and run the §Device
+procedure (Tests A–H), recording results back into POC_RESULTS.md. Stage 3 (UI)
+starts only after the owner accepts the evidence.

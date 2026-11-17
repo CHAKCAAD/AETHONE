@@ -137,3 +137,31 @@ unset — the frozen path is untouched) and `scripts/build_native_poc.sh` wraps 
 PoC builds, copying the vendored tree to a scratch dir first. No pin changed, no
 workflow changed, nothing committed or pushed — the owner decides if/when the patched
 zeptun becomes a fork pin (the psiphon-fork precedent).
+
+---
+
+# Stage 2.1 decisions — 2026-11-18
+
+## D15 — Wrapper cleanup invariant: own-only deletion, subprocess execution, preserved exit codes
+
+The first PoC cut of `build_native_poc.sh` had two confirmed safety defects: `exec`
+replaced the wrapper shell so its EXIT trap never ran (the scratch copy leaked on
+every run), and the trap's `rm -rf "$POC_SRC_CACHE"` could delete a caller-supplied
+pre-existing path whenever the script exited between trap installation and the exec
+(a `cp` failure was the reachable case — reproduced with a sentinel file).
+
+The fix (verified by `scripts/test_build_native_poc.sh`, 24 checks): the child
+`build_native.sh` runs as a SUBPROCESS and the wrapper exits with the child's exact
+status; cleanup only ever removes `POC_SCRATCH_DIR`, a directory the run itself
+created via `mktemp` (fresh by construction — ownership provable); `POC_SRC_CACHE`,
+when set, is honored solely as the parent into which that fresh scratch dir is placed
+(created if missing, never deleted); INT/TERM chain into the cleanup. This
+own-only-deletion invariant is binding for any future wrapper in this repo.
+
+## D16 — Bounded per-package attribution logging iterates in-scope package names
+
+The first real Kotlin compile caught `PerAppRouteResolver.kt:198` referencing a loop
+variable out of scope (`Unresolved reference 'pkg'`). The corrected block iterates
+the uid's package list inside its scope, preserving the documented semantics: one log
+line per NEW package name, at most 64 lines, package names never printed to logcat
+(privacy rule). No behavior beyond the logging block changed.
