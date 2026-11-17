@@ -193,9 +193,12 @@ class PerAppRouteResolver(
                 return 0
             }
             assigned.incrementAndGet()
-            if (loggedPackages.size < 64) {
-                synchronized(loggedPackages) {
-                    if (loggedPackages.add("$pkg")) {
+            // Bounded per-package logging (adb-driven PoC starts only): one
+            // line per NEW package name, 64 total, names never printed.
+            synchronized(loggedPackages) {
+                for (name in packages) {
+                    if (loggedPackages.size >= 64) break
+                    if (loggedPackages.add(name)) {
                         Log.i(TAG, "poc attribution: package logged, route=$agreed uid=$uid")
                     }
                 }
