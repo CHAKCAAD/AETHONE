@@ -173,16 +173,23 @@ ANDROID_NDK_HOME=<ndk> ZIG=<zig-0.16.0> scripts/build_native_poc.sh \
 
 1. Build the PoC APK (above) and install two distinguishable test apps, e.g.
    Firefox (package `org.mozilla.firefox`) and a second browser.
-2. Connect AETHONE normally (engine up on 1819), then arm the PoC table:
-   `adb shell am start-foreground-service -n com.chakcaad.aethone/.AethoneVpnService \
+2. Connect AETHONE DA NORMALLY through its UI once (engine up on 1819) and
+   accept the VPN consent dialog — the PoC entry point refuses to start
+   without the standing consent (round-4 correction; see §round 4 below).
+3. Arm the PoC table through the round-4 debug-only entry point (the
+   previously documented `am start-foreground-service` on
+   `AethoneVpnService` was IMPOSSIBLE as written: the service is
+   `exported=false` and the DA package id differs — see §round 4):
+   `adb shell am start -n com.chakcaad.aethone.da/com.chakcaad.aethone.PoCControlActivity \
       --ei port 1819 --es poc_routes '{"routes":[{"id":"engine","kind":"socks5"},{"id":"direct","kind":"direct"}],"assignments":{"org.mozilla.firefox":"direct"}}'`
-   (logcat tag `AethonePoC` prints the token).
-3. Test 2: in each app open an IP-echo page; the assigned app must show the device's
+   (logcat tag `AethonePoC` prints the validation/consent/start result and
+   the token; `-W` additionally reports the activity result).
+4. Test 2: in each app open an IP-echo page; the assigned app must show the device's
    real IP, the other the engine's exit. `POC_ROUTES_STATS` dumps attribution + latency.
-4. Test 4: `adb shell am broadcast -a com.chakcaad.aethone.POC_UPDATE_ROUTES --es token <t> \
+5. Test 4: `adb shell am broadcast -a com.chakcaad.aethone.POC_UPDATE_ROUTES --es token <t> \
    --es routes '<updated json>'` — keep a download running in the assigned app, verify
    its exit is unchanged while new flows use the new table.
-5. Test 5: assign an app to a dead route (`socks5` on a closed port), verify the app's
+6. Test 5: assign an app to a dead route (`socks5` on a closed port), verify the app's
    connections fail fast while others keep working.
 
 ## Completion gate (task §10) — verdict
@@ -546,3 +553,152 @@ badging, in-APK PoC symbols) and re-delivered with a fresh debug signature.
 Native-stage conclusions of round 2 stand unchanged (zeptun/lyrebird/psiphon
 Pass, aether RAM-blocked with the CI-artifact closure). Device tests remain
 Blocked (no device). Stage 3 remains gated on the owner's acceptance.**
+
+# Stage 2.1 round 4 — the device-test entry point (2026-11-18)
+
+The owner's task found a REAL defect in this document's device procedure: it
+started `AethoneVpnService` directly through
+`adb shell am start-foreground-service -n com.chakcaad.aethone/.AethoneVpnService`.
+That command could never work as written, for three independent reasons:
+(1) the DA debug APK's application id is `com.chakcaad.aethone.da`, not
+`com.chakcaad.aethone`; (2) `AethoneVpnService` is `exported=false` — an
+external `am` start from the shell uid is a permission denial by design (the
+service must only ever be started by the app itself or bound by the system);
+(3) `PoCRoutesReceiver` is the LIVE-update/stats surface only — it cannot
+start the initial PoC route session. This round delivers the correct entry
+point and rewrites §Device procedure accordingly.
+
+## Implementation (D20 — see DECISIONS.md)
+
+`PoCControlActivity` — a debug-only, adb-addressable, content-less
+(translucent) activity that starts the service FROM THE APPLICATION'S OWN UID:
+
+- **Source sets**: class + its pure input spec (`PoCControlStartSpec`) live in
+  `android/app/src/debug/kotlin/` — the debug variant's source set. Declared
+  ONLY in `android/app/src/debug/AndroidManifest.xml`. Neither the class nor
+  the component exists in release/profile builds (verified below, and by
+  construction: AGP never compiles `src/debug` into other variants).
+- **Launch** (explicit component, no intent-filter — implicit resolution
+  cannot reach it): `adb shell am start -n
+  com.chakcaad.aethone.da/com.chakcaad.aethone.PoCControlActivity --ei port
+  1819 --es poc_routes '<json>' [--ez tcpOnly true] [--ez socksStrict true]`.
+  Fully-qualified `android:name` makes the component suffix-safe; `am start
+  -W` gets the activity result (ok = start delivered, canceled = rejected
+  with the reason on logcat).
+- **Contract**: `port` optional (default 1819, validated 1..65535 when
+  present); `poc_routes` REQUIRED (the entry point exists only for
+  route-instrumented starts — a plain tunnel is the app UI's job); the
+  document is validated by the SAME `PoCRoutes.parse` the service start path
+  and the update broadcast use (one parser, no second opinion). A malformed
+  document is rejected BEFORE anything starts.
+- **Consent gate**: `VpnService.prepare(this)` must return null (consent
+  already standing, granted once through the app UI) — otherwise a clear
+  failure is logged and NOTHING starts. The activity never raises the
+  consent dialog itself.
+- **Start**: `startForegroundService` with exactly the documented extras
+  (`port`, `tcpOnly`, `socksStrict`, `poc_routes`) — no session stamp, no
+  per-app pick: an external start, precisely like the adb command it
+  replaces. The service's own already-running/restart semantics are
+  untouched (a changed route document restarts the tunnel, as before).
+- **Logging**: validation, consent, the actual start result and the live PoC
+  token are logged under the existing `AethonePoC` tag (the token read is a
+  new read-only in-process companion accessor `currentPocToken()` — no IPC
+  surface, no guard weakened; the receiver's token check and the
+  per-instance regeneration are untouched).
+- **Untouched**: `AethoneVpnService` stays `exported=false` with
+  `android.permission.BIND_VPN_SERVICE`; the routing algorithm, Zeptun,
+  route numbering and default behavior are not modified;
+  `POC_UPDATE_ROUTES`/`POC_ROUTES_STATS` keep their token protection.
+
+## Automated tests (brief: "malformed and valid route-start documents")
+
+`:app:testDebugUnitTest` — `PoCControlStartSpecTest` (JUnit 4, JVM; test-only
+deps `junit:junit:4.13.2` + `org.json:json:20240303`, the real JVM artifact
+behind Android's org.json — neither reaches any APK): **24/24 PASS**
+(0 failures, 0 errors, 0 skipped, 0.079 s):
+
+| Group | Cases |
+| --- | --- |
+| Valid documents | canonical 2-route document with an assignment (defaults: port 1819, flags false); explicit port + flags; port boundaries 1/65535; empty routes list; strict-flag socks5 entry |
+| Spec-level rejections | absent `poc_routes`; blank `poc_routes`; port 0; port 65536; wrong-typed port extra (sentry −1) |
+| Malformed documents | not-JSON; unknown kind; socks5 without server; server without port; non-numeric port; direct carrying a server; duplicate ids; empty/whitespace id; >8 routes; assignment to unknown route |
+| Forwarding contract | spec extra keys == `AethoneVpnService.EXTRA_*`; spec default port == the service's; the ADB component string is the DA package + FQ class |
+
+## Manifest / variant verification (all on the REAL builds)
+
+| Check | Result |
+| --- | --- |
+| DA debug APK merged manifest (`aapt dump xmltree`) | `PoCControlActivity` PRESENT, `exported=0xffffffff` (true), no intent-filter |
+| DA debug APK dex | `PoCControlActivity` + `PoCControlStartSpec` present |
+| `AethoneVpnService` in the DA debug APK | `exported=0x0`, `android.permission.BIND_VPN_SERVICE` — unchanged, not weakened |
+| `PoCRoutesReceiver` in the DA debug APK | exported, both actions (`POC_UPDATE_ROUTES`/`POC_ROUTES_STATS`) intact — the update/stats broadcasts continue to work as before |
+| Release merged manifest (`processReleaseMainManifest`) | `PoCControlActivity`/`PoCControlStartSpec`: ZERO occurrences; `AethoneVpnService` still exported=false + BIND_VPN_SERVICE; receiver intact |
+| Release APK (`assembleRelease`, `aapt` + dex scan) | package `com.chakcaad.aethone` (no DA suffix), activity absent from manifest AND from every dex bucket; `AethoneVpnService`/`PoCRoutesReceiver` present as always — no test-start entry point in the production variant |
+| Component/launch command | the unit test pins `com.chakcaad.aethone.da/com.chakcaad.aethone.PoCControlActivity`; the merged manifest confirms the component resolves in the DA package. The `adb shell am start` itself needs a device — with the environment's no-device rule, that execution is **Blocked (no device)** and is NOT claimed |
+
+## Build (round 4)
+
+Toolchain reinstalled at the exact pins after another sandbox recycle
+(round-2/3 method): JDK Temurin 17.0.21+9 (Adoptium v3-API sha256 verified,
+`8b9b611d…`), SDK platform-36 + build-tools 36.0.0 + cmdline-tools, Flutter
+3.47.9 (git clone @ tag, framework `c197ca5199`), NDK r28c `28.2.13676358`
+(= `flutter.ndkVersion`, for the `:jni` cmake build + AGP's strip task).
+jniLibs re-staged from the hash-verified round-3 deliverable APK itself
+(`95e71815…` re-verified before extraction; staged libzeptun-jni.so
+byte-identical to the pinned PoC export `1a31fa21…`; aether/psiphon/lyrebird
+staged as the exact in-APK bytes round 3 shipped — hashes recorded in
+`.toolchain/round4/`).
+
+Environment-level deviations (no repo file touched; same classes as
+rounds 2/3): `GRADLE_USER_HOME` daemon sized `-Xmx2200m` for the 3.9 GB
+host; a `GRADLE_USER_HOME/init.d` mirror prepend (Aliyun public proxies of
+Maven Central/google/gradle-plugin-portal, canonical repos kept as
+fallback) because repo.maven.apache.org 429-throttled the sandbox IP's
+parallel resolution bursts; disk-bounded reclaims of re-derivable caches
+only (gradle transforms, the round-2-precedent selective NDK extract —
+this round additionally dropping the fat host-side debugger/analysis
+tooling lldb/clangd/llvm-bolt etc. and non-arm32/x86 compiler-rt, 972 MB
+final — plus the superseded local copy of the round-3 APK whose bytes are
+hash-pinned here and staged as jniLibs); `assembleRelease` run with
+`-x :app:extractReleaseNativeSymbolTables` (a Play-upload side artifact,
+not an APK input — the release APK itself is complete and verified).
+`pubspec.lock` reverted to the committed baseline after the builds (the
+same pub-get drift as rounds 2/3).
+
+## PoC debug APK (round 4) — DELIVERED, all gates PASS
+
+Final assembly = the D19 method, round-4 edition: arm64-v8a-only repack of
+gradle's own valid debug APK (dropping the `:jni` module's armeabi-v7a/
+x86_64 extras and the old signature files), `zipalign -f -P 16 4`,
+`apksigner` with the round-4 debug keystore (fresh key, same situation as
+round 3 — gradle generated it for this build).
+
+| Gate | Result |
+| --- | --- |
+| Archive validity | PASS (`zipfile -t`, 900 entries) |
+| `zipalign -c -P 16 -v 4` | **PASS** (pre- and post-sign) |
+| `apksigner verify --print-certs` | **PASS** (CN=Android Debug, round-4 key `e77479b4…`) |
+| `aapt dump badging` | `com.chakcaad.aethone.da`, `versionName='1.0.0-da'`, label AETHONE DA, `native-code: 'arm64-v8a'` only, minSdk 24 / targetSdk 36 |
+| Native libs | all 8 present (aether, lyrebird, psiphon, zeptun-jni, flutter, VkLayer, dartjni, datastore_counter) |
+| **PoC symbols in the packaged binary** | `llvm-readelf --dyn-symbols` on the in-APK `libzeptun-jni.so`: `zeptun_update_routes`, `zeptun_set_flow_callback`, `JNI_OnLoad` all exported |
+| **Round-4 entry-point gates** | `PoCControlActivity` in the final manifest (exported=true) AND in the dex; `AethoneVpnService` exported=false + BIND_VPN_SERVICE; receiver actions intact |
+| APK | `AETHONE-PoC-Stage2.1-arm64-debug.apk` — 74 073 078 bytes, sha256 `83bd544cc804c7592464cdde97b3715d799f353c7052472308b3dbafd5340e5e` |
+
+## Device round (unchanged)
+
+No device/adb in the environment; Tests A–H remain **Blocked (no device)**.
+The round-4 APK is for the owner's hardware round via the corrected
+§Device procedure. Stage 3 remains gated on the owner's acceptance.
+
+## Stage 2.1 round-4 verdict
+
+**The device-test entry point is fixed and proven at every level this
+environment can prove: the documented procedure no longer asks the owner to
+run an impossible command; the debug-only activity is implemented,
+automated-tested (24/24), manifest- and dex-verified present in the DA
+debug APK and absent from the release variant; the VPN service's
+non-exported posture and the receiver's token guard are byte-level
+unchanged. A new gated PoC APK is delivered (round-4 key). Device tests
+remain Blocked (no device) — the completion gate's device-dependent items
+stay unmet and Stage 3 remains forbidden until the owner accepts the
+evidence.**

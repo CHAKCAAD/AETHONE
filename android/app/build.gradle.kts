@@ -100,6 +100,17 @@ dependencies {
     // AndroidX WebKit ProxyController routes the Firefox login WebView
     // through the temporary loopback DNS-aware CONNECT proxy.
     implementation("androidx.webkit:webkit:1.18.0")
+
+    // Stage 2 per-app routing (PoC, round 4) — JVM unit tests for the
+    // debug-only PoCControlActivity entry point (route-start documents,
+    // valid + malformed, through the same PoCRoutes.parse the service and
+    // the update broadcast use). TEST-ONLY classpath: neither dependency
+    // reaches any APK (the debug or release variants are unchanged —
+    // assembleDebug/assembleRelease do not see testImplementation).
+    // org.json:json is the real JVM artifact behind Android's org.json,
+    // the standard way to unit-test JSON parsing on the host.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }
 
 flutter {

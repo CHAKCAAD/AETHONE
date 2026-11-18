@@ -2,15 +2,17 @@
 
 ## Current phase
 
-**Stage 2.1 round 3 complete — deliverable RESTORED after the sandbox recycle.**
-Round 2's conclusions stand (zeptun/lyrebird/psiphon Pass, aether RAM-blocked
-with the CI-artifact closure, D18/D19). The recycle between sessions lost the
-round-2 APK, `.toolchain` env/evidence and the worktree; round 3 reinstalled
-the exact-pin toolchain, re-staged jniLibs from verified sources (surviving
-PoC zeptun export + the same-pin CI artifact), re-ran the gradle build and
-re-delivered the gated PoC debug APK (arm64-v8a, DA variant, fresh debug key).
-Device round: Blocked (no device). Stage 3 (UI) must not start until the owner
-accepts the evidence and the device gate closes.
+**Stage 2.1 round 4 complete — the device-test entry point FIXED and a new
+PoC APK delivered.** The round-0 device procedure asked the owner to start
+`AethoneVpnService` directly via `am start-foreground-service` — impossible
+(DA package id is `com.chakcaad.aethone.da`; the service is `exported=false`;
+the receiver cannot start sessions). Round 4 adds the debug-only
+`PoCControlActivity` (D20), automated-tested (24/24), verified present in
+the DA debug APK (manifest + dex) and absent from the release variant
+(manifest + dex), with the VPN service posture and the receiver token
+guard unchanged — and re-delivers the gated PoC debug APK. Device round:
+Blocked (no device). Stage 3 (UI) must not start until the owner accepts
+the evidence and the device gate closes.
 
 ## Repository state
 
@@ -23,7 +25,33 @@ accepts the evidence and the device gate closes.
 - Vendored `native/zeptun/` = pin 08a1ab0 + the Stage 2 patch (never commit
   `.zig-cache`/`zig-out` inside it).
 
-## Verified results (latest first — Stage 2.1 round 3, 2026-11-18)
+## Verified results (latest first — Stage 2.1 round 4, 2026-11-18)
+
+1. **Round-4 entry point** (details: POC_RESULTS.md §round 4, decision D20):
+   `PoCControlActivity` + `PoCControlStartSpec` in `src/debug/kotlin`,
+   declared only in `src/debug/AndroidManifest.xml` — explicit adb launch
+   `com.chakcaad.aethone.da/com.chakcaad.aethone.PoCControlActivity`,
+   `port`/`poc_routes`(+`tcpOnly`/`socksStrict`) validated through the same
+   `PoCRoutes.parse`, VPN-consent gate (`prepare()` == null), service started
+   from the app's own UID with the documented extras, start result + PoC
+   token logged under `AethonePoC`. `AethoneVpnService` remains
+   `exported=false` + `BIND_VPN_SERVICE`; receiver token guard untouched.
+2. **Automated tests**: `:app:testDebugUnitTest` 24/24 PASS (valid +
+   malformed route-start documents, spec rejections, forwarding contract).
+3. **Variant verification**: DA debug merged manifest — activity present,
+   exported=true, in dex; release merged manifest + release APK — activity
+   absent (manifest and every dex bucket), service/receiver unchanged.
+4. PoC debug APK **re-delivered** — `AETHONE-PoC-Stage2.1-arm64-debug.apk`
+   (74 073 078 B, sha256 `83bd544cc804c7592464cdde97b3715d799f353c7052472308b3dbafd5340e5e`):
+   package `com.chakcaad.aethone.da`, arm64-v8a only, 8 native libs, in-APK
+   libzeptun-jni.so exports the PoC symbols, zipalign -P 16 PASS (pre+post
+   sign), apksigner PASS (round-4 debug keystore). jniLibs re-staged from the
+   hash-verified round-3 APK (libzeptun-jni byte-identical to the pinned PoC
+   export). Toolchain reinstalled at the exact pins (JDK sha256-verified).
+5. Device round: still no device — Tests A–H Blocked (the corrected device
+   procedure is POC_RESULTS.md §Device procedure).
+
+## Verified results (Stage 2.1 round 3, 2026-11-18)
 
 1. **Round-3 recovery build** (details: POC_RESULTS.md §round 3): jniLibs
    re-staged hash-gated — libzeptun-jni.so from the surviving PoC export

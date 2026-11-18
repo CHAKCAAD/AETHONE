@@ -215,3 +215,44 @@ in the canonical zipalign-then-sign order. All of the project's own packaging
 gates pass (§ round-2 POC_RESULTS). On a normal disk, plain
 `flutter build apk --debug --target-platform android-arm64` reproduces this APK
 through gradle alone.
+
+## D20 — Stage 2.1 round 4: the device-test entry point is a debug-only `PoCControlActivity`, never an exported service
+
+The round-0 device procedure told the owner to run
+`adb shell am start-foreground-service -n com.chakcaad.aethone/.AethoneVpnService …`
+— a command that could never work: the DA APK's application id is
+`com.chakcaad.aethone.da`, the service is `exported=false` (an external am
+start is a permission denial — correctly so, the VPN service must not be
+startable by other UIDs), and `PoCRoutesReceiver` only drives live
+updates/stats on a running PoC tunnel, not the initial session.
+
+The fix is a dedicated debug-only activity, chosen over the alternatives on
+purpose:
+
+- **Not an exported `AethoneVpnService`**: opening the VPN service to other
+  UIDs (or weakening `BIND_VPN_SERVICE`) is a production-security regression
+  for a test convenience — rejected outright.
+- **Not the receiver**: it is the live-update/stats surface with its own
+  token contract; overloading it with session starts would blur the one
+  responsibility it documents, and it holds no consent gate.
+- **`PoCControlActivity` it is**: declared ONLY in
+  `android/app/src/debug/AndroidManifest.xml`, implemented ONLY in
+  `android/app/src/debug/kotlin` — the release/profile variants contain
+  neither the component nor the class (AGP never compiles debug sources
+  into them; verified on the built release APK's manifest and dex). The
+  activity validates `port`/`poc_routes`(+`tcpOnly`/`socksStrict`) through
+  the same `PoCRoutes.parse` authority the service uses, refuses to start
+  without the standing VPN consent (`VpnService.prepare` == null — granted
+  once through the app UI), then starts the service from the application's
+  own UID with exactly the documented extras. Translucent + content-less +
+  `noHistory`/`excludeFromRecents`: no UI trace, and `am start` puts the
+  process in the foreground, which is what makes the foreground-service
+  start legal on API 26+.
+
+The token is now also readable in-process (read-only companion accessor
+`AethoneVpnService.currentPocToken()`) so the entry point can log the start
+result and the token under the existing `AethonePoC` tag — no IPC surface,
+no guard weakened; the receiver's token check and the per-instance
+regeneration are untouched. The launch contract is pinned by
+`PoCControlStartSpecTest` (24/24): extra keys equal the service constants,
+and the ADB component is `com.chakcaad.aethone.da/com.chakcaad.aethone.PoCControlActivity`.

@@ -204,6 +204,13 @@ class AethoneVpnService : VpnService() {
                 " route_fallback=" + svc.readCounter(PerAppRouteResolver.STATS_ROUTE_FALLBACK) +
                 " route_direct_fake=" + svc.readCounter(PerAppRouteResolver.STATS_ROUTE_DIRECT_FAKE)
         }
+
+        /// PoC (round 4) — read-only view of the CURRENT instance token for
+        /// the debug-only PoCControlActivity's start-result log. In-process
+        /// Kotlin only (same UID, no IPC surface): this changes no behavior
+        /// and no guard — the receiver's token check, and the per-instance
+        /// regeneration in onCreate, are untouched.
+        fun currentPocToken(): String = pocToken
     }
 
     private var descriptor: ParcelFileDescriptor? = null

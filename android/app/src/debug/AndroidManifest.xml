@@ -4,4 +4,36 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Stage 2 per-app routing (PoC, round 4) — the DEBUG-ONLY device-test
+         entry point (D20). Declared HERE ONLY: this manifest merges into the
+         DA debug variant (applicationId com.chakcaad.aethone.da) and never
+         into release/profile — the production variants contain neither the
+         component nor the class (src/debug/kotlin source set).
+
+         Why an activity at all: AethoneVpnService is (and stays)
+         exported=false, so an external `am start-foreground-service` on it
+         is a permission denial, and PoCRoutesReceiver only drives live
+         updates/stats on an already-running PoC tunnel. PoCControlActivity
+         starts the service from the application's own UID after validating
+         port/poc_routes (+tcpOnly/socksStrict) and the standing VPN consent.
+
+         exported=true is what makes the EXPLICIT adb component launch legal
+         (no intent-filter: implicit resolution cannot reach it — explicit
+         component only, same debug-only posture as the PoC instrumentation
+         it replaces). Fully-qualified android:name so the component is
+         suffix-safe: com.chakcaad.aethone.da/com.chakcaad.aethone.PoCControlActivity.
+
+         Translucent + noHistory + excludeFromRecents: content-less, leaves
+         no UI trace; `am start` brings the process to the foreground, which
+         is what makes the foreground-service start legal on API 26+. -->
+    <application>
+        <activity
+            android:name="com.chakcaad.aethone.PoCControlActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""/>
+    </application>
 </manifest>

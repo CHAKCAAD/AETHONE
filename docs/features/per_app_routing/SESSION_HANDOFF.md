@@ -17,11 +17,13 @@ This file is a pointer, not a report. Update it after every milestone.
 ## Stage status
 
 Stage 2 (core PoC): implemented, host-proven. Stage 2.1 (validation & handoff):
-round 3 closed — deliverable RESTORED after the sandbox recycle (round-2
-conclusions stand: 3 of 4 native stages Pass, aether RAM-blocked via D18);
-the re-built, re-gated PoC debug APK is DELIVERED (round-3 key); device round
-Blocked (no device). Stage 3 (UI): FORBIDDEN until the owner accepts the
-evidence and the device gate closes.
+round 4 closed — the device-test entry point FIXED (the round-0 procedure's
+direct `am start-foreground-service` on the non-exported service was
+impossible; replaced by the debug-only `PoCControlActivity`, D20),
+automated-tested 24/24, manifest+dex verified in the DA debug APK and
+absent from the release variant; the round-4 PoC debug APK is DELIVERED
+(round-4 key); device round Blocked (no device). Stage 3 (UI): FORBIDDEN
+until the owner accepts the evidence and the device gate closes.
 
 ## Last valid results
 
@@ -34,27 +36,34 @@ evidence and the device gate closes.
   path; D17 defect found + proposed fix); psiphon PASS — byte-identical to CI
   artifact 14329444462 (run 44086964453); aether BLOCKED — 3× OOM at ~3.44 GB
   anon RSS on the 3.95 GB host (fat-LTO quiche unit; D18).
-- PoC APK (round 3, CURRENT DELIVERABLE): `AETHONE-PoC-Stage2.1-arm64-debug.apk`
-  — 74 068 982 B, sha256
-  `95e71815398d2753cf2c0de0b9ec31cbfaa7cff5fd4cde753f8c8b905b7dfd8f`, package
+- PoC APK (round 4, CURRENT DELIVERABLE): `AETHONE-PoC-Stage2.1-arm64-debug.apk`
+  — 74 073 078 B, sha256
+  `83bd544cc804c7592464cdde97b3715d799f353c7052472308b3dbafd5340e5e`, package
   `com.chakcaad.aethone.da`, arm64-v8a only, 8 native libs, in-APK
   libzeptun-jni.so exports the PoC symbols, zipalign -P 16 + apksigner PASS
-  (round-3 debug keystore — the round-2 key was lost with the recycle).
-  jniLibs = the surviving PoC zeptun build + aether/lyrebird/psiphon from the
-  same-pin CI artifact 14329444462 (manifest-verified; lyrebird git-path
-  substitution documented); final zip = repack of gradle's own valid APK
-  (D19 round-3 edition). Round-2 APK (53ff2a77…, 73 988 586 B) was lost with
-  the sandbox recycle — its record stays in POC_RESULTS.md §round 2.
+  (round-4 debug keystore — each recycled sandbox needs a fresh key).
+  Round-4 additions: `PoCControlActivity` in the merged manifest (exported,
+  explicit-component-only) and in the dex; `AethoneVpnService`
+  exported=false + BIND_VPN_SERVICE unchanged; receiver actions intact.
+  `:app:testDebugUnitTest` 24/24 (PoCControlStartSpecTest). jniLibs = the
+  round-3 APK's exact bytes (hash-verified re-staging); final zip = repack
+  of gradle's own valid APK (D19 round-4 edition). Rounds 2/3 records stay
+  in POC_RESULTS.md.
 
 ## Key files / entry points
 
 - Docs (all in `docs/features/per_app_routing/`): POC_RESULTS.md (full evidence
-  + device procedures), PROGRESS.md, DECISIONS.md (D1–D19), ARCHITECTURE.md (§8
+  + device procedures), PROGRESS.md, DECISIONS.md (D1–D20), ARCHITECTURE.md (§8
   = as built).
 - Native patch: `native/zeptun/` (config.zig, engine.zig, verdict.zig, tcp/udp.zig,
   jni/zeptun_jni.c, tests/route_tests.zig). Do NOT commit `.zig-cache/`/`zig-out`.
 - Kotlin: `PerAppRouteResolver.kt`, `PoCRoutes.kt`, `PoCRoutesReceiver.kt`,
-  `AethoneVpnService.kt` (EXTRA_POC_ROUTES / flowRoute), `dev/zeptun/Zeptun.kt`.
+  `AethoneVpnService.kt` (EXTRA_POC_ROUTES / flowRoute / currentPocToken),
+  `dev/zeptun/Zeptun.kt`. Debug-only round-4 files:
+  `android/app/src/debug/kotlin/…/PoCControlActivity.kt` +
+  `PoCControlStartSpec.kt`, declared in `android/app/src/debug/AndroidManifest.xml`;
+  tests: `android/app/src/testDebug/kotlin/…/PoCControlStartSpecTest.kt`
+  (test-only deps junit + org.json in app/build.gradle.kts).
 - Build: `scripts/build_native_poc.sh` (fixed wrapper — D15 invariant) +
   `scripts/test_build_native_poc.sh`; `build_native.sh` ZEPTUN_LOCAL_SRC gate.
 - Build-host tooling (NOT in the repo, on the sandbox): `/home/z/my-project/.toolchain/`
@@ -73,6 +82,16 @@ evidence and the device gate closes.
   IPv6 unchanged (D8). API 24–28: no attribution query, default route.
 - Vendored tree diverges from pin 08a1ab0 — fork-pin decision (D14) still open.
 - aether needs >4 GB RAM to compile (D18); the sandbox is 3.95 GB.
+
+## Done (Stage 2.1 round 4)
+
+Device-test entry point fixed per the owner's task: debug-only
+PoCControlActivity implemented (validation + consent gate + same-UID service
+start + AethonePoC logging incl. the token); 24/24 unit tests; DA debug +
+release variants built on the exact-pin toolchain and verified (activity in
+the DA manifest/dex, absent from release; service posture and receiver
+unchanged); gated PoC APK re-assembled and delivered (round-4 key); device
+procedure corrected in POC_RESULTS.md; docs updated; committed+pushed.
 
 ## Done (Stage 2.1 round 3)
 
@@ -100,10 +119,18 @@ docs updated; everything committed+pushed on the feature branch.
 
 ## Next exact command (owner's device round)
 
-Install the delivered APK (debug-signed — enable "install unknown apps"),
-connect via adb, then follow POC_RESULTS.md §Device procedure (Tests A–H) and
-record results back into POC_RESULTS.md with the five-state vocabulary. On a
-normal-disk host the canonical rebuild is:
+Install the delivered round-4 APK (debug-signed — enable "install unknown
+apps"), connect via the app UI ONCE (grants the VPN consent), then follow the
+CORRECTED POC_RESULTS.md §Device procedure (Tests A–H) — the PoC session is
+armed through the new entry point:
+
+```sh
+adb shell am start -n com.chakcaad.aethone.da/com.chakcaad.aethone.PoCControlActivity \
+  --ei port 1819 --es poc_routes '<route-start document>'
+# then POC_UPDATE_ROUTES / POC_ROUTES_STATS with the token from: adb logcat -s AethonePoC
+```
+
+On a normal-disk host the canonical rebuild is:
 
 ```sh
 # after staging jniLibs as in POC_RESULTS §round 2:
