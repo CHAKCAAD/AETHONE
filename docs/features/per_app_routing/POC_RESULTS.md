@@ -461,3 +461,88 @@ recorded); its cdylib for the APK taken from the project's own same-pin CI
 artifact. APK: built and gated (zipalign + apksigner + badging + in-APK PoC
 symbols), delivered for the device round. Device tests: Blocked (no device).
 Stage 3 remains gated on the owner's acceptance of the evidence.**
+
+# Stage 2.1 round 3 — sandbox-recycle recovery & re-delivery (2026-11-18)
+
+Between rounds 2 and 3 the build sandbox was recycled: the round-2 deliverable
+APK (download area), `.toolchain/per-app-routing-stage2.env` + `evidence/`,
+`scripts/stage21/` and the `aethone-stage21` worktree were lost; the pushed
+branch (docs + hashes) and the round-1 zeptun export under `poc-out/`
+survived. This round restores the deliverable from verified sources only.
+
+## What was recovered, from where
+
+| Piece | Source | Verification |
+| --- | --- | --- |
+| Toolchain | reinstalled at the exact pins: Flutter 3.47.9 (git clone @ tag, framework `c197ca5199` == the recorded archive hash), JDK Temurin 17.0.21+9 (release-metadata sha256), SDK platform-36/build-tools 36.0.0/platform-tools, NDK r28c `28.2.13676358` (= `flutter.ndkVersion`, for `:jni`'s cmake build + AGP's strip task) | fresh-install checks |
+| `libzeptun-jni.so` | the SURVIVING local PoC export (`poc-out/arm64-v8a/zeptun/`) | sizes exact-match the round-2 record (275 800 / 358 152 / 281 848 B); `nm -D` PoC symbols; ELF `ARM aarch64 … for Android 29, built by NDK r26d`; staged sha256 `1a31fa211e149282a16d676450819da7ad3cc2eaaa27f6eec712a45a375f524c` |
+| `libaether.so` / `libpsiphon.so` | the SAME CI artifact `native-arm64-v8a` id 14329444462 (run 44086964453) re-downloaded via the Actions API | all 7 files match the artifact's embedded `manifest.json` sha256s; libaether `6392090c…` == the round-2 record; psiphon `a26424ea…` == the round-2 LOCAL build (byte-identical — the round-2 reproducibility proof) |
+| `liblyrebird.so` | CI artifact (git path) — **documented substitution** for the lost round-2 proxy-path local build (`44cfb2f1…`) | same pin `fc105a03c0e0`; the git-path binary carries the pin in `vcs.revision` (grep-proven in-binary); sha256 `5164d8f9…` per manifest |
+| Gradle build | full `flutter build apk --debug --target-platform android-arm64` on the exact pins in the re-created `aethone-stage21` worktree | every compile/dex/resource/asset/jni task GREEN; gradle's own `packageDebug` produced a valid APK — the build was marked FAILED only by the post-build problems-report write on a full disk |
+
+Environment-level deviations (no repo file touched): the daemon was sized for
+this 3.9 GB host via `GRADLE_USER_HOME/gradle.properties` (`org.gradle.jvmargs=-Xmx2200m…`
+beats the project file by Gradle's documented precedence — the repo's `-Xmx8G`
+gets the daemon kernel-OOM-killed, dmesg-recorded); disk was reclaimed only
+from re-downloadable caches (gradle transform cache, wrapper zip, the
+go1.25.0 tree of the wrong version, the artifact zip after extraction).
+
+## Final assembly (D19 method, round-3 edition) — ALL GATES PASS
+
+gradle's valid APK repacked to the round-2 deliverable shape (arm64-v8a ONLY —
+dropping the `:jni` module's `armeabi-v7a`/`x86_64` extras — and the old
+signature files), then `zipalign -f -P 16 4`, then `apksigner` with the project
+debug keystore.
+
+| Gate | Result |
+| --- | --- |
+| Archive validity | PASS (`zipfile -t`, 900 entries) |
+| `zipalign -c -P 16 -v 4` | **PASS** (pre- and post-sign) |
+| `apksigner verify --print-certs` | **PASS** (CN=Android Debug — test install only; NEW debug key: the round-2 keystore was lost with the recycle, so the signature necessarily differs) |
+| `aapt dump badging` | `package: name='com.chakcaad.aethone.da'`, `versionName='1.0.0-da'`, `application-label:'AETHONE DA'`, `native-code: 'arm64-v8a'` only, minSdk 24 / targetSdk 36 |
+| Native libs in APK | all 8 present: libaether, liblyrebird, libpsiphon, libzeptun-jni, libflutter, libVkLayer_khronos_validation, libdartjni, libdatastore_shared_counter |
+| **PoC symbols in the packaged binary** | `nm -D` on the in-APK `libzeptun-jni.so`: `zeptun_update_routes`, `zeptun_set_flow_callback`, `JNI_OnLoad` all EXPORTED |
+| APK | `AETHONE-PoC-Stage2.1-arm64-debug.apk` — 74 068 982 bytes, sha256 `95e71815398d2753cf2c0de0b9ec31cbfaa7cff5fd4cde753f8c8b905b7dfd8f` |
+
+### In-APK native-lib provenance (round 3)
+
+- `libzeptun-jni.so` == the staged PoC build, **byte-identical** (`1a31fa21…`).
+- `liblyrebird.so` / `libpsiphon.so` == `llvm-strip` (r28c) of the staged
+  hash-verified inputs, **byte-identical** (`ed463246…` / `87545330…`).
+- `libaether.so` = AGP's own `stripDebugDebugSymbols` output of the staged
+  input `6392090c…`: same size, identical program headers and section list;
+  the 257 differing bytes are confined to the ELF section-header tail.
+- `libflutter.so` (38.8 MB) + `libVkLayer_khronos_validation.so` (15.2 MB) =
+  AGP-stripped flutter debug-engine artifacts of the pinned engine
+  `89c39edfdfae…` (the 395 MB + 248 MB unstripped originals never enter the
+  APK — exactly the round-2 finding).
+
+Differences from the round-2 APK (`53ff2a77…`, 73 988 586 B) are: the new
+debug key, zip re-compression, and the lyrebird substitution above — every
+component is provenance-verified against its recorded source hash.
+
+## Device round (unchanged)
+
+No device/adb in the environment; Tests A–H remain **Blocked (no device)**.
+The re-delivered APK is for the owner's hardware round (procedures:
+§Device procedure).
+
+## Supply-chain rules honored
+
+No pin, workflow, `build_native.sh` default path, or product file changed.
+`pubspec.lock` reverted to the committed baseline after the build (same
+pub-get drift as round 2: dev-only transitive `test_api`/`listen`). No APK,
+keystore, or secret committed; build logs distilled above and kept on the
+build host (`.toolchain/evidence/`, `.toolchain/round3/`). Assembly scripts:
+`scripts/stage21/stage-jnilibs-round3.sh`, `scripts/stage21/repack_apk_round3.py`,
+`scripts/stage21/assemble_final_apk_round3.sh` (build-host side, not the repo).
+
+## Stage 2.1 round-3 verdict
+
+**Deliverable restored: the PoC debug APK re-built from verified sources
+(surviving PoC zeptun export + the project's own same-pin CI artifact + the
+exact-pin Flutter/Gradle toolchain), re-gated end to end (zipalign, apksigner,
+badging, in-APK PoC symbols) and re-delivered with a fresh debug signature.
+Native-stage conclusions of round 2 stand unchanged (zeptun/lyrebird/psiphon
+Pass, aether RAM-blocked with the CI-artifact closure). Device tests remain
+Blocked (no device). Stage 3 remains gated on the owner's acceptance.**

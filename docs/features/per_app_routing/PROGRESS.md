@@ -2,11 +2,13 @@
 
 ## Current phase
 
-**Stage 2.1 round 2 complete to the sandbox's disk/RAM limits.** The exact-pin
-toolchain is installed and verified; zeptun, lyrebird and psiphon build PASS
-(zeptun through the fixed wrapper; the Go stages via the script's exact commands
-after the fail-fast aether abort); aether is RAM-blocked (deterministic OOM,
-D18); the PoC debug APK (arm64-v8a, DA variant) is built, gated and DELIVERED.
+**Stage 2.1 round 3 complete — deliverable RESTORED after the sandbox recycle.**
+Round 2's conclusions stand (zeptun/lyrebird/psiphon Pass, aether RAM-blocked
+with the CI-artifact closure, D18/D19). The recycle between sessions lost the
+round-2 APK, `.toolchain` env/evidence and the worktree; round 3 reinstalled
+the exact-pin toolchain, re-staged jniLibs from verified sources (surviving
+PoC zeptun export + the same-pin CI artifact), re-ran the gradle build and
+re-delivered the gated PoC debug APK (arm64-v8a, DA variant, fresh debug key).
 Device round: Blocked (no device). Stage 3 (UI) must not start until the owner
 accepts the evidence and the device gate closes.
 
@@ -21,7 +23,25 @@ accepts the evidence and the device gate closes.
 - Vendored `native/zeptun/` = pin 08a1ab0 + the Stage 2 patch (never commit
   `.zig-cache`/`zig-out` inside it).
 
-## Verified results (latest first — Stage 2.1 round 2, 2026-11-18)
+## Verified results (latest first — Stage 2.1 round 3, 2026-11-18)
+
+1. **Round-3 recovery build** (details: POC_RESULTS.md §round 3): jniLibs
+   re-staged hash-gated — libzeptun-jni.so from the surviving PoC export
+   (`1a31fa21…`, sizes == round-2 record, PoC symbols re-verified);
+   libaether/libpsiphon/liblyrebird from the same-pin CI artifact 14329444462
+   (manifest-verified; psiphon byte-identical to the round-2 local build;
+   lyrebird = git-path CI build with the pin in `vcs.revision` — documented
+   substitution for the lost proxy-path build).
+2. PoC debug APK **re-delivered** — `AETHONE-PoC-Stage2.1-arm64-debug.apk`
+   (74 068 982 B, sha256 `95e71815398d2753cf2c0de0b9ec31cbfaa7cff5fd4cde753f8c8b905b7dfd8f`):
+   package `com.chakcaad.aethone.da`, arm64-v8a only, 8 native libs, in-APK
+   libzeptun-jni.so exports the PoC symbols, zipalign -P 16 PASS (pre+post
+   sign), apksigner PASS (NEW debug keystore — the round-2 key was lost with
+   the recycle). Full gradle compile/dex/resource/jni graph GREEN; final
+   packaging per D19 (repack of gradle's own valid APK to arm64-only).
+3. Device round: still no device — Tests A–H Blocked.
+
+## Verified results (Stage 2.1 round 2, 2026-11-18)
 
 1. Toolchain at the exact pins, all §4 checks green (Flutter 3.47.9 via the
    LOCAL_BUILD_FA git-clone method, commit == the official archive hash; JDK
@@ -72,8 +92,8 @@ accepts the evidence and the device gate closes.
 
 ## Next exact action
 
-Owner: install `AETHONE-PoC-Stage2.1-arm64-debug.apk` (debug-signed, installs
-beside the main app as AETHONE DA) on an Android 10+ arm64 device and run
-POC_RESULTS.md §Device procedure (Tests A–H), recording results back into
-POC_RESULTS.md with the five-state vocabulary. Stage 3 (UI) starts only after
-the owner accepts the evidence.
+Owner: install the round-3 `AETHONE-PoC-Stage2.1-arm64-debug.apk` (debug-signed
+with the round-3 key, installs beside the main app as AETHONE DA) on an
+Android 10+ arm64 device and run POC_RESULTS.md §Device procedure (Tests A–H),
+recording results back into POC_RESULTS.md with the five-state vocabulary.
+Stage 3 (UI) starts only after the owner accepts the evidence.

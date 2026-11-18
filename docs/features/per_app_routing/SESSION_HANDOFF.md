@@ -17,10 +17,11 @@ This file is a pointer, not a report. Update it after every milestone.
 ## Stage status
 
 Stage 2 (core PoC): implemented, host-proven. Stage 2.1 (validation & handoff):
-round 2 closed to the sandbox's limits — toolchain exact, 3 of 4 native stages
-PASS, PoC debug APK DELIVERED; aether RAM-blocked (D18); device round Blocked
-(no device). Stage 3 (UI): FORBIDDEN until the owner accepts the evidence and
-the device gate closes.
+round 3 closed — deliverable RESTORED after the sandbox recycle (round-2
+conclusions stand: 3 of 4 native stages Pass, aether RAM-blocked via D18);
+the re-built, re-gated PoC debug APK is DELIVERED (round-3 key); device round
+Blocked (no device). Stage 3 (UI): FORBIDDEN until the owner accepts the
+evidence and the device gate closes.
 
 ## Last valid results
 
@@ -33,12 +34,17 @@ the device gate closes.
   path; D17 defect found + proposed fix); psiphon PASS — byte-identical to CI
   artifact 14329444462 (run 44086964453); aether BLOCKED — 3× OOM at ~3.44 GB
   anon RSS on the 3.95 GB host (fat-LTO quiche unit; D18).
-- PoC APK: `AETHONE-PoC-Stage2.1-arm64-debug.apk` — 73 988 586 B, sha256
-  `53ff2a778900f24d0d76140658c1d29e2834e513f0a72709cf8e38339bdd080b`, package
+- PoC APK (round 3, CURRENT DELIVERABLE): `AETHONE-PoC-Stage2.1-arm64-debug.apk`
+  — 74 068 982 B, sha256
+  `95e71815398d2753cf2c0de0b9ec31cbfaa7cff5fd4cde753f8c8b905b7dfd8f`, package
   `com.chakcaad.aethone.da`, arm64-v8a only, 8 native libs, in-APK
-  libzeptun-jni.so exports the PoC symbols, zipalign -P 16 + apksigner PASS.
-  jniLibs = 3 local builds + libaether.so from the same-pin CI artifact (D18);
-  final zip assembled from gradle's own green intermediates (D19).
+  libzeptun-jni.so exports the PoC symbols, zipalign -P 16 + apksigner PASS
+  (round-3 debug keystore — the round-2 key was lost with the recycle).
+  jniLibs = the surviving PoC zeptun build + aether/lyrebird/psiphon from the
+  same-pin CI artifact 14329444462 (manifest-verified; lyrebird git-path
+  substitution documented); final zip = repack of gradle's own valid APK
+  (D19 round-3 edition). Round-2 APK (53ff2a77…, 73 988 586 B) was lost with
+  the sandbox recycle — its record stays in POC_RESULTS.md §round 2.
 
 ## Key files / entry points
 
@@ -67,6 +73,14 @@ the device gate closes.
   IPv6 unchanged (D8). API 24–28: no attribution query, default route.
 - Vendored tree diverges from pin 08a1ab0 — fork-pin decision (D14) still open.
 - aether needs >4 GB RAM to compile (D18); the sandbox is 3.95 GB.
+
+## Done (Stage 2.1 round 3)
+
+Sandbox recycle recovery: exact-pin toolchain reinstalled (Flutter 3.47.9 clone
+@ tag c197ca5199, JDK 17.0.21+9, SDK 36/36.0.0, NDK r28c); worktree + env file
+re-created; jniLibs re-staged hash-gated; full gradle build re-run (daemon
+sized for the host via GRADLE_USER_HOME — env-level); APK re-assembled, all
+gates PASS, re-delivered; docs updated; committed+pushed on the feature branch.
 
 ## Done (Stage 2.1 round 2)
 
