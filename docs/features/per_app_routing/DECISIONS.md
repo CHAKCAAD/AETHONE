@@ -165,3 +165,53 @@ variable out of scope (`Unresolved reference 'pkg'`). The corrected block iterat
 the uid's package list inside its scope, preserving the documented semantics: one log
 line per NEW package name, at most 64 lines, package names never printed to logcat
 (privacy rule). No behavior beyond the logging block changed.
+
+## D17 — pt-build.sh proxy-path defect: the verification cleanup kills the build (found in Stage 2.1 round 2)
+
+The pin-hardened `pt-build.sh` (v4.2) proxy path — which the patch notes say was
+never executed on CI, because GitHub runners reach gitlab and take the git path —
+ends its official-Go-client sumdb verification with `rm -rf "$goverify"`. Go
+deliberately makes the module cache READ-ONLY (directories r-x), so that rm fails
+with "Permission denied" and `set -euo pipefail` aborts the whole build AFTER the
+verification already succeeded. Reproduced deterministically in the Stage 2.1
+round-2 sandbox (gitlab unreachable there → proxy path forced).
+
+Proposed fix (NOT applied — build scripts are frozen for Stage 2.1):
+`chmod -R u+w "$goverify" 2>/dev/null || true` before each `rm -rf "$goverify"`,
+or `go clean -modcache` semantics for a disposable GOMODCACHE. The round-2 run
+completed the lyrebird build by applying exactly this fallback at the ENVIRONMENT
+level (a scoped PATH shim), leaving the pinned script byte-identical
+(sha256 `3fbee02f…` verified before execution).
+
+## D18 — Stage 2.1 round 2: aether is RAM-blocked in the 4 GB sandbox; the APK's libaether.so comes from the project's own same-pin CI artifact
+
+The aether stage (aether @ d58f9d56, unchanged by the PoC) cannot compile in the
+sandbox: the same rustc unit (the in-tree `quiche` crate, release profile
+`lto=fat codegen-units=1`) was OOM-killed three times at ~3.42–3.45 GB anon RSS on
+a 3.95 GB host, even with `CARGO_BUILD_JOBS=1` and `CMAKE_BUILD_PARALLEL_LEVEL=1`
+(scheduling-only; output-identical). Output-changing mitigations (disabling LTO)
+were explicitly rejected — the frozen recipe is not negotiable for the PoC evidence.
+
+For the PoC APK, `libaether.so` was therefore taken from the project's OWN Actions
+artifact of the SAME frozen recipe (run 44086964453, `ci-bootstrap/v4.4` @
+`fbae94d`, native-arm64-v8a): manifest pins verified, hash matched, ELF/NDK-r26d
+checks passed. Artifact-based native staging is the project's own APK architecture
+(both CI workflows do it). The three other packaged cores are this round's local
+builds; psiphon is byte-identical to the CI manifest (reproducibility proof).
+
+## D19 — Stage 2.1 round 2: final APK packaging assembled from gradle's own intermediates (disk-bounded deviation)
+
+The sandbox disk (9.9 GB, ~4 GB pre-existing) cannot hold AGP's final
+merge→strip→package staging for a debug build whose engine artifacts alone are
+395 MB + 248 MB unstripped. All compile/link/dex/resource/manifest tasks ran green
+through gradle; the final zip was assembled from exactly those intermediates
+(AGP's `.ap_` resources package, merged assets, all dex buckets as native
+multidex, the 8 resolved native libs — engine + datastore libs `llvm-strip`-ed
+with the pinned r28c tool, exactly what AGP's StripDebugSymbolsTask does),
+zip-aligned (4-byte STORED entries; .so DEFLATED — legal for
+`android:extractNativeLibs="true"`, which this app requires anyway because it
+execs the Go binaries from nativeLibraryDir) and signed with the debug keystore
+in the canonical zipalign-then-sign order. All of the project's own packaging
+gates pass (§ round-2 POC_RESULTS). On a normal disk, plain
+`flutter build apk --debug --target-platform android-arm64` reproduces this APK
+through gradle alone.

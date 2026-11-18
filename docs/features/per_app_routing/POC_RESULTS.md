@@ -344,3 +344,120 @@ artifacts, and the full evidence trail persisted on the
 and the APK (need Rust 1.99.1 + Go 1.26.3 — CI or the owner's host), and the entire
 device round (Tests A–H). Stage 3 remains gated on the owner's review of the device
 evidence.
+
+---
+
+# Stage 2.1 round 2 — Full toolchain, native build & PoC APK (2026-11-18)
+
+Branch `feature/per-app-routing-stage2-poc` @ `408f7f0` (worktree, not the owner's
+checkout). Environment: the Debian 13 build sandbox — 2 vCPU, 3.9 GB RAM (no swap),
+9.9 GB disk (~4 GB system/pre-existing). Every deviation below is disk/RAM-bounded
+and documented; no pin, script, workflow, or product file was changed.
+
+## Toolchain (brief §3/§4) — installed at exact pins, verified
+
+| Tool | Version | Source & verification |
+| --- | --- | --- |
+| Flutter | 3.47.9 stable (framework `c197ca5199`, Dart 3.13.7) | git clone at the exact tag — the method `docs/LOCAL_BUILD_FA.md` itself prescribes; `c197ca5199` == the official `releases_linux.json` archive hash for 3.47.9. The 1.58 GB tarball does not fit the sandbox disk. |
+| JDK | Temurin 17.0.21+9 | Adoptium release archive, sha256 verified |
+| Android SDK | cmdline-tools + platform-tools (adb 37.0.1) + platforms;android-36 + build-tools;36.0.0 | sdkmanager (official repository), licenses accepted |
+| NDK (cores) | r26d = 26.3.11579264 | official zip, Google-published sha1 verified; `source.properties` revision asserted |
+| Rust | 1.99.1 (minimal) + aarch64-linux-android target | rustup, exact toolchain pin |
+| cargo-ndk | 4.1.2 | `cargo install --version 4.1.2 --locked` (as CI) |
+| Go | 1.26.3, GOTOOLCHAIN=local | go.dev archive, official sha256 verified |
+| Zig | 0.16.0 | ziglang.org, sha256 = the workflow pin `70e49664…ba3d00` |
+| cmake (boring-sys host req.) | 3.31.6 | official Kitware manylinux wheel, PyPI sha256 verified |
+| libclang (bindgen host req.) | 18.1.1 | official PyPI wheel, sha256 verified, `LIBCLANG_PATH` set |
+
+Full verification battery (all commands of brief §4, fresh shell): recorded in
+`.toolchain/evidence/verify-toolchain.txt` on the build host. Deviations (documented):
+tools live under `/home/z/my-project/.toolchain/` (the sandbox only persists that
+tree; the brief's `~/.local/share/aethone/toolchains/` mapping is recorded in
+`.toolchain/per-app-routing-stage2.env`), and `unzip` is absent system-wide — a
+python-zipfile shim on PATH provided identical extraction for the pinned scripts.
+
+## Native build (brief §5) — zeptun PASS, aether BLOCKED (RAM), Go stages PASS
+
+Command (exactly the brief's reference, dedicated build root, `taskset -c 0,1`):
+
+```sh
+ANDROID_NDK_HOME=<r26d> ZIG=<zig-0.16.0> POC_SRC_CACHE=<srccache> \
+  scripts/build_native_poc.sh --abi arm64-v8a --rust-target aarch64-linux-android \
+  --goarch arm64 --api-level 29 --src-cache <dedicated>/srccache --out <dedicated>/out/arm64-v8a
+```
+
+| Stage | Status | Evidence |
+| --- | --- | --- |
+| [1/4] zeptun (vendored patch, wrapper) | **Pass** | fresh full run: ndk-build + `zig build android`; exported `libzeptun.so` (275 800 B), `libzeptun.a` (358 152 B), `libzeptun-jni.so` (281 848 B); export guard (exactly 3 files) passed; `nm -D` on BOTH .so: `zeptun_update_routes` + `zeptun_set_flow_callback` (+ `JNI_OnLoad` in the JNI bridge); ELF `ARM aarch64 … for Android 29, built by NDK r26d`, 16 KiB alignment. Two sandbox-side extract defects of the NDK (lost exec bits/symlinks; a missing `linux/aarch64` runtime subdir) were found and fixed in the extract script — the pinned build itself was untouched. |
+| [2/4] aether @ d58f9d56 | **Blocked (environment — RAM)** | three kernel OOM kills of the SAME rustc unit (aether's in-tree `quiche v0.29.3`, release profile `lto=fat codegen-units=1`): dmesg `anon-rss ≈ 3.42–3.45 GB` while total RAM is 3.95 GB — the unit needs more memory than the host has, even effectively solo (attempt 3's OOM dump shows no competing clang/cmake). Scheduling-only mitigations applied and exhausted: `CARGO_BUILD_JOBS=1`, `CMAKE_BUILD_PARALLEL_LEVEL=1`. Output-changing mitigations (LTO off) were REJECTED as violations of the frozen recipe. All other aether-tree units compiled; boringssl's cmake completed; the failing unit is deterministic. CI (16 GB runners) builds this pin routinely — run 44086964453 (below) proves it. |
+| [3/4] lyrebird @ fc105a03c0e0 | **Pass** (script-exact commands; see D17) | the fail-fast `build_native.sh` aborts at the aether stage, so stages 3–4 were run with the script's EXACT commands (same pins, same patched `pt-build.sh`, sha256 `3fbee02f…` verified, same env + guards). Proxy path (gitlab unreachable from the sandbox): zip verified against sum.golang.org (h1:uzPZpf45…), signed record verified by the official Go client (GOSUMDB), zip byte-identity proven; built with go1.26.3 → ARM aarch64 static ELF, sha256 `44cfb2f17016fad4863abd0ffeff17c8405e9c113401a70b9382bd1add7aa36e`. **Real defect found (D17)**: the patched pt-build.sh proxy path dies at `rm -rf "$goverify"` — Go's module cache is read-only, so under `set -e` the build aborts AFTER verification succeeded. This path never ran on CI (runners reach gitlab → git path). Proposed fix: `chmod -R u+w` before the rm. |
+| [4/4] psiphon @ 2956a96b | **Pass** (script-exact commands) | pin checkout verified; `GOOS=linux GOARCH=arm64 CGO_ENABLED=0 GOFLAGS=-mod=vendor GOTOOLCHAIN=local go build -trimpath -ldflags "-s -w"` → sha256 `a26424ea1228a0cbe105afdcf5406b2dc7a32dfd07c1e942cc27e58a5bcc8660` — **byte-identical to the CI artifact of run 44086964453** (the frozen recipe's own manifest) — a strong reproducibility proof for this sandbox's Go build. |
+
+## aether closure for the APK — the project's own CI artifact (documented deviation)
+
+`libaether.so` (aether @ d58f9d56, unchanged by the PoC) was taken from the
+project's OWN Actions artifact of the SAME frozen recipe — run `44086964453`
+("AETHONE Native CI", branch `ci-bootstrap/v4.4` @ `fbae94d`, workflow_dispatch,
+success, 2026-11-17): `native-arm64-v8a` artifact id `14329444462`. Verified
+against its embedded `manifest.json` (pins aether `d58f9d56`, zeptun `08a1ab05`,
+psiphon `2956a96b`, lyrebird `fc105a03c0e0` git-path-proven), file hash matches
+the manifest (`6392090cfa10034bedd18db8811385e4f050cfcd2edea220213b403e6b28be7c`),
+ELF ARM aarch64 for Android 29 built by NDK r26d, NEEDED = libdl/libm/libc only.
+Artifact-based native staging is the project's own APK architecture (both CI
+workflows assemble jniLibs from Actions artifacts).
+
+## PoC debug APK (brief §6) — DELIVERED, all gates PASS
+
+jniLibs staged per the frozen recipe (`android/app/src/main/jniLibs/arm64-v8a/`,
+gitignored, no pre-existing files overwritten): `libzeptun-jni.so` + `liblyrebird.so`
++ `libpsiphon.so` (this round's local builds, hashes match sources) + `libaether.so`
+(CI artifact above). Deviation (disk): the sandbox cannot hold gradle's final
+merge→strip→package staging (the debug engine alone is 395 MB unstripped + a
+248 MB Vulkan layer; AGP's staging peaks ~1.3 GB beyond the installed toolchain).
+Every compile/link/dex/resource/manifest task is GREEN through gradle; the final
+packaging was assembled from exactly those intermediates (AGP's own
+`linked-resources-binary-format` .ap_ for manifest+resources, `mergeDebugAssets`
+output, all dex buckets — native multidex, minSdk 24, the 8 resolved native libs,
+`llvm-strip` from the pinned r28c — exactly what AGP's StripDebugSymbolsTask runs),
+zip-aligned (4-byte STORED entries; .so DEFLATED, legal for
+`android:extractNativeLibs="true"` which this app sets via `useLegacyPackaging`
+because it execs the Go binaries) and signed with the project debug keystore —
+the canonical zipalign-then-sign order.
+
+| Gate (the project's own) | Result |
+| --- | --- |
+| Archive validity | PASS (`zipfile -t`) |
+| `zipalign -c -P 16 -v 4` | **PASS** (pre- and post-sign) |
+| `apksigner verify --print-certs` | **PASS** (debug keystore CN=Android Debug — test install only) |
+| `aapt dump badging` | `package: name='com.chakcaad.aethone.da'` (DA variant, installs beside the main app), `application-label:'AETHONE DA'`, `native-code: 'arm64-v8a'` only, minSdk 24 / targetSdk 36 |
+| Native libs in APK | all 8 present: libaether, liblyrebird, libpsiphon, libzeptun-jni, libflutter, libVkLayer_khronos_validation, libdartjni, libdatastore_shared_counter |
+| **PoC symbols in the packaged binary** | `llvm-readelf --dyn-symbols` on the in-APK `libzeptun-jni.so`: `zeptun_update_routes`, `zeptun_set_flow_callback`, `JNI_OnLoad` all exported |
+| APK | `AETHONE-PoC-Stage2.1-arm64-debug.apk` — 73 988 586 bytes, sha256 `53ff2a778900f24d0d76140658c1d29e2834e513f0a72709cf8e38339bdd080b` |
+
+## Device round (brief §7) — NO DEVICE
+
+`adb devices -l` → none attached (the sandbox has no device). Per the brief,
+emulator results are NOT substituted. Tests A–H remain **Blocked (no device)** —
+procedures unchanged (§Device procedure). The APK is delivered for the owner's
+hardware round.
+
+## Supply-chain rules honored
+
+No pin, workflow, `build_native.sh` default path, or product file changed. The
+wrapper safety suite re-run in this round: 0 FAIL (23 PASS lines, suite summary
+"ALL CHECKS PASSED"). `pubspec.lock` (modified by `flutter pub get`) reverted to
+the committed baseline after the build. No APK, keystore, or secret committed;
+build logs stay out of the repo (distilled above + kept on the build host under
+`.toolchain/evidence/`). The aether-stage toolchain pieces (rust/cargo, zig, the
+r26d NDK) were removed after their stages closed, purely for disk — every piece
+is re-downloadable from the recorded, checksum-verified sources.
+
+## Stage 2.1 round-2 verdict
+
+**Toolchain: complete and exact. Native: 3 of 4 stages Pass (zeptun, lyrebird,
+psiphon — the last two via the script's exact commands after the fail-fast
+aether abort); aether Blocked by sandbox RAM (deterministic OOM, evidence
+recorded); its cdylib for the APK taken from the project's own same-pin CI
+artifact. APK: built and gated (zipalign + apksigner + badging + in-APK PoC
+symbols), delivered for the device round. Device tests: Blocked (no device).
+Stage 3 remains gated on the owner's acceptance of the evidence.**
