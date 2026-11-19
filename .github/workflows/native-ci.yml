@@ -2799,12 +2799,21 @@ jobs:
           # NOTE (the r98 lesson): never pipe a producer into `head`/`grep -q`
           # under pipefail — the early consumer exit SIGPIPEs the producer
           # and fails the step (tar: stdout: write error). List to a file.
-          tar -tzf bundle-artifact/aethone-linux-x86_64-r*.tar.gz > /tmp/bundle-list.txt
+          TARBALL="$(echo bundle-artifact/aethone-linux-x86_64-r*.tar.gz)"
+          [ -f "$TARBALL" ] || { echo "::error::the bundle tarball is missing"; exit 1; }
+          tar -tzf "$TARBALL" > /tmp/bundle-list.txt
           head -5 /tmp/bundle-list.txt
           grep -qxF 'bundle/aethone' /tmp/bundle-list.txt \
             || { echo "::error::the desktop-bundle artifact does not carry bundle/aethone"; exit 1; }
-          # the desktop-bundle SHA256SUMS must still match (fail-closed)
-          ( cd bundle-artifact && sha256sum -c SHA256SUMS.txt )
+          # the desktop-bundle SHA256SUMS must still match (fail-closed). The
+          # sums file records the PRODUCER's dist/-relative path (r99 lesson:
+          # `sha256sum -c` cannot resolve it from the flat artifact layout),
+          # so compare the digests directly.
+          expected="$(awk 'NR==1{print $1}' bundle-artifact/SHA256SUMS.txt)"
+          actual="$(sha256sum "$TARBALL" | cut -d' ' -f1)"
+          [ "$expected" = "$actual" ] \
+            || { echo "::error::bundle tar sha256 mismatch: $actual != $expected"; exit 1; }
+          echo "bundle sha256 verified: $actual"
 
       - name: Extract the bundle
         run: |

@@ -188,6 +188,10 @@ build_appimage() {
     # bundle ELFs byte-identical to the audited desktop-bundle artifacts
     export APPIMAGE_EXTRACT_AND_RUN=1
     export NO_STRIP=true
+    # the plugin must be discoverable as `linuxdeploy-plugin-gtk(.sh)` —
+    # putting the pinned tools' directory on PATH is the proven lookup
+    # (the r99 first flight: same-dir-without-PATH was not enough)
+    export PATH="$LINUXDEPLOY:$PATH"
     "$LINUXDEPLOY/linuxdeploy-x86_64.AppImage" \
       --appdir "$appdir" \
       --executable "$appdir/usr/bin/aethone" \
