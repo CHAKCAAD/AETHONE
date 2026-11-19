@@ -2796,8 +2796,12 @@ jobs:
         run: |
           set -euo pipefail
           ls -la bundle-artifact/
-          tar -tzf bundle-artifact/aethone-linux-x86_64-r*.tar.gz | head -5
-          tar -tzf bundle-artifact/aethone-linux-x86_64-r*.tar.gz | grep -q '^bundle/aethone$' \
+          # NOTE (the r98 lesson): never pipe a producer into `head`/`grep -q`
+          # under pipefail — the early consumer exit SIGPIPEs the producer
+          # and fails the step (tar: stdout: write error). List to a file.
+          tar -tzf bundle-artifact/aethone-linux-x86_64-r*.tar.gz > /tmp/bundle-list.txt
+          head -5 /tmp/bundle-list.txt
+          grep -qxF 'bundle/aethone' /tmp/bundle-list.txt \
             || { echo "::error::the desktop-bundle artifact does not carry bundle/aethone"; exit 1; }
           # the desktop-bundle SHA256SUMS must still match (fail-closed)
           ( cd bundle-artifact && sha256sum -c SHA256SUMS.txt )

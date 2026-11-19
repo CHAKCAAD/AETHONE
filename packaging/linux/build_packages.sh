@@ -155,8 +155,10 @@ build_rpm() {  # build_rpm <spec-template> <staged-root> <name> <out-rpm>
     --buildroot "$root" \
     "$top/SPECS/$name.spec" > "$WORK/rpmbuild-$name.log" 2>&1 \
     || { tail -40 "$WORK/rpmbuild-$name.log"; die "rpmbuild failed for $name"; }
+  # -print -quit, NOT `| head -1` — pipefail + an early-exiting consumer
+  # would SIGPIPE find exactly like the r98 tar|head lesson
   local produced
-  produced="$(find "$top/RPMS" -name '*.rpm' -type f | head -1)"
+  produced="$(find "$top/RPMS" -name '*.rpm' -type f -print -quit)"
   [ -n "$produced" ] || die "rpmbuild produced no rpm for $name"
   mv "$produced" "$out"
   log "built $(basename "$out") ($(du -h "$out" | cut -f1))"
@@ -326,10 +328,11 @@ verify_all() {
   test -f "$WORK/ai-x/squashfs-root/AppRun" || die "AppImage: AppRun missing"
   log "AppImage verification PASS"
 
-  # the flatpak was smoke-gated at build time (layout + the host bridge)
-  # the tar: listing + the entry point
+  # the tar: listing + the entry point (listed to a file first — the
+  # r98 lesson: `tar | grep -q` under pipefail SIGPIPEs tar)
   local tarball="$OUT/aethone-linux-x86_64-$VERSION.tar.gz"
-  tar -tzf "$tarball" | grep -q "^aethone-linux-x86_64/aethone$" \
+  tar -tzf "$tarball" > "$WORK/tar-list.txt"
+  grep -qxF "aethone-linux-x86_64/aethone" "$WORK/tar-list.txt" \
     || die "tar: the entry point is missing from the archive"
   log "tar verification PASS"
 }
