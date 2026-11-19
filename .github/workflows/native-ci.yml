@@ -2871,7 +2871,11 @@ jobs:
           echo "v1.0.1 release id: ${REL_ID}"
           for f in dist/*; do
             name="$(basename "$f")"
-            asset_id="$(ASSET_NAME="$name" curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
+            # export, NOT `ASSET_NAME=x curl | python` — the r102 lesson:
+            # the VAR=val prefix reaches only the FIRST pipeline element,
+            # python3 never saw it (KeyError) and the step died on pipefail
+            export ASSET_NAME="$name"
+            asset_id="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
               "${API}/releases/${REL_ID}/assets?per_page=100" \
               | python3 -c 'import json,os,sys; xs=[a for a in json.load(sys.stdin) if a["name"]==os.environ["ASSET_NAME"]]; print(xs[0]["id"] if xs else "")')"
             if [ -n "$asset_id" ]; then
