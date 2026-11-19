@@ -2744,7 +2744,7 @@ jobs:
   #     (handwritten specs, built under fakeroot for root:root ownership)
   #   * AETHONE-<v>-x86_64.AppImage (linuxdeploy + plugin-gtk, BOTH
   #     sha256-pinned below; NO_STRIP keeps the audited ELFs untouched)
-  #   * aethone-<v>-x86_64.flatpak (org.gnome.Platform 48; the manifest
+  #   * aethone-<v>-x86_64.flatpak (org.gnome.Platform 51; the manifest
   #     re-packages the same bundle and carries the dconf grants for the
   #     system-proxy companion + org.freedesktop.Flatpak for the tunnel
   #     bridge — see desktop_shared/desktop_engine.cpp)

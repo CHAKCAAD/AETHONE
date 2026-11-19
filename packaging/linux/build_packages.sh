@@ -15,7 +15,7 @@
 #                                             openSUSE Tumbleweed/Leap 16)
 #   aethone-tunnel-helper-<ver>-1.x86_64.rpm the Flatpak companion (rpm form)
 #   AETHONE-<ver>-x86_64.AppImage            universal single-file (any x86_64)
-#   aethone-<ver>-x86_64.flatpak             Flatpak bundle (GNOME 48 runtime;
+#   aethone-<ver>-x86_64.flatpak             Flatpak bundle (GNOME 51 runtime;
 #                                             tunnel mode needs the companion)
 #   BUILD_INFO-linux-r<run>.txt + SHA256SUMS-linux-r<run>.txt
 #
@@ -205,7 +205,7 @@ build_appimage() {
   log "built $(basename "$out") ($(du -h "$out" | cut -f1))"
 }
 
-# --- 5. the Flatpak (repackages the same bundle; GNOME 48 runtime) -------------
+# --- 5. the Flatpak (repackages the same bundle; GNOME 51 runtime) -------------
 build_flatpak() {
   command -v flatpak >/dev/null || die "flatpak is not installed"
   command -v flatpak-builder >/dev/null || die "flatpak-builder is not installed"
@@ -230,7 +230,7 @@ build_flatpak() {
     || { tail -60 "$WORK/flatpak-builder.log"; die "flatpak-builder failed"; }
   local out="$OUT/aethone-$VERSION-x86_64.flatpak"
   # --runtime-repo: users without flathub preconfigured still resolve the
-  # org.gnome.Platform 48 runtime when installing the bundle
+  # org.gnome.Platform 51 runtime when installing the bundle
   flatpak build-bundle --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
     "$repo" "$out" com.chakcaad.Aethone \
     > "$WORK/flatpak-bundle.log" 2>&1 \
@@ -356,7 +356,7 @@ write_manifests() {
     echo "run_id=$GITHUB_RUN_ID"
     echo "commit=$GITHUB_SHA"
     echo "version=$VERSION"
-    echo "formats=tar.gz (portable), deb (Debian 13+/Ubuntu 24.04+), rpm (Fedora 40+/openSUSE), AppImage (any x86_64), Flatpak (org.gnome.Platform 48)"
+    echo "formats=tar.gz (portable), deb (Debian 13+/Ubuntu 24.04+), rpm (Fedora 40+/openSUSE), AppImage (any x86_64), Flatpak (org.gnome.Platform 51)"
     echo "scope=v1.0.1 THE LINUX RELEASE ROUND: the same v1.0.1 source as the Android r97 release, packaged for every Linux family. The system-proxy companion widened to EVERY major desktop — GNOME gsettings + KDE Plasma kioslaverc (kwriteconfig6/5; Firefox nsUnixSystemProxySettings and Chromium proxy_config_service_linux.cc both parse those keys under Plasma); each backend's prior state is saved under its own backend= section and restored on disconnect. The Flatpak: dconf grants route the gsettings writes to the HOST's settings, the tunnel-mode bridge runs the host's pkexec through flatpak-spawn --host (companion aethone-tunnel-helper package for the TUN bring-up), and the KDE tools route to the host the same way. deb/rpm/AppImage/tar pre-install the helper + Polkit action (no first-connect self-install prompt). x86-64-v1 baseline, glibc 2.39 floor — see the ISA gates on the desktop-bundle job that built this bundle."
     echo "${pins:-native_pins=<not-carried>}"
     echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

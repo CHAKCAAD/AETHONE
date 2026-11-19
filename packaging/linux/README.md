@@ -8,7 +8,7 @@
 | دبیان | `aethone_1.0.1_amd64.deb` | Debian 13+، Ubuntu 24.04+، Mint 22+، Pop!_OS 24.04+ |
 | ردهت | `aethone-1.0.1-1.x86_64.rpm` | Fedora 40+، openSUSE Tumbleweed / Leap 16 |
 | اپ‌ایمیج | `AETHONE-1.0.1-x86_64.AppImage` | هر توزیع x86_64 — تک‌فایل، قابل اجرا |
-| فلت‌پک | `aethone-1.0.1-x86_64.flatpak` | هر توزیعی که فلت‌پک دارد (ران‌تایم GNOME 48) |
+| فلت‌پک | `aethone-1.0.1-x86_64.flatpak` | هر توزیعی که فلت‌پک دارد (ران‌تایم GNOME 51) |
 
 جدول SHA256 همه فایل‌ها در `SHA256SUMS-linux-*.txt` همان ریلیز است؛ قبل از نصب بررسی کنید:
 
@@ -48,7 +48,7 @@ flatpak install ./aethone-1.0.1-x86_64.flatpak
 flatpak run com.chakcaad.Aethone
 ```
 
-اگر ران‌تایم GNOME 48 ندارید، فلت‌پک خودش آن را از Flathub می‌گیرد.
+اگر ران‌تایم GNOME 51 ندارید، فلت‌پک خودش آن را از Flathub می‌گیرد.
 
 ### AppImage (هر توزیع)
 

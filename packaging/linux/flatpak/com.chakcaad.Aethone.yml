@@ -22,7 +22,7 @@
 #     host the same way. See desktop_shared/desktop_engine.cpp.
 app-id: com.chakcaad.Aethone
 runtime: org.gnome.Platform
-runtime-version: "48"
+runtime-version: "51"
 sdk: org.gnome.Sdk
 command: aethone
 

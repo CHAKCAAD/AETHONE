@@ -81,7 +81,7 @@ Linux (v1.0.1, x86-64-v1 baseline, glibc 2.39+):
 - `aethone_1.0.1_amd64.deb` — Debian 13+, Ubuntu 24.04+, Mint 22+
 - `aethone-1.0.1-1.x86_64.rpm` — Fedora 40+, openSUSE Tumbleweed / Leap 16
 - `AETHONE-1.0.1-x86_64.AppImage` — single-file, any x86_64 distro
-- `aethone-1.0.1-x86_64.flatpak` — Flatpak (GNOME 48 runtime); for tunnel mode also install `aethone-tunnel-helper` (.deb/.rpm) on the host once
+- `aethone-1.0.1-x86_64.flatpak` — Flatpak (GNOME 51 runtime); for tunnel mode also install `aethone-tunnel-helper` (.deb/.rpm) on the host once
 
 While the tunnel is up the system proxy points at the same local SOCKS5
 listener (GNOME gsettings + KDE Plasma kioslaverc) so browsers ride the
@@ -276,7 +276,7 @@ Lyrebird| Go| ترنسپورت‌های قابل‌جایگزینی
 - `aethone_1.0.1_amd64.deb` — Debian 13+، Ubuntu 24.04+، Mint 22+
 - `aethone-1.0.1-1.x86_64.rpm` — Fedora 40+، openSUSE Tumbleweed / Leap 16
 - `AETHONE-1.0.1-x86_64.AppImage` — تک‌فایل، هر توزیع x86_64
-- `aethone-1.0.1-x86_64.flatpak` — فلت‌پک (ران‌تایم GNOME 48)؛ برای حالت تونل بستهٔ `aethone-tunnel-helper` هم یک بار روی سیستم نصب کنید
+- `aethone-1.0.1-x86_64.flatpak` — فلت‌پک (ران‌تایم GNOME 51)؛ برای حالت تونل بستهٔ `aethone-tunnel-helper` هم یک بار روی سیستم نصب کنید
 
 وقتی حالت تونل فعال است، پروکسی سیستم هم روی سوکس۵ محلی همان تونل ست می‌شود
 (گنوم با gsettings و کِی‌دی‌ای پلاسما با kioslaverc) تا مرورگرها هم از اتصال
