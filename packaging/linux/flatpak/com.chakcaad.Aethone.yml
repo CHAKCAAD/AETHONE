@@ -58,7 +58,7 @@ modules:
       - |
         set -e
         for d in 16x16 24x24 32x32 48x48 64x64 96x96 128x128 256x256; do
-          install -Dm644 "hicolor/$d/apps/com.chakcaad.aethone.png" \
+          install -Dm644 "bundle/hicolor/$d/apps/com.chakcaad.aethone.png" \
             "/app/share/icons/hicolor/$d/apps/com.chakcaad.aethone.png"
         done
       # the flatpak build sanity gate
@@ -67,14 +67,15 @@ modules:
       - test -f /app/bin/lib/libaether.so
       - test -f /app/bin/lib/libzeptun.so
     sources:
-      # Staged by packaging/linux/build_packages.sh beside the manifest
-      # (a repackage of the CI desktop-bundle artifact — never committed).
+      # Staged by packaging/linux/build_packages.sh beside the manifest —
+      # ONE archive carrying the bundle CONTENTS at top level plus the
+      # hicolor icon set under hicolor/ (the r101 lesson: flatpak-builder
+      # 1.4.2's `type: dir` source did not land where the build-commands
+      # expected, while archive + file sources are proven; never committed).
       - type: archive
         path: aethone-bundle.tar.gz
         dest: bundle
       - type: file
         path: com.chakcaad.aethone.desktop
-      - type: dir
-        path: hicolor
       - type: file
         path: com.chakcaad.Aethone.metainfo.xml

@@ -215,13 +215,19 @@ build_flatpak() {
   cp "$PKGROOT/flatpak/com.chakcaad.Aethone.yml" "$stage/"
   cp "$PKGROOT/flatpak/com.chakcaad.Aethone.metainfo.xml" "$stage/"
   cp "$PKGROOT/shared/com.chakcaad.aethone.desktop" "$stage/"
-  cp -r "$PKGROOT/hicolor" "$stage/hicolor"
   sed "s/__RELEASE_DATE__/$(date -u +%F)/" \
     "$PKGROOT/flatpak/com.chakcaad.Aethone.metainfo.xml" > "$stage/com.chakcaad.Aethone.metainfo.xml"
-  # the manifest consumes the bundle as a local archive source (never
-  # committed); the archive carries the bundle CONTENTS at top level —
-  # the manifest's `dest: bundle` then lands them at bundle/
-  tar -czf "$stage/aethone-bundle.tar.gz" -C "$BUNDLE" .
+  # the manifest consumes ONE archive source: the bundle CONTENTS plus the
+  # hicolor icon set under hicolor/ (the r101 lesson: flatpak-builder
+  # 1.4.2's `type: dir` source did not land where the build-commands
+  # expected — archive + file sources are the proven semantics; the
+  # archive is a local staging artifact, never committed)
+  local arcstage="$WORK/flatpak-archive"
+  rm -rf "$arcstage"
+  mkdir -p "$arcstage"
+  cp -a "$BUNDLE"/. "$arcstage/"
+  cp -r "$PKGROOT/hicolor" "$arcstage/hicolor"
+  tar -czf "$stage/aethone-bundle.tar.gz" -C "$arcstage" .
   flatpak --user remote-add --if-not-exists flathub \
     https://flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1 || true
   flatpak-builder --user --install-deps-from=flathub --force-clean \
