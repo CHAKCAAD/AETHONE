@@ -63,3 +63,6 @@ Thumbs.db
 .srccache*/
 # local validation bundles staged by hand
 /native-out/
+
+# --- v1.0.1 linux packaging round: local staging outputs (never commit) ---
+packaging/linux/flatpak/aethone-bundle.tar.gz

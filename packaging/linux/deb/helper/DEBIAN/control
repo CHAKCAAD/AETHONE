@@ -1,0 +1,18 @@
+Package: aethone-tunnel-helper
+Version: __VERSION__
+Architecture: amd64
+Maintainer: AETHONE Project <aethone@users.noreply.github.com>
+Depends: policykit-1
+Section: net
+Priority: optional
+Homepage: https://github.com/CHAKCAAD/AETHONE
+Description: privileged tunnel helper for the AETHONE Flatpak
+ The TUN bring-up half of AETHONE's tunnel mode: pkexec-launched, serves
+ exactly one client over a user-owned Unix socket, hands the verified TUN
+ fd back to the app and tears everything down on disconnect.
+ .
+ This companion package exists for the FLATPAK build of AETHONE, where
+ the sandbox cannot self-install the helper: install it on the host once
+ and the Flatpak's tunnel mode works with the normal polkit prompt. The
+ deb/rpm/AppImage/tar releases ship the helper inside the app bundle and
+ do NOT need this package.

@@ -65,13 +65,30 @@ Aether runs inside the application process through its native interface, while Z
 
 📱 Platform Support
 
-Current development focus: Android.
+Current release targets: **Android** and **Linux** (v1.0.1).
 
-Linux and Windows directories may exist in the repository, but they are not currently established release targets.
+Downloads — https://github.com/CHAKCAAD/AETHONE/releases
 
-Check the Releases page for available Android builds:
+Android (v1.0.1, r97):
 
-https://github.com/CHAKCAAD/AETHONE/releases
+- `aethone-arm64-v8a-r97.apk` — 64-bit phones (most devices)
+- `aethone-armeabi-v7a-r97.apk` — 32-bit / older phones
+- `aethone-x86_64-r97.apk` — emulators and x86_64 devices
+
+Linux (v1.0.1, x86-64-v1 baseline, glibc 2.39+):
+
+- `aethone-linux-x86_64-1.0.1.tar.gz` — portable, any distro
+- `aethone_1.0.1_amd64.deb` — Debian 13+, Ubuntu 24.04+, Mint 22+
+- `aethone-1.0.1-1.x86_64.rpm` — Fedora 40+, openSUSE Tumbleweed / Leap 16
+- `AETHONE-1.0.1-x86_64.AppImage` — single-file, any x86_64 distro
+- `aethone-1.0.1-x86_64.flatpak` — Flatpak (GNOME 48 runtime); for tunnel mode also install `aethone-tunnel-helper` (.deb/.rpm) on the host once
+
+While the tunnel is up the system proxy points at the same local SOCKS5
+listener (GNOME gsettings + KDE Plasma kioslaverc) so browsers ride the
+tunnel too; the state is restored on disconnect. See
+`packaging/linux/README.md` for the full install guide (Persian).
+
+Windows builds exist as CI artifacts; Windows is not a release target yet.
 
 🔧 Building from Source
 
@@ -243,13 +260,30 @@ Lyrebird| Go| ترنسپورت‌های قابل‌جایگزینی
 
 📱 پلتفرم‌ها
 
-تمرکز فعلی توسعه: اندروید
+پلتفرم‌های هدف فعلی: **اندروید** و **لینوکس** (نسخه ۱.۰.۱)
 
-وجود پوشه‌های Linux و Windows در مخزن به معنای پشتیبانی و انتشار نسخه نهایی این سیستم‌عامل‌ها نیست.
+دانلود — https://github.com/CHAKCAAD/AETHONE/releases
 
-برای مشاهده نسخه‌های منتشرشده به صفحه Releases مراجعه کنید:
+اندروید (v1.0.1، r97):
 
-https://github.com/CHAKCAAD/AETHONE/releases
+- `aethone-arm64-v8a-r97.apk` — گوشی‌های ۶۴ بیتی (اکثر گوشی‌های امروزی)
+- `aethone-armeabi-v7a-r97.apk` — گوشی‌های ۳۲ بیتی و قدیمی‌تر
+- `aethone-x86_64-r97.apk` — شبیه‌سازها و دستگاه‌های x86_64
+
+لینوکس (v1.0.1، کف x86-64-v1، glibc 2.39 به بالا):
+
+- `aethone-linux-x86_64-1.0.1.tar.gz` — پرتابل، برای هر توزیع
+- `aethone_1.0.1_amd64.deb` — Debian 13+، Ubuntu 24.04+، Mint 22+
+- `aethone-1.0.1-1.x86_64.rpm` — Fedora 40+، openSUSE Tumbleweed / Leap 16
+- `AETHONE-1.0.1-x86_64.AppImage` — تک‌فایل، هر توزیع x86_64
+- `aethone-1.0.1-x86_64.flatpak` — فلت‌پک (ران‌تایم GNOME 48)؛ برای حالت تونل بستهٔ `aethone-tunnel-helper` هم یک بار روی سیستم نصب کنید
+
+وقتی حالت تونل فعال است، پروکسی سیستم هم روی سوکس۵ محلی همان تونل ست می‌شود
+(گنوم با gsettings و کِی‌دی‌ای پلاسما با kioslaverc) تا مرورگرها هم از اتصال
+استفاده کنند و با قطع اتصال، وضعیت قبلی بازگردانی می‌شود. راهنمای کامل نصب
+لینوکس: `packaging/linux/README.md`.
+
+نسخه ویندوز به‌صورت خروجی CI موجود است اما هنوز هدف انتشار نیست.
 
 🔧 ساخت از سورس
 

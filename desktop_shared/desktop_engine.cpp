@@ -276,6 +276,30 @@ std::mutex g_core_job_mutex;
 bool PathExists(const std::string& p);
 void MkDirAll(const std::string& path);
 
+// ---- v1.0.1: the Flatpak host bridges (system proxy + tunnel helper) ------
+// The Flatpak package (packaging/linux/flatpak) runs this same binary
+// inside the sandbox. Two host boundaries exist and both route through
+// `flatpak-spawn --host` (the manifest grants org.freedesktop.Flatpak):
+//   * the KDE proxy tools are not in the GNOME runtime — the HOST's
+//     kwriteconfig/kreadconfig edit the HOST's kioslaverc as the user;
+//   * pkexec + the companion aethone-tunnel-helper live on the HOST —
+//     see EnsureHelperInstalled/StartHelper for the tunnel bridge.
+bool InFlatpakSandbox() { return access("/.flatpak-info", F_OK) == 0; }
+
+// Runs <cmdline> under /bin/sh capturing stdout ("" on failure); stderr
+// is dropped — every caller treats the exit status as the truth.
+std::string RunCapture(const std::string& cmdline, bool* ok) {
+  *ok = false;
+  FILE* p = popen((cmdline + " 2>/dev/null").c_str(), "r");
+  if (p == nullptr) return std::string();
+  std::string out;
+  char buf[512];
+  while (fgets(buf, sizeof(buf), p) != nullptr) out += buf;
+  const int rc = pclose(p);
+  *ok = (rc == 0);
+  return out;
+}
+
 // The state of the pkexec-launched aethone-tunnel-helper (one per connect).
 struct HelperState {
   int sock = -1;             // the live client socket (>= 0 while serving)
@@ -337,11 +361,34 @@ bool HelperInstalled() {
          stat(kHelperPolicyInstallPath, &st) == 0;
 }
 
+// v1.0.1 — the Flatpak probe: the companion package's two files on the
+// HOST filesystem (flatpak-spawn exits nonzero when either is missing).
+bool HelperInstalledOnHost() {
+  bool ok = false;
+  RunCapture("flatpak-spawn --host sh -c 'test -x " +
+                 std::string(kHelperInstallPath) + " -a -f " +
+                 std::string(kHelperPolicyInstallPath) + "'",
+             &ok);
+  return ok;
+}
+
 // One pkexec round: /usr/bin/env (a root-owned system binary — pkexec's
 // refusal to execute user-writable BUNDLE paths does not apply to it) runs
 // the bundled helper as root, whose --self-install copies itself to
 // /usr/libexec and writes the Polkit action, verifying both (fail-closed).
 bool EnsureHelperInstalled(std::string* err) {
+  // v1.0.1 — inside a Flatpak the bundled helper CANNOT self-install (the
+  // host cannot see the sandbox's /app tree). The tunnel mode needs the
+  // HOST-side companion package instead — probe it honestly and point the
+  // user at the install step; the proxy mode works without it.
+  if (InFlatpakSandbox()) {
+    if (HelperInstalledOnHost()) return true;
+    *err = "the Flatpak build needs the host-side helper package for the "
+           "tunnel mode (aethone-tunnel-helper .deb/.rpm from the release "
+           "page — see packaging/linux/README.md); the proxy mode works "
+           "without it";
+    return false;
+  }
   if (HelperInstalled()) return true;
   const DesktopPaths& p = Paths();
   if (p.helperBin.empty() || access(p.helperBin.c_str(), X_OK) != 0) {
@@ -421,11 +468,23 @@ bool StartHelper(int stop_gen, std::string* err) {
 
   // The socket lives in the user's runtime dir (0700, user-owned) — the
   // helper refuses root-owned socket dirs and checks SO_PEERCRED against
-  // the directory's owner.
+  // the directory's owner. Inside a Flatpak only the app-private runtime
+  // subdir is writable AND host-visible at the same path — exactly where
+  // the host-side helper (root) needs to bind the socket.
+  const bool in_flatpak = InFlatpakSandbox();
   const char* xdg = getenv("XDG_RUNTIME_DIR");
   std::string dir;
   if (xdg && *xdg) {
-    dir = std::string(xdg) + "/aethone";
+    if (in_flatpak) {
+      const char* app_id = getenv("FLATPAK_ID");
+      dir = std::string(xdg) + "/app/" +
+            (app_id != nullptr && *app_id != 0
+                 ? app_id
+                 : "com.chakcaad.Aethone") +
+            "/aethone";
+    } else {
+      dir = std::string(xdg) + "/aethone";
+    }
   } else {
     dir = "/tmp/aethone-helper-" + std::to_string(static_cast<long>(getuid()));
   }
@@ -451,18 +510,62 @@ bool StartHelper(int stop_gen, std::string* err) {
   }
   char sock_arg[256];
   snprintf(sock_arg, sizeof(sock_arg), "%s", path.c_str());
-  const char* pkexec = access("/usr/bin/pkexec", X_OK) == 0
-                           ? "/usr/bin/pkexec"
-                           : "/bin/pkexec";
-  char* const argv[] = {const_cast<char*>("pkexec"),
-                        const_cast<char*>(kHelperInstallPath),
-                        const_cast<char*>("--serve"), sock_arg, nullptr};
   pid_t pid = -1;
-  const int rc = posix_spawn(&pid, pkexec, &fa, nullptr, argv, environ);
+  int rc = -1;
+  if (in_flatpak) {
+    // v1.0.1 — the Flatpak VPN bridge: pkexec and the companion helper
+    // live on the HOST. flatpak-spawn --host (org.freedesktop.Flatpak is
+    // granted by the manifest) runs the host's pkexec; the session vars
+    // are forwarded explicitly, and the session-bus address is REBUILT as
+    // the standard user bus (unix:path=$XDG_RUNTIME_DIR/bus — the same
+    // socket on both sides of the sandbox) so the polkit prompt can be
+    // driven by the desktop's authentication agent.
+    std::vector<std::string> hold;
+    hold.push_back("flatpak-spawn");
+    hold.push_back("--host");
+    hold.push_back("--forward-fd=1");
+    hold.push_back("--forward-fd=2");
+    if (xdg != nullptr && *xdg != 0) {
+      hold.push_back("--env=XDG_RUNTIME_DIR=" + std::string(xdg));
+      hold.push_back("--env=DBUS_SESSION_BUS_ADDRESS=unix:path=" +
+                     std::string(xdg) + "/bus");
+    }
+    static const char* const kForward[] = {
+        "DISPLAY", "WAYLAND_DISPLAY", "XDG_SESSION_TYPE",
+        "XDG_CURRENT_DESKTOP", "DESKTOP_SESSION", "LANG", "XAUTHORITY"};
+    for (const char* name : kForward) {
+      const char* const v = getenv(name);
+      if (v != nullptr && *v != 0) {
+        hold.push_back(std::string("--env=") + name + "=" + v);
+      }
+    }
+    hold.push_back("pkexec");
+    hold.push_back(kHelperInstallPath);
+    hold.push_back("--serve");
+    hold.push_back(sock_arg);
+    std::vector<char*> spawn_argv;
+    spawn_argv.reserve(hold.size() + 1);
+    for (const std::string& a : hold) {
+      spawn_argv.push_back(const_cast<char*>(a.c_str()));
+    }
+    spawn_argv.push_back(nullptr);
+    rc = posix_spawn(&pid, "/usr/bin/flatpak-spawn", &fa, nullptr,
+                     spawn_argv.data(), environ);
+  } else {
+    const char* pkexec = access("/usr/bin/pkexec", X_OK) == 0
+                             ? "/usr/bin/pkexec"
+                             : "/bin/pkexec";
+    char* const argv[] = {const_cast<char*>("pkexec"),
+                          const_cast<char*>(kHelperInstallPath),
+                          const_cast<char*>("--serve"), sock_arg, nullptr};
+    rc = posix_spawn(&pid, pkexec, &fa, nullptr, argv, environ);
+  }
   posix_spawn_file_actions_destroy(&fa);
   if (log_fd >= 0) close(log_fd);
   if (rc != 0) {
-    *err = "spawning the privilege helper failed";
+    *err = in_flatpak ? "spawning flatpak-spawn failed (is the "
+                         "org.freedesktop.Flatpak grant present?)"
+                      : "spawning the privilege helper failed";
     return false;
   }
   {
@@ -1459,6 +1562,10 @@ bool ReadAllBytes(const std::string& path, std::string* out) {
 bool ElevateAtStartup(int* exit_code) {
   *exit_code = 0;
   if (geteuid() == 0) return false;  // already root (sudo / the menu entry)
+  // v1.0.1 — never inside a Flatpak: the host cannot exec the sandbox's
+  // /app tree, so the pkexec relaunch would only fail; the tunnel mode
+  // uses the host helper bridge instead (EnsureHelperInstalled).
+  if (InFlatpakSandbox()) return false;
   // The loop guard doubles as the user's escape hatch: the elevated side
   // sets it (so the root instance never re-prompts), and anyone can plant
   // it to force the unprivileged mode on purpose.
@@ -1615,10 +1722,23 @@ void EnsureDesktopIntegration() {}             // Windows uses embedded resource
 //    session crashed while the proxy was set (the backup file survived),
 //    the state is restored right there, before the UI even comes up.
 //
+// v1.0.1 — the LINUX MULTI-BACKEND round (the owner's Linux decree: every
+// major desktop, not only GNOME). The Linux side now writes EVERY backend
+// it can resolve, saving each one's prior state in the same backup file
+// under its own `backend=` section:
+//   * gsettings (org.gnome.system.proxy) — GNOME/Cinnamon/MATE/Budgie and
+//     Firefox wherever the schema is installed, Flatpak included (the
+//     manifest's dconf grants route the writes to the HOST's settings);
+//   * kioslaverc [Proxy Settings] via kwriteconfig6/kwriteconfig5 — KDE
+//     Plasma 5/6 (Firefox's nsUnixSystemProxySettings and Chromium's
+//     proxy_config_service_linux.cc parse exactly these keys under
+//     Plasma; the value format is the Qv2ray-proven "socks://<host> <port>").
+//     Inside a Flatpak the tools run on the HOST through flatpak-spawn.
+// A desktop with NEITHER backend keeps the tunnel — only the companion is
+// missing (the honest error names what was tried).
+//
 // Honest-failure discipline: every function returns an error string (empty
-// = success) which the glue layer logs into the core log; a desktop
-// without a supported proxy backend (no gsettings, exotic DE) keeps the
-// tunnel — only the companion is missing.
+// = success) which the glue layer logs into the core log.
 // ---------------------------------------------------------------------------
 namespace {
 
@@ -1725,19 +1845,20 @@ bool WinProxyApplySaved(HKEY key, const std::string& saved) {
   return ok;
 }
 
-#else  // !_WIN32 — gsettings (GNOME family; other DEs log honestly)
+#else  // !_WIN32 — the multi-backend system proxy (v1.0.1)
 
-// Runs `gsettings <args>` capturing stdout ("" on failure).
+// GNOME family (and Firefox wherever the schema is installed) reads
+// org.gnome.system.proxy over the session's dconf — including from inside
+// a Flatpak, where the manifest's dconf grants route the writes to the
+// HOST's settings.
 std::string GSettings(const std::string& args, bool* ok) {
-  *ok = false;
-  FILE* p = popen(("gsettings " + args + " 2>/dev/null").c_str(), "r");
-  if (p == nullptr) return std::string();
-  std::string out;
-  char buf[512];
-  while (fgets(buf, sizeof(buf), p) != nullptr) out += buf;
-  const int rc = pclose(p);
-  *ok = (rc == 0);
-  return out;
+  return RunCapture("gsettings " + args, ok);
+}
+
+bool GSettingsAvailable() {
+  bool ok = false;
+  GSettings("get org.gnome.system.proxy mode", &ok);
+  return ok;
 }
 
 std::string GSettingsTrim(const std::string& v) {
@@ -1748,6 +1869,125 @@ std::string GSettingsTrim(const std::string& v) {
   if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'')
     s = s.substr(1, s.size() - 2);
   return s;
+}
+
+// A value about to be interpolated into a single-quoted shell argument
+// (the backup file's contents are NOT trusted input): quotes, backslashes
+// and control characters would break out of the quoting.
+std::string SanitizeProxyValue(const std::string& v) {
+  std::string out;
+  for (const char c : v) {
+    const unsigned char u = static_cast<unsigned char>(c);
+    if ((u >= 0x20 && u < 0x7f) || u >= 0x80) {
+      if (c != '\'' && c != '\\') out += c;
+    }
+  }
+  return out;
+}
+
+// ---- v1.0.1: the KDE Plasma backend (kioslaverc [Proxy Settings]) --------
+// Firefox (nsUnixSystemProxySettings) and Chromium
+// (proxy_config_service_linux.cc) parse exactly these keys under a Plasma
+// session; the value format is the Qv2ray-proven "socks://<host> <port>".
+// kwriteconfig6/kreadconfig6 for Plasma 6, the *5 pair for Plasma 5.
+//
+// The v4.39 elevated instance runs as root, where the tools would target
+// /root/.config — pin HOME to the DESKTOP session user's home so the
+// write lands in the config KDE actually reads (the same SUDO_USER
+// discipline as the autostart entry, plus the /run/user/<uid> fallback
+// the forwarded XDG_RUNTIME_DIR carries).
+std::string ElevatedHomePrefix() {
+  if (geteuid() != 0) return std::string();
+  std::string home;
+  const char* sudo_user = getenv("SUDO_USER");
+  if (sudo_user != nullptr && sudo_user[0] != '\0') {
+    const passwd* pw = getpwnam(sudo_user);
+    if (pw != nullptr && pw->pw_dir != nullptr) home = pw->pw_dir;
+  }
+  if (home.empty()) {
+    const char* xdg = getenv("XDG_RUNTIME_DIR");  // /run/user/<uid>
+    if (xdg != nullptr) {
+      const std::string xdg_dir(xdg);
+      const size_t slash = xdg_dir.rfind('/');
+      if (slash != std::string::npos) {
+        const long uid = strtol(xdg_dir.c_str() + slash + 1, nullptr, 10);
+        if (uid > 0) {
+          const passwd* pw = getpwuid(static_cast<uid_t>(uid));
+          if (pw != nullptr && pw->pw_dir != nullptr) home = pw->pw_dir;
+        }
+      }
+    }
+  }
+  if (home.empty()) return std::string();
+  const std::string safe = SanitizeProxyValue(home);
+  return "HOME='" + safe + "' XDG_CONFIG_HOME='" + safe + "/.config' ";
+}
+
+// The prefix every KDE tool invocation goes through: inside a Flatpak the
+// tools are not in the runtime — `flatpak-spawn --host` runs the HOST's
+// tool as the user (org.freedesktop.Flatpak is granted by the manifest).
+std::string KdeToolPrefix() {
+  return InFlatpakSandbox() ? "flatpak-spawn --host " : std::string();
+}
+
+bool KdeWrite(const std::string& key, const std::string& value) {
+  const std::string prefix = ElevatedHomePrefix() + KdeToolPrefix();
+  const std::string k = SanitizeProxyValue(key);
+  const std::string v = SanitizeProxyValue(value);
+  bool ok = false;
+  for (const char* tool : {"kwriteconfig6", "kwriteconfig5"}) {
+    RunCapture(prefix + tool +
+                   " --file kioslaverc --group 'Proxy Settings' --key '" + k +
+                   "' '" + v + "'",
+               &ok);
+    if (ok) return true;
+  }
+  return false;
+}
+
+std::string KdeRead(const std::string& key, const std::string& fallback) {
+  const std::string prefix = ElevatedHomePrefix() + KdeToolPrefix();
+  const std::string k = SanitizeProxyValue(key);
+  bool ok = false;
+  for (const char* tool : {"kreadconfig6", "kreadconfig5"}) {
+    std::string out =
+        RunCapture(prefix + tool +
+                       " --file kioslaverc --group 'Proxy Settings' --key '" + k +
+                       "' --default '" + SanitizeProxyValue(fallback) + "'",
+                   &ok);
+    if (ok) {
+      while (!out.empty() && (out.back() == '\n' || out.back() == '\r')) {
+        out.pop_back();
+      }
+      return out;
+    }
+  }
+  return fallback;
+}
+
+// KDE reads kioslaverc only under a Plasma session — on any other desktop
+// the file would sit unread forever, so the backend is gated on the session
+// hint (and on the tool actually resolving, locally or on the host).
+bool KdeBackendAvailable() {
+  const char* const desktop = getenv("XDG_CURRENT_DESKTOP");
+  const char* const session = getenv("DESKTOP_SESSION");
+  const std::string d = desktop != nullptr ? desktop : "";
+  const std::string s = session != nullptr ? session : "";
+  const bool plasma = d.find("KDE") != std::string::npos ||
+                      d.find("Plasma") != std::string::npos ||
+                      s.find("plasma") != std::string::npos ||
+                      getenv("KDE_SESSION_VERSION") != nullptr;
+  if (!plasma) return false;
+  const std::string prefix = KdeToolPrefix();
+  bool ok = false;
+  for (const char* tool : {"kreadconfig6", "kreadconfig5"}) {
+    RunCapture(prefix + tool +
+                   " --file kioslaverc --group 'Proxy Settings' --key "
+                   "ProxyType --default 0",
+               &ok);
+    if (ok) return true;
+  }
+  return false;
 }
 
 #endif  // !_WIN32
@@ -1781,25 +2021,51 @@ std::string SetSystemProxy(int port) {
   RegCloseKey(key);
   return err;
 #else
+  // v1.0.1 — save EVERY available backend, then set them all: gsettings
+  // (GNOME family + Firefox wherever the schema exists) and kioslaverc
+  // (KDE Plasma — Firefox/Chromium parse it under Plasma). The backup
+  // carries a backend= header per section; a v1 file (no header) restores
+  // as gsettings.
+  const bool have_gsettings = GSettingsAvailable();
+  const bool have_kde = KdeBackendAvailable();
+  if (!have_gsettings && !have_kde) {
+    return "no supported system-proxy backend on this desktop (neither "
+           "gsettings nor KDE's kwriteconfig is usable)";
+  }
+  std::string backup;
   bool ok = false;
-  // Probe gsettings first (honest error when the desktop has none).
-  GSettings("get org.gnome.system.proxy mode", &ok);
-  if (!ok) return "gsettings not available on this desktop";
-  std::string mode = GSettingsTrim(GSettings("get org.gnome.system.proxy mode", &ok));
-  std::string host = GSettingsTrim(GSettings("get org.gnome.system.proxy.socks host", &ok));
-  std::string port_s = GSettingsTrim(GSettings("get org.gnome.system.proxy.socks port", &ok));
-  if (!ProxyFileWrite(ProxyBackupPath(),
-                      "mode=" + mode + "\nsocks-host=" + host + "\nsocks-port=" +
-                          port_s + "\n")) {
+  if (have_gsettings) {
+    const std::string mode =
+        GSettingsTrim(GSettings("get org.gnome.system.proxy mode", &ok));
+    const std::string host =
+        GSettingsTrim(GSettings("get org.gnome.system.proxy.socks host", &ok));
+    const std::string port_s =
+        GSettingsTrim(GSettings("get org.gnome.system.proxy.socks port", &ok));
+    backup += "backend=gsettings\nmode=" + mode + "\nsocks-host=" + host +
+              "\nsocks-port=" + port_s + "\n";
+  }
+  if (have_kde) {
+    backup += "backend=kde\nkde-proxy-type=" + KdeRead("ProxyType", "0") +
+              "\nkde-socks-proxy=" + KdeRead("socksProxy", "") + "\n";
+  }
+  if (!ProxyFileWrite(ProxyBackupPath(), backup)) {
     return "cannot write the proxy backup file";
   }
   const std::string p = std::to_string(port);
   bool all = true;
-  GSettings("set org.gnome.system.proxy mode 'manual'", &ok); all = all && ok;
-  GSettings("set org.gnome.system.proxy.socks host '127.0.0.1'", &ok); all = all && ok;
-  GSettings("set org.gnome.system.proxy.socks port " + p, &ok); all = all && ok;
-  GSettings("set org.gnome.system.proxy ignore-hosts \"['localhost', '127.0.0.0/8', '::1']\"", &ok); all = all && ok;
-  if (!all) return "one of the gsettings writes failed (see the core log)";
+  if (have_gsettings) {
+    GSettings("set org.gnome.system.proxy mode 'manual'", &ok); all = all && ok;
+    GSettings("set org.gnome.system.proxy.socks host '127.0.0.1'", &ok); all = all && ok;
+    GSettings("set org.gnome.system.proxy.socks port " + p, &ok); all = all && ok;
+    GSettings("set org.gnome.system.proxy ignore-hosts \"['localhost', '127.0.0.0/8', '::1']\"", &ok); all = all && ok;
+  }
+  if (have_kde) {
+    // Plasma's manual mode: ProxyType=1 + the "socks://<host> <port>"
+    // value Firefox/Chromium parse under a Plasma session.
+    all = all && KdeWrite("ProxyType", "1");
+    all = all && KdeWrite("socksProxy", "socks://127.0.0.1 " + p);
+  }
+  if (!all) return "one of the system-proxy writes failed (see the core log)";
   return std::string();
 #endif
 }
@@ -1828,24 +2094,51 @@ std::string ClearSystemProxy() {
   const bool had = ProxyFileRead(ProxyBackupPath(), &saved);
   bool ok = false;
   if (had) {
-    // restore line-by-line: mode / socks-host / socks-port
+    // v1.0.1 — restore per backend= section (a file without one is a v1
+    // gsettings backup; its keys restore exactly as before). Values are
+    // sanitized before they reach a shell argument — the backup file is
+    // NOT trusted input.
+    std::string backend = "gsettings";
     size_t pos = 0;
     while (pos < saved.size()) {
       size_t nl = saved.find('\n', pos);
       if (nl == std::string::npos) nl = saved.size();
       std::string line = saved.substr(pos, nl - pos);
       pos = nl + 1;
-      if (line.rfind("mode=", 0) == 0) {
-        GSettings("set org.gnome.system.proxy mode '" + line.substr(5) + "'", &ok);
-      } else if (line.rfind("socks-host=", 0) == 0) {
-        GSettings("set org.gnome.system.proxy.socks host '" + line.substr(11) + "'", &ok);
-      } else if (line.rfind("socks-port=", 0) == 0) {
-        GSettings("set org.gnome.system.proxy.socks port " + line.substr(11), &ok);
+      if (line.rfind("backend=", 0) == 0) {
+        backend = SanitizeProxyValue(line.substr(8));
+        continue;
+      }
+      if (backend == "gsettings") {
+        if (line.rfind("mode=", 0) == 0) {
+          GSettings("set org.gnome.system.proxy mode '" +
+                    SanitizeProxyValue(line.substr(5)) + "'", &ok);
+        } else if (line.rfind("socks-host=", 0) == 0) {
+          GSettings("set org.gnome.system.proxy.socks host '" +
+                    SanitizeProxyValue(line.substr(11)) + "'", &ok);
+        } else if (line.rfind("socks-port=", 0) == 0) {
+          GSettings("set org.gnome.system.proxy.socks port " +
+                    SanitizeProxyValue(line.substr(11)), &ok);
+        }
+      } else if (backend == "kde") {
+        if (line.rfind("kde-proxy-type=", 0) == 0) {
+          KdeWrite("ProxyType", SanitizeProxyValue(line.substr(16)));
+        } else if (line.rfind("kde-socks-proxy=", 0) == 0) {
+          KdeWrite("socksProxy", SanitizeProxyValue(line.substr(17)));
+        }
       }
     }
   } else {
-    GSettings("set org.gnome.system.proxy mode 'none'", &ok);
-    if (!ok) return "gsettings not available on this desktop";
+    // Nothing was saved: put every available backend back to 'no proxy'.
+    bool any = false;
+    if (GSettingsAvailable()) {
+      GSettings("set org.gnome.system.proxy mode 'none'", &ok);
+      any = any || ok;
+    }
+    if (KdeBackendAvailable()) {
+      any = KdeWrite("ProxyType", "0") || any;
+    }
+    if (!any) return "no supported system-proxy backend on this desktop";
   }
   FileRemove(ProxyBackupPath());
   return std::string();

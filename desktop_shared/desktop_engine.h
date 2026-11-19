@@ -219,6 +219,14 @@ void EnsureDesktopIntegration();
 //  * SystemProxyHygiene()  — call at process start: a surviving backup file
 //    means a previous session died with the proxy set — restore immediately.
 //
+// v1.0.1 (Linux): the backend set widened from GNOME-only gsettings to
+// EVERY resolvable desktop backend — org.gnome.system.proxy (GNOME family
+// and Firefox wherever the schema exists, dconf-granted inside a Flatpak)
+// AND KDE Plasma's kioslaverc [Proxy Settings] through kwriteconfig6/5
+// (host-side via flatpak-spawn inside a Flatpak). Each backend's prior
+// state is saved under its own `backend=` section; a desktop with no
+// backend keeps the tunnel and reports the honest error.
+//
 // All three return "" on success or an honest error string (logged into the
 // core log by the glue layer; never fatal — the tunnel itself is unaffected).
 std::string SetSystemProxy(int port);

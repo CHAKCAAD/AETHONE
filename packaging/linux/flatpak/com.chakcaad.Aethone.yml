@@ -1,0 +1,80 @@
+# com.chakcaad.Aethone.yml — the v1.0.1 Flatpak manifest.
+#
+# The engines (aether/zeptun/lyrebird/psiphon) are built at the frozen
+# pins by the CI's desktop-native job and land in the bundle this manifest
+# consumes — the Flatpak repackages the SAME baseline x86-64-v1 artifacts
+# the tar/deb/rpm/AppImage carry (one build, every format).
+#
+# All source paths are relative to THIS file's directory: the build script
+# (packaging/linux/build_packages.sh) stages the manifest, the metainfo,
+# the desktop entry, the hicolor set and the bundle tarball into one flat
+# staging directory before invoking flatpak-builder.
+#
+# finish-args, in order:
+#   --share=network / --share=ipc / sockets / dri — the VPN client itself.
+#   dconf trio — the system-proxy companion: `gsettings` runs inside the
+#     runtime and its org.gnome.system.proxy writes reach the HOST's dconf
+#     through these grants (the dconf-editor pattern), so GNOME-family
+#     desktops and Firefox see the proxy.
+#   --talk-name=org.freedesktop.Flatpak — the tunnel-mode bridge: the app
+#     spawns `flatpak-spawn --host pkexec aethone-tunnel-helper --serve`
+#     (the companion host package) and the KDE proxy tools route to the
+#     host the same way. See desktop_shared/desktop_engine.cpp.
+app-id: com.chakcaad.Aethone
+runtime: org.gnome.Platform
+runtime-version: "48"
+sdk: org.gnome.Sdk
+command: aethone
+
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # the system-proxy companion (host dconf writes from the sandbox)
+  - --talk-name=ca.desrt.dconf
+  - --filesystem=xdg-run/dconf
+  - --env=DCONF_USER_CONFIG_DIR=.config/dconf
+  # the tunnel-mode bridge + the host-side KDE proxy tools
+  - --talk-name=org.freedesktop.Flatpak
+
+modules:
+  - name: aethone
+    buildsystem: simple
+    build-commands:
+      # The bundle keeps its self-relative layout under /app/bin: aethone +
+      # lib/ + data/ + lyrebird + psiphon (RPATH $ORIGIN/lib, Paths() from
+      # the executable's own directory — both hold inside the sandbox).
+      - install -Dm755 -t /app/bin bundle/aethone
+      - install -Dm755 -t /app/bin bundle/aethone-tunnel-helper
+      - install -Dm755 -t /app/bin bundle/lyrebird
+      - install -Dm755 -t /app/bin bundle/psiphon
+      - cp -r bundle/lib /app/bin/lib
+      - cp -r bundle/data /app/bin/data
+      - install -Dm644 bundle/com.chakcaad.aethone.tunnel-helper.policy /app/share/polkit-1/actions/com.chakcaad.aethone.tunnel-helper.policy
+      - install -Dm644 com.chakcaad.aethone.desktop /app/share/applications/com.chakcaad.aethone.desktop
+      - install -Dm644 com.chakcaad.Aethone.metainfo.xml /app/share/metainfo/com.chakcaad.Aethone.metainfo.xml
+      - |
+        set -e
+        for d in 16x16 24x24 32x32 48x48 64x64 96x96 128x128 256x256; do
+          install -Dm644 "hicolor/$d/apps/com.chakcaad.aethone.png" \
+            "/app/share/icons/hicolor/$d/apps/com.chakcaad.aethone.png"
+        done
+      # the flatpak build sanity gate
+      - test -x /app/bin/aethone
+      - test -f /app/bin/lib/libflutter_linux_gtk.so
+      - test -f /app/bin/lib/libaether.so
+      - test -f /app/bin/lib/libzeptun.so
+    sources:
+      # Staged by packaging/linux/build_packages.sh beside the manifest
+      # (a repackage of the CI desktop-bundle artifact — never committed).
+      - type: archive
+        path: aethone-bundle.tar.gz
+        dest: bundle
+      - type: file
+        path: com.chakcaad.aethone.desktop
+      - type: dir
+        path: hicolor
+      - type: file
+        path: com.chakcaad.Aethone.metainfo.xml

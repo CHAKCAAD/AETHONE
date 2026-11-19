@@ -2730,9 +2730,176 @@ jobs:
           path: status/build-status-desktop-smoke.txt
           if-no-files-found: error
 
+  # =========================================================================
+  # v1.0.1 — Job linux-packages: THE LINUX RELEASE ROUND (the owner's
+  # decree: «نسخه 1.0.1 اپ برای لینوکس هم منتشر بشه با پسوند های مختلف
+  # مثل فلتپک .دب و ... برای انواع توضیع های لینوکسی» + «در حالت vpn
+  # نسخه لینوکس باید پروکسی سیستم هم ست بشه»).
+  #
+  # Consumes the desktop-bundle LINUX artifact (the SAME baseline x86-64-v1
+  # bundle the ISA gate already audited) and produces EVERY package family:
+  #   * aethone_<v>_amd64.deb + aethone-tunnel-helper_<v>_amd64.deb
+  #     (Debian 13+/Ubuntu 24.04+; helper + polkit action pre-installed)
+  #   * aethone-<v>-1.x86_64.rpm + aethone-tunnel-helper-<v>-1.x86_64.rpm
+  #     (handwritten specs, built under fakeroot for root:root ownership)
+  #   * AETHONE-<v>-x86_64.AppImage (linuxdeploy + plugin-gtk, BOTH
+  #     sha256-pinned below; NO_STRIP keeps the audited ELFs untouched)
+  #   * aethone-<v>-x86_64.flatpak (org.gnome.Platform 48; the manifest
+  #     re-packages the same bundle and carries the dconf grants for the
+  #     system-proxy companion + org.freedesktop.Flatpak for the tunnel
+  #     bridge — see desktop_shared/desktop_engine.cpp)
+  #   * aethone-linux-x86_64-<v>.tar.gz (the portable form)
+  # Fail-closed per format: dpkg -x / rpm -qpl / --appimage-extract / a
+  # flatpak run sh gate + the bridge-binary presence inside the sandbox.
+  # =========================================================================
+  linux-packages:
+    name: "Linux packages (deb + rpm + AppImage + Flatpak + tar)"
+    needs: [flutter-ui, desktop-bundle]
+    # v4.36n discipline: the leg links nothing new, but it re-ships the
+    # baseline-verified ELFs and runs its checks against the same userland.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    # the release-upload step (release/v1.0.1-linux only) needs write;
+    # every other job keeps the workflow-level contents: read.
+    permissions:
+      contents: write
+    env:
+      APP_VERSION: "1.0.1"
+      LINUXDEPLOY_VERSION: "1-alpha-20251107-1"
+      LINUXDEPLOY_SHA256: "c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d"
+      LINUXDEPLOY_PLUGIN_GTK_COMMIT: "7a3fbc31a9e5075073ff8790f26effbac5f84453"
+      LINUXDEPLOY_PLUGIN_GTK_SHA256: "b0f4cbc684a0103a9651f0955b635eaea0096b3a66c0f5a2c2aa337960375171"
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install packaging prerequisites
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y -q \
+            libgtk-3-dev ninja-build \
+            rpm fakeroot \
+            flatpak flatpak-builder \
+            desktop-file-utils \
+            dbus
+
+      - name: Download the linux desktop bundle artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: bundle-artifact
+          name: aethone-desktop-r${{ github.run_number }}-linux
+
+      - name: Verify the bundle artifact layout
+        run: |
+          set -euo pipefail
+          ls -la bundle-artifact/
+          tar -tzf bundle-artifact/aethone-linux-x86_64-r*.tar.gz | head -5
+          tar -tzf bundle-artifact/aethone-linux-x86_64-r*.tar.gz | grep -q '^bundle/aethone$' \
+            || { echo "::error::the desktop-bundle artifact does not carry bundle/aethone"; exit 1; }
+          # the desktop-bundle SHA256SUMS must still match (fail-closed)
+          ( cd bundle-artifact && sha256sum -c SHA256SUMS.txt )
+
+      - name: Extract the bundle
+        run: |
+          set -euo pipefail
+          tar -xzf bundle-artifact/aethone-linux-x86_64-r*.tar.gz -C bundle-artifact
+          # BUILD_INFO.txt sits BESIDE the bundle dir — exactly where
+          # build_packages.sh looks for the native pins
+          [ -f bundle-artifact/BUILD_INFO.txt ] || { echo "::error::BUILD_INFO.txt missing from the artifact"; exit 1; }
+          [ -f bundle-artifact/bundle/aethone ] || { echo "::error::bundle/aethone missing"; exit 1; }
+
+      - name: Fetch the pinned linuxdeploy tools (sha256-gated)
+        run: |
+          set -euo pipefail
+          mkdir -p .tools
+          curl -fsSL -o .tools/linuxdeploy-x86_64.AppImage \
+            "https://github.com/linuxdeploy/linuxdeploy/releases/download/${LINUXDEPLOY_VERSION}/linuxdeploy-x86_64.AppImage"
+          echo "${LINUXDEPLOY_SHA256}  .tools/linuxdeploy-x86_64.AppImage" | sha256sum -c -
+          chmod +x .tools/linuxdeploy-x86_64.AppImage
+          curl -fsSL -o .tools/linuxdeploy-plugin-gtk.sh \
+            "https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/raw/${LINUXDEPLOY_PLUGIN_GTK_COMMIT}/linuxdeploy-plugin-gtk.sh"
+          echo "${LINUXDEPLOY_PLUGIN_GTK_SHA256}  .tools/linuxdeploy-plugin-gtk.sh" | sha256sum -c -
+
+      - name: Validate the desktop entry (desktop-file-validate)
+        run: desktop-file-validate packaging/linux/shared/com.chakcaad.aethone.desktop
+
+      - name: Build every Linux package format (fail-closed)
+        run: |
+          set -euo pipefail
+          bash packaging/linux/build_packages.sh \
+            --bundle "$PWD/bundle-artifact/bundle" \
+            --version "$APP_VERSION" \
+            --run "${{ github.run_number }}" \
+            --out "$PWD/dist" \
+            --linuxdeploy "$PWD/.tools" \
+            --flatpak-smoke
+
+      - name: Upload the linux package artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aethone-linux-packages-r${{ github.run_number }}
+          path: dist/
+          if-no-files-found: error
+
+      - name: Upload to the v1.0.1 GitHub release (release branch only)
+        if: github.ref == 'refs/heads/release/v1.0.1-linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          API="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          UP="https://uploads.github.com/repos/${GITHUB_REPOSITORY}"
+          REL_ID="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
+            "${API}/releases/tags/v1.0.1" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+          echo "v1.0.1 release id: ${REL_ID}"
+          for f in dist/*; do
+            name="$(basename "$f")"
+            asset_id="$(ASSET_NAME="$name" curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
+              "${API}/releases/${REL_ID}/assets?per_page=100" \
+              | python3 -c 'import json,os,sys; xs=[a for a in json.load(sys.stdin) if a["name"]==os.environ["ASSET_NAME"]]; print(xs[0]["id"] if xs else "")')"
+            if [ -n "$asset_id" ]; then
+              echo "replacing existing asset: ${name}"
+              curl -fsSL -X DELETE -H "Authorization: Bearer ${GH_TOKEN}" \
+                "${API}/releases/assets/${asset_id}"
+              sleep 2
+            fi
+            curl -fsSL -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@${f}" \
+              "${UP}/releases/${REL_ID}/assets?name=${name}" >/dev/null
+            echo "uploaded: ${name}"
+          done
+          echo "ALL LINUX ASSETS UPLOADED TO v1.0.1"
+
+      - name: Record leg status (real result, uploaded even on failure)
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p status
+          {
+            echo "job=linux-packages"
+            echo "status=${{ job.status }}"
+            echo "run_id=${{ github.run_id }}"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > status/build-status-linux-packages.txt
+          cat status/build-status-linux-packages.txt
+
+      - name: Upload leg status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: build-status-linux-packages
+          path: status/build-status-linux-packages.txt
+          if-no-files-found: error
+
   status-summary:
     name: Status summary (real CI results vs NOT TESTED)
-    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui, android-apk, apk-smoke, desktop-native, desktop-bundle, desktop-smoke]
+    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui, android-apk, apk-smoke, desktop-native, desktop-bundle, desktop-smoke, linux-packages]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -3025,8 +3192,9 @@ jobs:
           dn="${{ needs.desktop-native.result }}"
           db="${{ needs.desktop-bundle.result }}"
           ds="${{ needs.desktop-smoke.result }}"
-          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ] || [ "$zt" != "success" ] || [ "$fu" != "success" ] || [ "$aa" != "success" ] || [ "$as" != "success" ] || [ "$dn" != "success" ] || [ "$db" != "success" ] || [ "$ds" != "success" ]; then
-            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt zig-test=$zt flutter-ui=$fu android-apk=$aa apk-smoke=$as desktop-native=$dn desktop-bundle=$db desktop-smoke=$ds"
+          lp="${{ needs.linux-packages.result }}"
+          if [ "$nb" != "success" ] || [ "$ei" != "success" ] || [ "$rs" != "success" ] || [ "$ct" != "success" ] || [ "$gt" != "success" ] || [ "$zt" != "success" ] || [ "$fu" != "success" ] || [ "$aa" != "success" ] || [ "$as" != "success" ] || [ "$dn" != "success" ] || [ "$db" != "success" ] || [ "$ds" != "success" ] || [ "$lp" != "success" ]; then
+            echo "PIPELINE NOT GREEN: native-build=$nb elf-inspect=$ei runtime-smoke=$rs cargo-test=$ct go-test=$gt zig-test=$zt flutter-ui=$fu android-apk=$aa apk-smoke=$as desktop-native=$dn desktop-bundle=$db desktop-smoke=$ds linux-packages=$lp"
             exit 1
           fi
-          echo "PIPELINE GREEN (16/16: 3 android build legs + elf-inspect + runtime-smoke + cargo-test + go-test + zig-test + flutter-ui + android-apk + apk-smoke + desktop-native(linux+windows) + desktop-bundle(linux+windows) + desktop-smoke)"
+          echo "PIPELINE GREEN (17/17: 3 android build legs + elf-inspect + runtime-smoke + cargo-test + go-test + zig-test + flutter-ui + android-apk + apk-smoke + desktop-native(linux+windows) + desktop-bundle(linux+windows) + desktop-smoke + linux-packages(deb+rpm+AppImage+Flatpak+tar))"

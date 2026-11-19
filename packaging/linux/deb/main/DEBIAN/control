@@ -1,0 +1,21 @@
+Package: aethone
+Version: __VERSION__
+Architecture: amd64
+Maintainer: AETHONE Project <aethone@users.noreply.github.com>
+Installed-Size: __INSTALLED_SIZE__
+Depends: libgtk-3-0t64 | libgtk-3-0, libglib2.0-0t64 | libglib2.0-0
+Recommends: policykit-1
+Section: net
+Priority: optional
+Homepage: https://github.com/CHAKCAAD/AETHONE
+Description: Cross-platform VPN client (MASQUE, WireGuard, VLESS-WS, Tor, Psiphon)
+ AETHONE routes the whole device or proxy-aware apps through Aether
+ (WARP-class core) and zeptun (userspace TUN router) with MASQUE,
+ WireGuard, VLESS-WS, Tor and Psiphon protocols.
+ .
+ While the tunnel is up the system proxy points at the same local SOCKS5
+ listener (GNOME gsettings + KDE kioslaverc), so browsers ride the tunnel
+ too; the state is restored on disconnect.
+ .
+ Built at the x86-64-v1 baseline against glibc 2.39 — Debian 13+,
+ Ubuntu 24.04+ and newer Debian-family releases.
