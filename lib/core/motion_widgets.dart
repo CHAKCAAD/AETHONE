@@ -33,6 +33,7 @@ class PressSpring extends StatefulWidget {
     required this.child,
     this.style = MotionStyle.standard,
     this.haptic = true,
+    this.onPointerDown,
   });
 
   final VoidCallback? onTap;
@@ -43,6 +44,13 @@ class PressSpring extends StatefulWidget {
 
   /// Whether the micro haptic fires on press-down.
   final bool haptic;
+
+  /// v4.43 — optional pointer-down hook (the event's LOCAL position in
+  /// this widget's own space): the connect button's tap-ripple burst
+  /// rides the SAME raw listener as the squash — same frame, one gesture,
+  /// never a gate on the action. Silent whenever [onTap] is null (the
+  /// disconnecting lock) and under the OFF style (no listener branch).
+  final void Function(Offset localPosition)? onPointerDown;
 
   @override
   State<PressSpring> createState() => _PressSpringState();
@@ -133,7 +141,14 @@ class _PressSpringState extends State<PressSpring>
       onTap: widget.onTap,
       child: Listener(
         behavior: HitTestBehavior.opaque,
-        onPointerDown: widget.onTap == null ? null : (_) => _down(),
+        onPointerDown: widget.onTap == null
+            ? null
+            : (event) {
+                // The v4.43 hook fires first — the ripple burst is born
+                // the very frame the finger lands, like the squash.
+                widget.onPointerDown?.call(event.localPosition);
+                _down();
+              },
         onPointerUp: widget.onTap == null ? null : (_) => _up(),
         onPointerCancel: widget.onTap == null ? null : (_) => _up(),
         child: Transform.scale(

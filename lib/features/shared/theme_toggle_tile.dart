@@ -18,6 +18,7 @@ import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/app_theme.dart';
 import '../../core/design_tokens.dart';
+import '../../core/fx/theme_reveal.dart';
 import '../../core/motion.dart';
 
 class ThemeToggleTile extends StatelessWidget {
@@ -49,7 +50,18 @@ class ThemeToggleTile extends StatelessWidget {
       button: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: store.toggleThemeMode,
+        // v4.43 — the flutterfx circular reveal: the wipe radiates from
+        // THIS tile's centre (global coords — the shell's overlay fills
+        // the screen, so global == overlay-local). The old-frame capture
+        // completes before the store flips; OFF / capture-failure falls
+        // back to the plain 420 ms cross-fade inside the host.
+        onTap: () {
+          final box = context.findRenderObject();
+          final center = box is RenderBox && box.attached
+              ? box.localToGlobal(box.size.center(Offset.zero))
+              : Offset.zero;
+          ThemeReveal.request(origin: center, apply: store.toggleThemeMode);
+        },
         child: Container(
           width: size,
           height: size,
