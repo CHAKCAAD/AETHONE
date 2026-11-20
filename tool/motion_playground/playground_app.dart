@@ -10,6 +10,7 @@ import 'package:aethone/features/home/widgets/glow_pill.dart';
 
 import 'code_generator.dart';
 import 'custom_widget_slot.dart';
+import 'motion_studio_screen.dart';
 
 const bg = Color(0xFF090E0B);
 const panel = Color(0xFF101812);
@@ -39,7 +40,7 @@ class MotionPlaygroundApp extends StatelessWidget {
         ),
         home: const Directionality(
           textDirection: TextDirection.rtl,
-          child: MotionPlaygroundScreen(),
+          child: MotionStudioScreen(),
         ),
       );
 }
