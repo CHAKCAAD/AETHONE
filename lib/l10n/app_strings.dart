@@ -1,8 +1,9 @@
 /// UI strings — minimal hand-rolled l10n for UI step 1 (home screen).
 ///
 /// fa strings are taken VERBATIM from the reference screens (غیرفعال / متصل /
-/// آفلاین / پروتکل). en/ru/zh are natural translations; tk falls back to en
-/// until native Turkmen review (honest gap, tracked for the onboarding step).
+/// آفلاین / پروتکل). en/ru/zh are natural translations; tk is a FIRST-CLASS
+/// table since v4.42 (the v4.41 "fall back to en" mapping was the bug that
+/// killed the whole Turkmen table — see app.dart's tk seam).
 ///
 /// This is a deliberate stopgap: the full gen-l10n pipeline (5 locales, .arb
 /// files, untranslated-key policy) lands with the onboarding/settings step,
@@ -25,6 +26,12 @@ class AppStrings {
   String get statusConnecting => _v['statusConnecting']!;
   String get statusReconnecting => _v['statusReconnecting']!;
   String get statusFailed => _v['statusFailed']!;
+
+  // v1.0.2 motion overhaul — the three states the pill used to fold into
+  // their neighbours now carry their own words in every language.
+  String get statusStarting => _v['statusStarting']!;
+  String get statusWaitingPermissions => _v['statusWaitingPermissions']!;
+  String get statusDisconnecting => _v['statusDisconnecting']!;
   String get protocol => _v['protocol']!;
   String get settingsComingNext => _v['settingsComingNext']!;
   String get speedTestComingNext => _v['speedTestComingNext']!;
@@ -486,6 +493,9 @@ class AppStrings {
       'statusConnecting': 'در حال اتصال',
       'statusReconnecting': 'اتصال مجدد',
       'statusFailed': 'خطا',
+      'statusStarting': 'در حال شروع',
+      'statusWaitingPermissions': 'در انتظار مجوز',
+      'statusDisconnecting': 'در حال قطع',
       'protocol': 'پروتکل',
       'settingsComingNext': 'تنظیمات — در گام بعدی پیاده‌سازی می‌شود',
       'speedTestComingNext': 'تست سرعت — در گام بعدی پیاده‌سازی می‌شود',
@@ -793,6 +803,9 @@ class AppStrings {
       'statusConnecting': 'Connecting',
       'statusReconnecting': 'Reconnecting',
       'statusFailed': 'Error',
+      'statusStarting': 'Starting',
+      'statusWaitingPermissions': 'Waiting for permissions',
+      'statusDisconnecting': 'Disconnecting',
       'protocol': 'Protocol',
       'settingsComingNext': 'Settings — coming in the next step',
       'speedTestComingNext': 'Speed Test — coming in the next step',
@@ -1092,6 +1105,9 @@ class AppStrings {
       'statusConnecting': 'Подключение',
       'statusReconnecting': 'Переподключение',
       'statusFailed': 'Ошибка',
+      'statusStarting': 'Запуск',
+      'statusWaitingPermissions': 'Ожидание разрешений',
+      'statusDisconnecting': 'Отключение',
       'protocol': 'Протокол',
       'settingsComingNext': 'Настройки — на следующем шаге',
       'speedTestComingNext': 'Тест скорости — на следующем шаге',
@@ -1387,6 +1403,9 @@ class AppStrings {
       'statusConnecting': '连接中',
       'statusReconnecting': '重新连接',
       'statusFailed': '错误',
+      'statusStarting': '正在启动',
+      'statusWaitingPermissions': '等待权限',
+      'statusDisconnecting': '正在断开',
       'protocol': '协议',
       'settingsComingNext': '设置 — 将在下一步实现',
       'speedTestComingNext': '速度测试 — 将在下一步实现',
@@ -1688,6 +1707,9 @@ class AppStrings {
       'statusConnecting': 'Birikdirilýär',
       'statusReconnecting': 'Täzeden birikdirilýär',
       'statusFailed': 'Ýalňyşlyk',
+      'statusStarting': 'Başlanýar',
+      'statusWaitingPermissions': 'Rugsat garaşýar',
+      'statusDisconnecting': 'Aýrylýar',
       'protocol': 'Protokol',
       'settingsComingNext': 'Sazlamalar — indiki ädimde',
       'speedTestComingNext': 'Tizlik testi — indiki ädimde',

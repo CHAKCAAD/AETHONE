@@ -17,11 +17,13 @@ import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
+import '../../core/motion_widgets.dart';
 import '../../l10n/app_strings.dart';
 import '../settings/settings_screen.dart';
 import '../speedtest/speed_test_page.dart';
 import 'protocol_sheet/protocol_sheet.dart';
 import 'widgets/bottom_panel.dart';
+import 'widgets/connect_core.dart';
 import 'widgets/glow_pill.dart';
 import 'widgets/hero_logo.dart';
 import 'widgets/location_header.dart';
@@ -111,7 +113,11 @@ class HomeScreen extends StatelessWidget {
                 store.state == VpnState.connecting ||
                 store.state == VpnState.reconnecting);
 
-        return Scaffold(
+        // v1.0.2 — the home tree reads the style through the scope too
+        // (the theme tile's swap, the shared value-text fallbacks).
+        return MotionScope(
+          style: style,
+          child: Scaffold(
           backgroundColor: AethColors.bgScreen,
           // v4.25 — `StackFit.expand` for uniformity with every other page
           // (the pattern-placement fix; home already filled via the Column
@@ -169,87 +175,47 @@ class HomeScreen extends StatelessWidget {
                     ),
                     // Hero band: logo (look 1) or center connect button (2).
                     // The flex region is the reference's hero band — the
-                    // logo centers exactly like the frame. While the engine
-                    // walks (starting/connecting/reconnecting) the scanning
-                    // halo plays BEHIND the central icon (defect #10).
+                    // logo centers exactly like the frame. v1.0.2 — ONE
+                    // state-driven ConnectHalo plays BEHIND the central
+                    // element of BOTH looks (the v4.15 aurora + the v4.14
+                    // scan rings unified and extended to all EIGHT states:
+                    // ignition / held / march / aurora+celebration / seek /
+                    // collapse / error ring). Because both looks mount the
+                    // SAME director, their state languages can never
+                    // contradict — and the failed edge adds its one-shot
+                    // decaying shake around the central control itself.
                     Expanded(
                       child: Center(
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            AnimatedSwitcher(
-                              // v4.25 — style-scaled (was a fixed 250 ms).
-                              duration: motionDuration(
-                                style,
-                                MotionDurations.quick,
-                              ),
-                              child: showScan
-                                  ? ScanRings(
-                                      key: const ValueKey('scan-rings'),
-                                      color: connected
-                                          ? AethColors.accentConnected
-                                          : AethColors.statusDisconnected,
-                                      size: 270 * s,
-                                    )
-                                  : const SizedBox.shrink(
-                                      key: ValueKey('scan-off'),
-                                    ),
+                            ConnectHalo(
+                              state: store.state,
+                              style: style,
+                              size: (isLookOne
+                                      ? AethGeometry.heroSize
+                                      : AethGeometry.connectGroupSize) *
+                                  1.25 *
+                                  s,
                             ),
-                            // v4.15 connected halo — AURORA BLOOM (owner
-                            // home round #2: the v4.13 rotating sweep is
-                            // REPLACED by a soft breathing glow + slow
-                            // water-ripples BEHIND the central icon in BOTH
-                            // looks, so the connected screen keeps a quiet
-                            // life. The hero adds its own breathing scale
-                            // pulse.
-                            AnimatedSwitcher(
-                              duration: motionDuration(
-                                style,
-                                MotionDurations.state,
-                              ),
-                              child: connected
-                                  ? AuroraBloom(
-                                      key: const ValueKey('connected-aura'),
-                                      color: AethColors.accentConnected,
-                                      // v4.33 — the bloom wraps the WHOLE
-                                      // connect composition (the 236px
-                                      // group for look 2, the hero for
-                                      // look 1), breathing just outside
-                                      // its glow.
-                                      size: (isLookOne
-                                              ? AethGeometry.heroSize
-                                              : AethGeometry
-                                                  .connectGroupSize) *
-                                          1.25 *
-                                          s,
+                            ConnectShake(
+                              state: store.state,
+                              style: style,
+                              child: isLookOne
+                                  ? PressSpring(
                                       style: style,
+                                      onTap: _toggleConnection,
+                                      child: HeroLogo(
+                                        connected: connected,
+                                        style: style,
+                                      ),
                                     )
-                                  : const SizedBox.shrink(
-                                      key: ValueKey('aura-off'),
+                                  : _CenterConnectButton(
+                                      store: store,
+                                      style: style,
+                                      onTap: _toggleConnection,
                                     ),
                             ),
-                            if (isLookOne)
-                              GestureDetector(
-                                // v4.17 — owner home round #5: «آیکون وسط
-                                // صفحه هم به عنوان دکمه اتصال عمل کنه البته
-                                // دکمه اتصال هم همچنان عملکردش رو داشته
-                                // باشه» — the logo toggles the connection
-                                // exactly like the bottom FAB. v4.19 (#3):
-                                // the toggle now CANCELS the in-flight walk
-                                // instead of being ignored while connecting.
-                                behavior: HitTestBehavior.opaque,
-                                onTap: _toggleConnection,
-                                child: HeroLogo(
-                                  connected: connected,
-                                  style: style,
-                                ),
-                              )
-                            else
-                              _CenterConnectButton(
-                                store: store,
-                                style: style,
-                                onTap: _toggleConnection,
-                              ),
                           ],
                         ),
                       ),
@@ -300,9 +266,12 @@ class HomeScreen extends StatelessWidget {
                       padding: EdgeInsets.symmetric(
                         horizontal: AethGeometry.pageHPadding * s,
                       ),
+                      // v1.0.2 — the panel carries the REAL state now: the
+                      // FAB's three-slot ride + the protocol label swap.
                       child: BottomPanel(
                         connected: connected,
                         style: style,
+                        state: store.state,
                         // v4.32 — the SMART session's own display: while a
                         // SMART walk resolved (connected), the panel names
                         // the protocol that actually CARRIES the session
@@ -348,6 +317,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ],
+          ),
           ),
         );
       },
@@ -506,8 +476,13 @@ class _CenterConnectButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v1.0.2 — the REAL state drives the glyph (Send while walking,
+    // ShieldTick once really connected) + the disconnecting tap lock; the
+    // Group-45 geometry and the green/red crossfade stay verbatim.
     return ConnectButtonGlow(
       connected: store.isConnected,
+      state: store.state,
+      style: style,
       duration: motionDuration(style, MotionDurations.state),
       curve: style.curve,
       onTap: onTap, // tap-to-toggle (owner v4.12) + cancel (v4.19 #3)

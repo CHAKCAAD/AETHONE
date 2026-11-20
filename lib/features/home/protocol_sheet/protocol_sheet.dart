@@ -109,8 +109,9 @@ class _ProtocolPageState extends State<ProtocolPage> {
     if (!already) widget.store.selectProtocol(id);
     // Owner v4.16: after choosing a protocol the user is returned to the
     // home page automatically. The 300 ms hold lets the green crossfade +
-    // pulse land before the reverse slide.
-    Future.delayed(const Duration(milliseconds: 300), () {
+    // pulse land before the reverse slide — v1.0.2: style-scaled (OFF pops
+    // immediately; its crossfade is instant too, so nothing is lost).
+    Future.delayed(motionDuration(widget.style, 300), () {
       if (mounted) Navigator.of(context).pop();
     });
   }
@@ -118,16 +119,18 @@ class _ProtocolPageState extends State<ProtocolPage> {
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
-    final routeAnim = ModalRoute.of(context)!.animation!;
 
-    return Scaffold(
+    return MotionScope(
+      style: widget.style,
+      child: Scaffold(
         backgroundColor: AethColors.bgScreen,
+        // v1.0.2 — the page no longer rebuilds its WHOLE tree on every
+        // route tick: each block's [motionCascade] subscribes to the route
+        // animation itself, so the outer listener now only rebuilds on
+        // REAL store changes (the audit's no-full-screen-rebuild rule).
         body: AnimatedBuilder(
-          // v4.17: LIVE store binding — mode segments and scan pills apply
-          // instantly, independent of protocol selection.
-          animation: Listenable.merge([widget.store, routeAnim]),
+          animation: widget.store,
           builder: (context, _) {
-            final t = routeAnim.value;
             final s =
                 MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
             return Stack(
@@ -161,7 +164,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                           // (v4.34 — the exclamation tile became the
                           // night ⇄ light switch, owner round 10).
                           _enter(
-                            t,
                             0,
                             Positioned(
                               top: AethGeometry.topSafeExtraGap * s,
@@ -175,7 +177,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                           ),
                           // ---- «حالت اتصال» + the تونل/پروکسی segments
                           _enter(
-                            t,
                             1,
                             Positioned(
                               top: AethGeometry.protoPageHeadingModeTop * s,
@@ -188,7 +189,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                             ),
                           ),
                           _enter(
-                            t,
                             1,
                             Positioned(
                               top: AethGeometry.protoSegmentTop * s,
@@ -202,7 +202,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                           ),
                           // ---- «پروتکل» + the 3+3 tiles + family cards
                           _enter(
-                            t,
                             2,
                             Positioned(
                               top:
@@ -216,7 +215,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                             ),
                           ),
                           _enter(
-                            t,
                             3,
                             Positioned(
                               top: AethGeometry.protoTileRow1Top * s,
@@ -241,9 +239,9 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 onSelect: _select,
                               ),
                             ),
+                            flavor: EntranceFlavor.action,
                           ),
                           _enter(
-                            t,
                             4,
                             Positioned(
                               top: AethGeometry.protoTileRow2Top * s,
@@ -266,9 +264,9 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 onSelect: _select,
                               ),
                             ),
+                            flavor: EntranceFlavor.action,
                           ),
                           _enter(
-                            t,
                             5,
                             Positioned(
                               top: AethGeometry.protoCardTopPsiphon * s,
@@ -291,9 +289,9 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 onSelect: _select,
                               ),
                             ),
+                            flavor: EntranceFlavor.action,
                           ),
                           _enter(
-                            t,
                             6,
                             Positioned(
                               top: AethGeometry.protoCardTopTor * s,
@@ -314,10 +312,10 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 onSelect: _select,
                               ),
                             ),
+                            flavor: EntranceFlavor.action,
                           ),
                           // ---- «سرعت اسکن» + the 5 pills
                           _enter(
-                            t,
                             7,
                             Positioned(
                               top: AethGeometry.protoPageHeadingScanTop * s,
@@ -330,7 +328,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                             ),
                           ),
                           _enter(
-                            t,
                             7,
                             Positioned(
                               top: AethGeometry.protoPillTop * s,
@@ -351,44 +348,33 @@ class _ProtocolPageState extends State<ProtocolPage> {
             );
           },
         ),
+      ),
     );
   }
 
   /// The stagger wrapper (kept from the sheet — owner: «انیمیشن های فعلی رو
   /// حذف نکن»): block [i] enters on its own slice of the route timeline.
-  /// v4.25 — the choreography is the STYLE'S OWN recipe: SILK rises 22 px,
-  /// TIDE drifts up 34 px out of a soft zoom, SPRING pops from 90% with an
-  /// overshoot, BLINK pure-fades, OFF renders untouched. On reverse the
-  /// same slices retrace — the page folds away gently.
-  Widget _enter(double t, int block, Widget child) {
-    final style = widget.style;
-    if (style == MotionStyle.off) return child;
-    final r = style.recipe;
-    final start = (block * r.staggerStep).clamp(0.0, 0.45);
-    final bt = r.blockCurve
-        .transform(Interval(start, start + r.staggerSpan).transform(t));
-    if (bt >= 0.999) return child;
-
-    // The animation must live INSIDE the Positioned (ParentData rule:
-    // Positioned has to stay a DIRECT Stack child), so a Positioned child
-    // is unwrapped, animated, and re-wrapped with identical bounds.
+  /// v1.0.2 — UNIFIED with the app's ONE cascade ([motionCascade]): the
+  /// hand-rolled twin (the audit's «دو مسیر ناهمگون» finding — two code
+  /// paths for one behaviour, already drifting) is gone; the flavour
+  /// differentiates the block's MEANING (the protocol tiles reach for the
+  /// finger with [EntranceFlavor.action], the chrome stays standard).
+  /// The Positioned unwrap stays (ParentData rule: Positioned must remain
+  /// a DIRECT Stack child).
+  Widget _enter(
+    int block,
+    Widget child, {
+    EntranceFlavor flavor = EntranceFlavor.standard,
+  }) {
     final pd = child is Positioned ? child : null;
     final inner = pd?.child ?? child;
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    Widget animated = inner;
-    if (r.blockRise > 0) {
-      animated = Transform.translate(
-        offset: Offset(0, (1 - bt) * r.blockRise * s),
-        child: animated,
-      );
-    }
-    if (r.blockScaleFrom < 1) {
-      animated = Transform.scale(
-        scale: r.blockScaleFrom + (1 - r.blockScaleFrom) * bt,
-        child: animated,
-      );
-    }
-    animated = Opacity(opacity: bt, child: animated);
+    final animated = motionCascade(
+      context,
+      widget.style,
+      block,
+      inner,
+      flavor: flavor,
+    );
     if (pd == null) return animated;
     return Positioned(
       left: pd.left,
@@ -594,6 +580,11 @@ class _ModeSegments extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final strings = AppStrings.of(context);
+    // v1.0.2 — the segment's timing follows the SELECTED style through
+    // [MotionScope] (the audit's zero-hardcode rule; was a fixed 260 ms).
+    final ms = MotionScope.of(context);
+    final ctrl = Duration(milliseconds: ms.recipe.controlMs);
+    final ctrlCurve = ms.recipe.controlCurve;
     final h = AethGeometry.protoSegmentH * s;
     final r = AethGeometry.protoSegmentRadius * s;
 
@@ -603,8 +594,8 @@ class _ModeSegments extends StatelessWidget {
         child: GestureDetector(
           onTap: () => onSelect(mode),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOut,
+            duration: ctrl,
+            curve: ctrlCurve,
             height: h,
             decoration: BoxDecoration(
               color: isSel ? AethColors.accentConnected : AethColors.cardDark,
@@ -707,9 +698,16 @@ class _ProtoTileState extends State<_ProtoTile>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 300),
     lowerBound: 0.97,
   );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // v1.0.2 — the selection pulse follows the style (was a fixed 300 ms);
+    // OFF completes instantly, so only the green swap remains.
+    _pulse.duration = motionDuration(MotionScope.of(context), 300);
+  }
 
   @override
   void didUpdateWidget(covariant _ProtoTile old) {
@@ -728,6 +726,7 @@ class _ProtoTileState extends State<_ProtoTile>
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final ms = MotionScope.of(context);
     final w = AethGeometry.protoTileW * s;
     final iconBox = _tileIconBox(widget.id);
 
@@ -741,8 +740,8 @@ class _ProtoTileState extends State<_ProtoTile>
           behavior: HitTestBehavior.opaque,
           onTap: () => widget.onSelect(widget.id),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOut,
+            duration: Duration(milliseconds: ms.recipe.controlMs),
+            curve: ms.recipe.controlCurve,
             decoration: BoxDecoration(
               color: widget.isSelected
                   ? AethColors.accentConnected
@@ -960,9 +959,15 @@ class _SubTileState extends State<_SubTile>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 300),
     lowerBound: 0.95,
   );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // v1.0.2 — style-scaled like the plain tiles above.
+    _pulse.duration = motionDuration(MotionScope.of(context), 300);
+  }
 
   @override
   void didUpdateWidget(covariant _SubTile old) {
@@ -979,6 +984,7 @@ class _SubTileState extends State<_SubTile>
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final ms = MotionScope.of(context);
     final chain = widget.id.isPsiphon
         ? widget.id == ProtocolId.psiphonChain
         : widget.id == ProtocolId.torChain;
@@ -993,8 +999,8 @@ class _SubTileState extends State<_SubTile>
         behavior: HitTestBehavior.opaque,
         onTap: () => widget.onSelect(widget.id),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOut,
+          duration: Duration(milliseconds: ms.recipe.controlMs),
+          curve: ms.recipe.controlCurve,
           width: AethGeometry.protoSubtile * s,
           height: AethGeometry.protoSubtile * s,
           decoration: BoxDecoration(
@@ -1060,6 +1066,7 @@ class _ScanPills extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final ms = MotionScope.of(context);
     final h = AethGeometry.protoPillH * s;
     final r = AethGeometry.protoPillRadius * s;
 
@@ -1081,8 +1088,8 @@ class _ScanPills extends StatelessWidget {
                   key: ValueKey('proto-pill-$level'),
                   onTap: () => onSelect(level),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeOut,
+                    duration: Duration(milliseconds: ms.recipe.controlMs),
+                    curve: ms.recipe.controlCurve,
                     width: _w[level - 1] * s,
                     height: h,
                     decoration: BoxDecoration(

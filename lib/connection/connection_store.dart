@@ -14,7 +14,6 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../core/app_assets.dart';
 import '../core/app_theme.dart';
@@ -784,13 +783,18 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     if (next == VpnState.connected) {
       // Owner v4.12: a SMALL haptic pulse the moment the connection really
       // lands (state-machine-verified, never on a fake/optimistic path).
-      HapticFeedback.mediumImpact();
+      // v1.0.2 — the same owner-approved pulse, now through the shared
+      // [AethHaptics] vocabulary (commit = mediumImpact, unchanged bytes).
+      AethHaptics.commit();
     }
   }
 
   void _fail({String? errorCode, String? message}) {
     lastErrorCode = errorCode;
     lastErrorMessage = message;
+    // v1.0.2 — the failure's own heavy word, fired ON THE EDGE (the store
+    // is a state edge, never an animation callback — the hard rule).
+    AethHaptics.failure();
     // any → failed is always legal (prompt §8).
     _machine.transition(VpnState.failed);
   }

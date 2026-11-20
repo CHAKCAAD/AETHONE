@@ -43,9 +43,10 @@ Widget subpageEnter(
   BuildContext context,
   MotionStyle style,
   int block,
-  Widget child,
-) {
-  return motionCascade(context, style, block, child);
+  Widget child, {
+  EntranceFlavor flavor = EntranceFlavor.standard,
+}) {
+  return motionCascade(context, style, block, child, flavor: flavor);
 }
 
 /// One sub-page: [title] in the chrome, [children] as the cascading body
@@ -124,23 +125,37 @@ class SubPageFrame extends StatelessWidget {
                             ),
                           ),
                           SizedBox(height: 22 * s),
-                          Builder(
-                            builder: (context) {
-                              final blocks = children();
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  for (var i = 0; i < blocks.length; i++)
-                                    subpageEnter(
-                                      context,
-                                      style,
-                                      i + 1,
-                                      blocks[i],
-                                    ),
-                                  SizedBox(height: 30 * s),
-                                ],
-                              );
-                            },
+                          // v1.0.2 — the body column resizes SOFTLY when a
+                          // conditional section (export panel, bridge/ECH
+                          // fields, per-app router rows) appears or folds:
+                          // the style's own sectionResizeMs through the
+                          // scope (OFF = instant, the audit's jump fix).
+                          AnimatedSize(
+                            duration: Duration(
+                              milliseconds: MotionScope.of(context)
+                                  .recipe
+                                  .sectionResizeMs,
+                            ),
+                            curve: Curves.easeOutCubic,
+                            alignment: Alignment.topCenter,
+                            child: Builder(
+                              builder: (context) {
+                                final blocks = children();
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    for (var i = 0; i < blocks.length; i++)
+                                      subpageEnter(
+                                        context,
+                                        style,
+                                        i + 1,
+                                        blocks[i],
+                                      ),
+                                    SizedBox(height: 30 * s),
+                                  ],
+                                );
+                              },
+                            ),
                           ),
                         ],
                       ),
@@ -195,7 +210,7 @@ class _SubPageTopBar extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 child: Text(
                   title,
-                  textDirection: TextDirection.rtl,
+                  textDirection: appContentDirection(context),
                   maxLines: 1,
                   style: TextStyle(
                     fontFamily: 'IRANYekanX',
@@ -305,7 +320,7 @@ class SubSectionHeading extends StatelessWidget {
               fit: BoxFit.scaleDown,
               child: Text(
                 title,
-                textDirection: TextDirection.rtl,
+                textDirection: appContentDirection(context),
                 style: TextStyle(
                   fontFamily: 'IRANYekanX',
                   fontWeight: FontWeight.w700,

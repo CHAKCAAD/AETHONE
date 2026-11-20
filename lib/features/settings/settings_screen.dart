@@ -48,6 +48,7 @@ import '../../connection/core_log.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
+import '../../core/motion_widgets.dart';
 import '../../l10n/app_strings.dart';
 import '../home/widgets/pattern_sides.dart';
 import '../shared/theme_toggle_tile.dart';
@@ -542,12 +543,14 @@ class _SettingsCard extends StatelessWidget {
               left: 6 * s,
               right: 6 * s,
               child: Center(
-                child: Text(
+                // v1.0.2 — the status value lands softly (ON/OFF, the
+                // routing region, the protocol name — was a raw swap).
+                child: AnimatedValueText(
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  textStyle: TextStyle(
                     fontFamily: 'IRANYekanX',
                     fontWeight: FontWeight.w400,
                     fontSize: AethGeometry.settingsCardSubSize * s,
@@ -743,7 +746,7 @@ class _SectionHeading extends StatelessWidget {
         children: [
           Text(
             title,
-            textDirection: TextDirection.rtl,
+            textDirection: appContentDirection(context),
             style: TextStyle(
               fontFamily: 'IRANYekanX',
               fontWeight: FontWeight.w700,
@@ -1057,7 +1060,8 @@ class _CoreLogPageState extends State<CoreLogPage> {
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     return Directionality(
-      textDirection: TextDirection.rtl,
+      // v1.0.2 — the content follows the app's own locale.
+      textDirection: appContentDirection(context),
       child: Scaffold(
         backgroundColor: AethColors.bgScreen,
         // v4.25 — the pattern-placement fix (see the settings page's Stack):
@@ -1167,11 +1171,33 @@ class _CoreLogPageState extends State<CoreLogPage> {
                         color: AethColors.cardDark,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: _loading
-                          ? const Center(
-                              child: CircularProgressIndicator(
-                                color: AethColors.accentConnected,
-                              ),
+                      // v1.0.2 — the loading->content swap crossfades and
+                      // the spinner obeys the kill-switch (a STATIC ring
+                      // with animations off — was an always-spinning
+                      // CircularProgressIndicator, the audit's finding).
+                      child: AnimatedSwitcher(
+                        duration: motionDuration(
+                          widget.style,
+                          MotionDurations.quick,
+                        ),
+                        child: _loading
+                          ? Center(
+                              key: const ValueKey('core-log-loading'),
+                              child: widget.style == MotionStyle.off
+                                ? Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: AethColors.accentConnected,
+                                        width: 4,
+                                      ),
+                                    ),
+                                  )
+                                : const CircularProgressIndicator(
+                                    color: AethColors.accentConnected,
+                                  ),
                             )
                           : _snapshot.isEmpty
                               ? Center(
@@ -1186,6 +1212,7 @@ class _CoreLogPageState extends State<CoreLogPage> {
                                   ),
                                 )
                           : Scrollbar(
+                              key: const ValueKey('core-log-content'),
                               child: SingleChildScrollView(
                                 // The core's own lines are LTR (English +
                                 // timestamps); one line per log record.
@@ -1212,6 +1239,7 @@ class _CoreLogPageState extends State<CoreLogPage> {
                                 ),
                               ),
                             ),
+                          ),
                     ),
                   ),
                 ],
