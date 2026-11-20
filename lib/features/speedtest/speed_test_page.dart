@@ -41,6 +41,7 @@ import '../../connection/speed_test.dart';
 import '../../connection/transport_modes.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
+import '../../core/fx/smoke_burst.dart';
 import '../../core/motion.dart';
 import '../../core/motion_widgets.dart';
 import '../../l10n/app_strings.dart';
@@ -164,12 +165,22 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
             // این صفحه استفاده کن دقیقا همون پترن») — the HOME composition
             // itself, same position, same strength, no per-page wash; gated
             // by the appearance switch; alive while a test runs.
+            // v8a (owner round 18) — the every-page drift rule on top of
+            // the page's own running state + the green smoke blooms while
+            // the tunnel is up, exactly like the home screen.
+            if (widget.store.isConnected &&
+                widget.store.showPatterns &&
+                widget.style != MotionStyle.off)
+              Positioned.fill(
+                child: SmokeField(style: widget.style),
+              ),
             if (widget.store.showPatterns)
               Positioned.fill(
                 child: PatternSides(
                   connected: widget.store.isConnected,
                   style: widget.style,
-                  active: _state == _RunState.running,
+                  active:
+                      widget.store.patternsAlive || _state == _RunState.running,
                 ),
               ),
             SafeArea(

@@ -111,6 +111,18 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
 
   bool get isConnected => state == VpnState.connected;
 
+  /// v8a (owner round 18: «از انیمیشن حاله سبز در حالت اتصال در صفحه
+  /// اصلی در سایر صفحات هم استفاده کن») — the home screen's green
+  /// connected-state animation is now EVERY page's rule: the canvases
+  /// drift while the tunnel is up OR the engine walk is in flight —
+  /// the exact condition the home screen always passed as `active:`
+  /// (connected || the scanning walk).
+  bool get patternsAlive =>
+      isConnected ||
+      state == VpnState.starting ||
+      state == VpnState.connecting ||
+      state == VpnState.reconnecting;
+
   String? lastErrorCode;
   String? lastErrorMessage;
 

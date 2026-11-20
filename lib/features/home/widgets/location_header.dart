@@ -69,6 +69,7 @@ import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 import '../../../l10n/app_strings.dart';
 import '../../../connection/transport_modes.dart' show LocationWheelPolicy;
+import '../../shared/hyper_text.dart';
 import 'custom_icons.dart';
 
 class LocationHeader extends StatefulWidget {
@@ -534,18 +535,20 @@ class _LocationHeaderState extends State<LocationHeader> {
         : strings.offline;
 
     Widget slot({required Alignment alignment, required EdgeInsets pad, required String text, required TextStyle style, TextDirection? dir}) {
+      // v8a (owner round 18: «روی متن قسمت نام کشور و قسمت نمایش پینگ هم
+      // Hyper Text رو اعمال کن») — the flutterfx fx_10_hyper_text decode,
+      // native. The RESTING render is byte-identical to the old Text
+      // (style/ellipsis/direction preserved); only CHANGES animate.
       return Expanded(
         child: Align(
           alignment: alignment,
           child: Padding(
             padding: pad,
-            child: Text(
+            child: HyperText(
               text,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
+              style: widget.style,
+              textStyle: style,
               textDirection: dir,
-              style: style,
             ),
           ),
         ),

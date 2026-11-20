@@ -117,7 +117,12 @@ void main() {
         exitCountryCode: 'ir',
       ),
     );
-    // v4.12: the connected idle aura repeats forever — bounded pumps.
+    // v8a: the Hyper-Text decode rides a 16 ms periodic timer — a bare
+    // pump() first LANDS the stats rebuild (a big timed pump consumes its
+    // whole window BEFORE that frame), then the timed pumps carry the
+    // decode out (SILK 480 ms).
+    await tester.pump();
+    // v4.12: the connected idle motion repeats forever — bounded pumps.
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -310,6 +315,12 @@ void main() {
     for (var i = 0; i < 16; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }
+    // v8a — the LAST name change (the roulette's landing sync) starts a
+    // fresh Hyper-Text decode; give it its SILK window before reading the
+    // header geometry.
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
 
     final name = tester.getTopLeft(find.text('ایران'));
     final ping = tester.getTopLeft(find.text('146 ms'));
@@ -356,9 +367,11 @@ void main() {
         exitCountryCode: 'nl',
       ),
     );
-    // Ride out the re-spun roulette (2.6 s from the retarget) + the aura
-    // (repeats forever) — ~frame-sized steps (v4.15.1 lesson).
-    for (var i = 0; i < 16; i++) {
+    // Ride out the re-spun roulette (2.6 s from the retarget) + the
+    // connected idle motion (repeats forever) — ~frame-sized steps
+    // (v4.15.1 lesson). v8a: the +4 steps carry the landing's fresh
+    // Hyper-Text decode out (SILK 480 ms after the LAST name change).
+    for (var i = 0; i < 20; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }
 
@@ -506,6 +519,11 @@ void main() {
     for (var i = 0; i < 15; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }
+    // v8a — the landing's fresh Hyper-Text decode (name + ping) gets
+    // its SILK window before the assertions read the resolved texts.
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
 
     // The band now displays the engine-reported exit location.
     expect(find.text('آلمان'), findsOneWidget);
@@ -587,6 +605,10 @@ void main() {
       for (var i = 0; i < 16; i++) {
         await tester.pump(const Duration(milliseconds: 200));
       }
+      // v8a — +4 steps: the follow-spin's landing decode (روسیه).
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
 
       // The header shows the REAL exit — NOT the AUTO globe (the old
       // _indexOf fallback parked the wheel on index 0).
@@ -662,6 +684,12 @@ void main() {
       for (var i = 0; i < 16; i++) {
         await tester.pump(const Duration(milliseconds: 200));
       }
+      // v8a — +4 steps: the connect roulette's landing re-syncs the name
+      // slot (a fresh Hyper-Text decode even when the text lands on the
+      // SAME anchor word — the change event fires on the sync rebuild).
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
       expect(find.text('T1'), findsNothing);
       expect(find.text('خودکار'), findsOneWidget);
       expect(store.exitCountryCode, isNull);
@@ -669,6 +697,10 @@ void main() {
       // The resolution lands (Onionoo said the exit relay is in Austria).
       engine.emit(const EngineExitCountryResolved('at'));
       for (var i = 0; i < 16; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      // v8a — +4 steps for the follow-spin's decode, same reason.
+      for (var i = 0; i < 4; i++) {
         await tester.pump(const Duration(milliseconds: 200));
       }
       expect(store.exitCountryCode, 'at');

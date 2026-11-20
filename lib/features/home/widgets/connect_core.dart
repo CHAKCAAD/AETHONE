@@ -74,6 +74,18 @@ String connectGlyphFor(VpnState state) => switch (state) {
 /// look and their ambient loops park too. The connected edge's celebration,
 /// the aurora, the collapse and the error ring stay — only the walk
 /// vocabulary is suppressed, and look 2 keeps everything.
+///
+/// [hideConnectedAura] — v8a (owner round 18: «انیمیشنی که در حالت متصل
+/// نمای 1 پشت دکمه اتصال وسط صفحه وجود داره رو از اپ حذف کن و به جاش
+/// Shimmer Button رو اعمال کن»): the connected state's AURORA BLOOM —
+/// the soft breathing glow + water ripples that played in the AREA
+/// AROUND the button — is RETIRED from the app (both looks pass true);
+/// the connected idle life now rides the button's OWN EDGE instead
+/// ([ShimmerEdge], shimmer_edge.dart — «دقیقا رو لبه های دکمه حرکت
+/// کنه نه رو لبه محدوده اون»). The ONE-SHOT celebration on the
+/// connecting→connected edge stays (it is the walk vocabulary's landing
+/// flourish, not a steady-state ambience), as do the collapse and the
+/// error ring; the walk states keep their full vocabulary on look 2.
 class ConnectHalo extends StatefulWidget {
   const ConnectHalo({
     super.key,
@@ -81,6 +93,7 @@ class ConnectHalo extends StatefulWidget {
     required this.style,
     required this.size,
     this.hideWalkStates = false,
+    this.hideConnectedAura = false,
   });
 
   final VpnState state;
@@ -89,6 +102,10 @@ class ConnectHalo extends StatefulWidget {
 
   /// Suppress the walk-state visuals (look 1's spark-loader handoff).
   final bool hideWalkStates;
+
+  /// Suppress the connected state's steady aurora (the v8a shimmer
+  /// handoff — the edge replaces the area).
+  final bool hideConnectedAura;
 
   @override
   State<ConnectHalo> createState() => _ConnectHaloState();
@@ -117,7 +134,8 @@ class _ConnectHaloState extends State<ConnectHalo>
     super.didUpdateWidget(old);
     if (old.state != widget.state ||
         old.style != widget.style ||
-        old.hideWalkStates != widget.hideWalkStates) {
+        old.hideWalkStates != widget.hideWalkStates ||
+        old.hideConnectedAura != widget.hideConnectedAura) {
       _retune(old.state);
     }
   }
@@ -137,9 +155,13 @@ class _ConnectHaloState extends State<ConnectHalo>
     // The spark-loader handoff: look 1 parks the walk loops entirely.
     final walkHidden =
         widget.hideWalkStates && _isWalkState(state);
+    // v8a — the shimmer handoff: the connected state's aurora loops
+    // (the ripple cycle + the breath) park when the aura is retired —
+    // nothing paints, so nothing ticks (the battery-saver ethos).
+    final auraHidden = widget.hideConnectedAura && state == VpnState.connected;
 
     // --- the ambient loop: which states keep one running? ---
-    final loopMs = walkHidden
+    final loopMs = walkHidden || auraHidden
         ? 0
         : switch (state) {
             VpnState.connecting => r.connectMarchMs,
@@ -155,8 +177,12 @@ class _ConnectHaloState extends State<ConnectHalo>
       _loop.stop();
     }
 
-    // --- the breath: only the connected aurora breathes on its own clock.
-    if (state == VpnState.connected && !off && r.heroBreathAmp > 0) {
+    // --- the breath: only the connected aurora breathes on its own clock
+    // (and only while the aura still paints — v8a parks it otherwise). ---
+    if (state == VpnState.connected &&
+        !off &&
+        !auraHidden &&
+        r.heroBreathAmp > 0) {
       _breath.duration = Duration(milliseconds: r.heroBreathMs);
       if (!_breath.isAnimating) _breath.repeat(reverse: true);
     } else {
@@ -212,6 +238,7 @@ class _ConnectHaloState extends State<ConnectHalo>
           shot: _shot.value,
           directionSign: sign,
           hideWalkStates: widget.hideWalkStates,
+          hideConnectedAura: widget.hideConnectedAura,
         ),
       ),
     );
@@ -237,6 +264,7 @@ class _ConnectHaloPainter extends CustomPainter {
     required this.shot,
     required this.directionSign,
     this.hideWalkStates = false,
+    this.hideConnectedAura = false,
   });
 
   final VpnState state;
@@ -250,6 +278,10 @@ class _ConnectHaloPainter extends CustomPainter {
 
   /// Look 1's spark-loader handoff: paint nothing for the walk states.
   final bool hideWalkStates;
+
+  /// v8a — the shimmer handoff: the connected state's steady AURORA is
+  /// retired; only the one-shot celebration may paint there.
+  final bool hideConnectedAura;
 
   /// The central element's radius as a fraction of the box (0.40 for BOTH
   /// looks — each mounts the halo at element × 1.25).
@@ -280,7 +312,12 @@ class _ConnectHaloPainter extends CustomPainter {
         _march(canvas, size, c, col);
 
       case VpnState.connected:
-        _aurora(canvas, size, c, col);
+        // v8a — the steady AURORA BLOOM behind the button is RETIRED by
+        // the owner's decree (the ShimmerEdge on the button's own edge
+        // carries the connected idle life now); the ONE-SHOT landing
+        // celebration stays — it belongs to the walk vocabulary's finale,
+        // never to the steady state.
+        if (!hideConnectedAura) _aurora(canvas, size, c, col);
         if (shot > 0 && shot < 1) _celebration(canvas, size, c, col);
 
       case VpnState.reconnecting:
@@ -501,7 +538,8 @@ class _ConnectHaloPainter extends CustomPainter {
       old.breath != breath ||
       old.shot != shot ||
       old.directionSign != directionSign ||
-      old.hideWalkStates != hideWalkStates;
+      old.hideWalkStates != hideWalkStates ||
+      old.hideConnectedAura != hideConnectedAura;
 }
 
 /// The FAILED state's decaying shake for the CONTROL itself (logo or

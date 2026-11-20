@@ -64,6 +64,8 @@ class SecuritySettingsPage extends StatelessWidget {
                 builder: (_) => CoreLogPage(
                   showPatterns: store.showPatterns,
                   connected: store.isConnected,
+                  // v8a — the every-page drift rule (owner round 18).
+                  alive: store.patternsAlive,
                   style: store.effectiveMotionStyle(context),
                 ),
               ),

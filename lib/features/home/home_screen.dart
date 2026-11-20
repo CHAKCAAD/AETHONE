@@ -29,6 +29,7 @@ import 'widgets/glow_pill.dart';
 import 'widgets/hero_logo.dart';
 import 'widgets/location_header.dart';
 import 'widgets/pattern_sides.dart';
+import 'widgets/shimmer_edge.dart';
 import 'widgets/top_bar.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -154,12 +155,15 @@ class HomeScreen extends StatelessWidget {
               // داشته باشند»).
               // v4.22 — the appearance switch can turn the patterns off
               // (the page then renders on the bare bg colour).
+              // v8a (owner round 18): the green connected-state animation
+              // (the drift) is the HOME rule carried to EVERY page now —
+              // see the per-page `active:` wiring.
               if (store.showPatterns)
                 Positioned.fill(
                   child: PatternSides(
                     connected: connected,
                     style: style,
-                    active: connected || showScan,
+                    active: store.patternsAlive,
                   ),
                 ),
               SafeArea(
@@ -216,6 +220,14 @@ class HomeScreen extends StatelessWidget {
                     // to the SPARK LOADER (the logo itself marches, and the
                     // halo paints nothing while the walk is live); look 2
                     // keeps the full halo vocabulary.
+                    //
+                    // v8a (owner round 18) — the CONNECTED state's AURORA
+                    // (the breathing glow + water ripples in the AREA
+                    // AROUND the button) is RETIRED on BOTH looks
+                    // («انیمیشنی که در حالت متصل نمای 1 پشت دکمه اتصال وسط
+                    // صفحه وجود داره رو از اپ حذف کن»): the connected idle
+                    // life now rides the button's OWN EDGE — the
+                    // [ShimmerEdge] mounted below, above the button.
                     Expanded(
                       child: Center(
                         child: Stack(
@@ -225,6 +237,7 @@ class HomeScreen extends StatelessWidget {
                               state: store.state,
                               style: style,
                               hideWalkStates: isLookOne,
+                              hideConnectedAura: true,
                               size: (isLookOne
                                       ? AethGeometry.heroSize
                                       : AethGeometry.connectGroupSize) *
@@ -248,6 +261,44 @@ class HomeScreen extends StatelessWidget {
                                       store: store,
                                       style: style,
                                       onTap: _toggleConnection,
+                                    ),
+                            ),
+                            // v8a (owner round 18) — the ShimmerEdge: a
+                            // faint static border + ONE traveling light
+                            // segment lapping the button's rounded-rect
+                            // perimeter — painted ABOVE the button so the
+                            // edge is never covered by its own core layer:
+                            // look 1 = the hero logo's bounds (r62, the
+                            // app's squircle ratio), look 2 = the Group-45
+                            // core squircle. IgnorePointer inside — taps
+                            // stay the button's. Mounted only while
+                            // CONNECTED («دقیقا رو لبه های دکمه حرکت کنه نه
+                            // رو لبه محدوده اون»); OFF keeps the static
+                            // edge as status feedback and stops the lap.
+                            AnimatedSwitcher(
+                              duration: motionDuration(
+                                style,
+                                MotionDurations.state,
+                              ),
+                              child: connected
+                                  ? ShimmerEdge(
+                                      key: const ValueKey('connect-shimmer'),
+                                      style: style,
+                                      width: (isLookOne
+                                              ? AethGeometry.heroSize
+                                              : AethGeometry.connectCoreSize) *
+                                          s,
+                                      height: (isLookOne
+                                              ? AethGeometry.heroSize
+                                              : AethGeometry.connectCoreSize) *
+                                          s,
+                                      radius: (isLookOne
+                                              ? AethGeometry.heroEdgeRadius
+                                              : AethRadius.connectCore) *
+                                          s,
+                                    )
+                                  : const SizedBox.shrink(
+                                      key: ValueKey('shimmer-off'),
                                     ),
                             ),
                           ],

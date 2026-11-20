@@ -268,6 +268,11 @@ abstract final class AethGeometry {
   /// Hero logo: 164dp, top 292.7 (Figma XML) → horizontal center.
   static const double heroSize = 164;
 
+  /// v8a — the hero's ShimmerEdge frame: the rounded-rect that reads
+  /// as the connect button's own edge in look 1. The ratio mirrors the
+  /// app's squircle language (the Group-45 core is r41 on 108.17 ≈ 0.38).
+  static const double heroEdgeRadius = 62;
+
   /// Bottom connect button (look 1): ~48×48 at (312,784)–(360,832);
   /// moves UP by 72px when connected (pixel-verified 784 → 712).
   static const double connectButtonSize = 48;

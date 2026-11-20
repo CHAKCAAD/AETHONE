@@ -91,6 +91,13 @@ final class MotionRecipe {
     this.sectionResizeMs = 260,
     this.dialMs = 260,
     this.dialCurve = Curves.easeOutCubic,
+    // ---- v8a (owner round 18) — the four animation decrees' tokens
+    // (ADDITIVE, same rule as the v1.0.2 block above). ----
+    this.shimmerMs = 3200,
+    this.hyperTextMs = 480,
+    this.circleSelectMs = 380,
+    this.circleSelectGrow = 0.10,
+    this.circleSelectPush = 8,
   });
 
   /// State transitions (logo rotation, colour changes, button rise).
@@ -189,6 +196,29 @@ final class MotionRecipe {
 
   /// The curve that shapes [dialMs] transitions.
   final Curve dialCurve;
+
+  // ---- v8a (owner round 18) — the four animation decrees. ----
+
+  /// The CONNECTED shimmer: one full lap of the traveling light along
+  /// the connect button's own edge (the flutterfx «button-shimmer»
+  /// technique, rebuilt natively). 0 = the style keeps the edge still
+  /// (OFF — the static faint edge is status feedback, not motion).
+  final int shimmerMs;
+
+  /// The HYPER TEXT decode (the flutterfx «fx_10_hyper_text» technique):
+  /// how long a changed text takes to resolve out of its scramble (the
+  /// location header's country name + ping readout). 0 = instant (OFF).
+  final int hyperTextMs;
+
+  /// The CIRCLE SELECTOR impulse (the flutterfx «circles_selector»
+  /// technique): the selected item springs up ([circleSelectGrow] over
+  /// its resting size) and pushes its siblings aside ([circleSelectPush]
+  /// ref px at falloff distance 1) for [circleSelectMs], then everything
+  /// settles back to the pixel-true resting geometry. 0/0/0 = instant,
+  /// no travel (OFF).
+  final int circleSelectMs;
+  final double circleSelectGrow;
+  final double circleSelectPush;
 }
 
 extension MotionStyleX on MotionStyle {
@@ -276,6 +306,13 @@ extension MotionStyleX on MotionStyle {
           sectionResizeMs: 340,
           dialMs: 380,
           dialCurve: Curves.easeOutQuint,
+          // v8a — TIDE's decree tempos: a slow shimmer lap, a long decode,
+          // a wide soft push.
+          shimmerMs: 4800,
+          hyperTextMs: 720,
+          circleSelectMs: 560,
+          circleSelectGrow: 0.08,
+          circleSelectPush: 10,
         ),
 
         // SPRING — snappy and alive: the blocks pop from 90% with an
@@ -315,6 +352,13 @@ extension MotionStyleX on MotionStyle {
           sectionResizeMs: 200,
           dialMs: 180,
           dialCurve: Curves.easeOutBack,
+          // v8a — SPRING's decree tempos: a quick lap, a fast decode, a
+          // punchy grow with a tight push.
+          shimmerMs: 2400,
+          hyperTextMs: 384,
+          circleSelectMs: 320,
+          circleSelectGrow: 0.12,
+          circleSelectPush: 7,
         ),
 
         // BLINK — discreet: pure quick fades, no rise, no zoom, a tight
@@ -351,6 +395,13 @@ extension MotionStyleX on MotionStyle {
           sectionResizeMs: 120,
           dialMs: 120,
           dialCurve: Curves.easeOut,
+          // v8a — BLINK's decree tempos: a discreet lap, a brisk decode,
+          // a hair of grow and a whisper of push.
+          shimmerMs: 3200,
+          hyperTextMs: 192,
+          circleSelectMs: 180,
+          circleSelectGrow: 0.04,
+          circleSelectPush: 3,
         ),
 
         // The kill-switch state: identity everywhere, zero durations.
@@ -386,6 +437,14 @@ extension MotionStyleX on MotionStyle {
           sectionResizeMs: 0,
           dialMs: 0,
           dialCurve: Curves.linear,
+          // v8a — the kill-switch identity: the edge stays still (the
+          // static border is status feedback, not motion), text lands
+          // instantly, nothing ever travels.
+          shimmerMs: 0,
+          hyperTextMs: 0,
+          circleSelectMs: 0,
+          circleSelectGrow: 0,
+          circleSelectPush: 0,
         ),
       };
 }
