@@ -256,6 +256,7 @@ String _customWidgetCode({
 $uiImport
 import 'package:flutter/material.dart';
 
+// Add the import that defines the Widget expression used below.
 Widget buildAnimatedWidget() {
   return TweenAnimationBuilder<double>(
     tween: Tween<double>(begin: 0.0, end: 1.0),
