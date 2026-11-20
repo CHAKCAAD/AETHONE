@@ -209,24 +209,24 @@ String _customWidgetCode({
     MotionEffect.fade => '''
       return Opacity(
         opacity: progress,
-        child: child,
+        child: visibleChild,
       );''',
     MotionEffect.scale => '''
       final scale = 1.0 - ($strengthCode * 0.20) +
           ($strengthCode * 0.20 * progress);
       return Transform.scale(
         scale: scale,
-        child: child,
+        child: visibleChild,
       );''',
     MotionEffect.slide => '''
       return Transform.translate(
         offset: Offset(0, (1.0 - progress) * $strengthCode * 34),
-        child: child,
+        child: visibleChild,
       );''',
     MotionEffect.rotate => '''
       return Transform.rotate(
         angle: (1.0 - progress) * $strengthCode * 0.28,
-        child: child,
+        child: visibleChild,
       );''',
     MotionEffect.blur => '''
       final sigma = (1.0 - progress) * $strengthCode * 8;
@@ -235,7 +235,7 @@ String _customWidgetCode({
           sigmaX: sigma,
           sigmaY: sigma,
         ),
-        child: child,
+        child: visibleChild,
       );''',
     MotionEffect.fadeScale => '''
       final scale = 1.0 - ($strengthCode * 0.18) +
@@ -244,7 +244,7 @@ String _customWidgetCode({
         opacity: progress,
         child: Transform.scale(
           scale: scale,
-          child: child,
+          child: visibleChild,
         ),
       );''',
   };
