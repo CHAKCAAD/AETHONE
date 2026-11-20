@@ -1,0 +1,66 @@
+name: Deploy Motion Playground to GitHub Pages
+
+on:
+  push:
+    branches:
+      - tooling/motion-playground
+    paths:
+      - "tool/motion_playground/**"
+      - "lib/core/motion.dart"
+      - "lib/core/motion_widgets.dart"
+      - "lib/features/home/widgets/**"
+      - "lib/connection/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/motion-playground-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: motion-playground-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable web
+        run: flutter config --enable-web
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate web platform scaffolding
+        run: flutter create . --platforms web
+
+      - name: Build web app
+        run: flutter build web --release --target tool/motion_playground/main.dart --base-href /AETHONE/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
