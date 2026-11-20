@@ -43,6 +43,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Generate web platform scaffolding
+        run: flutter create . --platforms web
+
       - name: Build web app
         run: flutter build web --release --target tool/motion_playground/main.dart --base-href /AETHONE/
 
