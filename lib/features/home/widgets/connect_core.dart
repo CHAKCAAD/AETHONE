@@ -66,17 +66,29 @@ String connectGlyphFor(VpnState state) => switch (state) {
 /// (logo or button composition) occupies ~0.40 of it (both looks derive
 /// from ×1.25 of their element, so 0.40 is exact for both) and the state
 /// rings ride just outside at ~0.48.
+///
+/// [hideWalkStates] — the flutterfx round: look 1's walk vocabulary is the
+/// SPARK LOADER now (the logo itself marches, see [HeroLogo] /
+/// [SparkLoaderSpin]; owner: «هرچی انیمیشن برای حالت در حال اتصال نمای ۱
+/// … حذف کن»), so the halo paints NOTHING for the four walk states on that
+/// look and their ambient loops park too. The connected edge's celebration,
+/// the aurora, the collapse and the error ring stay — only the walk
+/// vocabulary is suppressed, and look 2 keeps everything.
 class ConnectHalo extends StatefulWidget {
   const ConnectHalo({
     super.key,
     required this.state,
     required this.style,
     required this.size,
+    this.hideWalkStates = false,
   });
 
   final VpnState state;
   final MotionStyle style;
   final double size;
+
+  /// Suppress the walk-state visuals (look 1's spark-loader handoff).
+  final bool hideWalkStates;
 
   @override
   State<ConnectHalo> createState() => _ConnectHaloState();
@@ -103,7 +115,9 @@ class _ConnectHaloState extends State<ConnectHalo>
   @override
   void didUpdateWidget(covariant ConnectHalo old) {
     super.didUpdateWidget(old);
-    if (old.state != widget.state || old.style != widget.style) {
+    if (old.state != widget.state ||
+        old.style != widget.style ||
+        old.hideWalkStates != widget.hideWalkStates) {
       _retune(old.state);
     }
   }
@@ -120,15 +134,20 @@ class _ConnectHaloState extends State<ConnectHalo>
     final r = widget.style.recipe;
     final state = widget.state;
     final off = widget.style == MotionStyle.off;
+    // The spark-loader handoff: look 1 parks the walk loops entirely.
+    final walkHidden =
+        widget.hideWalkStates && _isWalkState(state);
 
     // --- the ambient loop: which states keep one running? ---
-    final loopMs = switch (state) {
-      VpnState.connecting => r.connectMarchMs,
-      VpnState.reconnecting => r.connectSeekMs,
-      VpnState.waitingForPermissions => r.connectHoldMs,
-      VpnState.connected => r.rippleMs,
-      _ => 0,
-    };
+    final loopMs = walkHidden
+        ? 0
+        : switch (state) {
+            VpnState.connecting => r.connectMarchMs,
+            VpnState.reconnecting => r.connectSeekMs,
+            VpnState.waitingForPermissions => r.connectHoldMs,
+            VpnState.connected => r.rippleMs,
+            _ => 0,
+          };
     if (loopMs > 0 && !off) {
       _loop.duration = Duration(milliseconds: loopMs);
       if (!_loop.isAnimating) _loop.repeat();
@@ -148,7 +167,11 @@ class _ConnectHaloState extends State<ConnectHalo>
     if (previous != null && previous != state && !off) {
       switch (state) {
         case VpnState.starting:
-          _fire(motionDuration(widget.style, 400));
+          // The ignition ring belongs to the halo's walk vocabulary —
+          // suppressed on the spark-loader look with the rest of them.
+          if (!widget.hideWalkStates) {
+            _fire(motionDuration(widget.style, 400));
+          }
         case VpnState.connected:
           // Celebrate the transition, never the steady state.
           if (previous == VpnState.connecting ||
@@ -188,11 +211,20 @@ class _ConnectHaloState extends State<ConnectHalo>
           breath: Curves.easeInOut.transform(_breath.value),
           shot: _shot.value,
           directionSign: sign,
+          hideWalkStates: widget.hideWalkStates,
         ),
       ),
     );
   }
 }
+
+/// Whether [s] is one of the four engine-walk states (the spark loader's
+/// active domain on look 1).
+bool _isWalkState(VpnState s) =>
+    s == VpnState.starting ||
+    s == VpnState.waitingForPermissions ||
+    s == VpnState.connecting ||
+    s == VpnState.reconnecting;
 
 /// All eight states, one painter, one layer — `shouldRepaint` is exact, so
 /// an idle disconnected home paints nothing at all and the march costs one
@@ -204,6 +236,7 @@ class _ConnectHaloPainter extends CustomPainter {
     required this.breath,
     required this.shot,
     required this.directionSign,
+    this.hideWalkStates = false,
   });
 
   final VpnState state;
@@ -215,6 +248,9 @@ class _ConnectHaloPainter extends CustomPainter {
   /// multiplies radian rotations directly.
   final double directionSign;
 
+  /// Look 1's spark-loader handoff: paint nothing for the walk states.
+  final bool hideWalkStates;
+
   /// The central element's radius as a fraction of the box (0.40 for BOTH
   /// looks — each mounts the halo at element × 1.25).
   static const double _element = 0.40;
@@ -224,6 +260,10 @@ class _ConnectHaloPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // The spark-loader look: the walk states own NOTHING here — the logo
+    // itself is the motion (the calm-before/the march/the landing all
+    // live in SparkLoaderSpin).
+    if (hideWalkStates && _isWalkState(state)) return;
     final c = Offset(size.width / 2, size.height / 2);
     final col = connectAccentFor(state);
     switch (state) {
@@ -460,7 +500,8 @@ class _ConnectHaloPainter extends CustomPainter {
       old.phase != phase ||
       old.breath != breath ||
       old.shot != shot ||
-      old.directionSign != directionSign;
+      old.directionSign != directionSign ||
+      old.hideWalkStates != hideWalkStates;
 }
 
 /// The FAILED state's decaying shake for the CONTROL itself (logo or

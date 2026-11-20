@@ -113,6 +113,16 @@ class HomeScreen extends StatelessWidget {
             (store.state == VpnState.starting ||
                 store.state == VpnState.connecting ||
                 store.state == VpnState.reconnecting);
+        // The flutterfx round — the SPARK LOADER's domain: every state in
+        // which the engine is walking toward a session. On look 1 the logo
+        // marches in quarter-turn steps while any of these is live (owner:
+        // «به جاش از چرخش لوگو Spark Loader برای دکمه اتصال وسط صفحه
+        // نمای ۱ استفاده کن») and the halo's own walk vocabulary sleeps.
+        final walking = !connected &&
+            (store.state == VpnState.starting ||
+                store.state == VpnState.waitingForPermissions ||
+                store.state == VpnState.connecting ||
+                store.state == VpnState.reconnecting);
 
         // v1.0.2 — the home tree reads the style through the scope too
         // (the theme tile's swap, the shared value-text fallbacks).
@@ -167,6 +177,10 @@ class HomeScreen extends StatelessWidget {
                     SizedBox(height: AethGeometry.gapTopbarToLocation * s),
                     LocationHeader(
                       connected: connected,
+                      // The motion personality — the circles-selector
+                      // arrival pop on the flag wheel rides its tempos
+                      // and dies under its kill-switch.
+                      style: style,
                       // v4.21 — the band rule follows the committed mode
                       // (single-knob selection after the v4.20 revert).
                       protocolIsTorOrPsiphon:
@@ -197,6 +211,11 @@ class HomeScreen extends StatelessWidget {
                     // SAME director, their state languages can never
                     // contradict — and the failed edge adds its one-shot
                     // decaying shake around the central control itself.
+                    //
+                    // The flutterfx round — look 1's walk states now belong
+                    // to the SPARK LOADER (the logo itself marches, and the
+                    // halo paints nothing while the walk is live); look 2
+                    // keeps the full halo vocabulary.
                     Expanded(
                       child: Center(
                         child: Stack(
@@ -205,6 +224,7 @@ class HomeScreen extends StatelessWidget {
                             ConnectHalo(
                               state: store.state,
                               style: style,
+                              hideWalkStates: isLookOne,
                               size: (isLookOne
                                       ? AethGeometry.heroSize
                                       : AethGeometry.connectGroupSize) *
@@ -221,6 +241,7 @@ class HomeScreen extends StatelessWidget {
                                       child: HeroLogo(
                                         connected: connected,
                                         style: style,
+                                        sparking: walking,
                                       ),
                                     )
                                   : _CenterConnectButton(
