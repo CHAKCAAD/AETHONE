@@ -262,10 +262,15 @@ build_flatpak() {
       'grep -aq "flatpak-spawn --host --clear-env" /app/bin/aethone' \
       || die "flatpak smoke: the gsettings host bridge is missing from the aethone binary"
     # the manifest must NOT carry the v1.0.1 dconf trio (it never routed the
-    # writes to the host; org.freedesktop.Flatpak is the only proxy grant)
-    grep -q 'talk-name=ca.desrt.dconf' "$stage/com.chakcaad.Aethone.yml" \
-      && die "flatpak smoke: the v1.0.1 dconf trio is back in the manifest" \
-      || true
+    # writes to the host; org.freedesktop.Flatpak is the only proxy grant).
+    # r104 lesson: comment lines are stripped FIRST — the manifest's own
+    # header documents the dropped trio with the literal grant names, and a
+    # bare grep over the whole file false-positived the run. Only ACTIVE
+    # manifest lines count; all three trio members are checked.
+    if sed -e '/^[[:space:]]*#/d' "$stage/com.chakcaad.Aethone.yml" \
+         | grep -Eq 'talk-name=ca\.desrt\.dconf|xdg-run/dconf|DCONF_USER_CONFIG_DIR'; then
+      die "flatpak smoke: the v1.0.1 dconf trio is back in the manifest"
+    fi
     # the live host reachability needs a real desktop session (the portal's
     # D-Bus name); CI has none — attempt under dbus-run-session as a
     # REPORT-ONLY probe so an artificial session never blocks the release
