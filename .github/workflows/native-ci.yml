@@ -2745,12 +2745,15 @@ jobs:
   #   * AETHONE-<v>-x86_64.AppImage (linuxdeploy + plugin-gtk, BOTH
   #     sha256-pinned below; NO_STRIP keeps the audited ELFs untouched)
   #   * aethone-<v>-x86_64.flatpak (org.gnome.Platform 51; the manifest
-  #     re-packages the same bundle and carries the dconf grants for the
-  #     system-proxy companion + org.freedesktop.Flatpak for the tunnel
-  #     bridge — see desktop_shared/desktop_engine.cpp)
+  #     re-packages the same bundle; org.freedesktop.Flatpak is the ONE
+  #     grant — the tunnel bridge, the KDE proxy tools AND (v1.0.2) the
+  #     gsettings system-proxy companion all cross it via flatpak-spawn
+  #     --host; the v1.0.1 dconf grants provably never routed the proxy
+  #     writes to the host — see desktop_shared/desktop_engine.cpp)
   #   * aethone-linux-x86_64-<v>.tar.gz (the portable form)
   # Fail-closed per format: dpkg -x / rpm -qpl / --appimage-extract / a
-  # flatpak run sh gate + the bridge-binary presence inside the sandbox.
+  # flatpak run sh gate + the bridge-binary presence inside the sandbox
+  # + (v1.0.2) the compiled-in bridge string in the aethone binary.
   # =========================================================================
   linux-packages:
     name: "Linux packages (deb + rpm + AppImage + Flatpak + tar)"
@@ -2838,6 +2841,11 @@ jobs:
 
       - name: Validate the desktop entry (desktop-file-validate)
         run: desktop-file-validate packaging/linux/shared/com.chakcaad.aethone.desktop
+
+      - name: Functional gate - the gsettings host bridge (v1.0.2)
+        run: |
+          set -euo pipefail
+          python3 scripts/flatpak_gsettings_bridge_check.py
 
       - name: Build every Linux package format (fail-closed)
         run: |

@@ -221,7 +221,10 @@ void EnsureDesktopIntegration();
 //
 // v1.0.1 (Linux): the backend set widened from GNOME-only gsettings to
 // EVERY resolvable desktop backend — org.gnome.system.proxy (GNOME family
-// and Firefox wherever the schema exists, dconf-granted inside a Flatpak)
+// and Firefox wherever the schema exists, run on the HOST through
+// flatpak-spawn inside a Flatpak — v1.0.2: the runtime's own gsettings can
+// never write the host's dconf, so the call itself crosses the bridge, and
+// every set is confirmed by a read-back before success is reported)
 // AND KDE Plasma's kioslaverc [Proxy Settings] through kwriteconfig6/5
 // (host-side via flatpak-spawn inside a Flatpak). Each backend's prior
 // state is saved under its own `backend=` section; a desktop with no
