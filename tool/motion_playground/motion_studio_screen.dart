@@ -14,7 +14,7 @@ import 'custom_widget_slot.dart';
 const _bg = Color(0xFF080D0A), _panel = Color(0xFF111914), _raised = Color(0xFF18231C);
 const _line = Color(0xFF2A3A30), _muted = Color(0xFF91A095), _green = Color(0xFF1AD995);
 
-enum _Target { connectControl, stateHalo, customWidget }
+enum _Target { connectControl, connectButton, connectShake, stateHalo, customWidget }
 enum _CurveKind { linear, easeOutCubic, easeInOutCubic, easeOutBack, easeOutQuint, elastic, bounce, bezier, spring }
 
 class _Frame {
@@ -75,7 +75,7 @@ class _MotionStudioScreenState extends State<MotionStudioScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: Duration(milliseconds: _duration));
+    _controller = AnimationController(vsync: this, duration: Duration(milliseconds: _duration), value: 1);
     _controller.addStatusListener((s) {
       if (mounted && (s == AnimationStatus.completed || s == AnimationStatus.dismissed)) {
         setState(() => _playing = false);
@@ -251,10 +251,11 @@ $rows
 
 Widget buildAethoneMotionLayer({required Animation<double> progress, required Widget child}) =>
   AnimatedBuilder(animation: progress, child: child, builder: (context, kid) {
-    final p = aethoneMotionCurve.transform(progress.value.clamp(0.0, 1.0)).clamp(-0.5, 1.5);
+    final rawProgress = progress.value.clamp(0.0, 1.0).toDouble();
+    final p = aethoneMotionCurve.transform(rawProgress).clamp(-0.5, 1.5).toDouble();
     final f = _sampleAethoneMotion(p);
-    return Opacity(opacity: f.opacity.clamp(0.0, 1.0), child: ImageFiltered(
-      imageFilter: ImageFilter.blur(sigmaX: f.blur.clamp(0.0, 40.0), sigmaY: f.blur.clamp(0.0, 40.0)),
+    return Opacity(opacity: f.opacity.clamp(0.0, 1.0).toDouble(), child: ImageFiltered(
+      imageFilter: ImageFilter.blur(sigmaX: f.blur.clamp(0.0, 40.0).toDouble(), sigmaY: f.blur.clamp(0.0, 40.0).toDouble()),
       child: Transform.translate(offset: Offset(f.x, f.y), child: Transform.rotate(
         angle: f.rotation * 0.017453292519943295, child: Transform.scale(scale: f.scale, child: kid))),
     ));
@@ -365,6 +366,21 @@ Widget buildAnimatedAethoneConnectControl({required Animation<double> progress, 
             onTap: () => setState(() { _state = _nextState(_state); _controller.value = 0; }),
           )),
         ]));
+      case _Target.connectButton:
+        return SizedBox(width: 300, height: 300, child: Center(child: ConnectButtonGlow(
+          connected: _state == VpnState.connected, state: _state, style: _style,
+          duration: motionDuration(_style, MotionDurations.state), curve: _style.curve,
+          onTap: () => setState(() { _state = _nextState(_state); _controller.value = 0; }),
+        )));
+      case _Target.connectShake:
+        return SizedBox.square(dimension: 280, child: Center(child: ConnectShake(
+          state: _state, style: _style,
+          child: Container(width: 112, height: 112, alignment: Alignment.center,
+            decoration: BoxDecoration(color: _raised, borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: _green, width: 1.5),
+              boxShadow: [BoxShadow(color: _green.withValues(alpha: .22), blurRadius: 24)]),
+            child: const Icon(Icons.bolt_rounded, color: _green, size: 46)),
+        )));
       case _Target.stateHalo:
         final accent = _state == VpnState.connected ? _green : const Color(0xFFEA4545);
         return SizedBox.square(dimension: 280, child: Stack(alignment: Alignment.center, children: [
@@ -430,7 +446,7 @@ Widget buildAnimatedAethoneConnectControl({required Animation<double> progress, 
     _section('SCENE'),
     _label('کامپوننت'),
     _dropdown<_Target>(_target, _Target.values, (v) => switch (v) {
-      _Target.connectControl => 'دکمه اتصال واقعی', _Target.stateHalo => 'هاله وضعیت اتصال', _Target.customWidget => 'Widget اختصاصی',
+      _Target.connectControl => 'ترکیب کامل اتصال', _Target.connectButton => 'ConnectButtonGlow', _Target.connectShake => 'ConnectShake', _Target.stateHalo => 'ConnectHalo', _Target.customWidget => 'Widget اختصاصی',
     }, (v) => setState(() => _target = v)),
     const SizedBox(height: 8), _label('وضعیت نمایشی'),
     _dropdown<VpnState>(_state, VpnState.values, _stateLabel, (v) => setState(() => _state = v)),

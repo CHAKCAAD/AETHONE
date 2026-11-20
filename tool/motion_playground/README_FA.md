@@ -19,16 +19,32 @@ assetها، فونت‌ها و Widgetهای موجود در مخزن استفا�
 
     flutter run -t tool/motion_playground/main.dart -d linux
 
-## امکانات نسخه اول
+## امکانات Motion Studio 2.0
 
-- پیش‌نمایش مستقیم Widget واقعی ConnectButtonGlow و ConnectHalo.
-- آزمایش وضعیت‌های هشت‌گانه VpnState بدون اتصال به Engine یا VPN واقعی.
-- انتخاب پنج شخصیت حرکتی رسمی پروژه: SILK، TIDE، SPRING، BLINK و OFF.
-- مشاهده پارامترهای مهم MotionRecipe از جمله Connect March، Reconnect Seek،
-  Press Spring، Section Resize و Dial.
-- پیش‌نمایش افکت‌های عمومی Fade، Scale، Slide، Rotate، Blur و Fade + Scale.
-- تنظیم Duration، Curve و شدت افکت.
-- تولید و کپی کد Dart برای کامپوننت انتخاب‌شده.
+نسخه آنلاین و عمومی:
+  
+    https://chakcaad.github.io/AETHONE/
+
+استفاده از نسخه آنلاین به نصب Flutter، Dart یا Android Studio روی سیستم کاربر نیاز ندارد.
+
+- پیش‌نمایش جداگانه‌ی ترکیب کامل اتصال، ConnectButtonGlow، ConnectShake و ConnectHalo؛
+  همه با Widgetهای واقعی پروژه.
+- انتخاب وضعیت‌های هشت‌گانه‌ی VpnState و پنج شخصیت حرکتی SILK، TIDE، SPRING، BLINK و OFF.
+- Timeline با Playhead، پخش، توقف، Replay، Scrub و تنظیم سرعت و Delay.
+- افزودن، جابه‌جایی و حذف Keyframe برای Opacity، Scale، Position X/Y، Rotation و Blur.
+- ویرایش منحنی‌های Linear، Ease، Back، Quint، Elastic و Bounce.
+- منحنی Cubic Bezier سفارشی با کنترل نقاط P1/P2 و پیش‌نمایش گراف.
+- Spring Simulation با تنظیم Mass، Stiffness و Damping.
+- Loop، Ping-pong / Reverse و آزمون Reduce Motion.
+- تغییر Light/Dark پس‌زمینه پیش‌نمایش.
+- ذخیره Presetها در فضای ذخیره‌سازی مرورگر، بارگذاری و حذف آن‌ها.
+- خروجی و کپی Dart و JSON برای تنظیمات طراحی.
+
+## محدوده نسخه 2.0
+
+Timeline و Keyframeها یک لایه‌ی حرکتی قابل‌تنظیم روی پیش‌نمایش Widget واقعی اعمال می‌کنند.
+رفتار داخلی Halo، Shake و PressSpring همان رفتار اصلی AETHONE و وابسته به MotionStyle و
+VpnState باقی می‌ماند؛ این ابزار موتور VPN یا اتصال واقعی را اجرا نمی‌کند.
 
 ## استفاده از Widget خودت
 
