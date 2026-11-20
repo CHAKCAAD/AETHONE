@@ -12,14 +12,19 @@
 #
 # finish-args, in order:
 #   --share=network / --share=ipc / sockets / dri — the VPN client itself.
-#   dconf trio — the system-proxy companion: `gsettings` runs inside the
-#     runtime and its org.gnome.system.proxy writes reach the HOST's dconf
-#     through these grants (the dconf-editor pattern), so GNOME-family
-#     desktops and Firefox see the proxy.
-#   --talk-name=org.freedesktop.Flatpak — the tunnel-mode bridge: the app
-#     spawns `flatpak-spawn --host pkexec aethone-tunnel-helper --serve`
-#     (the companion host package) and the KDE proxy tools route to the
-#     host the same way. See desktop_shared/desktop_engine.cpp.
+#   --talk-name=org.freedesktop.Flatpak — EVERY host bridge: the tunnel
+#     mode spawns `flatpak-spawn --host pkexec aethone-tunnel-helper
+#     --serve` (the companion host package), the KDE proxy tools run on
+#     the host the same way, and since v1.0.2 the gsettings calls of the
+#     system-proxy companion do too — inside the sandbox the runtime's
+#     own gsettings can NEVER write the host's dconf (flatpak's D-Bus
+#     filtering confines sandboxed writers to the app-scoped database;
+#     the v1.0.1 dconf-grant trio — talk-name=ca.desrt.dconf +
+#     xdg-run/dconf + DCONF_USER_CONFIG_DIR — provably did NOT route the
+#     org.gnome.system.proxy writes to the host on a real GNOME desktop,
+#     so those grants are dropped). See desktop_shared/desktop_engine.cpp
+#     (GSettings / FlatpakHostGSettingsPrefix) and
+#     scripts/flatpak_gsettings_bridge_check.py.
 app-id: com.chakcaad.Aethone
 runtime: org.gnome.Platform
 runtime-version: "51"
@@ -32,11 +37,8 @@ finish-args:
   - --socket=fallback-x11
   - --socket=wayland
   - --device=dri
-  # the system-proxy companion (host dconf writes from the sandbox)
-  - --talk-name=ca.desrt.dconf
-  - --filesystem=xdg-run/dconf
-  - --env=DCONF_USER_CONFIG_DIR=.config/dconf
-  # the tunnel-mode bridge + the host-side KDE proxy tools
+  # every host bridge: the tunnel helper (pkexec), the KDE proxy tools,
+  # and the v1.0.2 gsettings system-proxy companion
   - --talk-name=org.freedesktop.Flatpak
 
 modules:

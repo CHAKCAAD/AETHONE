@@ -254,6 +254,18 @@ build_flatpak() {
     flatpak run --command=sh com.chakcaad.Aethone -c \
       'test -x /usr/bin/flatpak-spawn && test -x /usr/bin/gsettings' \
       || die "flatpak smoke: flatpak-spawn/gsettings missing from the runtime"
+    # v1.0.2 — the gsettings host bridge must be IN the binary: the v1.0.1
+    # release shipped a companion whose in-sandbox gsettings writes silently
+    # vanished (flatpak's dconf filtering), and the binary-presence gate
+    # above could not see it. The bridge string is the compiled-in proof.
+    flatpak run --command=sh com.chakcaad.Aethone -c \
+      'grep -aq "flatpak-spawn --host --clear-env" /app/bin/aethone' \
+      || die "flatpak smoke: the gsettings host bridge is missing from the aethone binary"
+    # the manifest must NOT carry the v1.0.1 dconf trio (it never routed the
+    # writes to the host; org.freedesktop.Flatpak is the only proxy grant)
+    grep -q 'talk-name=ca.desrt.dconf' "$stage/com.chakcaad.Aethone.yml" \
+      && die "flatpak smoke: the v1.0.1 dconf trio is back in the manifest" \
+      || true
     # the live host reachability needs a real desktop session (the portal's
     # D-Bus name); CI has none — attempt under dbus-run-session as a
     # REPORT-ONLY probe so an artificial session never blocks the release

@@ -1727,8 +1727,9 @@ void EnsureDesktopIntegration() {}             // Windows uses embedded resource
 // it can resolve, saving each one's prior state in the same backup file
 // under its own `backend=` section:
 //   * gsettings (org.gnome.system.proxy) — GNOME/Cinnamon/MATE/Budgie and
-//     Firefox wherever the schema is installed, Flatpak included (the
-//     manifest's dconf grants route the writes to the HOST's settings);
+//     Firefox wherever the schema is installed; inside a Flatpak the call
+//     itself runs on the HOST through flatpak-spawn (v1.0.2 — the sandbox's
+//     own gsettings can never write the host's dconf; see GSettings below);
 //   * kioslaverc [Proxy Settings] via kwriteconfig6/kwriteconfig5 — KDE
 //     Plasma 5/6 (Firefox's nsUnixSystemProxySettings and Chromium's
 //     proxy_config_service_linux.cc parse exactly these keys under
@@ -1847,29 +1848,22 @@ bool WinProxyApplySaved(HKEY key, const std::string& saved) {
 
 #else  // !_WIN32 — the multi-backend system proxy (v1.0.1)
 
-// GNOME family (and Firefox wherever the schema is installed) reads
-// org.gnome.system.proxy over the session's dconf — including from inside
-// a Flatpak, where the manifest's dconf grants route the writes to the
-// HOST's settings.
-std::string GSettings(const std::string& args, bool* ok) {
-  return RunCapture("gsettings " + args, ok);
-}
-
-bool GSettingsAvailable() {
-  bool ok = false;
-  GSettings("get org.gnome.system.proxy mode", &ok);
-  return ok;
-}
-
-std::string GSettingsTrim(const std::string& v) {
-  std::string s = v;
-  while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' '))
-    s.pop_back();
-  // strip the single quotes gsettings get wraps values in
-  if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'')
-    s = s.substr(1, s.size() - 2);
-  return s;
-}
+// v1.0.2 — the gsettings host discipline. Two boundaries can sit between
+// this process and the org.gnome.system.proxy the desktop actually reads:
+//
+//  * FLATPAK: inside the sandbox the runtime's own gsettings can NEVER
+//    write the desktop's proxy — flatpak's D-Bus filtering confines
+//    sandboxed dconf writers to the app-scoped database (the v1.0.1
+//    dconf-grant trio proved it on a real GNOME host: every write exited
+//    0 and vanished, the host's settings never moved, not even an
+//    app-scoped dconf file appeared). Every gsettings call therefore runs
+//    the HOST's gsettings as the session user through `flatpak-spawn
+//    --host` — the very bridge the tunnel helper (pkexec) and the KDE
+//    tools already cross.
+//  * THE NATIVE ELEVATED INSTANCE (v4.39 root-from-start): as root the
+//    dconf READ path would resolve against /root's databases — pin HOME
+//    and XDG_CONFIG_HOME to the DESKTOP session user's home so the backup
+//    captures the state the user's desktop actually had.
 
 // A value about to be interpolated into a single-quoted shell argument
 // (the backup file's contents are NOT trusted input): quotes, backslashes
@@ -1885,17 +1879,12 @@ std::string SanitizeProxyValue(const std::string& v) {
   return out;
 }
 
-// ---- v1.0.1: the KDE Plasma backend (kioslaverc [Proxy Settings]) --------
-// Firefox (nsUnixSystemProxySettings) and Chromium
-// (proxy_config_service_linux.cc) parse exactly these keys under a Plasma
-// session; the value format is the Qv2ray-proven "socks://<host> <port>".
-// kwriteconfig6/kreadconfig6 for Plasma 6, the *5 pair for Plasma 5.
-//
-// The v4.39 elevated instance runs as root, where the tools would target
-// /root/.config — pin HOME to the DESKTOP session user's home so the
-// write lands in the config KDE actually reads (the same SUDO_USER
-// discipline as the autostart entry, plus the /run/user/<uid> fallback
-// the forwarded XDG_RUNTIME_DIR carries).
+// The v4.39 elevated instance runs as root, where the config tools would
+// target /root/.config — pin HOME to the DESKTOP session user's home so
+// the writes land in the config the desktop actually reads (the same
+// SUDO_USER discipline as the autostart entry, plus the /run/user/<uid>
+// fallback the forwarded XDG_RUNTIME_DIR carries). Shared by the gsettings
+// and KDE backends.
 std::string ElevatedHomePrefix() {
   if (geteuid() != 0) return std::string();
   std::string home;
@@ -1922,6 +1911,83 @@ std::string ElevatedHomePrefix() {
   const std::string safe = SanitizeProxyValue(home);
   return "HOME='" + safe + "' XDG_CONFIG_HOME='" + safe + "/.config' ";
 }
+
+// The flatpak-spawn prefix every gsettings invocation goes through inside
+// the sandbox. --clear-env + an explicitly rebuilt environment: the
+// sandbox's own XDG_* (the app-scoped config paths, the runtime's schema
+// dirs) and its private session-bus address must NOT leak into the host
+// side — the host gsettings' schema lookup, its dconf read path and its
+// session bus must all resolve against the HOST. The bus address is
+// rebuilt as the standard user bus (unix:path=$XDG_RUNTIME_DIR/bus — the
+// same socket on both sides of the sandbox), exactly like the tunnel
+// helper bridge in StartHelper. (flatpak-spawn forwards the CALLING —
+// sandbox — environment to the host command by default; --clear-env is
+// what makes the explicit rebuild the whole truth.)
+std::string FlatpakHostGSettingsPrefix() {
+  std::string xdg;
+  const char* xdg_env = getenv("XDG_RUNTIME_DIR");
+  if (xdg_env != nullptr && *xdg_env != 0) xdg = xdg_env;
+  if (xdg.empty()) {
+    xdg = "/run/user/" + std::to_string(static_cast<long>(getuid()));
+  }
+  std::string home;
+  const passwd* pw = getpwuid(getuid());
+  if (pw != nullptr && pw->pw_dir != nullptr) home = pw->pw_dir;
+  if (home.empty()) {
+    const char* home_env = getenv("HOME");
+    if (home_env != nullptr) home = home_env;
+  }
+  std::string lang = "C.UTF-8";
+  const char* lang_env = getenv("LANG");
+  if (lang_env != nullptr && *lang_env != 0) lang = lang_env;
+  const std::string safe_xdg = SanitizeProxyValue(xdg);
+  const std::string safe_home = SanitizeProxyValue(home);
+  std::string prefix =
+      "flatpak-spawn --host --clear-env "
+      "--env=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+  if (!safe_home.empty()) {
+    prefix += " --env=HOME='" + safe_home + "' --env=XDG_CONFIG_HOME='" +
+              safe_home + "/.config'";
+  }
+  prefix += " --env=XDG_RUNTIME_DIR='" + safe_xdg +
+            "' --env=DBUS_SESSION_BUS_ADDRESS='unix:path=" + safe_xdg +
+            "/bus'";
+  if (!lang.empty()) {
+    prefix += " --env=LANG='" + SanitizeProxyValue(lang) + "'";
+  }
+  return prefix + " ";
+}
+
+std::string GSettings(const std::string& args, bool* ok) {
+  if (InFlatpakSandbox()) {
+    return RunCapture(FlatpakHostGSettingsPrefix() + "gsettings " + args, ok);
+  }
+  return RunCapture(ElevatedHomePrefix() + "gsettings " + args, ok);
+}
+
+bool GSettingsAvailable() {
+  bool ok = false;
+  GSettings("get org.gnome.system.proxy mode", &ok);
+  return ok;
+}
+
+std::string GSettingsTrim(const std::string& v) {
+  std::string s = v;
+  while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' '))
+    s.pop_back();
+  // strip the single quotes gsettings get wraps values in
+  if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'')
+    s = s.substr(1, s.size() - 2);
+  return s;
+}
+
+// ---- v1.0.1: the KDE Plasma backend (kioslaverc [Proxy Settings]) --------
+// Firefox (nsUnixSystemProxySettings) and Chromium
+// (proxy_config_service_linux.cc) parse exactly these keys under a Plasma
+// session; the value format is the Qv2ray-proven "socks://<host> <port>".
+// kwriteconfig6/kreadconfig6 for Plasma 6, the *5 pair for Plasma 5.
+// (ElevatedHomePrefix — the root-instance HOME pinning — now lives beside
+// GSettings above, shared by both backends since v1.0.2.)
 
 // The prefix every KDE tool invocation goes through: inside a Flatpak the
 // tools are not in the runtime — `flatpak-spawn --host` runs the HOST's
@@ -2053,11 +2119,27 @@ std::string SetSystemProxy(int port) {
   }
   const std::string p = std::to_string(port);
   bool all = true;
+  std::string detail;
   if (have_gsettings) {
     GSettings("set org.gnome.system.proxy mode 'manual'", &ok); all = all && ok;
     GSettings("set org.gnome.system.proxy.socks host '127.0.0.1'", &ok); all = all && ok;
     GSettings("set org.gnome.system.proxy.socks port " + p, &ok); all = all && ok;
     GSettings("set org.gnome.system.proxy ignore-hosts \"['localhost', '127.0.0.0/8', '::1']\"", &ok); all = all && ok;
+    if (all) {
+      // v1.0.2 — the silent-drop guard (the Flatpak lesson): a dconf write
+      // can vanish WITHOUT an exit status, so the set is only trusted once
+      // a fresh read-back sees it on the desktop that owns the proxy.
+      const std::string rb_mode =
+          GSettingsTrim(GSettings("get org.gnome.system.proxy mode", &ok));
+      const std::string rb_port =
+          GSettingsTrim(GSettings("get org.gnome.system.proxy.socks port", &ok));
+      if (rb_mode != "manual" || rb_port != p) {
+        all = false;
+        detail = " — the gsettings writes did not stick (read back mode='" +
+                 rb_mode + "' socks-port=" + rb_port + ", expected manual/" +
+                 p + ")";
+      }
+    }
   }
   if (have_kde) {
     // Plasma's manual mode: ProxyType=1 + the "socks://<host> <port>"
@@ -2065,7 +2147,8 @@ std::string SetSystemProxy(int port) {
     all = all && KdeWrite("ProxyType", "1");
     all = all && KdeWrite("socksProxy", "socks://127.0.0.1 " + p);
   }
-  if (!all) return "one of the system-proxy writes failed (see the core log)";
+  if (!all) return "one of the system-proxy writes failed" + detail +
+                   " (see the core log)";
   return std::string();
 #endif
 }
