@@ -8,6 +8,7 @@ import 'connection/connection_store.dart';
 import 'connection/desktop_window.dart';
 import 'core/app_theme.dart';
 import 'core/design_tokens.dart';
+import 'core/fx/theme_reveal.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/onboarding_flow.dart';
 
@@ -163,6 +164,15 @@ class _AethoneAppState extends State<AethoneApp>
           theme: _theme(),
           locale: _locale(widget.store.appLocale),
           supportedLocales: AethoneApp.supportedLocales,
+          // v4.43 — the flutterfx circular-reveal host: the whole navigator
+          // sits under a capture boundary so a theme-tile tap can wipe the
+          // OLD frame away in a growing circle while the palette lerps
+          // underneath. No host on cold start cost — the boundary itself is
+          // free; the capture only runs on an actual tap.
+          builder: (context, child) => ThemeRevealHost(
+            styleOf: () => widget.store.effectiveMotionStyle(context),
+            child: child ?? const SizedBox.shrink(),
+          ),
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,

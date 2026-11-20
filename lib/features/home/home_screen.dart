@@ -16,6 +16,7 @@ import '../../connection/connection_state.dart';
 import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
+import '../../core/fx/smoke_burst.dart';
 import '../../core/motion.dart';
 import '../../l10n/app_strings.dart';
 import '../settings/settings_screen.dart';
@@ -119,6 +120,18 @@ class HomeScreen extends StatelessWidget {
           body: Stack(
             fit: StackFit.expand,
             children: [
+              // v4.43 — the connected SMOKE FIELD (the flutterfx port,
+              // owner-approved): four soft green gradient blobs drifting
+              // on closed Bézier loops behind everything while the tunnel
+              // is REALLY up. State-honest by construction — it renders
+              // only when [store.isConnected]; the OFF style and the
+              // appearance switch (showPatterns — the background-
+              // decoration family) keep it off. Sits UNDER the pattern
+              // art so the owner's tuned frames keep their exact look.
+              if (connected && store.showPatterns && style != MotionStyle.off)
+                Positioned.fill(
+                  child: SmokeField(style: style),
+                ),
               // Edge patterns (red ↔ green, animated crossfade; v4.15 #5:
               // they also DRIFT while the engine walks or the tunnel is up —
               // «بعد از اتصال و حین اتصال پترن های پس زمینه هم انیمیشن

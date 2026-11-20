@@ -25,6 +25,7 @@ import '../../../connection/connection_state.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
+import '../../../core/fx/tap_ripple.dart';
 import '../../../l10n/app_strings.dart';
 
 /// One concentric layer of a glow group.
@@ -369,7 +370,7 @@ class SpeedTestButton extends StatelessWidget {
 /// color only») — green when connected, red when disconnected, colors
 /// crossfaded. [scale] renders the whole composition smaller (the look
 /// page's preview) without recomputing a single layer.
-class ConnectButtonGlow extends StatelessWidget {
+class ConnectButtonGlow extends StatefulWidget {
   const ConnectButtonGlow({
     super.key,
     required this.connected,
@@ -389,25 +390,58 @@ class ConnectButtonGlow extends StatelessWidget {
   final Curve curve;
 
   @override
+  State<ConnectButtonGlow> createState() => _ConnectButtonGlowState();
+}
+
+/// v4.43 — owns the [TapRippleController] so the flutterfx tap-ripple
+/// burst (owner-approved new dependency round) survives the rebuilds.
+class _ConnectButtonGlowState extends State<ConnectButtonGlow> {
+  final TapRippleController _ripple = TapRippleController();
+
+  @override
+  void dispose() {
+    _ripple.detach();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final connected = widget.connected;
+    final onTap = widget.onTap;
+    final duration = widget.duration;
+    final curve = widget.curve;
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final k = s * scale;
+    final k = s * widget.scale;
     final accent =
         connected ? AethColors.accentConnected : AethColors.statusDisconnected;
     final iconOn =
         connected ? AethColors.onConnectCore : AethColors.onPillDisconnected;
 
     // The tap target covers the WHOLE composition (glow included) — the
-    // v4.13 halo-taps-too decree carried over from the old circle.
+    // v4.13 halo-taps-too decree carried over from the old circle. The
+    // ripple burst rides the same gesture (v4.43, the flutterfx port):
+    // rings spawn from the tap point the moment the finger lands — pure
+    // decoration, the action itself never waits for them.
     return _TouchFeedback(
       onTap: onTap,
+      ripple: _ripple,
       child: SizedBox(
         width: AethGeometry.connectGroupSize * k,
         height: AethGeometry.connectGroupSize * k,
-        child: Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
+        child: TapRipple(
+          controller: _ripple,
+          color: accent,
+          duration:
+              Duration(milliseconds: (duration.inMilliseconds * 1.5).round()),
+          curve: curve,
+          // Ring one is born on the core's own edge (108.17/2 design px,
+          // style-scaled) and dies just past the halo layer (×2.2).
+          baseRadius: AethGeometry.connectCoreSize * k / 2,
+          maxScale: 2.2,
+          child: Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
             // The four layers, bottom→top — ONE crossfaded color drives
             // them all (green ↔ red), the owner's own opacities/radii.
             TweenAnimationBuilder<Color?>(
@@ -473,6 +507,7 @@ class ConnectButtonGlow extends StatelessWidget {
               ),
             ),
           ],
+          ),
         ),
       ),
     );
@@ -483,9 +518,19 @@ class ConnectButtonGlow extends StatelessWidget {
 /// max ~120 ms). Never delays the action. Used with onTap == null by the
 /// swipe-only connect surfaces (defect #11).
 class _TouchFeedback extends StatefulWidget {
-  const _TouchFeedback({required this.onTap, required this.child});
+  const _TouchFeedback({
+    required this.onTap,
+    required this.child,
+    this.ripple,
+  });
 
   final VoidCallback? onTap;
+
+  /// v4.43 — optional flutterfx tap-ripple handle: when present, every
+  /// tap-down spawns a ring burst at the finger's position. Pure
+  /// decoration — the action fires on its own schedule, never delayed.
+  final TapRippleController? ripple;
+
   final Widget child;
 
   @override
@@ -500,7 +545,13 @@ class _TouchFeedbackState extends State<_TouchFeedback> {
     return GestureDetector(
       onTapDown: widget.onTap == null
           ? null
-          : (_) => setState(() => _pressed = true),
+          : (details) {
+              // The burst is born the moment the finger LANDS (the
+              // flutterfx ripple's whole point) — inside the same
+              // gesture that drives the press feedback and the action.
+              widget.ripple?.tapAt(details.localPosition);
+              setState(() => _pressed = true);
+            },
       onTapCancel: widget.onTap == null
           ? null
           : () => setState(() => _pressed = false),
