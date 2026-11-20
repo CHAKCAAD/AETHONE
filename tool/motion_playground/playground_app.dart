@@ -9,6 +9,7 @@ import 'package:aethone/features/home/widgets/connect_core.dart';
 import 'package:aethone/features/home/widgets/glow_pill.dart';
 
 import 'code_generator.dart';
+import 'custom_widget_slot.dart';
 
 const bg = Color(0xFF090E0B);
 const panel = Color(0xFF101812);
@@ -135,7 +136,10 @@ class _MotionPlaygroundScreenState extends State<MotionPlaygroundScreen> {
                             ),
                           ),
                           const VerticalDivider(width: 1, color: line),
-                          SizedBox(width: 300, child: _inspector()),
+                          SizedBox(
+                            width: 300,
+                            child: SingleChildScrollView(child: _inspector()),
+                          ),
                         ],
                       ),
                     ),
@@ -460,42 +464,12 @@ class _MotionPlaygroundScreenState extends State<MotionPlaygroundScreen> {
     }
   }
 
-  Widget _sampleCard() => Container(
-        width: 250,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: const Color(0xFF142018),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0x8842B987)),
-          boxShadow: const [
-            BoxShadow(color: Color(0x331AD995), blurRadius: 30),
-          ],
-        ),
-        child: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('YOUR WIDGET', style: TextStyle(
-              color: green, fontSize: 10, fontWeight: FontWeight.w900,
-              letterSpacing: 1.2,
-            )),
-            SizedBox(height: 12),
-            Text('AETHONE', style: TextStyle(
-              fontSize: 25, fontWeight: FontWeight.w900,
-              letterSpacing: 2,
-            )),
-            SizedBox(height: 5),
-            Text('Motion is part of the interface.',
-                style: TextStyle(color: muted, fontSize: 10)),
-          ],
-        ),
-      );
+  Widget _sampleCard() => buildCustomWidgetPreview();
 
   Widget _inspector() => Container(
         color: panel,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(14),
-          child: Column(
+        padding: const EdgeInsets.all(14),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text('تنظیمات انیمیشن',
@@ -587,7 +561,6 @@ class _MotionPlaygroundScreenState extends State<MotionPlaygroundScreen> {
               text: 'تنظیمات ذخیره‌شده و رفتار VPN دست‌نخورده می‌مانند.',
             ),
           ],
-          ),
         ),
       );
 
