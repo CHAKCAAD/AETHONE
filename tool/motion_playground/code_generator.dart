@@ -205,6 +205,9 @@ String _customWidgetCode({
   final strengthCode = safeStrength.toStringAsFixed(2);
   final durationCode = durationMs.clamp(0, 10000);
   final curveName = curve.dartName;
+  final uiImport = effect == MotionEffect.blur
+      ? "import 'dart:ui' show ImageFilter;\\n\\n"
+      : '';
   final body = switch (effect) {
     MotionEffect.fade => '''
       return Opacity(
@@ -250,8 +253,7 @@ String _customWidgetCode({
   };
 
   return '''
-import 'dart:ui' show ImageFilter;
-
+$uiImport
 import 'package:flutter/material.dart';
 
 Widget buildAnimatedWidget() {
