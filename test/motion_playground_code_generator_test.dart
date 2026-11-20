@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/core/motion.dart';
-import 'package:aethone/tool/motion_playground/code_generator.dart';
+import '../tool/motion_playground/code_generator.dart';
 
 void main() {
   group('Motion Playground code generator', () {
