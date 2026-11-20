@@ -24,6 +24,7 @@ import '../../../l10n/app_strings.dart';
 import 'core_page.dart';
 import 'settings_controls.dart';
 import 'subpage_frame.dart';
+import '../../core/motion.dart';
 
 class ConnectionSettingsPage extends StatelessWidget {
   const ConnectionSettingsPage({super.key, required this.store});
@@ -113,7 +114,12 @@ class ConnectionSettingsPage extends StatelessWidget {
             title: strings.subCoreTitle,
             description: strings.coreRowDesc,
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
+              // v1.0.2 — the family route (the last stray
+              // MaterialPageRoute in the settings tree; the page now
+              // enters with the style's own personality like its
+              // siblings — the audit's «دو MaterialPageRoute سرگردان»).
+              aethPageRoute<void>(
+                style: store.effectiveMotionStyle(context),
                 builder: (_) => CoreSettingsPage(store: store),
               ),
             ),
@@ -147,8 +153,11 @@ class _ModeSegmentsRow extends StatelessWidget {
           key: ValueKey('conn-mode-${mode.name}'),
           onTap: () => onSelect(mode),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOut,
+            // v1.0.2 — the segment follows the ambient style (was 260 ms).
+            duration: Duration(
+              milliseconds: MotionScope.of(context).recipe.controlMs,
+            ),
+            curve: MotionScope.of(context).recipe.controlCurve,
             height: h,
             decoration: BoxDecoration(
               color: isSel ? AethColors.accentConnected : AethColors.sheetDescCard,

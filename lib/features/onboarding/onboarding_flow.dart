@@ -88,7 +88,11 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     // navigator over to the real home route.
     widget.store.completeOnboarding();
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
+      // v1.0.2 — the family route: the home screen now enters with the
+      // style's own personality (was a bare MaterialPageRoute — the
+      // audit's «تحویل onboarding→home بی‌شخصیت» finding).
+      aethPageRoute<void>(
+        style: widget.store.effectiveMotionStyle(context),
         builder: (_) => HomeScreen(store: widget.store),
       ),
     );
@@ -123,7 +127,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
           final stepCurve = style == MotionStyle.off
               ? Curves.linear
               : r.blockCurve;
-          return Scaffold(
+          return MotionScope(
+            style: style,
+            child: Scaffold(
             backgroundColor: AethColors.bgScreen,
             // v4.25 — the pattern-placement fix: expand keeps the body
             // (and the pattern box) at the FULL screen height.
@@ -150,11 +156,14 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeInCubic,
                   transitionBuilder: (child, anim) {
-                    // RTL forward: the incoming page slides in from the
-                    // visual LEFT (the reading direction's "next"); the
-                    // travel is the recipe's (0 on BLINK, springy on
-                    // SPRING, flowing on TIDE).
-                    final dx = (_forward ? -0.06 : 0.06) *
+                    // v1.0.2 — direction-AWARE: the incoming step slides
+                    // in from the reading direction's "next" — visual LEFT
+                    // under Persian (RTL), visual RIGHT under the LTR
+                    // locales (was a hardcoded RTL assumption, the audit's
+                    // «اسلاید مرحله جهت-ناواقع» finding). The travel is
+                    // the recipe's (0 on BLINK, springy on SPRING).
+                    final dx = (_forward ? 0.06 : -0.06) *
+                        horizontalSign(context) *
                         (MediaQuery.sizeOf(context).width /
                             AethGeometry.refWidth) *
                         (r.blockRise > 0 ? 1 : 0);
@@ -191,7 +200,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                   ),
               ],
             ),
-          );
+          ),
+            );
         },
       ),
     );

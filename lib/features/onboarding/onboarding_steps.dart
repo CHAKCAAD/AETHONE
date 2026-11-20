@@ -33,6 +33,7 @@ import '../../connection/connection_state.dart';
 import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
+import '../../core/motion.dart';
 import '../../l10n/app_strings.dart';
 import '../home/widgets/bottom_panel.dart';
 import '../home/widgets/glow_pill.dart';
@@ -79,33 +80,43 @@ class ObTile extends StatelessWidget {
                     BorderRadius.circular(AethGeometry.obTileRadius * s),
                 child: SizedBox(width: size, height: size, child: face),
               ),
-              if (selected)
-                Positioned(
-                  left: -(ring - size) / 2,
-                  top: -(ring - size) / 2,
-                  width: ring,
-                  height: ring,
-                  child: IgnorePointer(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(
-                          AethGeometry.obRingRadius * s,
-                        ),
-                        border: Border.all(
-                          color: AethColors.accentConnected,
-                          width: AethGeometry.obRingStroke * s,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AethColors.accentConnected
-                                .withValues(alpha: 0.35),
-                            blurRadius: 10 * s,
+              // v1.0.2 — the selection ring LANDS softly (scale+fade
+              // through the ambient style; was a raw appear/disappear).
+              Positioned(
+                left: -(ring - size) / 2,
+                top: -(ring - size) / 2,
+                width: ring,
+                height: ring,
+                child: IgnorePointer(
+                  child: AnimatedScale(
+                    scale: selected ? 1.0 : 0.86,
+                    duration: _markDuration(context),
+                    curve: _markCurve(context),
+                    child: AnimatedOpacity(
+                      opacity: selected ? 1.0 : 0.0,
+                      duration: _markDuration(context),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(
+                            AethGeometry.obRingRadius * s,
                           ),
-                        ],
+                          border: Border.all(
+                            color: AethColors.accentConnected,
+                            width: AethGeometry.obRingStroke * s,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AethColors.accentConnected
+                                  .withValues(alpha: 0.35),
+                              blurRadius: 10 * s,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
+              ),
             ],
           ),
         ),
@@ -145,6 +156,15 @@ Widget _grayFace(String icon) => LayoutBuilder(
 // ---------------------------------------------------------------------------
 // Step 1 — the language grid (3×2, centered; RTL: فارسی lands top-right).
 // ---------------------------------------------------------------------------
+
+/// v1.0.2 — the shared "selection mark lands" timing (the check badge,
+/// the language ring): the ambient style's own quick tempo + curve.
+Duration _markDuration(BuildContext context) => Duration(
+      milliseconds: MotionScope.of(context).recipe.controlMs,
+    );
+
+Curve _markCurve(BuildContext context) =>
+    MotionScope.of(context).recipe.controlCurve;
 
 class ObLanguageTiles extends StatelessWidget {
   const ObLanguageTiles({super.key, required this.store});
@@ -369,8 +389,17 @@ class _LookGroup extends StatelessWidget {
           SizedBox(
             width: AethGeometry.obCheckBadge * s,
             height: AethGeometry.obCheckBadge * s,
-            child: selected
-                ? Container(
+            // v1.0.2 — the tick LANDS (a soft scale+fade through the
+            // ambient style; was a raw appear/disappear).
+            child: IgnorePointer(
+              child: AnimatedScale(
+                scale: selected ? 1.0 : 0.0,
+                duration: _markDuration(context),
+                curve: _markCurve(context),
+                child: AnimatedOpacity(
+                  opacity: selected ? 1.0 : 0.0,
+                  duration: _markDuration(context),
+                  child: Container(
                     decoration: BoxDecoration(
                       color: AethColors.accentConnected,
                       borderRadius: BorderRadius.circular(
@@ -388,8 +417,10 @@ class _LookGroup extends StatelessWidget {
                         ),
                       ),
                     ),
-                  )
-                : null,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -507,8 +538,11 @@ class _ObSegments extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: () => store.setConnectionMode(mode),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOut,
+            // v1.0.2 — the ambient style's own control tempo (was 260 ms).
+            duration: Duration(
+              milliseconds: MotionScope.of(context).recipe.controlMs,
+            ),
+            curve: MotionScope.of(context).recipe.controlCurve,
             height: AethGeometry.protoSegmentH * s,
             decoration: BoxDecoration(
               color: isSel ? AethColors.accentConnected : AethColors.cardDark,
@@ -578,8 +612,11 @@ class _ObScanPills extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   onTap: () => store.setScanSpeed(level),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeOut,
+                    // v1.0.2 — the ambient style's own control tempo.
+                    duration: Duration(
+                      milliseconds: MotionScope.of(context).recipe.controlMs,
+                    ),
+                    curve: MotionScope.of(context).recipe.controlCurve,
                     width: _w[level - 1] * s,
                     height: AethGeometry.protoPillH * s,
                     decoration: BoxDecoration(

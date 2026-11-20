@@ -18,6 +18,7 @@ import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/app_theme.dart';
 import '../../core/design_tokens.dart';
+import '../../core/motion.dart';
 
 class ThemeToggleTile extends StatelessWidget {
   const ThemeToggleTile({
@@ -68,7 +69,11 @@ class ThemeToggleTile extends StatelessWidget {
           ),
           child: Center(
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
+              // v1.0.2 — the icon swap follows the ambient style (was a
+              // fixed 220 ms that ran even under the kill-switch).
+              duration: Duration(
+                milliseconds: MotionScope.of(context).recipe.controlMs,
+              ),
               transitionBuilder: (child, anim) => FadeTransition(
                 opacity: anim,
                 child: ScaleTransition(scale: anim, child: child),

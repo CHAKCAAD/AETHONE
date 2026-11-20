@@ -19,6 +19,7 @@ import '../../../core/country_names.dart';
 import '../../../l10n/app_strings.dart';
 import 'settings_controls.dart';
 import 'subpage_frame.dart';
+import '../../core/motion.dart';
 
 class RoutingSettingsPage extends StatelessWidget {
   const RoutingSettingsPage({super.key, required this.store});
@@ -241,8 +242,11 @@ class _AppRow extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: () => onToggle(!selected),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOut,
+        // v1.0.2 — the chip follows the ambient style (was 260 ms).
+        duration: Duration(
+          milliseconds: MotionScope.of(context).recipe.controlMs,
+        ),
+        curve: MotionScope.of(context).recipe.controlCurve,
         padding: EdgeInsets.symmetric(
           horizontal: 12 * s,
           vertical: 9 * s,

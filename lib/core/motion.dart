@@ -31,7 +31,8 @@
 ///  * no external animation packages — Flutter built-ins only.
 library;
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'design_tokens.dart';
 
@@ -79,6 +80,17 @@ final class MotionRecipe {
     required this.heroBreathMs,
     required this.heroBreathAmp,
     required this.rippleMs,
+    this.connectMarchMs = 1200,
+    this.connectSeekMs = 2200,
+    this.connectHoldMs = 2200,
+    this.celebrationMs = 950,
+    this.shakeAmpRef = 8,
+    this.pressScale = 0.96,
+    this.pressStiffness = 350,
+    this.pressDamping = 26,
+    this.sectionResizeMs = 260,
+    this.dialMs = 260,
+    this.dialCurve = Curves.easeOutCubic,
   });
 
   /// State transitions (logo rotation, colour changes, button rise).
@@ -129,6 +141,54 @@ final class MotionRecipe {
 
   /// The aurora halo's ripple cycle.
   final int rippleMs;
+
+  // ---- v1.0.2 motion-overhaul additions (all ADDITIVE — every existing
+  // field and value above is untouched, so the v4.25 tests and the owner's
+  // approved baselines keep passing verbatim). ----
+
+  /// The CONNECTING state's marching-dash ring period (ms). The dashes
+  /// march around the connect core — directional energy, one full loop
+  /// per period (ZedSecure's 900ms marching-wave principle, retimed per
+  /// personality).
+  final int connectMarchMs;
+
+  /// The RECONNECTING state's double-pulse "seek" period (ms): two quick
+  /// pulses + a rest — a rhythm that is deliberately DISTINCT from
+  /// [connectMarchMs] so the two walking states never share an animation.
+  final int connectSeekMs;
+
+  /// The WAITING-FOR-PERMISSIONS state's suspended-breath period (ms): the
+  /// ring freezes and its opacity breathes slowly — "held", not marching.
+  final int connectHoldMs;
+
+  /// The one-shot celebration when the connecting→connected EDGE lands
+  /// (ms; 0 = never celebrate). Fired once on the edge, never in the
+  /// steady state.
+  final int celebrationMs;
+
+  /// The FAILED state's decaying-shake amplitude (ref px; 0 = no shake).
+  /// The offset profile is [1, -0.8, 0.6, -0.3, 0.15, 0] × this amplitude,
+  /// ~55ms per step (≈330ms total).
+  final double shakeAmpRef;
+
+  /// How far a pressable control squashes under the finger (1 = none).
+  final double pressScale;
+
+  /// The press-release spring (Flutter [SpringSimulation] stiffness and
+  /// damping units). Bouncier personalities get lower damping so the
+  /// return visibly overshoots a hair.
+  final double pressStiffness;
+  final double pressDamping;
+
+  /// AnimatedSize for conditional sections (settings sub-pages expanding
+  /// expert panels etc.) — ms; 0 = instant.
+  final int sectionResizeMs;
+
+  /// Gauge/number transitions (speed-test needle, value swaps) — ms.
+  final int dialMs;
+
+  /// The curve that shapes [dialMs] transitions.
+  final Curve dialCurve;
 }
 
 extension MotionStyleX on MotionStyle {
@@ -175,6 +235,8 @@ extension MotionStyleX on MotionStyle {
           heroBreathMs: 2600,
           heroBreathAmp: 0.02,
           rippleMs: 3900,
+          // v1.0.2 connect-control choreography: SILK = the defaults (a
+          // 1.2 s march, a 2.2 s seek, a measured celebration).
         ),
 
         // TIDE — long, flowing, underwater: the blocks drift up 34 px out
@@ -201,6 +263,19 @@ extension MotionStyleX on MotionStyle {
           heroBreathMs: 3400,
           heroBreathAmp: 0.03,
           rippleMs: 5200,
+          // v1.0.2 — TIDE's connect choreography: everything slower, wider
+          // and softer; the press is a deep cushioned squash.
+          connectMarchMs: 1800,
+          connectSeekMs: 2800,
+          connectHoldMs: 2600,
+          celebrationMs: 1200,
+          shakeAmpRef: 10,
+          pressScale: 0.965,
+          pressStiffness: 180,
+          pressDamping: 30,
+          sectionResizeMs: 340,
+          dialMs: 380,
+          dialCurve: Curves.easeOutQuint,
         ),
 
         // SPRING — snappy and alive: the blocks pop from 90% with an
@@ -227,6 +302,19 @@ extension MotionStyleX on MotionStyle {
           heroBreathMs: 2000,
           heroBreathAmp: 0.025,
           rippleMs: 2800,
+          // v1.0.2 — SPRING's connect choreography: a fast march, a tight
+          // seek, a punchy celebration and a visibly bouncy press.
+          connectMarchMs: 800,
+          connectSeekMs: 1600,
+          connectHoldMs: 1800,
+          celebrationMs: 800,
+          shakeAmpRef: 12,
+          pressScale: 0.94,
+          pressStiffness: 420,
+          pressDamping: 17,
+          sectionResizeMs: 200,
+          dialMs: 180,
+          dialCurve: Curves.easeOutBack,
         ),
 
         // BLINK — discreet: pure quick fades, no rise, no zoom, a tight
@@ -250,6 +338,19 @@ extension MotionStyleX on MotionStyle {
           heroBreathMs: 2600,
           heroBreathAmp: 0.008,
           rippleMs: 3900,
+          // v1.0.2 — BLINK's connect choreography: quick and discreet — a
+          // brisk march, the smallest shake, a feather press.
+          connectMarchMs: 900,
+          connectSeekMs: 1400,
+          connectHoldMs: 2000,
+          celebrationMs: 600,
+          shakeAmpRef: 4,
+          pressScale: 0.97,
+          pressStiffness: 500,
+          pressDamping: 34,
+          sectionResizeMs: 120,
+          dialMs: 120,
+          dialCurve: Curves.easeOut,
         ),
 
         // The kill-switch state: identity everywhere, zero durations.
@@ -272,6 +373,19 @@ extension MotionStyleX on MotionStyle {
           heroBreathMs: 2600,
           heroBreathAmp: 0,
           rippleMs: 3900,
+          // v1.0.2 — the kill-switch identity: no march, no seek, no
+          // celebration, no shake, no press squash, instant resizes.
+          connectMarchMs: 0,
+          connectSeekMs: 0,
+          connectHoldMs: 0,
+          celebrationMs: 0,
+          shakeAmpRef: 0,
+          pressScale: 1.0,
+          pressStiffness: 0,
+          pressDamping: 0,
+          sectionResizeMs: 0,
+          dialMs: 0,
+          dialCurve: Curves.linear,
         ),
       };
 }
@@ -309,12 +423,18 @@ Duration motionDuration(MotionStyle style, int baseMs) => Duration(
 /// cascades block-by-block and the SAME slices retrace on pop, so the exit
 /// folds the page away gently. With no route (bare-harness pumps) or with
 /// the OFF style the child renders untouched.
+///
+/// v1.0.2 — [flavor] differentiates the entrance by the block's SEMANTICS
+/// (a protocol card pops a little, a stat card stays calm, a router row
+/// slides in from the leading edge RTL-aware, …). The default keeps the
+/// exact v4.25 choreography, so every existing call site is untouched.
 Widget motionCascade(
   BuildContext context,
   MotionStyle style,
   int block,
-  Widget child,
-) {
+  Widget child, {
+  EntranceFlavor flavor = EntranceFlavor.standard,
+}) {
   if (style == MotionStyle.off) return child;
   final anim = ModalRoute.of(context)?.animation;
   if (anim == null) return child;
@@ -328,22 +448,114 @@ Widget motionCascade(
           r.blockCurve.transform(Interval(start, start + r.staggerSpan).transform(t));
       if (bt >= 0.999) return child;
       final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+      // The flavor's per-math tweaks (v1.0.2). `rise`/`scaleFrom` override
+      // the recipe's own values; `slideDx` (ref px) adds a DIRECTIONAL
+      // horizontal entrance for row-like cards.
+      final rise = flavor.rise(r.blockRise);
+      final scaleFrom = flavor.scaleFrom(r.blockScaleFrom);
+      final slideDx = flavor.slideDxRef;
       Widget node = child;
-      if (r.blockRise > 0) {
+      if (slideDx != 0) {
         node = Transform.translate(
-          offset: Offset(0, (1 - bt) * r.blockRise * s),
+          offset: Offset(
+            -horizontalSign(context) * (1 - bt) * slideDx * s,
+            0,
+          ),
           child: node,
         );
       }
-      if (r.blockScaleFrom < 1) {
+      if (rise > 0) {
+        node = Transform.translate(
+          offset: Offset(0, (1 - bt) * rise * s),
+          child: node,
+        );
+      }
+      if (scaleFrom < 1) {
         node = Transform.scale(
-          scale: r.blockScaleFrom + (1 - r.blockScaleFrom) * bt,
+          scale: scaleFrom + (1 - scaleFrom) * bt,
           child: node,
         );
       }
       return Opacity(opacity: bt, child: node);
     },
   );
+}
+
+/// v1.0.2 — the per-card-type entrance personalities. The STYLE recipe
+/// stays the choreography's backbone (its curve, stagger and tempo); the
+/// flavor bends two numbers so a card's MEANING reads in its entrance:
+/// action cards reach out, data cards stay calm, list rows arrive from the
+/// reading direction, status surfaces just fade.
+enum EntranceFlavor {
+  /// The recipe verbatim (the v4.25 baseline).
+  standard,
+
+  /// Protocol / primary action cards: always a slight zoom (≤3%) and a
+  /// touch more rise — the card "reaches" for the finger.
+  action,
+
+  /// Info cards: rise only — no zoom, ever.
+  info,
+
+  /// Stat / data cards: calm — less rise, no zoom; numbers never bounce.
+  stat,
+
+  /// Status pills / cards: a pure fade — state changes, not geometry.
+  status,
+
+  /// Router / server rows: slide in from the leading edge (RTL-aware).
+  route,
+
+  /// The speed-test gauge group: a zoom-dissolve like TIDE's route.
+  gauge,
+
+  /// Onboarding tiles: the biggest rise — the wizard's playful step.
+  onboarding;
+
+  double rise(double recipeRise) => switch (this) {
+        EntranceFlavor.stat => recipeRise * 0.6,
+        EntranceFlavor.status => 0,
+        EntranceFlavor.onboarding => recipeRise * 1.3 + 6,
+        EntranceFlavor.route => 0,
+        _ => recipeRise,
+      };
+
+  double scaleFrom(double recipeScaleFrom) => switch (this) {
+        EntranceFlavor.action =>
+          recipeScaleFrom < 1 ? recipeScaleFrom : 0.97,
+        EntranceFlavor.info => 1.0,
+        EntranceFlavor.stat => 1.0,
+        EntranceFlavor.status => 1.0,
+        EntranceFlavor.gauge =>
+          recipeScaleFrom < 1 ? recipeScaleFrom : 0.965,
+        EntranceFlavor.route => 1.0,
+        _ => recipeScaleFrom,
+      };
+
+  double get slideDxRef => switch (this) {
+        EntranceFlavor.route => 26,
+        _ => 0,
+      };
+}
+
+/// v1.0.2 — the horizontal reading-direction sign: +1 under LTR, −1 under
+/// RTL. Multiplying a westward (leftward) design offset by this renders the
+/// mirrored motion under Persian without any hardcoded direction.
+double horizontalSign(BuildContext context) =>
+    Directionality.of(context) == TextDirection.rtl ? -1 : 1;
+
+/// v1.0.2 — the CONTENT direction of the app's own locale (fa ⇒ RTL;
+/// en/ru/zh/tk ⇒ LTR). The settings rows and content columns follow the
+/// LANGUAGE, not whatever LTR-locked geometry frame they sit in — the old
+/// hardcoded `Directionality(rtl)` locks mirrored the content under every
+/// non-Persian locale too (the audit's RTL finding). Reads the MATERIAL
+/// locale (what the app actually renders), never a guess.
+TextDirection appContentDirection(BuildContext context) {
+  final l = Localizations.maybeLocaleOf(context)?.languageCode;
+  return switch (l) {
+    'fa' || 'ar' || 'he' || 'ur' => TextDirection.rtl,
+    _ => TextDirection.ltr,
+  };
 }
 
 /// The app's ONE page-route factory (v4.25): every pushed page enters with
@@ -361,8 +573,11 @@ PageRouteBuilder<T> aethPageRoute<T>({
     reverseTransitionDuration: motionDuration(style, 320),
     pageBuilder: (context, _, _) => builder(context),
     transitionsBuilder: (context, animation, _, child) {
-      final fade = CurvedAnimation(parent: animation, curve: r.pageFadeCurve);
-      final move = CurvedAnimation(parent: animation, curve: r.pageMoveCurve);
+      // `.drive(CurveTween(...))` (not `CurvedAnimation`) — the driven
+      // animation adds NO listener to the route's controller, so building
+      // per animation tick cannot accumulate listeners on it.
+      final fade = animation.drive(CurveTween(curve: r.pageFadeCurve));
+      final move = animation.drive(CurveTween(curve: r.pageMoveCurve));
       return FadeTransition(
         opacity: fade,
         child: SlideTransition(
@@ -401,4 +616,72 @@ class MotionScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(MotionScope oldWidget) => oldWidget.style != style;
+}
+
+/// v1.0.2 — the app's haptic vocabulary. Exactly THREE words, mirroring the
+/// two-word discipline of the reference study (a heavy word only when a
+/// REAL state change commits, a light word for previews/selection) plus the
+/// owner's already-approved connected pulse:
+///
+///  * [tap]      — micro: a press lands, a pill/flag is picked, a drag
+///                 starts. The "the surface felt you" word.
+///  * [commit]   — a real state change landed (the existing owner-approved
+///                 medium pulse on connection lives on in the store).
+///  * [failure]  — the tunnel failed; the heaviest word the platform offers.
+///
+/// Never called from an animation callback — only from gesture handlers and
+/// store state edges, so haptics can never delay or fake an operation.
+abstract final class AethHaptics {
+  /// Micro feedback (selection-grade).
+  static void tap() => HapticFeedback.selectionClick();
+
+  /// A real state change committed.
+  static void commit() => HapticFeedback.mediumImpact();
+
+  /// Something failed.
+  static void failure() => HapticFeedback.heavyImpact();
+}
+
+/// v1.0.2 — the app's dialog/sheet transition, style-scaled: a fade paired
+/// with a soft 0.94 → 1.0 zoom (the same asymmetric-fade language as the
+/// page routes; OFF = the instant cut). `barrierColor` stays the caller's
+/// own choice (the brand's black54).
+Widget aethDialogTransition(
+  MotionStyle style,
+  Animation<double> animation,
+  Widget child,
+) {
+  if (style == MotionStyle.off) return child;
+  return FadeTransition(
+    opacity: animation.drive(CurveTween(curve: Curves.easeOut)),
+    child: ScaleTransition(
+      scale: animation.drive(
+        Tween<double>(begin: 0.94, end: 1.0)
+            .chain(CurveTween(curve: style.recipe.stateCurve)),
+      ),
+      child: child,
+    ),
+  );
+}
+
+/// v1.0.2 — [showDialog] with the app's own style-aware transition (the
+/// Material black54 barrier kept; the content zoom-fades with the style's
+/// own curve — OFF renders the content instantly). Rides
+/// [showGeneralDialog] so the transition itself is ours, not Material's.
+Future<T?> showAethDialog<T>({
+  required BuildContext context,
+  required MotionStyle style,
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+}) {
+  return showGeneralDialog<T>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    barrierColor: const Color(0x8A000000), // Colors.black54
+    transitionDuration: motionDuration(style, MotionDurations.page),
+    transitionBuilder: (context, animation, _, child) =>
+        aethDialogTransition(style, animation, child),
+    pageBuilder: (context, _, _) => builder(context),
+  );
 }
