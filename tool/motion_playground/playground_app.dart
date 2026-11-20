@@ -332,7 +332,15 @@ class _MotionPlaygroundScreenState extends State<MotionPlaygroundScreen> {
                     Positioned.fill(child: CustomPaint(
                       painter: _GridPainter(),
                     )),
-                    Center(child: _previewChild()),
+                    Center(
+                      child: Builder(
+                        builder: (context) => MediaQuery(
+                          data: MediaQuery.of(context)
+                              .copyWith(size: const Size(402, 874)),
+                          child: _previewChild(),
+                        ),
+                      ),
+                    ),
                     Positioned(
                       right: 12,
                       bottom: 12,
@@ -485,8 +493,9 @@ class _MotionPlaygroundScreenState extends State<MotionPlaygroundScreen> {
 
   Widget _inspector() => Container(
         color: panel,
-        padding: const EdgeInsets.all(14),
-        child: Column(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(14),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text('تنظیمات انیمیشن',
@@ -578,6 +587,7 @@ class _MotionPlaygroundScreenState extends State<MotionPlaygroundScreen> {
               text: 'تنظیمات ذخیره‌شده و رفتار VPN دست‌نخورده می‌مانند.',
             ),
           ],
+          ),
         ),
       );
 
