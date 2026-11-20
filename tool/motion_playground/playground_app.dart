@@ -545,7 +545,7 @@ class _MotionPlaygroundScreenState extends State<MotionPlaygroundScreen> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'عبارت بالا در کد Dart قرار می‌گیرد؛ پیش‌نمایش از کارت نمونه استفاده می‌کند. اجرای کد Dart دلخواه در زمان اجرا ممکن نیست.',
+                'برای پیش‌نمایش Widget واقعی، فایل custom_widget_slot.dart را به کلاس خودت متصل کن. عبارت همین فیلد هم در کد خروجی استفاده می‌شود؛ کد Dart دلخواه در زمان اجرا اجرا نمی‌شود.',
                 style: TextStyle(color: muted, fontSize: 9, height: 1.5),
               ),
             ],
