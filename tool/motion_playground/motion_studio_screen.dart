@@ -95,7 +95,7 @@ class _MotionStudioScreenState extends State<MotionStudioScreen> with SingleTick
     _CurveKind.easeInOutCubic => Curves.easeInOutCubic,
     _CurveKind.easeOutBack => Curves.easeOutBack,
     _CurveKind.easeOutQuint => Curves.easeOutQuint,
-    _CurveKind.elastic => Curves.easeOutElastic,
+    _CurveKind.elastic => Curves.elasticOut,
     _CurveKind.bounce => Curves.bounceOut,
     _CurveKind.bezier => Cubic(_x1, _y1, _x2, _y2),
     _CurveKind.spring => _SpringCurve(_duration, _mass, _stiffness, _damping),
@@ -214,7 +214,7 @@ class _MotionStudioScreenState extends State<MotionStudioScreen> with SingleTick
     final curve = switch (_curve) {
       _CurveKind.linear => 'Curves.linear', _CurveKind.easeOutCubic => 'Curves.easeOutCubic',
       _CurveKind.easeInOutCubic => 'Curves.easeInOutCubic', _CurveKind.easeOutBack => 'Curves.easeOutBack',
-      _CurveKind.easeOutQuint => 'Curves.easeOutQuint', _CurveKind.elastic => 'Curves.easeOutElastic',
+      _CurveKind.easeOutQuint => 'Curves.easeOutQuint', _CurveKind.elastic => 'Curves.elasticOut',
       _CurveKind.bounce => 'Curves.bounceOut',
       _CurveKind.bezier => 'Cubic(' + _x1.toStringAsFixed(3) + ', ' + _y1.toStringAsFixed(3) + ', ' + _x2.toStringAsFixed(3) + ', ' + _y2.toStringAsFixed(3) + ')',
       _CurveKind.spring => 'AethoneSpringCurve(durationSeconds: ' + (_duration / 1000).toStringAsFixed(3) + ', mass: ' + _mass.toStringAsFixed(2) + ', stiffness: ' + _stiffness.toStringAsFixed(1) + ', damping: ' + _damping.toStringAsFixed(1) + ')',
@@ -339,7 +339,7 @@ Widget buildAnimatedAethoneConnectControl({required Animation<double> progress, 
             final f = _sample(_controller.value);
             return Opacity(opacity: f.opacity, child: ImageFiltered(imageFilter: ui.ImageFilter.blur(sigmaX: f.blur, sigmaY: f.blur),
               child: Transform.translate(offset: Offset(f.x, f.y), child: Transform.rotate(
-                angle: f.rotation * math.pi / 180, child: Transform.scale(scale: f.scale, child: _previewChild()))));
+                angle: f.rotation * math.pi / 180, child: Transform.scale(scale: f.scale, child: _previewChild())))));
           })),
           Positioned(left: 10, bottom: 10, child: _Badge(_target == _Target.customWidget ? 'CUSTOM WIDGET' : 'AETHONE COMPONENT')),
           Positioned(right: 10, bottom: 10, child: _Badge((_controller.value * 100).round().toString() + '%')),
@@ -422,7 +422,7 @@ Widget buildAnimatedAethoneConnectControl({required Animation<double> progress, 
           )),
         )),
         Positioned(left: (_controller.value * usable).clamp(0.0, usable), top: 1, child: Container(width: 1.5, height: 20, color: Colors.white.withValues(alpha: .85))),
-      ]);
+      ]));
     })),
   ]));
 
@@ -513,7 +513,7 @@ Widget buildAnimatedAethoneConnectControl({required Animation<double> progress, 
       ]))),
       const Divider(height: 1, color: _line),
       Expanded(child: SingleChildScrollView(padding: const EdgeInsets.all(10), child: Directionality(textDirection: TextDirection.ltr,
-        child: SelectableText(_code, style: const TextStyle(fontFamily: 'monospace', fontSize: 9, height: 1.45, color: Color(0xFFC7D8CC))))),
+        child: SelectableText(_code, style: const TextStyle(fontFamily: 'monospace', fontSize: 9, height: 1.45, color: Color(0xFFC7D8CC)))))),
     ]));
 
   String _stateLabel(VpnState s) => switch (s) {
