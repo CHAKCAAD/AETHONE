@@ -7,42 +7,27 @@
 /// The canvases render at [AethGeometry.patternScale] (0.6) of the screen
 /// width (v4.12 — owner: «پترن‌های چپ و راست رو ۴۰ درصد کوچک‌تر کن»).
 ///
-/// v4.25 — ONE composition for EVERY page (the owner's twin decrees:
-/// «از پترن های صفحه اصلی برای سایر صفحات مثل انتخاب پروتکل و تنطیمات
-/// استفاده کن دقیقا همونا با همون مکان» and «مکانش دقیقا مثل صفحه اصلی
-/// باشه»): the v4.17 per-screen [PatternStage] split is RETIRED — the old
-/// edge-glued settings variant could still ship in a stale build and read
-/// as "wrong place"; now there is a single code path and it cannot diverge.
-/// The ART (not the canvas) is placed with the measured art bounds
-/// ([AethGeometry.patternLeftArtTopRow] etc.): the LEFT art is centred at
-/// 60% of the screen height (10% below the middle — owner v4.17: «پترن سمت
-/// چپ رو بیار بالا تر در حدی که حدود ۱۰٪ پایین‌تر از وسط صفحه باشه»),
-/// the RIGHT art's bottom edge lands at 40% (10% above the middle — «پترن
-/// سمت راست رو بیار پایین تر در حدی که حدود ۱۰٪ بالاتر از وسط صفحه
-/// باشه») — the diagonal frame the reference screens show, computed from
-/// the LIVE height so it holds on every device.
+/// v5 («نمای 2», owner round 19) — the owner's NEW artwork pair (the ZIP
+/// «پترن سمت چپ/راست» frames, connected + disconnected): the canvases are
+/// 534×1593 (left) / 594×1848 (right) at 3×, rendered at their OWN design
+/// scale (44 % / 49 % of the 402 reference width) hugging their screen
+/// edges. Placement (template-matched on the committed mockups): the LEFT
+/// art's centre rides at 27 % of the LIVE screen height, the RIGHT art's
+/// ink ends at 48.5 % — both reflow on every device.
 ///
-/// The color change is animated as a crossfade between the two artwork
-/// variants (owner: «با انیمیشن به رنگ سبز تغییر پیدا میکنند»).
+/// v5: the v4.35 alpha ×1.6 boost is RETIRED — the new art's strokes
+/// composite at full design strength on the mockups (measured max ink
+/// ≈102/255 vs the PNG's own ≈99 composite), so the canvases render
+/// untouched.
 ///
-/// v4.41 (owner round 17, item 6): «کمی فلش های رو به بالا پترن های کنار
-/// تمام صفحات رو کوچیک تر کن دقت کن فقط فلش رو به بالا رو کوچیک کن، نه
-/// حاله رنگی زیرش» — the up-arrow chevron STROKES of all four artworks
-/// were re-scaled to 0.8 around their own centre (path + mask + gradient
-/// coordinates, SVG sources in design/پترن پس زمینه صفحه اصلی), while the
-/// blurred halo circle underneath kept its geometry untouched; the PNGs
-/// were re-rendered from those sources.
+/// v4.25 — ONE composition for EVERY page (the owner's twin decrees):
+/// home, the settings main page and every sub-page share this single
+/// placement; there is one code path and it cannot diverge.
 ///
-/// While [active] (the engine walking OR the tunnel up — home only) the
-/// canvases come alive: a slow VERTICAL drift plus a gentle luminance
-/// breath — v4.25 makes the drift the STYLE'S OWN tempo ([MotionRecipe]):
-/// SILK 6.5 s ±7 px · TIDE 9.5 s ±11 px (slow, wide, deep breath) ·
-/// SPRING 4.2 s ±9 px (a quick bob) · BLINK ±3 px (barely there) ·
-/// OFF static. v4.17 — the drift runs on the VERTICAL axis (owner home
-/// round #4: the old horizontal sway slid the edge-hugging art out of
-/// view; with the floating anchors neither art touches a screen edge, so
-/// an up-down drift can never push ink off-screen). MotionStyle.off keeps
-/// them static (accessibility clamp).
+/// The color change stays an animated crossfade between the two artwork
+/// variants; while [active] (the engine walking OR the tunnel up — home
+/// only) the canvases keep their vertical drift + luminance breath on the
+/// style's own tempo ([MotionRecipe]).
 library;
 
 import 'dart:math' as math;
@@ -73,22 +58,6 @@ class PatternSides extends StatefulWidget {
   @override
   State<PatternSides> createState() => _PatternSidesState();
 }
-
-/// v4.35 (owner round 11, item 8: «حالت‌های سبز و قرمز پترن‌های صفحات رو
-/// کمی پر رنگ‌تر و بزرگ‌تر کن») — the paint half of the decree: the pattern
-/// PNGs are thin blurred strokes whose alpha mostly sits at 12–25 % (the
-/// feGaussianBlur falloff of the source art), so on screen they read as a
-/// dim ghost. This matrix multiplies every pixel's ALPHA by 1.6 (capped at
-/// opaque by the rasterizer) — the soft halos lift toward their stroke
-/// colors and the canvases grow 0.6 → 0.7 ([AethGeometry.patternScale],
-/// the size half of the same decree). Hue/saturation untouched (the
-/// strokes are already pure #1AD995 / #EA2323).
-const List<double> _patternAlphaBoost = <double>[
-  1, 0, 0, 0, 0, //
-  0, 1, 0, 0, 0, //
-  0, 0, 1, 0, 0, //
-  0, 0, 0, 1.6, 0, //
-];
 
 class _PatternSidesState extends State<PatternSides>
     with SingleTickerProviderStateMixin {
@@ -147,20 +116,21 @@ class _PatternSidesState extends State<PatternSides>
         final h = box.maxHeight;
         final s = w / AethGeometry.refWidth;
 
-        // Canvases at 60% of the screen width (v4.12, art 40% smaller).
-        final leftW = w * AethGeometry.patternScale;
+        // v5 — the new canvases at their own design scale (×s, s =
+        // width/402), hugging their screen edges like the mockups.
+        final leftW = AethGeometry.patternLeftCanvasW * s;
         final leftH = leftW * AethGeometry.patternLeftAspect;
-        final rightW = w * AethGeometry.patternScale;
+        final rightW = AethGeometry.patternRightCanvasW * s;
         final rightH = rightW * AethGeometry.patternRightAspect;
 
-        // v4.25 — the ONE composition (the v4.17 home placement, from the
-        // LIVE height): the LEFT art centred at 0.60h (10% below the
-        // middle), the RIGHT art's bottom edge at 0.40h (10% above it).
+        // v5 placement (mockup-measured): the LEFT art's CENTRE at 27 % of
+        // the LIVE height, the RIGHT art's ink BOTTOM at 48.5 %.
         const leftArtMidRow = AethGeometry.patternLeftArtTopRow +
             AethGeometry.patternLeftArtRows / 2;
-        final leftTop = 0.60 * h - leftArtMidRow * leftH / 1232;
-        final rightTop =
-            0.40 * h - AethGeometry.patternRightArtBottomRow * rightH / 1178;
+        final leftTop = AethGeometry.patternLeftAnchor * h -
+            leftArtMidRow * leftH / 1593;
+        final rightTop = AethGeometry.patternRightAnchor * h -
+            AethGeometry.patternRightArtBottomRow * rightH / 1848;
 
         return IgnorePointer(
           child: Stack(
@@ -178,20 +148,15 @@ class _PatternSidesState extends State<PatternSides>
                   breathFloor: recipe.swayBreathFloor,
                   child: AnimatedSwitcher(
                     duration: duration,
-                    child: ColorFiltered(
-                      colorFilter: const ColorFilter.matrix(
-                        _patternAlphaBoost,
+                    child: Image.asset(
+                      key: ValueKey(
+                        'pattern-left-${widget.connected ? 'on' : 'off'}',
                       ),
-                      child: Image.asset(
-                        key: ValueKey(
-                          'pattern-left-${widget.connected ? 'on' : 'off'}',
-                        ),
-                        widget.connected
-                            ? AppAssets.patternConnectedLeft
-                            : AppAssets.patternDisconnectedLeft,
-                        fit: BoxFit.fill,
-                        filterQuality: FilterQuality.medium,
-                      ),
+                      widget.connected
+                          ? AppAssets.patternConnectedLeft
+                          : AppAssets.patternDisconnectedLeft,
+                      fit: BoxFit.fill,
+                      filterQuality: FilterQuality.medium,
                     ),
                   ),
                 ),
@@ -208,20 +173,15 @@ class _PatternSidesState extends State<PatternSides>
                   breathFloor: recipe.swayBreathFloor,
                   child: AnimatedSwitcher(
                     duration: duration,
-                    child: ColorFiltered(
-                      colorFilter: const ColorFilter.matrix(
-                        _patternAlphaBoost,
+                    child: Image.asset(
+                      key: ValueKey(
+                        'pattern-right-${widget.connected ? 'on' : 'off'}',
                       ),
-                      child: Image.asset(
-                        key: ValueKey(
-                          'pattern-right-${widget.connected ? 'on' : 'off'}',
-                        ),
-                        widget.connected
-                            ? AppAssets.patternConnectedRight
-                            : AppAssets.patternDisconnectedRight,
-                        fit: BoxFit.fill,
-                        filterQuality: FilterQuality.medium,
-                      ),
+                      widget.connected
+                          ? AppAssets.patternConnectedRight
+                          : AppAssets.patternDisconnectedRight,
+                      fit: BoxFit.fill,
+                      filterQuality: FilterQuality.medium,
                     ),
                   ),
                 ),

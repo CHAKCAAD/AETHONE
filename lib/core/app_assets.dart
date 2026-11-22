@@ -108,6 +108,10 @@ abstract final class AppAssets {
   static const String iconActivity4 = '$_icons/Activity 4.svg';
   static const String iconRight2 = '$_icons/Right 2.svg';
 
+  /// v5 («نمای 2») — the country-row expander chevron («Hicon / Linear /
+  /// Down 2», rotated −180° so it points UP at the flags wheel above).
+  static const String iconDown2 = '$_icons/Down 2.svg';
+
   // --- step 2 (settings main page): pixel-matched against the design
   // frame — the six card icons, the status-card icons, the section
   // heading icon, and the owner's GitHub logo for the server cards.
@@ -326,6 +330,7 @@ abstract final class AppAssets {
         iconOff,
         iconActivity4,
         iconRight2,
+        iconDown2,
         iconRedo,
         iconFilter5,
         iconLock1,

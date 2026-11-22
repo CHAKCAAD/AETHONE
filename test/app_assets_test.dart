@@ -62,8 +62,10 @@ void main() {
 
   test('fa strings are the exact reference-screen texts', () {
     final fa = AppStrings.forLocale('fa');
-    expect(fa.statusDisconnected, 'غیرفعال');
-    expect(fa.statusConnected, 'متصل');
+    // v5 («نمای 2»): the owner's own pill labels, tatweel-stretched
+    // exactly as the committed CSS spells them.
+    expect(fa.statusDisconnected, 'قــطــع!');
+    expect(fa.statusConnected, 'مــتـصـل');
     expect(fa.offline, 'آفلاین');
     expect(fa.protocol, 'پروتکل');
   });

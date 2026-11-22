@@ -58,6 +58,8 @@ class AethPal {
     required this.bgScreen,
     required this.cardDark,
     required this.topTile,
+    required this.connectBase,
+    required this.flagRing,
     required this.textPrimary,
     required this.textSecondary,
     required this.onPillConnected,
@@ -93,8 +95,19 @@ class AethPal {
   final Color cardDark;
 
   /// Top-bar icon tiles (Rectangle 9/17) — night `#0F1510` / light
-  /// `#FFFFFF`.
+  /// `#F4F4F4` (v5: the «نمای 2» mockup's tiles measure #F4F4F4 on the
+  /// now-white page).
   final Color topTile;
+
+  /// v5 («نمای 2») — the look-2 connect button's base squircle («3»:
+  /// 160×160 r60, `#FFFFFF` in the committed light frames); night maps it
+  /// to the dark-card family `#0F1511`.
+  final Color connectBase;
+
+  /// v5 — the selected-flag ring («Ellipse 74»: 4px `#F4F4F4` in light);
+  /// night `#1A261C` (the sheet-subtile relation — just visible on the
+  /// night panel).
+  final Color flagRing;
 
   /// Primary text / icon ink — night `#FFFFFF` / light `#141C16` (owner:
   /// «متن ها و آیکون های روی کارت … باید به رنگ 141C16 در لایت مود»).
@@ -195,6 +208,8 @@ class AethPal {
     bgScreen: Color(0xFF141C16),
     cardDark: Color(0xFF0F1511),
     topTile: Color(0xFF0F1510),
+    connectBase: Color(0xFF0F1511),
+    flagRing: Color(0xFF1A261C),
     textPrimary: Color(0xFFFFFFFF),
     textSecondary: Color(0xFF8E8E93),
     onPillConnected: Color(0xFF123E2B),
@@ -221,10 +236,16 @@ class AethPal {
   );
 
   /// The owner-CSS light palette (plus the documented derivations).
+  /// v5 («نمای 2»): the committed mockups render the page PURE WHITE
+  /// (`#FFFFFF` — pixel-sampled), the cards/tiles `#F4F4F4` (owner CSS
+  /// «Rectangle 13» + the measured top tiles), so the light family moves
+  /// from the old #EDEDED/#FFFFFF pair to #FFFFFF/#F4F4F4.
   static const AethPal light = AethPal(
-    bgScreen: Color(0xFFEDEDED),
-    cardDark: Color(0xFFFFFFFF),
-    topTile: Color(0xFFFFFFFF),
+    bgScreen: Color(0xFFFFFFFF),
+    cardDark: Color(0xFFF4F4F4),
+    topTile: Color(0xFFF4F4F4),
+    connectBase: Color(0xFFFFFFFF),
+    flagRing: Color(0xFFF4F4F4),
     textPrimary: Color(0xFF141C16),
     textSecondary: Color(0xFFA3A3A3),
     onPillConnected: Color(0xFF141C16),
@@ -258,6 +279,8 @@ class AethPal {
         bgScreen: Color.lerp(a.bgScreen, b.bgScreen, t)!,
         cardDark: Color.lerp(a.cardDark, b.cardDark, t)!,
         topTile: Color.lerp(a.topTile, b.topTile, t)!,
+        connectBase: Color.lerp(a.connectBase, b.connectBase, t)!,
+        flagRing: Color.lerp(a.flagRing, b.flagRing, t)!,
         textPrimary: Color.lerp(a.textPrimary, b.textPrimary, t)!,
         textSecondary: Color.lerp(a.textSecondary, b.textSecondary, t)!,
         onPillConnected: Color.lerp(a.onPillConnected, b.onPillConnected, t)!,

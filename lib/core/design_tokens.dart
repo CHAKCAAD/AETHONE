@@ -40,6 +40,35 @@ abstract final class AethColors {
   static const double pillHaloOpacity = 0.19;
   static const double pillMidOpacity = 0.45;
 
+  // ---- v5 (owner round 19, «نمای 2» redesign) — the new home CSS. ----
+
+  /// The pill gradient's LIGHT end — owner CSS «لایه 1»:
+  /// `linear-gradient(266.14deg, #2FF8B1 -4.82%, #1AD995 100%)` (the
+  /// connected pill). The dark end is [accentConnected] itself.
+  static const Color pillGreenFrom = Color(0xFF2FF8B1);
+
+  /// The DISCONNECTED pill gradient — owner CSS «گرادینت قرمز»:
+  /// `linear-gradient(180deg, #FF5B5E 0%, #FF383C 100%)`. The deep end
+  /// is the pill's own [statusDisconnected] family anchor.
+  static const Color pillRedFrom = Color(0xFFFF5B5E);
+  static const Color pillRedTo = Color(0xFFFF383C);
+
+  /// The look-2 connect button's WHITE base («3»: 160×160, r60,
+  /// `background: #FFFFFF`) — theme-dependent: light `#FFFFFF`, night the
+  /// dark-card family `#0F1511` (the new design ships light frames only;
+  /// the night mapping follows the standing card relation).
+  static Color get connectBase => AethThemeSync.palette.connectBase;
+
+  /// The selected-flag ring («Ellipse 74»: 4px `#F4F4F4`) — light `#F4F4F4`
+  /// on the white panel, night `#1A261C` (the sheet-subtile relation — a
+  /// just-visible ring on the night panel).
+  static Color get flagRing => AethThemeSync.palette.flagRing;
+
+  /// The speed-test button's DISCONNECTED core («1»: 44×44 r17,
+  /// `background: #363636`) — const: the CSS names one value for the dark
+  /// idle face in every theme.
+  static const Color speedIdleCore = Color(0xFF363636);
+
   /// Gold accent on mim / gool-classic protocol icons (asset XML `#997A35`).
   static const Color goldAccent = Color(0xFF997A35);
 
@@ -219,37 +248,37 @@ abstract final class AethColors {
 
 /// Shape & effect tokens (report table 8, Figma CSS + owner CSS v4.11).
 abstract final class AethRadius {
-  /// Status pill radii — owner CSS (Group 8): layers 140x38 r13 /
-  /// 132.88x32 r11 / 125.76x26 r9. The 4th blurred blob layer (162x60) is
-  /// REMOVED per the owner: the pill has exactly 3 background layers + a soft
-  /// blurred accent shadow underneath (like the background-pattern glow).
-  static const double pillHalo = 13;
-  static const double pillMid = 11;
+  /// v5 («نمای 2») — the status pill is ONE solid gradient layer: 126×30,
+  /// `border-radius: 9px` (owner CSS «لایه 1»). The v4.11 three-layer
+  /// halo/mid stack and the soft under-shadow are RETIRED by the redesign.
   static const double pillCore = 9;
 
-  /// Speed Test button radii — owner CSS (Group 11): 96 r32 / 74 r32 /
-  /// 62 r27 / 44 r17.
-  static const double speedGlow = 32;
+  /// Speed Test button radii — v5 owner CSS (Group 13): 74 r32 / 62 r27 /
+  /// 44 r17 (the home button's three crisp layers; the blurred 96 glow
+  /// is gone from HOME — the speed PAGE's own start button keeps it as
+  /// [speedStartGlow]).
   static const double speedHalo = 32;
   static const double speedMid = 27;
   static const double speedCore = 17;
 
-  /// v4.33 — the look-2 CONNECT button composition (the owner's own CSS,
-  /// «Group 45»/«Group 11», 236×236 at the hero position): four concentric
-  /// layers, the outermost a circular blurred glow, the inner three
-  /// SQUIRCLES (the old circular GlowCircle is retired by decree):
-  ///   glow : 236×236,   r120 (a circle), rgba(26,217,149,0.53), blur(57)
-  ///   halo : 181.92²,   r69,  rgba(26,217,149,0.19)
-  ///   mid  : 152.42²,   r62,  rgba(26,217,149,0.45)
-  ///   core : 108.17²,   r41,  #1AD995 + the Off glyph 48×48, 4.5px #0D5138
-  static const double connectGlow = 120;
-  static const double connectHalo = 69;
-  static const double connectMid = 62;
+  /// The speed-test PAGE's start button — its outer glow layer radius
+  /// (the v4.33 «Group 11» composition the page still renders).
+  static const double speedStartGlow = 32;
+
+  /// v5 — the look-2 CONNECT button (owner CSS «Group 45»): the WHITE base
+  /// 160×160 r60 («3») + the gradient core 108.17² r41 («1») with the Off
+  /// glyph 48×48 in WHITE on top. The v4.33 glow/halo/mid alpha stack is
+  /// RETIRED — the redesign is two crisp squircles.
+  static const double connectBase = 60;
   static const double connectCore = 41;
 
   /// Dark cards — corner radius pixel-measured on the reference frames:
   /// protocol card (62 tall) and stat cards (65 tall) both ≈16.
   static const double card = 16;
+
+  /// v5 — the redesigned protocol card: 336×62, `border-radius: 17px`
+  /// (owner CSS «Rectangle 13»).
+  static const double protocolCard = 17;
 
   /// FAB column container radius (65×138 squircle column, ≈20).
   static const double fabColumn = 20;
@@ -273,54 +302,42 @@ abstract final class AethGeometry {
   static const double connectButtonSize = 48;
   static const double connectButtonRise = 72;
 
-  /// Edge patterns. v4.11 anchored each canvas (LEFT art bottom on the
-  /// screen bottom, RIGHT art top on the screen top). v4.12 — owner
-  /// «پترن‌های چپ و راست رو ۴۰ درصد کوچک‌تر کن، الان خیلی بزرگن»: the
-  /// canvases render at [patternScale] of the screen width (art 40% smaller
-  /// than the v4.11 full-width span), keeping the same anchors — left art
-  /// hugging the LEFT edge, right art the RIGHT edge.
-  ///
-  /// v4.15 — owner settings round #4: «پترن سمت چپ پس زمینه پایینش حالت
-  /// برش خورده داره یا اون رو پایین تر بیار که بچسبه به پایین و برش
-  /// خوردگیش مشخص نباشه». Measured on the shipped PNG (PIL alpha profile):
-  /// the visible art (alpha>40) ends at canvas row 834/1232 — the OLD anchor
-  /// 969/1232 left that hard end ~71 ref px ABOVE the glass, which read as a
-  /// straight cut. New anchor: the art's end runs 25 canvas rows (~13 ref
-  /// px) BELOW the screen bottom, so the pattern flows off the bottom edge
-  /// and no end edge is ever visible on screen («بچسبه به پایین»).
-  // v4.35 (owner round 11, item 8: «حالت‌های سبز و قرمز پترن‌های صفحات رو
-  // کمی پر رنگ‌تر و بزرگ‌تر کن») — 0.6 → 0.7: the canvases grow back
-  // ~17 % (a bit bigger, the v4.12 40 % cut restored partially), and the
-  // paint adds an alpha ×1.6 lift (see pattern_sides.dart) so the soft
-  // blurred strokes read stronger in BOTH color states.
-  static const double patternScale = 0.7;
-  static const double patternLeftAspect = 1232 / 456; // h/w of the canvas
-  static const double patternRightAspect = 1178 / 464;
-  static const double patternLeftAnchorBottom = 809 / 1232;
-  static const double patternRightAnchorTop = 205 / 1178;
+  /// Edge patterns — v5 («نمای 2»): the owner's new artwork pair (ZIP
+  /// «پترن سمت چپ/راست», canvases 534×1593 left / 594×1848 right at 3×).
+  /// The canvases render at their OWN design scale (44 % / 49 % of the
+  /// 402 reference width), hugging their screen edges exactly like the
+  /// committed mockups (template-matched: the LEFT art's centre rides at
+  /// ≈27 % of the screen height, the RIGHT art's ink ends ≈48–49 % —
+  /// both measured on «نمای 2-متصل/قطع»).
+  static const double patternLeftCanvasW = 178; // 534 / 3
+  static const double patternRightCanvasW = 198; // 594 / 3
+  static const double patternLeftAspect = 1593 / 534; // h/w of the canvas
+  static const double patternRightAspect = 1848 / 594;
+
+  /// Art bounds inside the new canvases (PIL alpha>30 profile): the LEFT
+  /// art occupies canvas rows 372–1011 (hugging the canvas's LEFT edge,
+  /// cols 0–267), the RIGHT art rows 656–1147 (hugging its RIGHT edge,
+  /// cols 324–593).
+  static const double patternLeftArtTopRow = 372;
+  static const double patternLeftArtRows = 639; // 372..1011
+  static const double patternRightArtBottomRow = 1147; // art rows 656..1147
+
+  /// v5 placement anchors (fractions of the LIVE screen height, from the
+  /// mockup measurement): the LEFT art's CENTRE sits at 27 %, the RIGHT
+  /// art's BOTTOM ink edge at 48.5 %.
+  static const double patternLeftAnchor = 0.27;
+  static const double patternRightAnchor = 0.485;
 
   /// v4.12 — owner «کمی از بالا کل اپ رو فاصله بده تا اپ وارد فرورفتگی
   /// نمایش درصد شارژ و ... گوشی نشه»: extra top gap UNDER the SafeArea so
   /// the content never crowds the status bar / notch on any device.
   static const double topSafeExtraGap = 12;
 
-  /// Edge-pattern ART BOUNDS inside the committed canvases (PIL alpha>40
-  /// profile, v4.17): the LEFT art occupies canvas rows 375..834 of 1232
-  /// (hugs its LEFT edge), the RIGHT art rows 357..719 of 1178 (hugs its
-  /// RIGHT edge). The v4.17 per-screen placement formulas need these to put
-  /// the art itself — not the canvas — on the owner's requested bands.
-  static const double patternLeftArtTopRow = 375;
-  static const double patternLeftArtRows = 459; // 375..834
-  static const double patternRightArtBottomRow = 719; // art rows 357..719
-
-  /// v4.33 — the look-2 CONNECT button composition sizes (the owner's own
-  /// CSS, 236×236 «Group 45» at the hero position left:83 top:263):
-  /// glow 236 (circle r120, blurred 57) / halo 181.92 / mid 152.42 /
-  /// core 108.17 (squircle r41) with the Off glyph 48×48. The whole group
-  /// IS the button's layout box — the glow spills past it via blur.
-  static const double connectGroupSize = 236;
-  static const double connectHaloSize = 181.92;
-  static const double connectMidSize = 152.42;
+  /// v5 — the look-2 CONNECT button composition (the owner's new CSS
+  /// «Group 45», 160×160 at the hero position left:121 top:307): the WHITE
+  /// base 160² r60 («3») + the gradient core 108.17² r41 («1») + the Off
+  /// glyph 48×48 in WHITE. The whole group IS the button's layout box.
+  static const double connectGroupSize = 160;
   static const double connectCoreSize = 108.17;
   static const double connectIconSize = 48;
 
@@ -329,50 +346,17 @@ abstract final class AethGeometry {
   /// measures ≈150 total / ≈66 core).
   static const double obPreviewGroupSize = 150;
 
-  /// Status pill group — owner CSS (Group 8): outer layer 140×38 at
-  /// (131,605); all layers concentric (center x201 = frame center).
-  static const double pillWidth = 140;
-  static const double pillHeight = 38;
-  static const double pillMidWidth = 132.88;
-  static const double pillMidHeight = 32;
-  static const double pillCoreWidth = 125.76;
-  static const double pillCoreHeight = 26;
+  /// Status pill group — v5 owner CSS («Group 8»/«لایه 1"): ONE gradient
+  /// layer 126×30 (r9) centered on the frame (x 136–262, y 198–228); the
+  /// Shield Tick glyph 20×20 and the 16px/600 label ride it in WHITE.
+  static const double pillWidth = 126;
+  static const double pillHeight = 30;
+  static const double pillIconSize = 20;
 
-  /// Soft blurred accent shadow under the pill (owner: «یک سایه محو سبز رنگ
-  /// زیرش مثل سایه سبز پترن های پس زمینه»). v4.13 — owner round-4 #5:
-  /// «حالۀ سبز زیر دکمهٔ نمایش وضعیت اتصال و دکمهٔ اسپید تست زیادی کوچیک و
-  /// پر رنگه؛ کمی کم‌رنگ‌ترش کن و بلرش رو بیشتر کن تا منطقه بیشتری رو پوشش
-  /// بده، اما زیاد هم بزرگش نکن» — the halo rect is a touch wider than the
-  /// pill, the sigma doubled, the alpha reduced.
-  static const double pillShadowW = 152;
-  static const double pillShadowH = 48;
-  static const double pillShadowRadius = 16;
-  static const double pillShadowBlur = 24;
-  static const double pillShadowOffsetY = 8;
-  static const double pillShadowAlpha = 0.30;
-
-  /// Speed-Test glow layer (Group 11 halo) — v4.33: the owner's own CSS
-  /// (both states) pins the glow at rgba(26,217,149,0.53) with
-  /// `filter: blur(57px)`; the old 0.34/24 tuning is superseded by the
-  /// explicit decree («کد css ش رو هم میزارم»).
-  static const double speedGlowOpacity = 0.53;
-  static const double speedGlowBlur = 57;
-
-  /// The connect-button glow blur — the owner CSS `filter: blur(57px)`
-  /// on the 236×236 layer (v4.33).
-  static const double connectBlur = 57;
-
-  /// Speed Test button group — owner CSS (Group 11): 96×96 glow at (153,508),
-  /// layers concentric, core 44×44 at (179,534); icon box 28×28 (Activity 4).
-  static const double speedGroupSize = 96;
-  static const double speedHaloSize = 74;
-  static const double speedMidSize = 62;
-  static const double speedCoreSize = 44;
-  static const double speedIconSize = 28;
-
-  /// Top-bar icon tile (owner CSS Rectangle 9): 50×50, icon glyph ≈26.
+  /// Top-bar icon tile (owner CSS Rectangle 9): 50×50; v5 («نمای 2»): the
+  /// glyph ink measures ≈28–30 on the committed frames → glyph ≈32.
   static const double topTileSize = 50;
-  static const double topTileIcon = 26;
+  static const double topTileIcon = 32;
   static const double topTileRadius = 16;
 
   /// Brand mark behind the wordmark (آیکون اپ/2.svg) — measured on the
@@ -381,27 +365,9 @@ abstract final class AethGeometry {
   static const double wordmarkFontSize = 15;
   static const double wordmarkLetterSpacing = 1.1;
 
-  /// Figma CSS: `filter: blur(57px)` on the glow layer — but the reference
-  /// FRAMES show a tight neon halo (~15–25px beyond the group box). Figma's
-  /// blur value and a CSS blur(57px) disagree with the exported frames; the
-  /// frames are the ground truth the user compares against, so the effective
-  /// sigma is tuned to them (v4.10; measured glow profile on
-  /// حالت متصل-ضاهر1: α 0.45→0.19 within 15px of the core).
-  static const double pillBlur = 10;
-
-  /// Figma CSS box-shadow of the pill group.
-  static final List<BoxShadow> pillShadow = [
-    const BoxShadow(
-      color: Color(0x0D00091F), // rgba(0,9,31,0.05) 0 8 24
-      offset: Offset(0, 8),
-      blurRadius: 24,
-    ),
-    const BoxShadow(
-      color: Color(0x1AFFFFFF), // rgba(255,255,255,0.1) 0 1 1
-      offset: Offset(0, 1),
-      blurRadius: 1,
-    ),
-  ];
+  // (v5 «نمای 2»: the pill's v4.10 tuned blur + Figma box-shadow pair are
+  // RETIRED with the three-layer pill — the redesign is one crisp gradient
+  // layer with no shadow, per the owner's new CSS.)
 
   /// Page horizontal padding — pixel-measured v4.10: bottom-panel cards span
   /// x 33–370 and the top-bar icons start at x 45 (= 33 + 12 IconButton
@@ -410,9 +376,88 @@ abstract final class AethGeometry {
 
   /// Flags: 42×42 tiles, selected 52 (pixel-measured on the reference flags
   /// row y 161–212); carousel pitch 72. Assets are 256×256 PNGs.
+  /// v5: the clips are CIRCULAR (radius ≈ 0.47·size — owner CSS image
+  /// radii 60/70px at 3×) and the selected centre flag rides a 4px ring
+  /// («Ellipse 74», 58×58 #F4F4F4).
   static const double flagSize = 42;
   static const double flagSizeSelected = 52;
   static const double flagPitch = 72;
+  static const double flagRadiusFactor = 0.47;
+  static const double flagRingSize = 58;
+  static const double flagRingBorder = 4;
+
+  // -------------------------------------------------------------------
+  // v5 («نمای 2» redesign) — the look-2 vertical rhythm, measured on the
+  // committed mockups «نمای 2-متصل/قطع» (402×874 @3×). All values in
+  // reference pixels BELOW the top bar (which itself sits at design y 34
+  // under the status area — the app keeps its SafeArea+12 convention).
+  // -------------------------------------------------------------------
+
+  /// Top-bar bottom → status pill top: design y 84 → 198.
+  static const double gapTopbarToPill = 114;
+
+  /// The connect button's bottom → the panel's top edge: design y 467 →
+  /// 470 — the white base all but TOUCHES the panel (the merged-blob look).
+  static const double gapHeroToPanel = 3;
+
+  /// The panel's top edge → the speed-test row: design y 470 → 532 (the
+  /// curved sheet's empty crown above the stats row).
+  static const double panelTopPad = 62;
+
+  /// The speed row (74 tall: button 164–238 × 532–606) → the flags band:
+  /// design y 606 → 636.
+  static const double gapStatsToFlags = 30;
+
+  /// The flags band (52 tall, y 636–688) → the country row block
+  /// («Group 115», 45 tall, y 703–748).
+  static const double gapFlagsToRow = 15;
+  static const double countryRowHeight = 45;
+
+  /// The country row block → the protocol card: design y 748 → 775.
+  static const double gapRowToCard = 27;
+
+  /// The protocol card (62 tall, y 775–837) → the screen bottom (874): 37,
+  /// of which ~34 is the reference home-indicator inset — the app renders
+  /// 3 + the live bottom inset (the panel itself bleeds edge-to-edge).
+  static const double gapCardToBottomBase = 3;
+
+  /// The stats row's stat groups (mockup-measured): Graph glyph 26×26 at
+  /// x 34 (DOWN) / x 282 (UP), 20px icon→text gap, label 10px over value
+  /// 14px — the SAME «DOWN:»/«UP:» type ramp the look-1 cards carry.
+  static const double statGlyphSize = 26;
+  static const double statGlyphTextGap = 20;
+
+  /// Speed Test button group — v5 owner CSS (Group 13): 74×74 at
+  /// (164,532); layers 74 r32 / 62 r27 / 44 r17; icon 28×28 in WHITE.
+  static const double speedGroupSize = 74;
+  static const double speedMidSize = 62;
+  static const double speedCoreSize = 44;
+  static const double speedIconSize = 28;
+
+  /// The SPEED-TEST PAGE's own start button keeps the v4.33 «Group 11»
+  /// composition (untouched by the home redesign): 96×96 blurred glow +
+  /// the 74/62/44 stack under it.
+  static const double speedStartGroupSize = 96;
+  static const double speedStartGlowOpacity = 0.53;
+  static const double speedStartGlowBlur = 57;
+
+  /// v5 — the curved bottom-sheet's shadow (owner CSS «Rectangle 87» + the
+  /// committed SVG filter): `0 -16 95 rgba(0,0,0,0.09)` = σ 47.5, dy −16.
+  static const double panelShadowSigma = 47.5;
+  static const double panelShadowDy = -16;
+  static const double panelShadowAlpha = 0.09;
+
+  /// v5 — the panel's curved crown, normalized to the panel's own top edge
+  /// (owner SVG path, design px): flat rim 0–96, the U-dip sinks to +30 in
+  /// the centre (x 182–215), rim again from 301. X values are fractions of
+  /// the LIVE width so the curve reflows on every device.
+  static const double panelDipX1 = 96.157;
+  static const double panelDipCx1 = 146.704;
+  static const double panelDipX2 = 182.664;
+  static const double panelDipX3 = 214.836;
+  static const double panelDipCx2 = 250.796;
+  static const double panelDipX4 = 301.343;
+  static const double panelDipDepth = 30.0; // 141.148 − 111
 
   /// Bottom panel rows (pixel-measured v4.10, ref frame 402×874):
   /// protocol card y 706–768 (62), stat cards y 776–841 (65),
@@ -424,11 +469,12 @@ abstract final class AethGeometry {
   static const double fabColumnHeight = 138;
   static const double protocolLogoSize = 30;
 
-  /// Vertical rhythm gaps (ref frame): topbar→location 21, location→flags 13,
+  /// Vertical rhythm gaps (ref frame): topbar→location 21,
   /// speed-group(96)→pill 1 (design y604→605), pill(38)→panel 63
-  /// (design y643→706), panel→bottom 30. (v4.11 — owner CSS Group 8/11.)
+  /// (design y643→706), panel→bottom 30. (v4.11 — owner CSS Group 8/11.
+  /// v5: the old location→flags gap is retired with the v4.13 band order
+  /// — the new band owns [gapFlagsToRow] instead.)
   static const double gapTopbarToLocation = 21;
-  static const double gapLocationToFlags = 13;
   static const double gapSpeedToPill = 1;
   static const double gapPillToPanel = 63;
   static const double gapPanelToBottom = 30;

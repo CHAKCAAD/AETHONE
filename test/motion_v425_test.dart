@@ -302,8 +302,11 @@ void main() {
         ..sort((a, b) => a.left.compareTo(b.left));
       // Both canvases must have actually laid out (decoded + sized) —
       // a zero-sized rect would quietly void the comparison below.
+      // v5: the new artworks render at their OWN design scale — the LEFT
+      // canvas 178 wide, the RIGHT 198 (44 % / 49 % of the 402 frame).
+      expect(rects.first.width, closeTo(178, 0.5));
+      expect(rects.last.width, closeTo(198, 0.5));
       for (final r in rects) {
-        expect(r.width, closeTo(402 * AethGeometry.patternScale, 0.5));
         expect(r.height, greaterThan(400));
       }
       return rects;
@@ -346,20 +349,21 @@ void main() {
         );
       }
 
-      // …and the shared placement is the owner-approved v4.17 home band:
-      // the LEFT art's middle row sits at 60% of the screen height, the
-      // RIGHT art's bottom edge at 40% (10% above the middle).
+      // …and the shared placement is the v5 mockup-measured band: the
+      // LEFT art's middle row sits at 27% of the screen height, the RIGHT
+      // art's ink bottom at 48.5% (both template-matched on the committed
+      // «نمای 2» frames).
       const h = AethGeometry.refHeight * 1.0;
       final left = homeRects.first;
       final leftArtMidPx = (AethGeometry.patternLeftArtTopRow +
               AethGeometry.patternLeftArtRows / 2) /
-          1232 *
+          1593 *
           left.height;
-      expect(left.top + leftArtMidPx, closeTo(0.60 * h, 0.5));
+      expect(left.top + leftArtMidPx, closeTo(0.27 * h, 0.5));
       final right = homeRects.last;
       final rightArtBottomPx =
-          AethGeometry.patternRightArtBottomRow / 1178 * right.height;
-      expect(right.top + rightArtBottomPx, closeTo(0.40 * h, 0.5));
+          AethGeometry.patternRightArtBottomRow / 1848 * right.height;
+      expect(right.top + rightArtBottomPx, closeTo(0.485 * h, 0.5));
     });
   });
 }

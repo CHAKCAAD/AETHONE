@@ -93,7 +93,10 @@ flutter:
     - design/آیکون پروتکل ها/وارپ اور تور.svg
     # --- background patterns: pre-rendered PNGs (v4.10 — the SVGs carry
     # feGaussianBlur which flutter_svg cannot rasterize; rendered via
-    # headless Chromium with filters intact; SVG sources stay committed) ---
+    # headless Chromium with filters intact; SVG sources stay committed).
+    # v5 («نمای 2», owner round 19): the owner's NEW artwork pair (ZIP
+    # «پترن سمت چپ/راست», connected + disconnected) replaced the v4.x
+    # canvases under the same names. ---
     - design/patterns_png/
     # --- v4.41 (round 17): the country routing profiles — one [direct]
     #     rule file per routing-area pick (ccTLD suffixes + domestic
@@ -129,6 +132,9 @@ flutter:
     - design/آیکون های اپ/Off.svg
     - design/آیکون های اپ/Activity 4.svg
     - design/آیکون های اپ/Right 2.svg
+    # v5 («نمای 2»): the country-row expander chevron (Down 2, rotated
+    # −180° so it points up at the flag wheel).
+    - design/آیکون های اپ/Down 2.svg
     # --- v4.24 speed test («صفحه تست سرعت»): the stat-card glyphs —
     # the set's own Wifi.svg (ping); the jitter drop-with-rain and the
     # badge/button hexagon+wave brand glyph are traced from the committed

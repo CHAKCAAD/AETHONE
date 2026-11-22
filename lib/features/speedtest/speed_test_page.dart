@@ -905,8 +905,8 @@ class _StartButton extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: SizedBox(
-            width: AethGeometry.speedGroupSize * s,
-            height: AethGeometry.speedGroupSize * s,
+            width: AethGeometry.speedStartGroupSize * s,
+            height: AethGeometry.speedStartGroupSize * s,
             child: Stack(
               alignment: Alignment.center,
               clipBehavior: Clip.none,
@@ -918,11 +918,11 @@ class _StartButton extends StatelessWidget {
                   color: AethColors.accentConnected,
                   layers: const [
                     LayerSpec(
-                      width: AethGeometry.speedGroupSize,
-                      height: AethGeometry.speedGroupSize,
-                      radius: AethRadius.speedGlow,
-                      opacity: AethGeometry.speedGlowOpacity,
-                      blurSigma: AethGeometry.speedGlowBlur,
+                      width: AethGeometry.speedStartGroupSize,
+                      height: AethGeometry.speedStartGroupSize,
+                      radius: AethRadius.speedStartGlow,
+                      opacity: AethGeometry.speedStartGlowOpacity,
+                      blurSigma: AethGeometry.speedStartGlowBlur,
                     ),
                   ],
                 ),
@@ -945,8 +945,8 @@ class _StartButton extends StatelessWidget {
                     color: color ?? AethColors.speedIdleLayer,
                     layers: const [
                       LayerSpec(
-                        width: AethGeometry.speedHaloSize,
-                        height: AethGeometry.speedHaloSize,
+                        width: AethGeometry.speedGroupSize,
+                        height: AethGeometry.speedGroupSize,
                         radius: AethRadius.speedHalo,
                         opacity: AethColors.pillHaloOpacity,
                       ),

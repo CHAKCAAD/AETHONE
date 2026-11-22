@@ -1,12 +1,21 @@
-/// The home screen — faithful reimplementation of the four reference frames
-/// (looks 1/2 × connected/disconnected) plus the intermediate machine states.
-/// Layout bands follow the pixel-verified geometry (report table 5):
-///   top bar → location/flags band → hero band (logo 164dp @ 292.7/874) →
-///   status pill (@594/874) → bottom panel (@~716–860).
+/// The home screen — LOOK 1 keeps the v4.x four-band column; LOOK 2 is the
+/// v5 «نمای 2» redesign (owner round 19), pixel-cut from the committed
+/// mockups «نمای 2-متصل/قطع» (402×874 @3×) and the owner's own CSS:
+///
+///   top bar → status pill (y 198) → connect button (160dp @ 307) →
+///   the CURVED WHITE SHEET (top edge y 470, U-dip to 500, shadow
+///   0 −16 95 rgba(0,0,0,.09)) carrying the stats row (y 532: DOWN ·
+///   speed-test · UP) → the flag wheel (y 636) → the country row
+///   (y 703) → the protocol card (y 775).
+///
+/// The pill sits ABOVE the hero in look 2 (the v4.x order is reversed);
+/// the hero is BOTTOM-anchored in the flex band so the button's white
+/// base stays glued to the sheet's crown (the merged-blob look of the
+/// mockups) on every device height.
 ///
 /// State honesty: every visual (colors, ping, speed button, stats) derives
 /// from the REAL [ConnectionStore] state — nothing shows "connected" before
-/// the engine reports it (prompt §8 / report §10 rule).
+/// the engine reports it.
 library;
 
 import 'package:flutter/material.dart';
@@ -112,20 +121,37 @@ class HomeScreen extends StatelessWidget {
                 store.state == VpnState.connecting ||
                 store.state == VpnState.reconnecting);
 
+        final locationHeader = LocationHeader(
+          connected: connected,
+          // v4.21 — the band rule follows the committed mode
+          // (single-knob selection after the v4.20 revert).
+          protocolIsTorOrPsiphon:
+              store.effectiveProtocol.isTor ||
+              store.effectiveProtocol.isPsiphon,
+          // v4.21 — the wheel is a real, scrollable SELECTOR for the
+          // whole psiphon + tor families while DISCONNECTED, and locks on
+          // the connected location once connected (owner device-test
+          // round 3). v5: non-family protocols keep the band VISIBLE but
+          // GREYSCALE + locked while disconnected (round 19).
+          selectable: store.wheelSelectable,
+          allowedCodes: store.wheelAllowedCodes,
+          autoEntry: store.wheelAutoEntry,
+          anchorCode: store.wheelAnchorCode,
+          pingMs: store.pingMs,
+          exitCountryCode: store.exitCountryCode,
+          onCountrySelected: store.selectLocation,
+        );
+
         return Scaffold(
           backgroundColor: AethColors.bgScreen,
-          // v4.25 — `StackFit.expand` for uniformity with every other page
-          // (the pattern-placement fix; home already filled via the Column
-          // `Expanded`, but the body now pins itself explicitly).
           body: Stack(
             fit: StackFit.expand,
             children: [
-              // Edge patterns (red ↔ green, animated crossfade; v4.15 #5:
-              // they also DRIFT while the engine walks or the tunnel is up —
-              // «بعد از اتصال و حین اتصال پترن های پس زمینه هم انیمیشن
-              // داشته باشند»).
-              // v4.22 — the appearance switch can turn the patterns off
-              // (the page then renders on the bare bg colour).
+              // Edge patterns (red ↔ green, animated crossfade; they also
+              // DRIFT while the engine walks or the tunnel is up). The
+              // appearance switch can turn them off. v5: the look-2 curved
+              // sheet COVERS them below its crown exactly like the
+              // mockups (the sheet is painted above in z-order).
               if (store.showPatterns)
                 Positioned.fill(
                   child: PatternSides(
@@ -135,223 +161,89 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               SafeArea(
+                // v5 — look 2's curved sheet bleeds to the PHYSICAL bottom
+                // edge (the mockups run it past the home indicator); only
+                // look 1 keeps the bottom inset inside the SafeArea.
+                bottom: isLookOne,
                 child: Column(
                   children: [
                     // v4.12: extra top gap so the app never crowds the
-                    // status-bar / notch area (owner: «کمی از بالا کل اپ رو
-                    // فاصله بده تا اپ وارد فرورفتگی نمایش درصد شارژ و ...
-                    // گوشی نشه»).
+                    // status-bar / notch area.
                     SizedBox(height: AethGeometry.topSafeExtraGap * s),
                     HomeTopBar(
                       onSettings: () => _openSettings(context),
                       store: store,
                     ),
-                    SizedBox(height: AethGeometry.gapTopbarToLocation * s),
-                    LocationHeader(
-                      connected: connected,
-                      // v4.21 — the band rule follows the committed mode
-                      // (single-knob selection after the v4.20 revert).
-                      protocolIsTorOrPsiphon:
-                          store.effectiveProtocol.isTor ||
-                          store.effectiveProtocol.isPsiphon,
-                      // v4.21 — the wheel is a real, scrollable SELECTOR
-                      // for the whole psiphon + tor families while
-                      // DISCONNECTED, and locks on the connected location
-                      // once connected (owner device-test round 3).
-                      selectable: store.wheelSelectable,
-                      allowedCodes: store.wheelAllowedCodes,
-                      autoEntry: store.wheelAutoEntry,
-                      anchorCode: store.wheelAnchorCode,
-                      pingMs: store.pingMs,
-                      exitCountryCode: store.exitCountryCode,
-                      // Wheel selection commit — the store routes the pick
-                      // into the current family's remembered location.
-                      onCountrySelected: store.selectLocation,
-                    ),
-                    // Hero band: logo (look 1) or center connect button (2).
-                    // The flex region is the reference's hero band — the
-                    // logo centers exactly like the frame. While the engine
-                    // walks (starting/connecting/reconnecting) the scanning
-                    // halo plays BEHIND the central icon (defect #10).
-                    Expanded(
-                      child: Center(
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            AnimatedSwitcher(
-                              // v4.25 — style-scaled (was a fixed 250 ms).
-                              duration: motionDuration(
-                                style,
-                                MotionDurations.quick,
-                              ),
-                              child: showScan
-                                  ? ScanRings(
-                                      key: const ValueKey('scan-rings'),
-                                      color: connected
-                                          ? AethColors.accentConnected
-                                          : AethColors.statusDisconnected,
-                                      size: 270 * s,
-                                    )
-                                  : const SizedBox.shrink(
-                                      key: ValueKey('scan-off'),
-                                    ),
-                            ),
-                            // v4.15 connected halo — AURORA BLOOM (owner
-                            // home round #2: the v4.13 rotating sweep is
-                            // REPLACED by a soft breathing glow + slow
-                            // water-ripples BEHIND the central icon in BOTH
-                            // looks, so the connected screen keeps a quiet
-                            // life. The hero adds its own breathing scale
-                            // pulse.
-                            AnimatedSwitcher(
-                              duration: motionDuration(
-                                style,
-                                MotionDurations.state,
-                              ),
-                              child: connected
-                                  ? AuroraBloom(
-                                      key: const ValueKey('connected-aura'),
-                                      color: AethColors.accentConnected,
-                                      // v4.33 — the bloom wraps the WHOLE
-                                      // connect composition (the 236px
-                                      // group for look 2, the hero for
-                                      // look 1), breathing just outside
-                                      // its glow.
-                                      size: (isLookOne
-                                              ? AethGeometry.heroSize
-                                              : AethGeometry
-                                                  .connectGroupSize) *
-                                          1.25 *
-                                          s,
-                                      style: style,
-                                    )
-                                  : const SizedBox.shrink(
-                                      key: ValueKey('aura-off'),
-                                    ),
-                            ),
-                            if (isLookOne)
-                              GestureDetector(
-                                // v4.17 — owner home round #5: «آیکون وسط
-                                // صفحه هم به عنوان دکمه اتصال عمل کنه البته
-                                // دکمه اتصال هم همچنان عملکردش رو داشته
-                                // باشه» — the logo toggles the connection
-                                // exactly like the bottom FAB. v4.19 (#3):
-                                // the toggle now CANCELS the in-flight walk
-                                // instead of being ignored while connecting.
-                                behavior: HitTestBehavior.opaque,
-                                onTap: _toggleConnection,
-                                child: HeroLogo(
-                                  connected: connected,
-                                  style: style,
-                                ),
-                              )
-                            else
-                              _CenterConnectButton(
-                                store: store,
-                                style: style,
-                                onTap: _toggleConnection,
-                              ),
-                          ],
+                    if (isLookOne) ...[
+                      SizedBox(height: AethGeometry.gapTopbarToLocation * s),
+                      locationHeader,
+                      // Hero band: the logo centers in the flex region.
+                      Expanded(
+                        child: Center(
+                          child: heroStack(context, s, style, connected, showScan),
                         ),
                       ),
-                    ),
-                    // v2.1.0 (the owner's decree: «برای صفحه اصلی چندتا
-                    // ویجت خلاقانه اضافه کن») — THE HOME WIDGET DECK: the
-                    // live session timer, the ping sparkline and the session
-                    // data card, riding the hero band's flexible space
-                    // (every value honest — placeholders while idle).
-                    HomeWidgetDeck(store: store, style: style),
-                    SizedBox(height: AethGeometry.gapSpeedToPill * s),
-                    // Speed Test entry — connected only, animated. Its slot
-                    // stays reserved when hidden so the hero never moves
-                    // (both reference frames pin the logo at y≈293).
-                    // v4.24 — the tap opens the REAL page (was: the
-                    // v4.14 placeholder sheet).
-                    SpeedTestButton(
-                      visible: connected,
-                      style: style,
-                      onTap: () => _openSpeedTest(context),
-                    ),
-                    SizedBox(height: AethGeometry.gapSpeedToPill * s),
-                    StatusPill(state: store.state, style: style),
-                    // v4.20 — the failed state names its stage: the engine's
-                    // own error code rides under the pill (tap = full details
-                    // + copy). A device failure can now be REPORTED without
-                    // adb (owner: the tunnel failure was an anonymous miss).
-                    AnimatedSize(
-                      duration: motionDuration(
-                        style,
-                        MotionDurations.quick,
-                      ),
-                      curve: Curves.easeOut,
-                      alignment: Alignment.topCenter,
-                      child: store.state == VpnState.failed &&
-                              store.lastErrorCode != null
-                          ? Padding(
-                              padding: EdgeInsets.only(top: 8 * s),
-                              child: _FailureCaption(
-                                code: store.lastErrorCode!,
-                                message: store.lastErrorMessage,
-                                onTap: () => _openFailureDetails(
-                                  context,
-                                  store.lastErrorCode!,
-                                  store.lastErrorMessage,
-                                ),
-                              ),
-                            )
-                          : const SizedBox(width: double.infinity),
-                    ),
-                    SizedBox(height: AethGeometry.gapPillToPanel * s),
-                    Padding(
-                      // Reference: the panel spans x 33–370 on the 402-wide
-                      // frame (pageHPadding both sides) — NOT edge to edge.
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AethGeometry.pageHPadding * s,
-                      ),
-                      child: BottomPanel(
+                      // v2.1.0 (the owner's decree: «برای صفحه اصلی چندتا
+                      // ویجت خلاقانه اضافه کن») — THE HOME WIDGET DECK: the
+                      // live session timer, the ping sparkline and the
+                      // session data card (look 1's hero band; the v5 look-2
+                      // redesign has no deck — its sheet owns the space).
+                      HomeWidgetDeck(store: store, style: style),
+                      SizedBox(height: AethGeometry.gapSpeedToPill * s),
+                      SpeedTestButton(
+                        visible: connected,
                         connected: connected,
                         style: style,
-                        // v4.32 — the SMART session's own display: while a
-                        // SMART walk resolved (connected), the panel names
-                        // the protocol that actually CARRIES the session
-                        // (not the generic AUTO tile); while the walk is
-                        // mid-chain, it names the in-flight candidate +
-                        // its attempt count — the explicit, observable
-                        // fallback chain (SMART_AUTO_SPEC §7.2).
-                        // v4.35 — the panel takes the ProtocolId (the
-                        // glyph renderer owns the asset + theme ink).
-                        selectedProtocol: store.smartDisplayProtocol,
-                        protocolLabel: store.smartAttempt != null && showScan
-                            ? (store.smartAttempt!.measuring
-                                  ? strings.smartMeasuringLabel(
-                                      strings.protocolName(
-                                        store.smartAttempt!.candidate,
-                                      ),
-                                    )
-                                  : strings.smartAttemptLabel(
-                                      strings.protocolName(
-                                        store.smartAttempt!.candidate,
-                                      ),
-                                      store.smartAttempt!.attempt,
-                                      store.smartAttempt!.total,
-                                    ))
-                            : strings.protocolName(store.smartDisplayProtocol),
-                        downBytes: store.downBytes,
-                        upBytes: store.upBytes,
-                        showConnectButton: isLookOne,
-                        onProtocolCardTap: () => _openProtocolPage(context),
-                        // Tap connect (owner v4.12: «دکمه اتصال رو به حالت
-                        // کلیک قبلش برگردون، نمیخوام حالت سوییپ داشته باشه»)
-                        // — the FAB toggles: tap connects, tap again
-                        // disconnects. The center look-2 button behaves the
-                        // same. v4.19 (#3): both handlers route through the
-                        // tap-to-cancel toggle — during the engine walk a
-                        // tap cancels the pending connection.
-                        onConnect: _toggleConnection,
-                        onDisconnect: _toggleConnection,
+                        onTap: () => _openSpeedTest(context),
                       ),
-                    ),
-                    SizedBox(height: AethGeometry.gapPanelToBottom * s),
+                      SizedBox(height: AethGeometry.gapSpeedToPill * s),
+                      StatusPill(state: store.state, style: style),
+                      failureCaption(context, s),
+                      SizedBox(height: AethGeometry.gapPillToPanel * s),
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AethGeometry.pageHPadding * s,
+                        ),
+                        child: BottomPanel(
+                          connected: connected,
+                          style: style,
+                          selectedProtocol: store.smartDisplayProtocol,
+                          protocolLabel: protocolLabel(strings, showScan),
+                          downBytes: store.downBytes,
+                          upBytes: store.upBytes,
+                          showConnectButton: true,
+                          onProtocolCardTap: () => _openProtocolPage(context),
+                          onConnect: _toggleConnection,
+                          onDisconnect: _toggleConnection,
+                        ),
+                      ),
+                      SizedBox(height: AethGeometry.gapPanelToBottom * s),
+                    ] else ...[
+                      // v5 «نمای 2» — the pill rides ABOVE the hero.
+                      SizedBox(height: AethGeometry.gapTopbarToPill * s),
+                      StatusPill(state: store.state, style: style),
+                      failureCaption(context, s),
+                      // The hero is BOTTOM-anchored: the connect button's
+                      // white base stays glued to the sheet's crown.
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: heroStack(context, s, style, connected, showScan),
+                        ),
+                      ),
+                      SizedBox(height: AethGeometry.gapHeroToPanel * s),
+                      _LookTwoSheet(
+                        store: store,
+                        style: style,
+                        strings: strings,
+                        s: s,
+                        connected: connected,
+                        locationHeader: locationHeader,
+                        protocolLabel: protocolLabel(strings, showScan),
+                        onProtocolCardTap: () => _openProtocolPage(context),
+                        onSpeedTap: () => _openSpeedTest(context),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -360,6 +252,110 @@ class HomeScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// The hero band's constant Stack: the scan halo (engine walk) and the
+  /// connected aura BEHIND the look-1 logo / the look-2 connect button.
+  Widget heroStack(
+    BuildContext context,
+    double s,
+    MotionStyle style,
+    bool connected,
+    bool showScan,
+  ) {
+    final isLookOne = store.homeLook == HomeLook.one;
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        AnimatedSwitcher(
+          duration: motionDuration(style, MotionDurations.quick),
+          child: showScan
+              ? ScanRings(
+                  key: const ValueKey('scan-rings'),
+                  color: connected
+                      ? AethColors.accentConnected
+                      : AethColors.statusDisconnected,
+                  size: 270 * s,
+                )
+              : const SizedBox.shrink(key: ValueKey('scan-off')),
+        ),
+        // The connected breathing aura wraps the WHOLE connect
+        // composition (v4.33 rule, re-based on the v5 160px group).
+        AnimatedSwitcher(
+          duration: motionDuration(style, MotionDurations.state),
+          child: connected
+              ? AuroraBloom(
+                  key: const ValueKey('connected-aura'),
+                  color: AethColors.accentConnected,
+                  size: (isLookOne
+                          ? AethGeometry.heroSize
+                          : AethGeometry.connectGroupSize) *
+                      1.25 *
+                      s,
+                  style: style,
+                )
+              : const SizedBox.shrink(key: ValueKey('aura-off')),
+        ),
+        if (isLookOne)
+          GestureDetector(
+            // The logo toggles the connection exactly like the bottom FAB
+            // (v4.17 round #5); tap-to-cancel during the walk (v4.19 #3).
+            behavior: HitTestBehavior.opaque,
+            onTap: _toggleConnection,
+            child: HeroLogo(connected: connected, style: style),
+          )
+        else
+          _CenterConnectButton(
+            store: store,
+            style: style,
+            onTap: _toggleConnection,
+          ),
+      ],
+    );
+  }
+
+  /// The failed state's honest caption under the status pill (v4.20),
+  /// shared by both looks — it eats into the flex band in look 2.
+  Widget failureCaption(BuildContext context, double s) {
+    return AnimatedSize(
+      duration: motionDuration(
+        store.effectiveMotionStyle(context),
+        MotionDurations.quick,
+      ),
+      curve: Curves.easeOut,
+      alignment: Alignment.topCenter,
+      child: store.state == VpnState.failed && store.lastErrorCode != null
+          ? Padding(
+              padding: EdgeInsets.only(top: 8 * s),
+              child: _FailureCaption(
+                code: store.lastErrorCode!,
+                message: store.lastErrorMessage,
+                onTap: () => _openFailureDetails(
+                  context,
+                  store.lastErrorCode!,
+                  store.lastErrorMessage,
+                ),
+              ),
+            )
+          : const SizedBox(width: double.infinity),
+    );
+  }
+
+  /// The panel's protocol label (v4.32/v4.35 rule): the SMART session's
+  /// own display — the carrying protocol while resolved, the in-flight
+  /// candidate + attempt while the walk runs.
+  String protocolLabel(AppStrings strings, bool showScan) {
+    return store.smartAttempt != null && showScan
+        ? (store.smartAttempt!.measuring
+              ? strings.smartMeasuringLabel(
+                  strings.protocolName(store.smartAttempt!.candidate),
+                )
+              : strings.smartAttemptLabel(
+                  strings.protocolName(store.smartAttempt!.candidate),
+                  store.smartAttempt!.attempt,
+                  store.smartAttempt!.total,
+                ))
+        : strings.protocolName(store.smartDisplayProtocol);
   }
 
   /// v4.20 — the failure details sheet: the engine's own error code + full
@@ -521,4 +517,164 @@ class _CenterConnectButton extends StatelessWidget {
       onTap: onTap, // tap-to-toggle (owner v4.12) + cancel (v4.19 #3)
     );
   }
+}
+
+/// v5 («نمای 2») — the curved white bottom sheet: the owner's «Rectangle
+/// 87» + SVG crown (flat rim, a U-dip to +30 across the centre) with the
+/// committed shadow (`0 −16 95 rgba(0,0,0,0.09)`), carrying the stats row,
+/// the flag wheel + country row and the protocol card down to the screen's
+/// physical bottom edge.
+class _LookTwoSheet extends StatelessWidget {
+  const _LookTwoSheet({
+    required this.store,
+    required this.style,
+    required this.strings,
+    required this.s,
+    required this.connected,
+    required this.locationHeader,
+    required this.protocolLabel,
+    required this.onProtocolCardTap,
+    required this.onSpeedTap,
+  });
+
+  final ConnectionStore store;
+  final MotionStyle style;
+  final AppStrings strings;
+  final double s;
+  final bool connected;
+  final Widget locationHeader;
+  final String protocolLabel;
+  final VoidCallback onProtocolCardTap;
+  final VoidCallback onSpeedTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    return CustomPaint(
+      // The crown paints UNDER the content — the sheet's own fill must
+      // never cover the stats row / flags / card riding on it.
+      painter: _SheetCrownPainter(s),
+      child: Padding(
+        // The sheet's empty crown between its top edge and the stats row
+        // (design y 470 → 532).
+        padding: EdgeInsets.only(top: AethGeometry.panelTopPad * s),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            HomeStatsRow(
+              connected: connected,
+              style: style,
+              downBytes: store.downBytes,
+              upBytes: store.upBytes,
+              onSpeedTap: onSpeedTap,
+            ),
+            SizedBox(height: AethGeometry.gapStatsToFlags * s),
+            locationHeader,
+            SizedBox(height: AethGeometry.gapRowToCard * s),
+            Padding(
+              // The card spans x 33–369 on the 402-wide frame.
+              padding: EdgeInsets.symmetric(
+                horizontal: AethGeometry.pageHPadding * s,
+              ),
+              child: BottomPanel(
+                connected: connected,
+                style: style,
+                selectedProtocol: store.smartDisplayProtocol,
+                protocolLabel: protocolLabel,
+                downBytes: store.downBytes,
+                upBytes: store.upBytes,
+                showConnectButton: false,
+                onProtocolCardTap: onProtocolCardTap,
+                onConnect: () {},
+                onDisconnect: () {},
+              ),
+            ),
+            // The card rides 3px + the live home-indicator inset above the
+            // glass (design: 837 → 874 with the 34px inset).
+            SizedBox(
+              height: AethGeometry.gapCardToBottomBase * s + bottomInset,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Paints the sheet's crown: the blurred shadow ABOVE the top edge + the
+/// bg-coloured fill whose top line follows the owner's SVG path (flat rim
+/// 0–96 · U-dip to +30 across the centre · flat rim 301–402, design px).
+class _SheetCrownPainter extends CustomPainter {
+  _SheetCrownPainter(this.s);
+
+  final double s;
+
+  Path _crownPath(Size size) {
+    final k = s;
+    Path path = Path()..moveTo(0, 0);
+    path = path
+      ..lineTo(AethGeometry.panelDipX1 * k, 0)
+      ..cubicTo(
+        114.511 * k,
+        0,
+        132.325 * k,
+        6.208 * k,
+        AethGeometry.panelDipCx1 * k,
+        17.616 * k,
+      )
+      ..cubicTo(
+        156.933 * k,
+        25.731 * k,
+        169.606 * k,
+        AethGeometry.panelDipDepth * k,
+        AethGeometry.panelDipX2 * k,
+        AethGeometry.panelDipDepth * k,
+      )
+      ..lineTo(AethGeometry.panelDipX3 * k, AethGeometry.panelDipDepth * k)
+      ..cubicTo(
+        227.894 * k,
+        AethGeometry.panelDipDepth * k,
+        240.567 * k,
+        25.731 * k,
+        AethGeometry.panelDipCx2 * k,
+        17.616 * k,
+      )
+      ..cubicTo(
+        265.175 * k,
+        6.208 * k,
+        282.989 * k,
+        0,
+        AethGeometry.panelDipX4 * k,
+        0,
+      )
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    return path;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = _crownPath(size);
+    // The committed shadow — the SVG filter: feOffset dy −16, feGaussian
+    // σ47.5, α0.09. Painted FIRST so the fill covers its lower half.
+    canvas.save();
+    canvas.translate(0, AethGeometry.panelShadowDy * s);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = const Color.fromRGBO(0, 0, 0, AethGeometry.panelShadowAlpha)
+        ..maskFilter = MaskFilter.blur(
+          BlurStyle.normal,
+          AethGeometry.panelShadowSigma * s,
+        ),
+    );
+    canvas.restore();
+    canvas.drawPath(path, Paint()..color = AethColors.bgScreen);
+  }
+
+  @override
+  bool shouldRepaint(_SheetCrownPainter oldDelegate) =>
+      oldDelegate.s != s;
 }

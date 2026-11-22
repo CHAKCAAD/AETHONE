@@ -10,6 +10,11 @@
 ///     BOTTOM slot when disconnected (y 785–833); three tiny red chevrons
 ///     sit near the bottom, hidden behind the button when it is down.
 ///
+/// v5 («نمای 2», owner round 19) — LOOK 2 drops this card grid: the stats
+/// moved up beside the Speed Test entry ([HomeStatsRow]) and the panel is
+/// just the redesigned protocol card (336×62 r17, #F4F4F4 in light) on the
+/// curved white sheet. LOOK 1 keeps the v4.10 arrangement untouched.
+///
 /// The whole panel is directionality-locked LTR: the reference arrangement
 /// (DOWN left, UP right, FAB column on the right edge) is a fixed visual
 /// layout — under the Persian RTL locale the first build mirrored it, which
@@ -24,6 +29,7 @@ import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 import '../../shared/protocol_glyph.dart';
+import 'glow_pill.dart';
 
 class BottomPanel extends StatelessWidget {
   const BottomPanel({
@@ -65,17 +71,15 @@ class BottomPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     if (!showConnectButton) {
-      // Look 2: no FAB column — the center button owns connect/disconnect.
+      // v5 — LOOK 2: the stats moved up beside the Speed Test entry
+      // ([HomeStatsRow] in the home column); the panel is the redesigned
+      // protocol card alone, riding the curved sheet.
       return Directionality(
         textDirection: TextDirection.ltr,
-        child: _CardsColumn(
-          connected: connected,
-          style: style,
-          selectedProtocol: selectedProtocol,
-          protocolLabel: protocolLabel,
-          downBytes: downBytes,
-          upBytes: upBytes,
-          onProtocolCardTap: onProtocolCardTap,
+        child: ProtocolCard(
+          protocol: selectedProtocol,
+          label: protocolLabel,
+          onTap: onProtocolCardTap,
         ),
       );
     }
@@ -112,6 +116,163 @@ class BottomPanel extends StatelessWidget {
   static String formatBytes(int bytes) {
     final mb = bytes ~/ (1024 * 1024);
     return '$mb MB';
+  }
+
+  /// v5 («نمای 2») — the look-2 stat row's own adaptive format, exactly
+  /// like the committed mockups: «314KB» under a megabyte, «31.1MB» with
+  /// one decimal above it (no space, per the frames). Zero shows «--».
+  static String formatBytesAdaptive(int bytes) {
+    if (bytes <= 0) return '--';
+    const kb = 1024;
+    const mb = 1024 * 1024;
+    if (bytes < mb) {
+      return '${bytes ~/ kb}KB';
+    }
+    return '${(bytes / mb).toStringAsFixed(1)}MB';
+  }
+}
+
+/// v5 («نمای 2») — the look-2 stats row: the DOWN/UP counters flank the
+/// Speed Test entry on the curved sheet (mockup-measured: the Graph
+/// glyphs 26×26 at x 34 / x 282, y 562–588, the texts 20px right of each
+/// glyph; the speed group sits dead-centre). The glyphs are the icon
+/// set's own «Graph Down»/«Graph Up» OUTLINES (no filled box — the v4.10
+/// stat-card boxes are a look-1-only treatment), green #00D589 / red
+/// #E63946 in BOTH connection states.
+class HomeStatsRow extends StatelessWidget {
+  const HomeStatsRow({
+    super.key,
+    required this.connected,
+    required this.style,
+    required this.downBytes,
+    required this.upBytes,
+    required this.onSpeedTap,
+  });
+
+  final bool connected;
+  final MotionStyle style;
+  final int downBytes;
+  final int upBytes;
+
+  /// Passed straight to the Speed Test entry's [SpeedTestButton.onTap].
+  final VoidCallback onSpeedTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: SizedBox(
+        height: AethGeometry.speedGroupSize * s,
+        // The speed group rides the EXACT screen centre (mockup:
+        // 164–238 on the 402 frame) because both stat groups take EQUAL
+        // slots — DOWN hugs the left edge of its slot, UP the right edge
+        // of its own.
+        child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _StatGroup(
+                    iconAsset: AppAssets.iconGraphDown,
+                    label: 'DOWN:',
+                    valueText: BottomPanel.formatBytesAdaptive(downBytes),
+                  ),
+                ),
+              ),
+              // v5: the entry stays on screen in BOTH states — green while
+              // connected, the CSS idle family (#363636 over rgba(17,0,0,α))
+              // while disconnected; taps stay dead without a tunnel.
+              SpeedTestButton(
+                visible: true,
+                connected: connected,
+                style: style,
+                onTap: onSpeedTap,
+              ),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: _StatGroup(
+                    iconAsset: AppAssets.iconGraphUp,
+                    label: 'UP:',
+                    valueText: BottomPanel.formatBytesAdaptive(upBytes),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One look-2 stat group: the outline Graph glyph + the two-line
+/// «DOWN:»/value text block (LTR-locked, never bidi-flipped).
+class _StatGroup extends StatelessWidget {
+  const _StatGroup({
+    required this.iconAsset,
+    required this.label,
+    required this.valueText,
+  });
+
+  final String iconAsset;
+  final String label;
+  final String valueText;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SvgPicture.asset(
+          iconAsset,
+          width: AethGeometry.statGlyphSize * s,
+          height: AethGeometry.statGlyphSize * s,
+          fit: BoxFit.contain,
+          // The set's own stroke colors (#00D589 / the red family) — the
+          // owner's rule: the icon files' own colors, no tinting.
+        ),
+        SizedBox(width: AethGeometry.statGlyphTextGap * s),
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  textDirection: TextDirection.ltr,
+                  style: TextStyle(
+                    fontFamily: 'IRANYekanX',
+                    fontWeight: FontWeight.w400,
+                    fontSize: 11 * s,
+                    letterSpacing: 0.5,
+                    color: AethColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  valueText,
+                  textDirection: TextDirection.ltr,
+                  style: TextStyle(
+                    fontFamily: 'IRANYekanX',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14 * s,
+                    color: AethColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -177,15 +338,18 @@ class _CardsColumn extends StatelessWidget {
 }
 
 /// Protocol selector card — [logo] [name centered in the remaining space]
-/// [white forward chevron]. The logo renders straight on the card (the
+/// [forward chevron]. The logo renders straight on the card (the
 /// reference has NO backing box).
+///
+/// v5 («نمای 2», owner CSS «Group 117»/«Rectangle 13»): 336×62,
+/// `border-radius: 17px`, `background: #F4F4F4` (light — the themed card
+/// family), the label 16px/400 in the theme ink and the WireGuard-class
+/// glyph ~34px wide at the left end. Look 1 keeps the same redesigned
+/// card (it rides the dark family at night exactly as before).
 ///
 /// v4.35 (owner round 11, items 4/5) — the logo renders through the shared
 /// [ProtocolGlyph]: theme ink (white at night / #141C16 in light) and the
-/// combined modes' rebuilt drop shadow. (v4.17 history: the Tor/Psiphon
-/// raster logos carry BLACK ink and were tinted white; the chain SVGs
-/// rendered filter-less white art — both now own their theme treatment in
-/// one place.)
+/// combined modes' rebuilt drop shadow.
 class ProtocolCard extends StatelessWidget {
   const ProtocolCard({
     super.key,
@@ -206,12 +370,12 @@ class ProtocolCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(AethRadius.card * s),
+        borderRadius: BorderRadius.circular(AethRadius.protocolCard * s),
         child: Container(
           height: AethGeometry.protocolCardHeight * s,
           decoration: BoxDecoration(
             color: AethColors.cardDark,
-            borderRadius: BorderRadius.circular(AethRadius.card * s),
+            borderRadius: BorderRadius.circular(AethRadius.protocolCard * s),
           ),
           padding: EdgeInsets.symmetric(horizontal: 14 * s),
           child: Row(
@@ -220,8 +384,9 @@ class ProtocolCard extends StatelessWidget {
                 width: AethGeometry.protocolLogoSize * s,
                 height: AethGeometry.protocolLogoSize * s,
                 child: Center(
-                  // v4.35 — the shared theme-aware glyph (ink + shadow).
-                  child: ProtocolGlyph(id: protocol, size: 24 * s),
+                  // v5 — the shared theme-aware glyph; 34 renders the CSS's
+                  // ~37px-wide W at the card's left end.
+                  child: ProtocolGlyph(id: protocol, size: 34 * s),
                 ),
               ),
               Expanded(
@@ -230,15 +395,15 @@ class ProtocolCard extends StatelessWidget {
                     label,
                     style: TextStyle(
                       fontFamily: 'IRANYekanX',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15 * s,
+                      fontWeight: FontWeight.w400,
+                      fontSize: 16 * s,
                       color: AethColors.textPrimary,
                     ),
                   ),
                 ),
               ),
               // Owner defect #12: the forward chevron is the set's own
-              // «Right 2.svg» artwork, white-tinted like the reference card.
+              // «Right 2.svg» artwork, tinted like the reference card.
               SvgPicture.asset(
                 AppAssets.iconRight2,
                 width: 26 * s,

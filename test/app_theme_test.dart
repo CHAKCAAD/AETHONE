@@ -23,13 +23,19 @@ void main() {
   group('the owner-CSS light palette (both home frames)', () {
     test('the named surfaces map exactly (bg / cards / ink / secondary)', () {
       const l = AethPal.light;
-      expect(l.bgScreen, const Color(0xFFEDEDED)); // «background: #EDEDED»
-      expect(l.cardDark, const Color(0xFFFFFFFF)); // «background: #FFFFFF»
-      expect(l.topTile, const Color(0xFFFFFFFF)); // Rectangle 9 / 17
+      // v5 («نمای 2»): the committed mockups render the page PURE WHITE
+      // and the cards/tiles #F4F4F4 (owner CSS «Rectangle 13» + the
+      // measured top tiles).
+      expect(l.bgScreen, const Color(0xFFFFFFFF)); // «نمای 2» frames
+      expect(l.cardDark, const Color(0xFFF4F4F4)); // «Rectangle 13»
+      expect(l.topTile, const Color(0xFFF4F4F4)); // the measured tiles
       expect(l.textPrimary, const Color(0xFF141C16)); // «color: #141C16»
       expect(l.textSecondary, const Color(0xFFA3A3A3)); // «UP:»/«DOWN:»
       expect(l.onPillConnected, const Color(0xFF141C16)); // «مــتـصـل»
-      expect(l.onPillDisconnected, const Color(0xFF141C16)); // «غیرفعال»
+      expect(l.onPillDisconnected, const Color(0xFF141C16)); // «قــطــع!»
+      // v5 — the look-2 connect base + the flag ring.
+      expect(l.connectBase, const Color(0xFFFFFFFF)); // «Group 45»/«3»
+      expect(l.flagRing, const Color(0xFFF4F4F4)); // «Ellipse 74»
     });
 
     test('the stat icon boxes go translucent (Rectangle 11 / 12)', () {

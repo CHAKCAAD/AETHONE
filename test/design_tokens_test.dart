@@ -47,43 +47,64 @@ void main() {
       expect(AethGeometry.heroSize, 164);
       expect(AethGeometry.connectButtonSize, 48);
       expect(AethGeometry.connectButtonRise, 72);
-      // v4.33 — the look-2 connect button is the owner's own CSS
-      // composition (a 236 glow circle over squircle layers).
-      expect(AethGeometry.connectGroupSize, 236);
-      expect(AethGeometry.connectHaloSize, 181.92);
-      expect(AethGeometry.connectMidSize, 152.42);
+      // v5 («نمای 2», owner round 19) — the look-2 connect button is the
+      // owner's NEW CSS composition «Group 45»: the WHITE 160² r60 base +
+      // the 108.17² r41 gradient core + the 48×48 Off glyph (the v4.33
+      // 236 glow stack is retired).
+      expect(AethGeometry.connectGroupSize, 160);
       expect(AethGeometry.connectCoreSize, 108.17);
       expect(AethGeometry.connectIconSize, 48);
-      expect(AethRadius.connectGlow, 120);
-      expect(AethRadius.connectHalo, 69);
-      expect(AethRadius.connectMid, 62);
+      expect(AethRadius.connectBase, 60);
       expect(AethRadius.connectCore, 41);
-      // v4.11 — owner CSS Group 8: pill group is the 140x38 halo (the old
-      // 162x60 blurred 4th layer was REMOVED per the owner's defect report).
-      expect(AethGeometry.pillWidth, 140);
-      expect(AethGeometry.pillHeight, 38);
-      expect(AethGeometry.pillMidWidth, 132.88);
-      expect(AethGeometry.pillMidHeight, 32);
-      expect(AethGeometry.pillCoreWidth, 125.76);
-      expect(AethGeometry.pillCoreHeight, 26);
-      // v4.11 — owner CSS Group 11: speed-test layered group.
-      expect(AethGeometry.speedGroupSize, 96);
-      expect(AethGeometry.speedHaloSize, 74);
+      // v5 — the pill is ONE gradient layer: 126×30 r9 («لایه 1»).
+      expect(AethGeometry.pillWidth, 126);
+      expect(AethGeometry.pillHeight, 30);
+      expect(AethGeometry.pillIconSize, 20);
+      // v5 — owner CSS «Group 13»: the home speed-test group is 74/62/44.
+      expect(AethGeometry.speedGroupSize, 74);
       expect(AethGeometry.speedMidSize, 62);
       expect(AethGeometry.speedCoreSize, 44);
-      // v4.10: tuned to the exported FRAMES (tight halo) — the Figma CSS
-      // blur(57px) value disagrees with every reference screenshot.
-      expect(AethGeometry.pillBlur, 10);
+      expect(AethGeometry.speedIconSize, 28);
+      // The speed-test PAGE's own start button keeps the v4.33 «Group 11»
+      // 96-glow composition.
+      expect(AethGeometry.speedStartGroupSize, 96);
+      expect(AethGeometry.speedStartGlowOpacity, 0.53);
+      expect(AethGeometry.speedStartGlowBlur, 57);
     });
 
-    test('pill + speed radii are the owner CSS values (v4.11)', () {
-      expect(AethRadius.pillHalo, 13);
-      expect(AethRadius.pillMid, 11);
+    test('pill + speed radii are the owner CSS values (v5)', () {
       expect(AethRadius.pillCore, 9);
-      expect(AethRadius.speedGlow, 32);
       expect(AethRadius.speedHalo, 32);
       expect(AethRadius.speedMid, 27);
       expect(AethRadius.speedCore, 17);
+      expect(AethRadius.speedStartGlow, 32);
+      expect(AethRadius.protocolCard, 17);
+    });
+
+    test('v5 «نمای 2» — the look-2 vertical rhythm and the panel crown', () {
+      expect(AethGeometry.gapTopbarToPill, 114);
+      expect(AethGeometry.gapHeroToPanel, 3);
+      expect(AethGeometry.panelTopPad, 62);
+      expect(AethGeometry.gapStatsToFlags, 30);
+      expect(AethGeometry.gapFlagsToRow, 15);
+      expect(AethGeometry.countryRowHeight, 45);
+      expect(AethGeometry.gapRowToCard, 27);
+      expect(AethGeometry.gapCardToBottomBase, 3);
+      expect(AethGeometry.panelShadowSigma, 47.5);
+      expect(AethGeometry.panelShadowDy, -16);
+      expect(AethGeometry.panelShadowAlpha, 0.09);
+      expect(AethGeometry.panelDipDepth, 30.0);
+      // The new pattern canvases and their mockup-measured anchors.
+      expect(AethGeometry.patternLeftCanvasW, 178);
+      expect(AethGeometry.patternRightCanvasW, 198);
+      expect(AethGeometry.patternLeftAspect, 1593 / 534);
+      expect(AethGeometry.patternRightAspect, 1848 / 594);
+      expect(AethGeometry.patternLeftAnchor, 0.27);
+      expect(AethGeometry.patternRightAnchor, 0.485);
+      // The circular flag clips + the «Ellipse 74» ring.
+      expect(AethGeometry.flagRadiusFactor, 0.47);
+      expect(AethGeometry.flagRingSize, 58);
+      expect(AethGeometry.flagRingBorder, 4);
     });
   });
 

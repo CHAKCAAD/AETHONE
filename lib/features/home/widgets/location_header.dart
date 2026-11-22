@@ -1,62 +1,58 @@
-/// Location header + flag WHEEL (v4.13 — owner defect reports, round 4;
-/// restyled v4.15 — owner home round #3):
+/// Location band + flag WHEEL (v5 — the «نمای 2» redesign of owner round 19).
 ///
-/// Header row (v4.13, LTR-locked) — owner re-clarification, EXACT reference
-/// geometry («آیکون پرچم در وسط صفحه باید باشه، متن پینگ ... در سمت راستش
-/// باید باشه و متن نمایش اسم کشور باید در سمت چپش باشه»):
-///   [country name] —— [map icon + chevron at the EXACT screen centre] —— [ping / آفلاین]
-/// The map icon is laid out independently of both texts (two EQUAL Expanded
-/// slots + a fixed-width centre box), so NO text change can ever move it off
-/// centre. Long names/pings ellipsis INSIDE their own half.
-///   * connected  : name = wheel/exit country (white) · «146 ms» green.
-///   * disconnected: name = wheel selection (grey) · «آفلاین» grey.
+/// BAND ORDER (v5, owner CSS «Group 15»/«Group 115»): the flag wheel sits
+/// on TOP (y 636–688), the country row BELOW it (y 703–748) — the reverse
+/// of the v4.13 order. The row itself:
+///   [country name] —— [UP-chevron above the map icon, both at the EXACT
+///   screen centre] —— [ping / آفلاین]
+/// The «Hicon / Linear / Down 2» chevron rides 180°-rotated (pointing UP
+/// at the wheel) and the Map glyph renders 180°-rotated like the CSS
+/// (`transform: rotate(-180deg)`). The map icon is laid out independently
+/// of both texts (two EQUAL Expanded slots + a fixed-width centre box), so
+/// NO text change can ever move it off centre.
+///   * connected  : name = wheel/exit country (ink) · «146 ms» green w400.
+///   * disconnected: «آفلاین» in the theme ink w400.
 ///   * connecting : the ping slot stays empty (honest — nothing measured).
 ///
-/// v4.15 #3 — VISIBILITY RULE (owner: «بخش پرچم ها در حالت غیر متصل پروتکل
-/// های به غیر از زیرمجموعه سایفون و تور کاملا پنهان باشه و فقط در حالت
-/// اتصال نقش نمایش لوکیشن رو داشته باشه. دقت کن که این بخش در پروتکل های
-/// زیرمجموعه سایفون و تور نقش انتخاب لوکیشن را دارد»):
-///   * Tor/Psiphon protocols → the band is ALWAYS visible (location SELECTOR).
-///   * every other protocol → the band is completely HIDDEN while
-///     disconnected and REVEALS (animated) once connected, acting as the
-///     location DISPLAY. Every movement of the band (hide/reveal) animates
-///     through a single 420 ms ease tween (clip + fade), so the hero band
-///     glides instead of jumping.
+/// v5 — THE GREYSCALE LOCK (owner round 19: «قسمت نمایش پروتکل باید در
+/// زمانی که پروتکل های غیر از سایفون و تور انتخاب میشود در حالت قطع سیاه
+/// و سفید باشند و نباید قابلیت انتخاب پروتکل یا همون جابه جایی بین نقشه
+/// کشور هارو داشته باشه و باید قفل باشه»): the v4.15 HIDE rule is RETIRED
+/// — the band is ALWAYS laid out.
+///   * Tor/Psiphon + disconnected → full colour, the real SELECTOR.
+///   * every other protocol + disconnected → GREYSCALE + locked (the CSS
+///     «قطع» frame: the Iran flag mask runs #252525/#FDFDFD/#3D3D3D).
+///   * connected (any protocol) → full colour, locked on the exit.
+/// The saturation cross-fades through ONE constant ColorFiltered tree (the
+/// v4.15.1 lesson — swapping the wrapper would rebuild the PageView and
+/// kill an in-flight roulette).
 ///
-/// v4.15 #3 — FLAG FALLOFF, owner CSS «Group 9» (301×52 strip, 402 frame):
-///   centre 52×52 @ opacity 1.0 · ±1 42×42 @ 0.5 · ±2 35×35 @ 0.2 —
-///   the centre flag is the LARGEST and the most opaque (the flag that
-///   becomes the selected/displayed location always reads at 100%). The
-///   falloff interpolates CONTINUOUSLY while scrolling (size and opacity
-///   ride the controller, no snap points).
+/// FLAG FALLOFF, owner CSS «Group 9» (301×52 strip, 402 frame) — unchanged:
+///   centre 52×52 @ opacity 1.0 · ±1 42×42 @ 0.5 · ±2 35×35 @ 0.2.
+/// v5: the clips are CIRCULAR (radius ≈ 0.47·size) and the centre slot
+/// rides a 4px ring («Ellipse 74», 58×58) painted BEHIND the flags — the
+/// ring marks the selection slot; scrolling flags glide over it and the
+/// settled flag sits inside it.
 ///
-/// Flag wheel — UNBOUNDED PageView (v4.13): silently re-centered after every
-/// settle — there are ALWAYS flags on BOTH edges and the cycle wraps. The
-/// old v4.13 greyscale lock is RETIRED by the v4.15 hide rule (a hidden band
-/// cannot be greyscale — it is simply not there).
+/// Flag wheel — UNBOUNDED PageView (v4.13): silently re-centered after
+/// every settle — there are ALWAYS flags on BOTH edges and the cycle wraps.
 ///
-/// CONNECT ROULETTE (v4.13, owner: «وقتی اتصال صورت گرفت اسکرول پرچم ها باید
-/// بین کشور ها مقداری اسکرول کند و بعد لوکیشن اصلی رو نشون بده»): the moment
-/// the machine enters `connected` the wheel spins forward through the
-/// countries (two full laps) and lands on the engine-reported exit country.
-/// Works on the real-core path too: the trigger is the STATE edge, and a
-/// late exit-country report RE-SPINS the roulette (a fresh two-lap spin from
-/// the current position). A monotonic EPOCH protocol makes every
-/// programmatic spin the sole owner of the wheel: a superseded animation's
-/// completion is a no-op. The roulette never writes to the store at all —
-/// the engine owns the connected location.
+/// CONNECT ROULETTE (v4.13): on the `connected` edge the wheel spins two
+/// full laps forward and lands on the engine-reported exit country; a late
+/// exit-country report RE-SPINS it. A monotonic EPOCH protocol makes every
+/// programmatic spin the sole owner of the wheel; the roulette never
+/// writes to the store — the engine owns the connected location.
 ///
-/// Selection lock (v4.19 #5 refinement): ONLY the protocols whose pin the
-/// core actually HONORS render the wheel as a selector (psiphon-exit +
-/// reverse modes); tor-exit protocols render it as a locked DISPLAY (the
-/// core has no Tor exit-country control — the roulette still lands on the
-/// real exit). The psiphon-EXIT modes additionally FILTER the flag list to
-/// the Psiphon egress regions (owner: «در حالت تور و سایفون باید فقط پرچم
-/// کشورهایی رو نشون بده که سایفون و تور ساپورت میکنن»); a filter change
-/// re-anchors the wheel on the nearest allowed flag and commits it.
+/// Selection lock (v4.19 #5): ONLY the protocols whose pin the core
+/// actually HONORS render the wheel as a selector (psiphon-exit + reverse
+/// modes); tor-exit protocols render it as a locked DISPLAY. The
+/// psiphon-EXIT modes additionally FILTER the flag list to the Psiphon
+/// egress regions; a filter change re-anchors the wheel on the nearest
+/// allowed flag and commits it.
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -67,7 +63,6 @@ import '../../../core/country_names.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 import '../../../connection/transport_modes.dart' show LocationWheelPolicy;
-import 'custom_icons.dart';
 
 class LocationHeader extends StatefulWidget {
   const LocationHeader({
@@ -388,8 +383,11 @@ class _LocationHeaderState extends State<LocationHeader> {
 
   void _ensureController() {
     _pageController ??= PageController(
-      // 72 pitch on the 402 reference frame — scale-free ratio.
-      viewportFraction: AethGeometry.flagPitch / AethGeometry.refWidth,
+      // 72px pitch on the INSET viewport (v5: the strip spans
+      // pagePadding..refWidth-pagePadding like the mockup's clean side
+      // margins — scale-free ratio).
+      viewportFraction: AethGeometry.flagPitch /
+          (AethGeometry.refWidth - 2 * AethGeometry.pageHPadding),
       initialPage: _lapBase + _indexOf(_selected),
     );
   }
@@ -516,12 +514,16 @@ class _LocationHeaderState extends State<LocationHeader> {
   // ------------------------------------------------------------------
   // Header row — the centre icon is INDEPENDENT of both texts.
   // ------------------------------------------------------------------
-  Widget _buildHeaderRow(BuildContext context, AppStrings strings, double s) {
+  /// v5 — the country row block («Group 115», 45 tall): the UP-chevron
+  /// rides ABOVE the map icon (both at the EXACT screen centre), the name
+  /// and ping flank them on the row that is vertically centred on the map.
+  Widget _buildCountryRow(BuildContext context, AppStrings strings, double s) {
     final connected = widget.connected;
     final nameText = countryName(_selected) ?? '';
 
-    // Ping slot: green «146 ms» when measured, «آفلاین» grey when
-    // disconnected, empty while the engine walks (nothing measured yet).
+    // Ping slot: green «146 ms» when measured, «آفلاین» in the theme ink
+    // when disconnected (owner CSS «حالت قطع»: #141C16, w400/15), empty
+    // while the engine walks (nothing measured yet).
     final pingText = connected
         ? (widget.pingMs != null ? strings.pingMs(widget.pingMs!) : '')
         : strings.offline;
@@ -545,59 +547,101 @@ class _LocationHeaderState extends State<LocationHeader> {
       );
     }
 
+    // v5 owner CSS: the name carries the theme ink in BOTH states
+    // («ایران … color: #141C16», w500/15); the ping is the accent green
+    // w400/15 only when measured.
     final nameStyle = TextStyle(
       fontFamily: 'IRANYekanX',
       fontWeight: FontWeight.w500,
       fontSize: 15 * s,
-      color: connected ? AethColors.textPrimary : AethColors.textSecondary,
+      color: AethColors.textPrimary,
     );
     final pingStyle = TextStyle(
       fontFamily: 'IRANYekanX',
-      fontWeight: FontWeight.w500,
-      fontSize: 14 * s,
+      fontWeight: FontWeight.w400,
+      fontSize: 15 * s,
       color: connected && widget.pingMs != null
           ? AethColors.accentConnected
-          : AethColors.textSecondary,
+          : AethColors.textPrimary,
     );
 
-    // Two EQUAL Expanded slots + the fixed icon box ⇒ the icon is at the
+    // The chevron: «Hicon / Linear / Down 2» rotated −180° → pointing UP
+    // at the wheel (its 24-box rides the block's top; the 4px visual sits
+    // at y 10–14, mockup-measured).
+    final chevron = Transform.rotate(
+      angle: math.pi,
+      child: SvgPicture.asset(
+        AppAssets.iconDown2,
+        width: 24 * s,
+        height: 24 * s,
+        colorFilter: ColorFilter.mode(
+          AethColors.textPrimary,
+          BlendMode.srcIn,
+        ),
+      ),
+    );
+
+    // The 180°-rotated Map glyph — the row's centre anchor.
+    final mapIcon = Transform.rotate(
+      angle: math.pi,
+      child: SvgPicture.asset(
+        AppAssets.iconMap,
+        key: const ValueKey('location-map-icon'),
+        width: 24 * s,
+        height: 24 * s,
+        colorFilter: ColorFilter.mode(
+          AethColors.textPrimary,
+          BlendMode.srcIn,
+        ),
+      ),
+    );
+
+    // The block («Group 115», 45 tall): chevron box on top (y 0–24,
+    // 3px overlap), the name/map/ping row at y 21–45 — the texts centre
+    // on the MAP box exactly like the mockup (texts y 725–747).
+    // Two EQUAL Expanded slots + the fixed map box ⇒ the icon is at the
     // exact horizontal centre of the screen at all times, whatever the
     // texts read (owner defect round 4 #1).
     return SizedBox(
-      height: 22 * s,
+      height: AethGeometry.countryRowHeight * s,
       child: Directionality(
         textDirection: TextDirection.ltr,
-        child: Row(
+        child: Stack(
           children: [
-            slot(
-              alignment: Alignment.centerRight,
-              pad: EdgeInsets.only(right: AethGeometry.locationSideGap * s),
-              text: nameText,
-              style: nameStyle,
+            // The chevron box, centred (CSS boxes overlap the map by 3px).
+            Padding(
+              padding: EdgeInsets.only(bottom: 24 * s - 3 * s),
+              child: Center(child: chevron),
             ),
-            SizedBox(
-              width: 22 * s,
-              child: Center(
-                child: SvgPicture.asset(
-                  AppAssets.iconMap,
-                  key: const ValueKey('location-map-icon'),
-                  width: 22 * s,
-                  height: 22 * s,
-                  colorFilter: ColorFilter.mode(
-                    connected
-                        ? AethColors.textPrimary
-                        : AethColors.textSecondary,
-                    BlendMode.srcIn,
-                  ),
+            // The name · map · ping row, pinned to the block's bottom half.
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: SizedBox(
+                height: 24 * s,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    slot(
+                      alignment: Alignment.centerRight,
+                      pad: EdgeInsets.only(
+                        right: AethGeometry.locationSideGap * s,
+                      ),
+                      text: nameText,
+                      style: nameStyle,
+                    ),
+                    SizedBox(width: 24 * s, child: Center(child: mapIcon)),
+                    slot(
+                      alignment: Alignment.centerLeft,
+                      pad: EdgeInsets.only(
+                        left: AethGeometry.locationSideGap * s,
+                      ),
+                      text: pingText,
+                      style: pingStyle,
+                      dir: TextDirection.ltr,
+                    ),
+                  ],
                 ),
               ),
-            ),
-            slot(
-              alignment: Alignment.centerLeft,
-              pad: EdgeInsets.only(left: AethGeometry.locationSideGap * s),
-              text: pingText,
-              style: pingStyle,
-              dir: TextDirection.ltr,
             ),
           ],
         ),
@@ -617,18 +661,14 @@ class _LocationHeaderState extends State<LocationHeader> {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final connected = widget.connected;
 
-    // v4.21 — the lock rule (owner device-test round 3): a family selector
-    // is scrollable ONLY while disconnected; once connected the band is a
-    // pure DISPLAY locked on the connected location (the roulette lands
-    // there and no user scroll can move it). Non-family protocols keep the
-    // v4.15 #3 rule (hidden until connected, then the same locked display).
+    // v4.21 + v5 — the lock rule: a family selector is scrollable ONLY
+    // while disconnected; once connected the band is a pure DISPLAY locked
+    // on the connected location (the roulette lands there and no user
+    // scroll can move it). Non-family protocols are ALWAYS locked — v5
+    /// keeps them VISIBLE but GREYSCALE while disconnected (the round-19
+    /// decree) instead of hiding the band.
     final selectable = widget.selectable;
     final locked = widget.connected || !selectable;
-
-    // v4.15 #3 — the hide rule: a non-Tor/Psiphon protocol keeps the whole
-    // band completely hidden while disconnected; it only exists (revealing
-    // animated) as the location display once connected.
-    final hidden = locked && !connected;
 
     _ensureController();
 
@@ -694,57 +734,100 @@ class _LocationHeaderState extends State<LocationHeader> {
       },
     );
 
+    // v5 — the ring behind the wheel's CENTRE slot («Ellipse 74»: 58×58,
+    /// 4px #F4F4F4). Painted UNDER the flags: scrolling flags glide over
+    /// it, the settled (selected) flag sits inside it.
+    final ring = Container(
+      width: AethGeometry.flagRingSize * s,
+      height: AethGeometry.flagRingSize * s,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: AethColors.flagRing,
+          width: AethGeometry.flagRingBorder * s,
+        ),
+      ),
+    );
+
     final band = Column(
+      key: const ValueKey('location-band'),
       children: [
-        _buildHeaderRow(context, strings, s),
-        SizedBox(height: 3 * s),
-        // Chevron under the map icon — centred on the screen like the icon.
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: Center(
-            child: ChevronDownIcon(
-              size: 8 * s,
-              color: AethColors.textSecondary,
+        // v5 — the WHEEL leads the band (owner CSS «Group 15»: flags y
+        // 636–688, country row 703–748); the ring centres behind it.
+        Padding(
+          // v5 — the mockup's clean side margins: the strip spans
+          // x 33–369 on the 402 frame (the ±2 flags end inside them).
+          padding: EdgeInsets.symmetric(
+            horizontal: AethGeometry.pageHPadding * s,
+          ),
+          child: SizedBox(
+            height: AethGeometry.flagRingSize * s,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                ring,
+                SizedBox(
+                  height: AethGeometry.flagSizeSelected * s,
+                  width: double.infinity,
+                  child: wheel,
+                ),
+              ],
             ),
           ),
         ),
-        SizedBox(height: AethGeometry.gapLocationToFlags * s),
-        wheel,
+        SizedBox(height: AethGeometry.gapFlagsToRow * s),
+        _buildCountryRow(context, strings, s),
       ],
     );
 
-    // v4.15 #3 — the reveal seam. One tween drives clip + fade: the band
-    // grows from zero height (Align heightFactor) and fades in together,
-    // so the layout above/below GLIDES. The wheel stays laid out at full
-    // size behind the clip while hidden — the PageController never loses
-    // its clients, so the connect-edge roulette is always safe.
-    //
-    // v4.15.1 — BUGFIX: the wrapper tree must NEVER change shape. The first
-    // cut short-circuited `t >= 0.999` to the bare child, which swapped the
-    // element at this slot (ClipRect ≠ Column) the moment the reveal
-    // finished — mid-roulette, 420 ms into the spin. The PageView subtree
-    // was inflated FRESH, the old scroll position detached (completing the
-    // animateToPage future as a fake success) and the new client re-attached
-    // at initialPage — the wheel snapped back to ایران and the roulette
-    // died. A CONSTANT ClipRect > Align > Opacity tree with only the `t`
-    // values tweened is visually identical at t = 1 (Align heightFactor 1
-    // and Opacity 1 are no-ops) and keeps the PageView's element — and its
-    // scroll position — alive through the whole reveal + roulette.
+    // v5 — THE GREYSCALE LOCK replaces the v4.15 hide rule: the band is
+    // ALWAYS laid out; a non-family protocol keeps it GREYSCALE + locked
+    /// while disconnected (owner round 19). One constant ColorFiltered
+    /// tree cross-fades the saturation (the v4.15.1 lesson — the wrapper
+    /// must never change shape or the PageView's element dies mid-spin).
+    final grayscale = locked && !connected;
+    return FlagSaturation(
+      key: const ValueKey('flag-saturation'),
+      grayscale: grayscale,
+      child: band,
+    );
+  }
+}
+
+/// v5 — the greyscale seam: ONE constant ColorFiltered tree whose
+/// saturation cross-fades (1 = full colour, 0 = greyscale). The wrapper
+/// NEVER changes shape — swapping it in/out would rebuild the PageView
+/// subtree and kill an in-flight roulette (the v4.15.1 lesson).
+class FlagSaturation extends StatelessWidget {
+  const FlagSaturation({super.key, required this.grayscale, required this.child});
+
+  /// The TARGET saturation state (the semantic bit tests can read); the
+  /// 420 ms tween is presentation only.
+  final bool grayscale;
+  final Widget child;
+
+  /// The luminance-preserving saturation matrix at [s] (1 = identity).
+  static List<double> matrix(double s) {
+    const r = 0.2126, g = 0.7152, b = 0.0722;
+    return <double>[
+      r + (1 - r) * s, g - g * s, b - b * s, 0, 0, //
+      r - r * s, g + (1 - g) * s, b - b * s, 0, 0, //
+      r - r * s, g - g * s, b + (1 - b) * s, 0, 0, //
+      0, 0, 0, 1, 0, //
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
-      key: const ValueKey('location-band'),
-      tween: Tween(end: hidden ? 0.0 : 1.0),
+      tween: Tween(end: grayscale ? 0.0 : 1.0),
       duration: const Duration(milliseconds: 420),
       curve: Curves.easeInOutCubic,
-      builder: (context, t, child) {
-        return ClipRect(
-          child: Align(
-            alignment: AlignmentDirectional.topCenter,
-            heightFactor: t,
-            child: Opacity(opacity: t, child: child),
-          ),
-        );
-      },
-      child: band,
+      builder: (context, sat, child) => ColorFiltered(
+        colorFilter: ColorFilter.matrix(matrix(sat)),
+        child: child,
+      ),
+      child: child,
     );
   }
 }
@@ -892,8 +975,9 @@ class _FlagItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v5 — circular clips (owner CSS image radii ≈ 0.47·size at 3×).
     final flag = ClipRRect(
-      borderRadius: BorderRadius.circular(size * 0.24),
+      borderRadius: BorderRadius.circular(size * AethGeometry.flagRadiusFactor),
       child: Image.asset(asset, fit: BoxFit.cover, width: size, height: size),
     );
     if (onTap == null) return flag;

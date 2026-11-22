@@ -11,6 +11,7 @@ import 'package:aethone/app.dart';
 import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
+import 'package:aethone/core/app_theme.dart';
 import 'package:aethone/features/home/home_screen.dart';
 import 'package:aethone/features/settings/settings_screen.dart';
 
@@ -134,6 +135,54 @@ void main() {
     );
     await _save(tester, 'home_connected');
     expect(store.isConnected, isTrue);
+  }, timeout: const Timeout(Duration(minutes: 5)));
+
+  // v5 («نمای 2», owner round 19) — the redesigned look-2 home, both
+  // connection states, both themes (the committed mockups are the LIGHT
+  // frames).
+  testWidgets('render the look-2 home screens to PNG (v5 redesign)', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(402, 874);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    addTearDown(() {
+      AethThemeSync.palette = AethPal.night;
+      AethThemeSync.light = false;
+    });
+
+    for (final light in [true, false]) {
+      AethThemeSync.palette = light ? AethPal.light : AethPal.night;
+      AethThemeSync.light = light;
+      final suffix = light ? 'light' : 'night';
+      final engine = ScriptedEngine();
+      final store = ConnectionStore(engine: engine);
+      store.setHomeLook(HomeLook.two);
+      // Keep the store's own mode in step with the palette slot (the app
+      // shell does this; the toggle glyph follows the store).
+      store.setThemeMode(light ? AethThemeMode.light : AethThemeMode.night);
+      await tester.pumpWidget(_booth(HomeScreen(store: store)));
+      await tester.runAsync(_loadRealFonts);
+      await _save(tester, 'look2_disconnected_$suffix');
+
+      await store.connect();
+      engine.emit(const EngineStateChanged(VpnState.connecting));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      engine.emit(const EngineStateChanged(VpnState.connected));
+      engine.emit(
+        const EngineStatsUpdated(
+          pingMs: 146,
+          downBytes: 31 * 1024 * 1024 + 105 * 1024,
+          upBytes: 314 * 1024,
+          exitCountryCode: 'ir',
+        ),
+      );
+      await _save(tester, 'look2_connected_$suffix');
+      expect(store.isConnected, isTrue);
+      await tester.pumpWidget(const SizedBox());
+    }
   }, timeout: const Timeout(Duration(minutes: 5)));
 
   testWidgets('render the settings main page to PNG (step 2)', (

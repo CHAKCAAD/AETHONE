@@ -10,6 +10,8 @@ import 'package:aethone/connection/engine.dart';
 import 'package:aethone/features/home/home_screen.dart';
 import 'package:aethone/features/home/widgets/bottom_panel.dart';
 import 'package:aethone/features/home/widgets/glow_pill.dart';
+import 'package:aethone/features/home/widgets/location_header.dart'
+    show FlagSaturation;
 import 'package:aethone/core/app_assets.dart' show ProtocolId;
 import 'package:aethone/connection/transport_modes.dart' show LocationWheelPolicy;
 
@@ -56,14 +58,14 @@ void main() {
     addTearDown(tester.view.reset);
   }
 
-  // v4.15 (owner home round #3): «بخش پرچم ها در حالت غیر متصل پروتکل های
-  // به غیر از زیرمجموعه سایفون و تور کاملا پنهان باشه و فقط در حالت اتصال
-  // نقش نمایش لوکیشن رو داشته باشه» — for non-Tor/Psiphon protocols the
-  // whole location band is HIDDEN while disconnected (zero height, faded
-  // out) and reveals ANIMATED on connect. The v4.13 greyscale lock is
-  // retired: a hidden band is not greyscale — it is not there at all.
-  testWidgets('disconnected home shows غیرفعال pill; MASQUE hides the whole '
-      'location band (v4.15: no location UI without Tor/Psiphon)', (
+  // v5 (owner round 19): «قسمت نمایش پروتکل باید در زمانی که پروتکل های
+  // غیر از سایفون و تور انتخاب میشود در حالت قطع سیاه و سفید باشند و
+  // نباید قابلیت انتخاب پروتکل یا همون جابه جایی بین نقشه کشور هارو
+  // داشته باشه و باید قفل باشه» — the v4.15 HIDE rule is RETIRED: for
+  // non-Tor/Psiphon protocols the location band stays ON SCREEN while
+  // disconnected, GREYSCALE + locked (the CSS «قطع» frame).
+  testWidgets('disconnected home shows قــطــع! pill; MASQUE keeps the '
+      'location band GREYSCALE + locked (v5 round 19)', (
     tester,
   ) async {
     await useReferenceSurface(tester);
@@ -72,26 +74,20 @@ void main() {
     await tester.pumpWidget(_booth(HomeScreen(store: store)));
     await tester.pumpAndSettle();
 
-    expect(find.text('غیرفعال'), findsOneWidget);
-    // The pill's ping slot text exists in the (hidden) tree but the band
-    // renders ZERO height — the flag wheel is completely gone visually.
+    expect(find.text('قــطــع!'), findsOneWidget);
+    // The band is FULLY laid out (never zero-height anymore)…
     expect(tester.getSize(find.byKey(const ValueKey('location-band'))).height,
-        0.0);
-    // The v4.13 greyscale ColorFiltered is retired with the hide rule.
-    // v4.35: the pattern layer now carries its own ColorFiltered (the
-    // round-11 alpha boost) OUTSIDE the band — scope to the band.
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('location-band')),
-        matching: find.byType(ColorFiltered),
-      ),
-      findsNothing,
+        greaterThan(100.0));
+    // …and its wheel rides the constant ColorFiltered saturation seam in
+    // the GREYSCALE pose (locked + disconnected).
+    final saturation = tester.widget<FlagSaturation>(
+      find.byKey(const ValueKey('flag-saturation')),
     );
+    expect(saturation.grayscale, isTrue);
     expect(find.byType(BackdropFilter), findsNothing);
-    // No flag pixel row is visible on the disconnected screen: the band's
-    // content stays laid out behind a zero-height clip, so a drag never
-    // reaches it (locked + NeverScrollable anyway).
-    expect(find.text('146 ms'), findsNothing); // ping only when connected
+    // The disconnected ping slot reads «آفلاین» — ping only when connected.
+    expect(find.text('146 ms'), findsNothing);
+    expect(find.text('آفلاین'), findsOneWidget);
   });
 
   testWidgets('after engine reports connected: متصل pill, ping, speed button', (
@@ -124,8 +120,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(store.state, VpnState.connected);
-    expect(find.text('متصل'), findsOneWidget);
-    expect(find.text('غیرفعال'), findsNothing);
+    expect(find.text('مــتـصـل'), findsOneWidget);
+    expect(find.text('قــطــع!'), findsNothing);
     expect(find.text('146 ms'), findsOneWidget);
     expect(find.text('145 MB'), findsOneWidget);
     expect(find.text('45 MB'), findsOneWidget);
@@ -145,7 +141,7 @@ void main() {
     expect(store.state, VpnState.failed);
     expect(store.lastErrorCode, 'engineNotWired');
     expect(find.text('خطا'), findsOneWidget);
-    expect(find.text('متصل'), findsNothing);
+    expect(find.text('مــتـصـل'), findsNothing);
   });
 
   testWidgets(
@@ -458,13 +454,14 @@ void main() {
     expect(find.text('ایران'), findsOneWidget); // selection unchanged
   });
 
-  // v4.15 regression (owner home round #3): for a non-Tor/Psiphon protocol
-  // (MASQUE = the default) the location band must be completely hidden
-  // while disconnected and REVEAL ANIMATED on connect, acting as the
-  // location display — with the exit country centred at FULL opacity and
-  // the side falloff per the owner CSS Group 9 (52@1.0 / 42@0.5 / 35@0.2).
-  testWidgets('MASQUE: band hidden while disconnected, reveals on connect '
-      'with the exit location (v4.15 hide rule)', (tester) async {
+  // v5 regression (owner round 19): for a non-Tor/Psiphon protocol
+  // (MASQUE = the default) the location band stays GREYSCALE + locked
+  // while disconnected and returns to FULL COLOUR on connect, acting as
+  // the location display — with the exit country centred at FULL opacity
+  // and the side falloff per the owner CSS Group 9 (52@1.0 / 42@0.5 /
+  // 35@0.2).
+  testWidgets('MASQUE: band greyscale while disconnected, colours on '
+      'connect with the exit location (v5 greyscale lock)', (tester) async {
     await useReferenceSurface(tester);
     final engine = ScriptedEngine();
     final store = ConnectionStore(engine: engine);
@@ -472,10 +469,18 @@ void main() {
     await tester.pumpWidget(_booth(HomeScreen(store: store)));
     await tester.pumpAndSettle();
 
-    // Hidden while disconnected.
+    // Greyscale + locked while disconnected.
     expect(
       tester.getSize(find.byKey(const ValueKey('location-band'))).height,
-      0.0,
+      greaterThan(100.0),
+    );
+    expect(
+      tester
+          .widget<FlagSaturation>(
+            find.byKey(const ValueKey('flag-saturation')),
+          )
+          .grayscale,
+      isTrue,
     );
 
     await store.connect();
@@ -491,19 +496,15 @@ void main() {
         exitCountryCode: 'de',
       ),
     );
-    // Ride out the 420 ms reveal + the 2.6 s connect roulette in ~frame-sized
-    // steps. flutter_test advances ONE frame per pump(); a single huge pump
-    // lands the whole 2.6 s DrivenScrollActivity on ONE ticker tick, which
-    // the fake clock cannot complete (v4.15.1 debug trace — with coarse
-    // pumps the future never resolves, with ~frame-sized pumps it does). A
-    // real device ticks at 60 fps, so 200 ms steps mirror the real cadence.
+    // Ride out the 420 ms greyscale release + the 2.6 s connect roulette
+    // in ~frame-sized steps (the v4.15.1 fake-clock lesson).
     for (var i = 0; i < 3; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }
     expect(
       tester.getSize(find.byKey(const ValueKey('location-band'))).height,
-      greaterThan(80.0),
-      reason: 'the reveal seam must restore the full band height',
+      greaterThan(100.0),
+      reason: 'the band stays laid out through the release',
     );
     for (var i = 0; i < 15; i++) {
       await tester.pump(const Duration(milliseconds: 200));
@@ -512,16 +513,150 @@ void main() {
     // The band now displays the engine-reported exit location.
     expect(find.text('آلمان'), findsOneWidget);
     expect(find.text('90 ms'), findsOneWidget);
-    // The centre flag is full colour — the greyscale filter is gone.
-    // v4.35: scoped to the band (the pattern layer's own ColorFiltered
-    // boost lives outside it).
+    // v5: the seam is a CONSTANT tree — the wrapper stays mounted but its
+    // target flips to full colour on the connect edge.
     expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('location-band')),
-        matching: find.byType(ColorFiltered),
-      ),
-      findsNothing,
+      tester
+          .widget<FlagSaturation>(
+            find.byKey(const ValueKey('flag-saturation')),
+          )
+          .grayscale,
+      isFalse,
     );
+  });
+
+  // -------------------------------------------------------------------
+  // v5 (owner round 19, the «نمای 2» redesign) — the look-2 home layout.
+  // -------------------------------------------------------------------
+  group('v5 — the look-2 «نمای 2» redesign', () {
+    testWidgets(
+        'the pill rides ABOVE the connect button; the stats row and the '
+        'protocol card ride the curved sheet; no FAB column', (tester) async {
+      await useReferenceSurface(tester);
+      final engine = ScriptedEngine();
+      final store = ConnectionStore(engine: engine);
+      store.setHomeLook(HomeLook.two);
+      await tester.pumpWidget(_booth(HomeScreen(store: store)));
+      await tester.pumpAndSettle();
+
+      // The pill sits ABOVE the connect button (the v4.x order reversed).
+      final pill = tester.getCenter(find.byType(StatusPill));
+      final button = tester.getCenter(find.byType(ConnectButtonGlow));
+      expect(pill.dy, lessThan(button.dy));
+
+      // The stats row flanks the Speed Test entry: DOWN left, UP right,
+      // the speed group dead-centre (LTR-locked, never mirrored).
+      final down = tester.getTopLeft(find.text('DOWN:'));
+      final up = tester.getTopLeft(find.text('UP:'));
+      expect(down.dy, greaterThan(button.dy),
+          reason: 'stats sit below the hero');
+      expect(down.dx, lessThan(up.dx));
+      final speed = tester.getCenter(find.byType(SpeedTestButton));
+      expect((speed.dx - 201).abs(), lessThan(2.0),
+          reason: 'the speed group is screen-centred');
+      expect(find.byType(HomeStatsRow), findsOneWidget);
+
+      // The flag wheel + country row ride BELOW the stats row, the
+      // protocol card last; the look-1 FAB column is absent.
+      final band =
+          tester.getTopLeft(find.byKey(const ValueKey('location-band')));
+      expect(band.dy, greaterThan(down.dy));
+      expect(find.text('وایرگارد'), findsOneWidget);
+      expect(find.byType(FabColumn), findsNothing);
+
+      // The connect button keeps the reference width (160 design px).
+      expect(tester.getSize(find.byType(ConnectButtonGlow)).width,
+          closeTo(160, 1.0));
+    });
+
+    testWidgets(
+        'disconnected: the speed entry stays on screen in its dark pose '
+        '(v5 — it no longer vanishes), the pill reads قــطــع!', (tester) async {
+      await useReferenceSurface(tester);
+      final engine = ScriptedEngine();
+      final store = ConnectionStore(engine: engine);
+      store.setHomeLook(HomeLook.two);
+      await tester.pumpWidget(_booth(HomeScreen(store: store)));
+      await tester.pumpAndSettle();
+
+      // Look 2 keeps the entry mounted while disconnected (the CSS
+      // «حالت قطع» dark family) — look 1 keeps its hide rule.
+      expect(find.byType(SpeedTestButton), findsOneWidget);
+      expect(
+          tester
+              .widget<SpeedTestButton>(find.byType(SpeedTestButton))
+              .connected,
+          isFalse);
+      expect(find.text('قــطــع!'), findsOneWidget);
+
+      // The MASQUE band is greyscale + locked (round 19).
+      expect(
+        tester
+            .widget<FlagSaturation>(
+              find.byKey(const ValueKey('flag-saturation')),
+            )
+            .grayscale,
+        isTrue,
+      );
+      // A drag on the locked wheel never changes the selection.
+      final masqueCenter = tester.getCenter(find.byType(PageView).first);
+      final drag = await tester.startGesture(masqueCenter);
+      for (var i = 0; i < 5; i++) {
+        await drag.moveBy(const Offset(-24, 0));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      await drag.up();
+      await tester.pumpAndSettle();
+      expect(find.text('ایران'), findsOneWidget); // selection unchanged
+    });
+
+    testWidgets('connected look-2: the pill reads مــتـصـل and the band colours',
+        (tester) async {
+      await useReferenceSurface(tester);
+      final engine = ScriptedEngine();
+      final store = ConnectionStore(engine: engine);
+      store.setHomeLook(HomeLook.two);
+      await tester.pumpWidget(_booth(HomeScreen(store: store)));
+      await tester.pumpAndSettle();
+
+      await store.connect();
+      engine.emit(const EngineStateChanged(VpnState.connecting));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 100));
+      engine.emit(const EngineStateChanged(VpnState.connected));
+      engine.emit(
+        const EngineStatsUpdated(
+          pingMs: 146,
+          downBytes: 145 * 1024 * 1024,
+          upBytes: 45 * 1024 * 1024,
+          exitCountryCode: 'ir',
+        ),
+      );
+      for (var i = 0; i < 16; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+
+      expect(find.text('مــتـصـل'), findsOneWidget);
+      expect(find.text('146 ms'), findsOneWidget);
+      // The stats row renders the live counters on the sheet (the v5
+      // adaptive format: «145.0MB» / «45.0MB», one decimal, no space).
+      expect(find.text('145.0MB'), findsOneWidget);
+      expect(find.text('45.0MB'), findsOneWidget);
+      expect(
+        tester
+            .widget<FlagSaturation>(
+              find.byKey(const ValueKey('flag-saturation')),
+            )
+            .grayscale,
+        isFalse,
+      );
+      // The speed entry is live again.
+      expect(
+          tester
+              .widget<SpeedTestButton>(find.byType(SpeedTestButton))
+              .connected,
+          isTrue);
+    });
   });
 
   // -------------------------------------------------------------------

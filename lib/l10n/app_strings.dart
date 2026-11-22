@@ -498,8 +498,10 @@ class AppStrings {
   static const Map<String, Map<String, String>> _table = {
     'fa': {
       'offline': 'آفلاین',
-      'statusDisconnected': 'غیرفعال',
-      'statusConnected': 'متصل',
+      // v5 («نمای 2»): the owner's own pill labels — tatweel-stretched
+      // exactly as the committed CSS spells them («قــطــع!»).
+      'statusDisconnected': 'قــطــع!',
+      'statusConnected': 'مــتـصـل',
       'statusConnecting': 'در حال اتصال',
       'statusReconnecting': 'اتصال مجدد',
       'statusFailed': 'خطا',
@@ -809,7 +811,7 @@ class AppStrings {
     },
     'en': {
       'offline': 'Offline',
-      'statusDisconnected': 'Inactive',
+      'statusDisconnected': 'Offline!',
       'statusConnected': 'Connected',
       'statusConnecting': 'Connecting',
       'statusReconnecting': 'Reconnecting',
@@ -1112,7 +1114,7 @@ class AppStrings {
     },
     'ru': {
       'offline': 'Офлайн',
-      'statusDisconnected': 'Отключено',
+      'statusDisconnected': 'Оффлайн!',
       'statusConnected': 'Подключено',
       'statusConnecting': 'Подключение',
       'statusReconnecting': 'Переподключение',
@@ -1411,7 +1413,7 @@ class AppStrings {
     },
     'zh': {
       'offline': '离线',
-      'statusDisconnected': '未连接',
+      'statusDisconnected': '未连接!',
       'statusConnected': '已连接',
       'statusConnecting': '连接中',
       'statusReconnecting': '重新连接',
@@ -1716,7 +1718,7 @@ class AppStrings {
     // resolves tk natively now.
     'tk': {
       'offline': 'Oflaýn',
-      'statusDisconnected': 'Işjeň däl',
+      'statusDisconnected': 'Offline!',
       'statusConnected': 'Berkidildi',
       'statusConnecting': 'Birikdirilýär',
       'statusReconnecting': 'Täzeden birikdirilýär',

@@ -125,39 +125,26 @@ class _IconTile extends StatelessWidget {
   }
 }
 
-/// The AETHONE wordmark: white bold text with the REAL brand mark (2.svg,
-/// its own gradient facets) centered BEHIND the letters — measured on the
-/// reference frames: mark ≈38px centered on the wordmark center.
+/// The AETHONE wordmark — v5 («نمای 2»): plain bold text, NO brand mark
+/// behind it (the committed mockups show the bare wordmark; the v4.11
+/// mark-behind-the-letters is retired with the redesign).
 class _Wordmark extends StatelessWidget {
   const _Wordmark();
 
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final fontSize = AethGeometry.wordmarkFontSize * s;
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        SvgPicture.asset(
-          AppAssets.brandMark,
-          width: AethGeometry.brandMarkSize * s,
-          height: AethGeometry.brandMarkSize * s,
-          fit: BoxFit.contain,
-          // The artwork renders with its OWN gradient colors (v4.11, owner
-          // defect #14: the flat green tint was wrong).
-        ),
-        Text(
-          'AETHONE',
-          style: TextStyle(
-            fontFamily: 'IRANYekanX',
-            fontWeight: FontWeight.w700,
-            fontSize: fontSize,
-            letterSpacing: AethGeometry.wordmarkLetterSpacing * s,
-            // v4.41 (round 17, item 10): pinned pure white at night.
-            color: AethColors.wordmarkInk,
-          ),
-        ),
-      ],
+    return Text(
+      'AETHONE',
+      style: TextStyle(
+        fontFamily: 'IRANYekanX',
+        fontWeight: FontWeight.w700,
+        fontSize: AethGeometry.wordmarkFontSize * s,
+        letterSpacing: AethGeometry.wordmarkLetterSpacing * s,
+        // v4.41 (round 17, item 10) + v1.0.0 (round 18): white at night,
+        // black in light — the resolved slots, never the lerped palette.
+        color: AethColors.wordmarkInk,
+      ),
     );
   }
 }
