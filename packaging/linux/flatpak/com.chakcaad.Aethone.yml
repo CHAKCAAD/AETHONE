@@ -1,0 +1,83 @@
+# com.chakcaad.Aethone.yml — the v1.0.1 Flatpak manifest.
+#
+# The engines (aether/zeptun/lyrebird/psiphon) are built at the frozen
+# pins by the CI's desktop-native job and land in the bundle this manifest
+# consumes — the Flatpak repackages the SAME baseline x86-64-v1 artifacts
+# the tar/deb/rpm/AppImage carry (one build, every format).
+#
+# All source paths are relative to THIS file's directory: the build script
+# (packaging/linux/build_packages.sh) stages the manifest, the metainfo,
+# the desktop entry, the hicolor set and the bundle tarball into one flat
+# staging directory before invoking flatpak-builder.
+#
+# finish-args, in order:
+#   --share=network / --share=ipc / sockets / dri — the VPN client itself.
+#   --talk-name=org.freedesktop.Flatpak — EVERY host bridge: the tunnel
+#     mode spawns `flatpak-spawn --host pkexec aethone-tunnel-helper
+#     --serve` (the companion host package), the KDE proxy tools run on
+#     the host the same way, and since v1.0.2 the gsettings calls of the
+#     system-proxy companion do too — inside the sandbox the runtime's
+#     own gsettings can NEVER write the host's dconf (flatpak's D-Bus
+#     filtering confines sandboxed writers to the app-scoped database;
+#     the v1.0.1 dconf-grant trio — talk-name=ca.desrt.dconf +
+#     xdg-run/dconf + DCONF_USER_CONFIG_DIR — provably did NOT route the
+#     org.gnome.system.proxy writes to the host on a real GNOME desktop,
+#     so those grants are dropped). See desktop_shared/desktop_engine.cpp
+#     (GSettings / FlatpakHostGSettingsPrefix) and
+#     scripts/flatpak_gsettings_bridge_check.py.
+app-id: com.chakcaad.Aethone
+runtime: org.gnome.Platform
+runtime-version: "51"
+sdk: org.gnome.Sdk
+command: aethone
+
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # every host bridge: the tunnel helper (pkexec), the KDE proxy tools,
+  # and the v1.0.2 gsettings system-proxy companion
+  - --talk-name=org.freedesktop.Flatpak
+
+modules:
+  - name: aethone
+    buildsystem: simple
+    build-commands:
+      # The bundle keeps its self-relative layout under /app/bin: aethone +
+      # lib/ + data/ + lyrebird + psiphon (RPATH $ORIGIN/lib, Paths() from
+      # the executable's own directory — both hold inside the sandbox).
+      - install -Dm755 -t /app/bin bundle/aethone
+      - install -Dm755 -t /app/bin bundle/aethone-tunnel-helper
+      - install -Dm755 -t /app/bin bundle/lyrebird
+      - install -Dm755 -t /app/bin bundle/psiphon
+      - cp -r bundle/lib /app/bin/lib
+      - cp -r bundle/data /app/bin/data
+      - install -Dm644 bundle/com.chakcaad.aethone.tunnel-helper.policy /app/share/polkit-1/actions/com.chakcaad.aethone.tunnel-helper.policy
+      - install -Dm644 com.chakcaad.aethone.desktop /app/share/applications/com.chakcaad.aethone.desktop
+      - install -Dm644 com.chakcaad.Aethone.metainfo.xml /app/share/metainfo/com.chakcaad.Aethone.metainfo.xml
+      - |
+        set -e
+        for d in 16x16 24x24 32x32 48x48 64x64 96x96 128x128 256x256; do
+          install -Dm644 "bundle/hicolor/$d/apps/com.chakcaad.aethone.png" \
+            "/app/share/icons/hicolor/$d/apps/com.chakcaad.aethone.png"
+        done
+      # the flatpak build sanity gate
+      - test -x /app/bin/aethone
+      - test -f /app/bin/lib/libflutter_linux_gtk.so
+      - test -f /app/bin/lib/libaether.so
+      - test -f /app/bin/lib/libzeptun.so
+    sources:
+      # Staged by packaging/linux/build_packages.sh beside the manifest —
+      # ONE archive carrying the bundle CONTENTS at top level plus the
+      # hicolor icon set under hicolor/ (the r101 lesson: flatpak-builder
+      # 1.4.2's `type: dir` source did not land where the build-commands
+      # expected, while archive + file sources are proven; never committed).
+      - type: archive
+        path: aethone-bundle.tar.gz
+        dest: bundle
+      - type: file
+        path: com.chakcaad.aethone.desktop
+      - type: file
+        path: com.chakcaad.Aethone.metainfo.xml

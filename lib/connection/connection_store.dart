@@ -14,7 +14,6 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../core/app_assets.dart';
 import '../core/app_theme.dart';
 import '../core/motion.dart';
@@ -110,6 +109,18 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   VpnState get state => _machine.current;
 
   bool get isConnected => state == VpnState.connected;
+
+  /// v8a (owner round 18: «از انیمیشن حاله سبز در حالت اتصال در صفحه
+  /// اصلی در سایر صفحات هم استفاده کن») — the home screen's green
+  /// connected-state animation is now EVERY page's rule: the canvases
+  /// drift while the tunnel is up OR the engine walk is in flight —
+  /// the exact condition the home screen always passed as `active:`
+  /// (connected || the scanning walk).
+  bool get patternsAlive =>
+      isConnected ||
+      state == VpnState.starting ||
+      state == VpnState.connecting ||
+      state == VpnState.reconnecting;
 
   String? lastErrorCode;
   String? lastErrorMessage;
@@ -348,19 +359,16 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
-  /// v4.19 — the app's DEFAULT protocol is WireGuard (owner device-test
-  /// decree #4: «حالا که هنوز بخش تنظیمات رو طراحی نکردیم حالت دیفالت تور
-  /// اور وارپ رو بزار روی پروتکل وایرگارد»). The sheet's AUTO tile still
-  /// selects the core's own default (MASQUE) explicitly — only the cold
-  /// default changed.
+  /// v1.0.1 — the app's DEFAULT protocol is MASQUE (owner decree:
+  /// «پروتکل دیفالت اپ رو ماسک قرار بده»). The v4.19 cold default was
+  /// WireGuard; the fresh install and the factory reset now both land on
+  /// MASQUE — Aether's own default protocol.
   ///
   /// v4.21 — SINGLE KNOB again (owner: the v4.20 chain/leg split was not
   /// good UX — «لطفا به حالت قبل برشگردون»): the field holds the committed
-  /// mode directly — a plain tile OR a family member. The WARP leg under a
-  /// family mode is the fixed WireGuard default (v4.19 decree) until the
-  /// promised "AETHER core protocol" option lands.
+  /// mode directly — a plain tile OR a family member.
   @override
-  ProtocolId selectedProtocol = ProtocolId.wireguard;
+  ProtocolId selectedProtocol = ProtocolId.masque;
 
   /// The mode the engine runs and the UI shows — with the single-knob
   /// revert this is simply the committed selection.
@@ -557,6 +565,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     closeBehavior = CloseBehavior.ask;
     scanSpeed = 4;
     selectedProtocol = ProtocolId.auto;
+
     protocolModeSmart = false;
     connectionMode = ConnectionMode.proxy;
     selectedCountryCode = null;
@@ -795,13 +804,18 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     if (next == VpnState.connected) {
       // Owner v4.12: a SMALL haptic pulse the moment the connection really
       // lands (state-machine-verified, never on a fake/optimistic path).
-      HapticFeedback.mediumImpact();
+      // v1.0.2 — the same owner-approved pulse, now through the shared
+      // [AethHaptics] vocabulary (commit = mediumImpact, unchanged bytes).
+      AethHaptics.commit();
     }
   }
 
   void _fail({String? errorCode, String? message}) {
     lastErrorCode = errorCode;
     lastErrorMessage = message;
+    // v1.0.2 — the failure's own heavy word, fired ON THE EDGE (the store
+    // is a state edge, never an animation callback — the hard rule).
+    AethHaptics.failure();
     // any → failed is always legal (prompt §8).
     _machine.transition(VpnState.failed);
   }

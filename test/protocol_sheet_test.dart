@@ -52,8 +52,9 @@ Future<void> _openPage(WidgetTester tester, ConnectionStore store) async {
   await tester.pumpWidget(_booth(HomeScreen(store: store)));
   await tester.pumpAndSettle();
   // The home protocol card shows the selected protocol's own name — the
-  // v4.19 cold default is WIREGUARD (owner device-test decree #4).
-  await tester.tap(find.text('وایرگارد').first);
+  // v1.0.1 cold default is MASQUE (owner decree: «پروتکل دیفالت اپ رو
+  // ماسک قرار بده»).
+  await tester.tap(find.text('ماسک').first);
   await tester.pump();
   await tester.pumpAndSettle();
 }
@@ -165,18 +166,18 @@ void main() {
           'the frame line',
     );
 
-    // v4.19: the app's cold DEFAULT is WireGuard (owner decree #4 — until
-    // the settings redesign ships), so ITS tile renders selected (green).
-    // The design mock merely shows WireGuard picked; report table 11 still
-    // documents MASQUE as the CORE's own default (the AUTO tile path).
-    final wgContainer = tester.widget<AnimatedContainer>(
+    // v1.0.1: the app's cold DEFAULT is MASQUE (owner decree:
+    // «پروتکل دیفالت اپ رو ماسک قرار بده»), so ITS tile renders selected
+    // (green) — the same highlight the WireGuard default carried since
+    // v4.19.
+    final masqueContainer = tester.widget<AnimatedContainer>(
       find.descendant(
-        of: find.byKey(const ValueKey('proto-tile-wireguard')),
+        of: find.byKey(const ValueKey('proto-tile-masque')),
         matching: find.byType(AnimatedContainer),
       ).first,
     );
     expect(
-      (wgContainer.decoration as BoxDecoration).color,
+      (masqueContainer.decoration as BoxDecoration).color,
       AethColors.accentConnected,
     );
   });

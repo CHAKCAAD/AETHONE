@@ -17,8 +17,10 @@ The project aims to make sophisticated networking technologies more accessible t
 - Tor Integration — Multiple connection arrangements powered by Aether.
 - Psiphon Integration — Additional transport options through the Psiphon ecosystem.
 - VPN & Proxy Modes — Android VPN tunneling and local SOCKS5 proxy functionality.
+- Per-App Tunneling — Route the whole device or only the apps you pick through the tunnel.
+- Home-Screen Widget & Control-Centre Tile — Connect and disconnect straight from the launcher and Android's Quick Settings (v1.0.1).
 - Advanced Routing — Configurable traffic routing and direct/block rules.
-- Connection Configuration — Scan profiles, obfuscation settings, DNS and IP configuration.
+- Connection Configuration — Scan profiles, obfuscation settings, and IP version selection.
 - Connection Monitoring — Connection status, latency and available traffic statistics.
 - Multilingual Interface — Persian, English, Russian, Chinese, and Turkmen.
 - Custom Interface — Dedicated visual assets, protocol icons, themes, and animated backgrounds.
@@ -63,13 +65,30 @@ Aether runs inside the application process through its native interface, while Z
 
 📱 Platform Support
 
-Current development focus: Android.
+Current release targets: **Android** and **Linux** (v1.0.1).
 
-Linux and Windows directories may exist in the repository, but they are not currently established release targets.
+Downloads — https://github.com/CHAKCAAD/AETHONE/releases
 
-Check the Releases page for available Android builds:
+Android (v1.0.1, r97):
 
-https://github.com/CHAKCAAD/AETHONE/releases
+- `aethone-arm64-v8a-r97.apk` — 64-bit phones (most devices)
+- `aethone-armeabi-v7a-r97.apk` — 32-bit / older phones
+- `aethone-x86_64-r97.apk` — emulators and x86_64 devices
+
+Linux (v1.0.1, x86-64-v1 baseline, glibc 2.39+):
+
+- `aethone-linux-x86_64-1.0.1.tar.gz` — portable, any distro
+- `aethone_1.0.1_amd64.deb` — Debian 13+, Ubuntu 24.04+, Mint 22+
+- `aethone-1.0.1-1.x86_64.rpm` — Fedora 40+, openSUSE Tumbleweed / Leap 16
+- `AETHONE-1.0.1-x86_64.AppImage` — single-file, any x86_64 distro
+- `aethone-1.0.1-x86_64.flatpak` — Flatpak (GNOME 51 runtime); for tunnel mode also install `aethone-tunnel-helper` (.deb/.rpm) on the host once
+
+While the tunnel is up the system proxy points at the same local SOCKS5
+listener (GNOME gsettings + KDE Plasma kioslaverc) so browsers ride the
+tunnel too; the state is restored on disconnect. See
+`packaging/linux/README.md` for the full install guide (Persian).
+
+Windows builds exist as CI artifacts; Windows is not a release target yet.
 
 🔧 Building from Source
 
@@ -163,7 +182,7 @@ Open-source software makes projects like AETHONE possible. Thank you! ❤️
 
 📜 Licensing
 
-AETHONE currently does not declare a project-wide license. No root-level "LICENSE" file is present in this repository.
+AETHONE is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)** — see the [LICENSE](LICENSE) file at the repository root. The embedded Aether core is itself AGPL-3.0, so the combined work follows the same terms.
 
 Third-party components retain their respective licenses:
 
@@ -172,8 +191,6 @@ Third-party components retain their respective licenses:
 - Other bundled components and design assets may have separate licensing requirements.
 
 Please consult the original license files before copying, modifying, or redistributing any component.
-
-The project's overall licensing and redistribution terms will need to be explicitly established.
 
 ---
 
@@ -195,8 +212,10 @@ AETHONE یک برنامه آزمایشی در حوزه شبکه و عبور از
 - یکپارچه‌سازی تور: حالت‌های مختلف اتصال مبتنی بر هسته Aether.
 - یکپارچه‌سازی سایفون: پشتیبانی از ترنسپورت‌های مبتنی بر اکوسیستم Psiphon.
 - حالت VPN و Proxy: تونل‌سازی ترافیک دستگاه اندرویدی و پروکسی محلی SOCKS5.
+- مسیریابی برنامه‌ها: تونل‌سازی کل دستگاه یا فقط برنامه‌های انتخابی شما.
+- ویجت صفحه اصلی و کاشک کنترل سنتر: اتصال و قطع اتصال مستقیم از لانچر و تنظیمات سریع اندروید (v1.0.1).
 - مسیریابی پیشرفته: قوانین مسدودسازی، اتصال مستقیم و تنظیم مسیر ترافیک.
-- تنظیمات اتصال: پروفایل‌های اسکن، تنظیمات مبهم‌سازی، DNS و نسخه IP.
+- تنظیمات اتصال: پروفایل‌های اسکن، تنظیمات مبهم‌سازی و نسخه IP.
 - نمایش اطلاعات اتصال: وضعیت ارتباط، تأخیر و آمار ترافیک در بخش‌های پشتیبانی‌شده.
 - رابط کاربری چندزبانه: فارسی، انگلیسی، روسی، چینی و ترکمنی.
 - طراحی اختصاصی: آیکون‌های اختصاصی پروتکل‌ها، تم‌های مختلف و پس‌زمینه‌های متحرک.
@@ -241,13 +260,30 @@ Lyrebird| Go| ترنسپورت‌های قابل‌جایگزینی
 
 📱 پلتفرم‌ها
 
-تمرکز فعلی توسعه: اندروید
+پلتفرم‌های هدف فعلی: **اندروید** و **لینوکس** (نسخه ۱.۰.۱)
 
-وجود پوشه‌های Linux و Windows در مخزن به معنای پشتیبانی و انتشار نسخه نهایی این سیستم‌عامل‌ها نیست.
+دانلود — https://github.com/CHAKCAAD/AETHONE/releases
 
-برای مشاهده نسخه‌های منتشرشده به صفحه Releases مراجعه کنید:
+اندروید (v1.0.1، r97):
 
-https://github.com/CHAKCAAD/AETHONE/releases
+- `aethone-arm64-v8a-r97.apk` — گوشی‌های ۶۴ بیتی (اکثر گوشی‌های امروزی)
+- `aethone-armeabi-v7a-r97.apk` — گوشی‌های ۳۲ بیتی و قدیمی‌تر
+- `aethone-x86_64-r97.apk` — شبیه‌سازها و دستگاه‌های x86_64
+
+لینوکس (v1.0.1، کف x86-64-v1، glibc 2.39 به بالا):
+
+- `aethone-linux-x86_64-1.0.1.tar.gz` — پرتابل، برای هر توزیع
+- `aethone_1.0.1_amd64.deb` — Debian 13+، Ubuntu 24.04+، Mint 22+
+- `aethone-1.0.1-1.x86_64.rpm` — Fedora 40+، openSUSE Tumbleweed / Leap 16
+- `AETHONE-1.0.1-x86_64.AppImage` — تک‌فایل، هر توزیع x86_64
+- `aethone-1.0.1-x86_64.flatpak` — فلت‌پک (ران‌تایم GNOME 51)؛ برای حالت تونل بستهٔ `aethone-tunnel-helper` هم یک بار روی سیستم نصب کنید
+
+وقتی حالت تونل فعال است، پروکسی سیستم هم روی سوکس۵ محلی همان تونل ست می‌شود
+(گنوم با gsettings و کِی‌دی‌ای پلاسما با kioslaverc) تا مرورگرها هم از اتصال
+استفاده کنند و با قطع اتصال، وضعیت قبلی بازگردانی می‌شود. راهنمای کامل نصب
+لینوکس: `packaging/linux/README.md`.
+
+نسخه ویندوز به‌صورت خروجی CI موجود است اما هنوز هدف انتشار نیست.
 
 🔧 ساخت از سورس
 
@@ -329,7 +365,7 @@ AETHONE یک پروژه در حال توسعه است و هنوز نباید آ�
 
 📜 مجوز و لایسنس
 
-در حال حاضر AETHONE لایسنس کلی مشخصی ندارد و فایل "LICENSE" در ریشه مخزن موجود نیست.
+AETHONE تحت **لایسنس GNU Affero General Public License نسخه ۳ (AGPL-3.0)** منتشر می‌شود — متن کامل در فایل [LICENSE](LICENSE) در ریشه مخزن موجود است. هسته Aether خودش تحت AGPL-3.0 است و اثر ترکیبی نیز با همان شرایط منتشر می‌شود.
 
 مؤلفه‌های شخص ثالث همچنان تحت لایسنس اصلی خودشان قرار دارند:
 
@@ -338,6 +374,4 @@ AETHONE یک پروژه در حال توسعه است و هنوز نباید آ�
 - سایر هسته‌ها، وابستگی‌ها، فونت‌ها و فایل‌های طراحی ممکن است لایسنس‌های مستقل داشته باشند.
 
 پیش از کپی، تغییر یا بازنشر هر مؤلفه، فایل لایسنس اصلی آن را بررسی کنید.
-
-تعیین لایسنس نهایی AETHONE و شرایط بازنشر آن نیازمند بررسی و اعلام رسمی جداگانه است.
 </div>

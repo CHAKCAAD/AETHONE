@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.chakcaad.Aethone</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-only</project_license>
+  <name>AETHONE</name>
+  <summary>Cross-platform VPN client</summary>
+  <summary xml:lang="fa">کلاینت چندسکویی وی‌پی‌ان</summary>
+  <description>
+    <p>AETHONE routes the whole device or proxy-aware apps through Aether
+    (WARP-class core) and zeptun (userspace TUN router) with MASQUE,
+    WireGuard, VLESS-WS, Tor and Psiphon protocols.</p>
+    <p>While the tunnel is up the system proxy points at the same local
+    SOCKS5 listener (GNOME gsettings + KDE kioslaverc), so browsers ride
+    the tunnel too; the state is restored on disconnect.</p>
+  </description>
+  <launchable type="desktop-id">com.chakcaad.aethone.desktop</launchable>
+  <url type="homepage">https://github.com/CHAKCAAD/AETHONE</url>
+  <url type="bugtracker">https://github.com/CHAKCAAD/AETHONE/issues</url>
+  <developer_name>CHAKCAAD</developer_name>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.0.1" date="__RELEASE_DATE__">
+      <description>
+        <p>The first Linux release of AETHONE: deb, rpm, AppImage, Flatpak
+        and a portable tar.gz, all built from the same v1.0.1 source as
+        the Android release. The system-proxy companion now covers GNOME
+        (gsettings) and KDE Plasma (kioslaverc) desktops.</p>
+      </description>
+    </release>
+  </releases>
+</component>

@@ -41,7 +41,9 @@ import '../../connection/speed_test.dart';
 import '../../connection/transport_modes.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
+import '../../core/fx/smoke_burst.dart';
 import '../../core/motion.dart';
+import '../../core/motion_widgets.dart';
 import '../../l10n/app_strings.dart';
 import '../home/widgets/glow_pill.dart';
 import '../home/widgets/pattern_sides.dart';
@@ -94,7 +96,18 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
     _engine.onUpdate = _onSnapshot;
   }
 
-
+  @override
+  void dispose() {
+    // v1.0.2 — THE lifecycle fix (the audit's real bug): the engine's own
+    // contract promises «page dispose / tap-to-stop» stops the run, but the
+    // page never disposed — leaving the page mid-run kept the measurement
+    // alive and the onUpdate closure hooked long after the route was gone.
+    // Detach FIRST (no callback can touch an unmounted State), then stop
+    // the measurement itself — exactly what a tap-to-stop does.
+    _engine.onUpdate = null;
+    _engine.abort();
+    super.dispose();
+  }
 
   void _onSnapshot(SpeedTestSnapshot snap) {
     if (!mounted) return;
@@ -139,7 +152,9 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: widget.store,
-      builder: (context, _) => Scaffold(
+      builder: (context, _) => MotionScope(
+        style: widget.style,
+        child: Scaffold(
         backgroundColor: AethColors.bgScreen,
         // v4.25 — the pattern-placement fix: expand keeps the pattern box
         // at the FULL screen height (see the settings page's Stack).
@@ -150,12 +165,22 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
             // این صفحه استفاده کن دقیقا همون پترن») — the HOME composition
             // itself, same position, same strength, no per-page wash; gated
             // by the appearance switch; alive while a test runs.
+            // v8a (owner round 18) — the every-page drift rule on top of
+            // the page's own running state + the green smoke blooms while
+            // the tunnel is up, exactly like the home screen.
+            if (widget.store.isConnected &&
+                widget.store.showPatterns &&
+                widget.style != MotionStyle.off)
+              Positioned.fill(
+                child: SmokeField(style: widget.style),
+              ),
             if (widget.store.showPatterns)
               Positioned.fill(
                 child: PatternSides(
                   connected: widget.store.isConnected,
                   style: widget.style,
-                  active: _state == _RunState.running,
+                  active:
+                      widget.store.patternsAlive || _state == _RunState.running,
                 ),
               ),
             SafeArea(
@@ -192,6 +217,7 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
                           widget.style,
                           2,
                           _DialZone(state: _state, snap: _snap),
+                          flavor: EntranceFlavor.gauge,
                         ),
                         _gap(context, AethGeometry.speedGapDialToCards),
                         subpageEnter(
@@ -199,6 +225,7 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
                           widget.style,
                           3,
                           _StatGrid(snap: _snap, state: _state),
+                          flavor: EntranceFlavor.stat,
                         ),
                         _gap(context, AethGeometry.speedGapCardsToButton),
                         subpageEnter(
@@ -211,6 +238,7 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
                             label: _buttonLabel(),
                             onTap: _tapButton,
                           ),
+                          flavor: EntranceFlavor.action,
                         ),
                         SizedBox(height: 40 * _scale(context)),
                       ],
@@ -221,6 +249,7 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -493,8 +522,13 @@ class _DialZone extends StatelessWidget {
                         key: const ValueKey('speed-needle'),
                         turns:
                             _needleFraction() / 2 - 0.25, // 0→W · 0.5→N · 1→E
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOutCubic,
+                        // v1.0.2 — the sweep follows the style's own dial
+                        // tempo/curve (was a fixed 180 ms); OFF = instant.
+                        duration: Duration(
+                          milliseconds:
+                              MotionScope.of(context).recipe.dialMs,
+                        ),
+                        curve: MotionScope.of(context).recipe.dialCurve,
                         alignment:
                             Alignment.bottomCenter, // pivot = dial centre
                         child: SvgPicture.asset(
@@ -533,10 +567,13 @@ class _DialZone extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                Text(
+                // v1.0.2 — the number never pops: the shared asymmetric
+                // crossfade (the audit's «عدد گیج تست سرعت» finding). The
+                // right edge stays pinned; the swap rides inside the slot.
+                AnimatedValueText(
                   _gaugeValue(),
                   textDirection: TextDirection.ltr,
-                  style: TextStyle(
+                  textStyle: TextStyle(
                     fontFamily: 'IRANYekanX',
                     fontWeight: FontWeight.w700,
                     fontSize: AethGeometry.speedValueSize * s,
@@ -558,25 +595,26 @@ class _DialZone extends StatelessWidget {
             ),
           ),
           // The phase label — running only; the slot stays reserved
-          // otherwise so the cards below never move.
-          if (phaseLabel != null)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Center(
-                child: Text(
-                  phaseLabel,
-                  textDirection: TextDirection.rtl,
-                  style: TextStyle(
-                    fontFamily: 'IRANYekanX',
-                    fontWeight: FontWeight.w700,
-                    fontSize: AethGeometry.speedPhaseLabelSize * s,
-                    color: AethColors.textPrimary,
-                  ),
+          // otherwise so the cards below never move. v1.0.2 — the swap
+          // crossfades (ping → download → upload never pops); an empty
+          // string at rest keeps the slot invisible but laid out.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Center(
+              child: AnimatedValueText(
+                phaseLabel ?? '',
+                textDirection: TextDirection.rtl,
+                textStyle: TextStyle(
+                  fontFamily: 'IRANYekanX',
+                  fontWeight: FontWeight.w700,
+                  fontSize: AethGeometry.speedPhaseLabelSize * s,
+                  color: AethColors.textPrimary,
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
@@ -848,10 +886,12 @@ class _SpeedStatCard extends StatelessWidget {
                         color: AethColors.textSecondary,
                       ),
                     ),
-                    Text(
+                    // v1.0.2 — measured values land through the shared
+                    // crossfade («...» → the number never pops).
+                    AnimatedValueText(
                       value,
                       textDirection: TextDirection.ltr,
-                      style: TextStyle(
+                      textStyle: TextStyle(
                         fontFamily: 'IRANYekanX',
                         fontWeight: FontWeight.w700,
                         fontSize: AethGeometry.speedCardValueSize * s,
@@ -900,9 +940,9 @@ class _StartButton extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        GestureDetector(
+        PressSpring(
           key: const ValueKey('speed-start'),
-          behavior: HitTestBehavior.opaque,
+          style: style,
           onTap: onTap,
           child: SizedBox(
             width: AethGeometry.speedStartGroupSize * s,
@@ -1000,10 +1040,10 @@ class _StartButton extends StatelessWidget {
         // without breaking the column's constraints.
         Transform.translate(
           offset: Offset(0, AethGeometry.speedGapButtonToLabel * s),
-          child: Text(
+          child: AnimatedValueText(
             label,
             textDirection: TextDirection.rtl,
-            style: TextStyle(
+            textStyle: TextStyle(
               fontFamily: 'IRANYekanX',
               fontWeight: FontWeight.w500,
               fontSize: AethGeometry.speedButtonLabelSize * s,

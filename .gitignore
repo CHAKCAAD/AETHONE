@@ -11,6 +11,9 @@
 !.env.example
 *.jks
 *.keystore
+# v1.0.1 — the app's permanent release key (android/app/) is committed by
+# design; the negation lives next to its own rule in android/.gitignore.
+!android/app/aethone-release.keystore
 *.p12
 *.pfx
 *.keytab
@@ -64,3 +67,6 @@ Thumbs.db
 
 # PHASE-2 rebuild: engine build outputs — binaries never enter git;
 # the manifest + inspection evidence stay (the deploy check reads them).
+
+# --- v1.0.1 linux packaging round: local staging outputs (never commit) ---
+packaging/linux/flatpak/aethone-bundle.tar.gz

@@ -34,8 +34,11 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../connection/connection_state.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
+import '../../../core/fx/tap_ripple.dart';
 import '../../../core/motion.dart';
+import '../../../core/motion_widgets.dart';
 import '../../../l10n/app_strings.dart';
+import 'connect_core.dart';
 
 /// One concentric layer of a glow group.
 class LayerSpec {
@@ -156,16 +159,22 @@ class StatusPill extends StatelessWidget {
     final duration = motionDuration(style, MotionDurations.quick);
 
     final connected = state == VpnState.connected;
-    final (label, iconAsset) = switch (state) {
-      VpnState.connected => (strings.statusConnected, AppAssets.iconShieldTick),
-      VpnState.connecting => (strings.statusConnecting, AppAssets.iconSend),
-      VpnState.reconnecting => (
-        strings.statusReconnecting,
-        AppAssets.iconShieldCross,
-      ),
-      VpnState.failed => (strings.statusFailed, AppAssets.iconShieldCross),
-      _ => (strings.statusDisconnected, AppAssets.iconShieldCross),
+    // v1.0.2 — all EIGHT states carry their own words + glyph (the three
+    // previously-unlabelled middle states — starting / waiting / —
+    // disconnecting — folded into «غیرفعال» before; the audit's dead-middle
+    // finding). The glyph mapping is the ONE shared [connectGlyphFor] so
+    // the pill, the center button and the halo can never disagree.
+    final label = switch (state) {
+      VpnState.connected => strings.statusConnected,
+      VpnState.connecting => strings.statusConnecting,
+      VpnState.starting => strings.statusStarting,
+      VpnState.waitingForPermissions => strings.statusWaitingPermissions,
+      VpnState.reconnecting => strings.statusReconnecting,
+      VpnState.disconnecting => strings.statusDisconnecting,
+      VpnState.failed => strings.statusFailed,
+      VpnState.disconnected => strings.statusDisconnected,
     };
+    final iconAsset = connectGlyphFor(state);
 
     return SizedBox(
       width: AethGeometry.pillWidth * s,
@@ -273,7 +282,8 @@ class SpeedTestButton extends StatelessWidget {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final duration = motionDuration(style, MotionDurations.state);
 
-    // Animated appearance (scale + fade). OFF style ⇒ instant.
+    // Animated appearance (scale + fade). OFF style ⇒ instant. The press
+    // is the shared real spring (v1.0.2 — was a plain GestureDetector).
     return AnimatedScale(
       scale: visible ? 1.0 : 0.0,
       duration: duration,
@@ -284,9 +294,11 @@ class SpeedTestButton extends StatelessWidget {
         child: IgnorePointer(
           // v5: the button is on screen in BOTH states (the dark idle
           // pose), but only a live tunnel can run a test — taps are dead
-          // until connected.
+          // until connected. The press itself is the shared real spring
+          // (v1.0.2 — was a plain GestureDetector).
           ignoring: !visible || !connected,
-          child: GestureDetector(
+          child: PressSpring(
+            style: style,
             onTap: onTap,
             child: SizedBox(
               width: AethGeometry.speedGroupSize * s,
@@ -363,14 +375,24 @@ class SpeedTestButton extends StatelessWidget {
   }
 }
 
-/// v5 — the look-2 CONNECT button (the owner's new «Group 45»): the WHITE
-/// 160×160 r60 base + the 108.17² r41 gradient core + the Off glyph 48×48
-/// in WHITE. The gradient runs top→bottom in both states (green
-/// #2FF8B1→#1AD995 connected, red #FF5B5E→#FF383C disconnected) and the
-/// whole composition crossfades on the state edge. [scale] renders the
-/// composition smaller (the look page's preview) without recomputing a
+/// v5 — the look-2 CONNECT button (the owner's new «Group 45», round 19):
+/// the WHITE 160×160 r60 base + the 108.17² r41 gradient core + the Off
+/// glyph 48×48 in WHITE. The gradient runs top→bottom in both states
+/// (green #2FF8B1→#1AD995 connected, red #FF5B5E→#FF383C disconnected)
+/// and the whole composition crossfades on the state edge. [scale] renders
+/// the composition smaller (the look page's preview) without recomputing a
 /// single layer.
-class ConnectButtonGlow extends StatelessWidget {
+///
+/// v1.0.2 motion overhaul (the motion-line merge) — the press is a REAL
+/// spring ([PressSpring]: fast squash down, personality-tuned
+/// [SpringSimulation] return with a hair of overshoot) and the v4.43
+/// tap-ripple burst rides the same pointer-down. [state] is optional for
+/// the non-interactive previews (the onboarding look page), which keep
+/// rendering the connected pose exactly as before. While DISCONNECTING
+/// the tap is a deliberate no-op — one transition is already in flight,
+/// the collapse tells the story. The glyph stays the round-19 CSS's own
+/// Off (power) glyph in WHITE for both states.
+class ConnectButtonGlow extends StatefulWidget {
   const ConnectButtonGlow({
     super.key,
     required this.connected,
@@ -378,6 +400,8 @@ class ConnectButtonGlow extends StatelessWidget {
     this.scale = 1.0,
     this.duration = const Duration(milliseconds: 400),
     this.curve = Curves.easeInOutCubic,
+    this.style = MotionStyle.standard,
+    this.state,
   });
 
   final bool connected;
@@ -389,26 +413,77 @@ class ConnectButtonGlow extends StatelessWidget {
   final Duration duration;
   final Curve curve;
 
+  /// The motion personality (the press spring's tuning).
+  final MotionStyle style;
+
+  /// The REAL VPN state — drives the disconnecting tap lock (the glyph
+  /// stays the round-19 CSS's own Off power glyph in both states). Null
+  /// (the previews) keeps the binary behaviour.
+  final VpnState? state;
+
+  @override
+  State<ConnectButtonGlow> createState() => _ConnectButtonGlowState();
+}
+
+/// v4.43 — owns the [TapRippleController] so the flutterfx tap-ripple
+/// burst (owner-approved new dependency round) survives the rebuilds.
+class _ConnectButtonGlowState extends State<ConnectButtonGlow> {
+  final TapRippleController _ripple = TapRippleController();
+
+  @override
+  void dispose() {
+    _ripple.detach();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final connected = widget.connected;
+    final onTap = widget.onTap;
+    final duration = widget.duration;
+    final curve = widget.curve;
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final k = s * scale;
-    final size = AethGeometry.connectGroupSize * k;
+    final k = s * widget.scale;
+    final effective = widget.state ??
+        (connected ? VpnState.connected : VpnState.disconnected);
+    final accent =
+        connected ? AethColors.accentConnected : AethColors.statusDisconnected;
+    // The disconnecting lock: one transition already in flight — a tap is a
+    // no-op and the press feedback stays silent (the collapse narrates).
+    final tap = effective == VpnState.disconnecting ? null : onTap;
 
-    return _TouchFeedback(
-      onTap: onTap,
+    // The tap target covers the WHOLE composition. The v4.43 ripple burst
+    // rides the SAME pointer-down as the squash (one raw listener, one
+    // gesture): rings spawn from the tap point the moment the finger
+    // lands — pure decoration, the action itself never waits for them;
+    // the disconnecting lock silences burst and tap together, and OFF
+    // never mounts a listener at all.
+    return PressSpring(
+      style: widget.style,
+      onTap: tap,
+      onPointerDown: (origin) => _ripple.tapAt(origin),
       child: SizedBox(
-        width: size,
-        height: size,
-        child: Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            // The WHITE base («3»: 160² r60) — themed (light #FFFFFF, night
-            // the dark-card family), crossfaded with the core so the whole
-            // button breathes on the state edge.
-            TweenAnimationBuilder<double>(
-              tween: Tween(end: connected ? 1.0 : 0.0),
+        width: AethGeometry.connectGroupSize * k,
+        height: AethGeometry.connectGroupSize * k,
+        child: TapRipple(
+          controller: _ripple,
+          color: accent,
+          duration:
+              Duration(milliseconds: (duration.inMilliseconds * 1.5).round()),
+          curve: curve,
+          // Ring one is born on the core's own edge (108.17/2 design px,
+          // style-scaled) and dies just past the white base (x2.2).
+          baseRadius: AethGeometry.connectCoreSize * k / 2,
+          maxScale: 2.2,
+          child: Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              // The WHITE base («3»: 160² r60) — themed (light #FFFFFF,
+              // night the dark-card family), crossfaded with the core so
+              // the whole button breathes on the state edge.
+              TweenAnimationBuilder<double>(
+                tween: Tween(end: connected ? 1.0 : 0.0),
               duration: duration,
               curve: curve,
               builder: (context, t, _) => DecoratedBox(
@@ -462,49 +537,15 @@ class ConnectButtonGlow extends StatelessWidget {
               ),
             ),
           ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Short, subtle touch feedback (scale 0.97 + opacity — report table 14,
-/// max ~120 ms). Never delays the action.
-class _TouchFeedback extends StatefulWidget {
-  const _TouchFeedback({required this.onTap, required this.child});
-
-  final VoidCallback? onTap;
-  final Widget child;
-
-  @override
-  State<_TouchFeedback> createState() => _TouchFeedbackState();
-}
-
-class _TouchFeedbackState extends State<_TouchFeedback> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: widget.onTap == null
-          ? null
-          : (_) => setState(() => _pressed = true),
-      onTapCancel: widget.onTap == null
-          ? null
-          : () => setState(() => _pressed = false),
-      onTapUp: widget.onTap == null
-          ? null
-          : (_) => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 120),
-        child: AnimatedOpacity(
-          opacity: _pressed ? 0.85 : 1.0,
-          duration: const Duration(milliseconds: 120),
-          child: widget.child,
-        ),
-      ),
-    );
-  }
-}
+// (_TouchFeedback retired by the v1.0.2 motion overhaul — the shared
+// [PressSpring] in motion_widgets.dart now carries the press for every
+// connect surface: fast squash down, spring return, micro haptic. The
+// v4.43 tap-ripple burst rides PressSpring's own pointer-down hook, so
+// the retired class stays retired.)

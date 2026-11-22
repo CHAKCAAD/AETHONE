@@ -1,0 +1,17 @@
+#!/bin/sh
+# postinst — refresh the desktop database and the hicolor icon cache after
+# install (both best-effort: their absence must never fail the install).
+set -e
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database -q /usr/share/applications || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+elif [ -x /usr/libexec/gtk-update-icon-cache ] 2>/dev/null; then
+  /usr/libexec/gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+fi
+
+# polkitd watches the actions directory on its own — no reload needed.
+
+exit 0

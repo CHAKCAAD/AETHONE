@@ -1,0 +1,58 @@
+# PKGBUILD — the AETHONE repackaging recipe for Arch-family users (AUR
+# reference; not auto-published — an AUR maintainer can adopt this as-is).
+# It repackages the official release tarball (the SAME baseline artifacts
+# CI built), so nothing is recompiled on the user's machine.
+#
+# Maintainer: AETHONE Project <https://github.com/CHAKCAAD/AETHONE>
+
+pkgname=aethone
+pkgver=1.0.1
+pkgrel=1
+pkgdesc='Cross-platform VPN client (MASQUE, WireGuard, VLESS-WS, Tor, Psiphon) — system proxy set on tunnel'
+arch=('x86_64')
+url='https://github.com/CHAKCAAD/AETHONE'
+license=('AGPL-3.0-only')
+depends=('gtk3' 'glib2')
+optdepends=('polkit: tunnel mode (the TUN bring-up helper)')
+source=("aethone-linux-x86_64-${pkgver}.tar.gz::${url}/releases/download/v${pkgver}/aethone-linux-x86_64-${pkgver}.tar.gz")
+# VERIFY against SHA256SUMS-linux-*.txt on the release page before
+# installing; replace SKIP with the real digest when packaging for AUR.
+sha256sums=('SKIP')
+
+package() {
+  cd "${srcdir}/aethone-linux-x86_64"
+
+  # the app bundle keeps its self-relative layout (RPATH $ORIGIN/lib)
+  install -dm755 "${pkgdir}/usr/lib/aethone"
+  cp -a . "${pkgdir}/usr/lib/aethone/"
+  rm -f "${pkgdir}/usr/lib/aethone/INSTALL.txt"
+
+  # the launcher (exec wrapper — a symlink would NOT resolve the RPATH)
+  install -dm755 "${pkgdir}/usr/bin"
+  printf '#!/bin/sh\nexec /usr/lib/aethone/aethone "$@"\n' \
+    > "${pkgdir}/usr/bin/aethone"
+  chmod 755 "${pkgdir}/usr/bin/aethone"
+
+  # the privilege helper + its polkit action, pre-installed system-wide
+  install -Dm755 aethone-tunnel-helper \
+    "${pkgdir}/usr/libexec/aethone-tunnel-helper"
+  install -Dm644 com.chakcaad.aethone.tunnel-helper.policy \
+    "${pkgdir}/usr/share/polkit-1/actions/com.chakcaad.aethone.tunnel-helper.policy"
+
+  # the menu entry + the 256 hicolor face (the bundle's own icon)
+  install -Dm644 /dev/stdin \
+    "${pkgdir}/usr/share/applications/com.chakcaad.aethone.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=AETHONE
+GenericName=VPN Client
+Comment=Cross-platform VPN client (MASQUE, WireGuard, VLESS-WS, Tor, Psiphon)
+Exec=aethone
+Icon=com.chakcaad.aethone
+Terminal=false
+Categories=Network;Security;
+StartupWMClass=com.chakcaad.aethone
+EOF
+  install -Dm644 aethone-icon.png \
+    "${pkgdir}/usr/share/icons/hicolor/256x256/apps/com.chakcaad.aethone.png"
+}

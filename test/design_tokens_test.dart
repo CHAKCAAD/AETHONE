@@ -85,11 +85,13 @@ void main() {
       expect(AethGeometry.gapTopbarToPill, 114);
       expect(AethGeometry.gapHeroToPanel, 3);
       expect(AethGeometry.panelTopPad, 62);
-      expect(AethGeometry.gapStatsToFlags, 30);
-      expect(AethGeometry.gapFlagsToRow, 15);
+      expect(AethGeometry.gapStatsToFlags, 27);
+      expect(AethGeometry.gapFlagsToRow, 12);
       expect(AethGeometry.countryRowHeight, 45);
       expect(AethGeometry.gapRowToCard, 27);
-      expect(AethGeometry.gapCardToBottomBase, 3);
+      expect(AethGeometry.gapCardToBottom, 37);
+      expect(AethGeometry.statGlyphSize, 27);
+      expect(AethGeometry.statGroupNudge, 6);
       expect(AethGeometry.panelShadowSigma, 47.5);
       expect(AethGeometry.panelShadowDy, -16);
       expect(AethGeometry.panelShadowAlpha, 0.09);

@@ -48,8 +48,10 @@ import '../../../connection/connection_state.dart';
 import '../../../connection/connection_store.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
+import '../../../core/fx/smoke_burst.dart';
 import '../../../core/motion.dart';
 import '../../../l10n/app_strings.dart';
+import '../../shared/circle_selector.dart';
 import '../../shared/protocol_glyph.dart';
 import '../../shared/theme_toggle_tile.dart';
 import '../widgets/pattern_sides.dart';
@@ -111,8 +113,9 @@ class _ProtocolPageState extends State<ProtocolPage> {
     if (!already) widget.store.selectProtocol(id);
     // Owner v4.16: after choosing a protocol the user is returned to the
     // home page automatically. The 300 ms hold lets the green crossfade +
-    // pulse land before the reverse slide.
-    Future.delayed(const Duration(milliseconds: 300), () {
+    // pulse land before the reverse slide — v1.0.2: style-scaled (OFF pops
+    // immediately; its crossfade is instant too, so nothing is lost).
+    Future.delayed(motionDuration(widget.style, 300), () {
       if (mounted) Navigator.of(context).pop();
     });
   }
@@ -120,16 +123,18 @@ class _ProtocolPageState extends State<ProtocolPage> {
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
-    final routeAnim = ModalRoute.of(context)!.animation!;
 
-    return Scaffold(
+    return MotionScope(
+      style: widget.style,
+      child: Scaffold(
         backgroundColor: AethColors.bgScreen,
+        // v1.0.2 — the page no longer rebuilds its WHOLE tree on every
+        // route tick: each block's [motionCascade] subscribes to the route
+        // animation itself, so the outer listener now only rebuilds on
+        // REAL store changes (the audit's no-full-screen-rebuild rule).
         body: AnimatedBuilder(
-          // v4.17: LIVE store binding — mode segments and scan pills apply
-          // instantly, independent of protocol selection.
-          animation: Listenable.merge([widget.store, routeAnim]),
+          animation: widget.store,
           builder: (context, _) {
-            final t = routeAnim.value;
             final s =
                 MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
             return Stack(
@@ -145,11 +150,26 @@ class _ProtocolPageState extends State<ProtocolPage> {
                 // و تنطیمات استفاده کن دقیقا همونا با همون مکان»; v4.25 —
                 // one single composition, no per-page variant left).
                 // v4.22 — gated by the appearance switch (bare bg when off).
+                // v8a (owner round 18: «از انمیشن حاله سبز در حالت اتصال
+                // در صفحه اصلی در سایر صفحات هم استفاده کن») — the green
+                // connected-state ambience is no longer home-only: the
+                // SMOKE FIELD blooms and the patterns DRIFT under the SAME
+                // condition the home screen always used.
+                if (widget.store.isConnected &&
+                    widget.store.showPatterns &&
+                    widget.store.effectiveMotionStyle(context) !=
+                        MotionStyle.off)
+                  Positioned.fill(
+                    child: SmokeField(
+                      style: widget.store.effectiveMotionStyle(context),
+                    ),
+                  ),
                 if (widget.store.showPatterns)
                   Positioned.fill(
                     child: PatternSides(
                       connected: widget.store.isConnected,
                       style: widget.store.effectiveMotionStyle(context),
+                      active: widget.store.patternsAlive,
                     ),
                   ),
                 SafeArea(
@@ -163,7 +183,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                           // (v4.34 — the exclamation tile became the
                           // night ⇄ light switch, owner round 10).
                           _enter(
-                            t,
                             0,
                             Positioned(
                               top: AethGeometry.topSafeExtraGap * s,
@@ -177,7 +196,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                           ),
                           // ---- «حالت اتصال» + the تونل/پروکسی segments
                           _enter(
-                            t,
                             1,
                             Positioned(
                               top: AethGeometry.protoPageHeadingModeTop * s,
@@ -190,7 +208,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                             ),
                           ),
                           _enter(
-                            t,
                             1,
                             Positioned(
                               top: AethGeometry.protoSegmentTop * s,
@@ -204,7 +221,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                           ),
                           // ---- «پروتکل» + the 3+3 tiles + family cards
                           _enter(
-                            t,
                             2,
                             Positioned(
                               top:
@@ -218,7 +234,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                             ),
                           ),
                           _enter(
-                            t,
                             3,
                             Positioned(
                               top: AethGeometry.protoTileRow1Top * s,
@@ -240,12 +255,13 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 // active (the v4.20 double-green is gone).
                                 selected: _plainHighlight,
                                 pulse: _pulseId,
+                                style: widget.style,
                                 onSelect: _select,
                               ),
                             ),
+                            flavor: EntranceFlavor.action,
                           ),
                           _enter(
-                            t,
                             4,
                             Positioned(
                               top: AethGeometry.protoTileRow2Top * s,
@@ -265,12 +281,13 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 // v4.21 — the single-knob highlight.
                                 selected: _plainHighlight,
                                 pulse: _pulseId,
+                                style: widget.style,
                                 onSelect: _select,
                               ),
                             ),
+                            flavor: EntranceFlavor.action,
                           ),
                           _enter(
-                            t,
                             5,
                             Positioned(
                               top: AethGeometry.protoCardTopPsiphon * s,
@@ -290,12 +307,13 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 // members is the committed protocol.
                                 selected: widget.store.selectedProtocol,
                                 pulse: _pulseId,
+                                style: widget.style,
                                 onSelect: _select,
                               ),
                             ),
+                            flavor: EntranceFlavor.action,
                           ),
                           _enter(
-                            t,
                             6,
                             Positioned(
                               top: AethGeometry.protoCardTopTor * s,
@@ -313,16 +331,17 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 // v4.21 — the single-knob selection.
                                 selected: widget.store.selectedProtocol,
                                 pulse: _pulseId,
+                                style: widget.style,
                                 onSelect: _select,
                               ),
                             ),
+                            flavor: EntranceFlavor.action,
                           ),
                           // ---- v2.1.0 (the owner's decree): the
                           // «سرعت اسکن» section is BACK on the protocol
                           // page, in the Firefox card's place — the
                           // pre-PHASE-2 geometry, restored verbatim.
                           _enter(
-                            t,
                             7,
                             Positioned(
                               top: AethGeometry.protoPageHeadingScanTop * s,
@@ -335,7 +354,6 @@ class _ProtocolPageState extends State<ProtocolPage> {
                             ),
                           ),
                           _enter(
-                            t,
                             7,
                             Positioned(
                               top: AethGeometry.protoPillTop * s,
@@ -356,44 +374,33 @@ class _ProtocolPageState extends State<ProtocolPage> {
             );
           },
         ),
+      ),
     );
   }
 
   /// The stagger wrapper (kept from the sheet — owner: «انیمیشن های فعلی رو
   /// حذف نکن»): block [i] enters on its own slice of the route timeline.
-  /// v4.25 — the choreography is the STYLE'S OWN recipe: SILK rises 22 px,
-  /// TIDE drifts up 34 px out of a soft zoom, SPRING pops from 90% with an
-  /// overshoot, BLINK pure-fades, OFF renders untouched. On reverse the
-  /// same slices retrace — the page folds away gently.
-  Widget _enter(double t, int block, Widget child) {
-    final style = widget.style;
-    if (style == MotionStyle.off) return child;
-    final r = style.recipe;
-    final start = (block * r.staggerStep).clamp(0.0, 0.45);
-    final bt = r.blockCurve
-        .transform(Interval(start, start + r.staggerSpan).transform(t));
-    if (bt >= 0.999) return child;
-
-    // The animation must live INSIDE the Positioned (ParentData rule:
-    // Positioned has to stay a DIRECT Stack child), so a Positioned child
-    // is unwrapped, animated, and re-wrapped with identical bounds.
+  /// v1.0.2 — UNIFIED with the app's ONE cascade ([motionCascade]): the
+  /// hand-rolled twin (the audit's «دو مسیر ناهمگون» finding — two code
+  /// paths for one behaviour, already drifting) is gone; the flavour
+  /// differentiates the block's MEANING (the protocol tiles reach for the
+  /// finger with [EntranceFlavor.action], the chrome stays standard).
+  /// The Positioned unwrap stays (ParentData rule: Positioned must remain
+  /// a DIRECT Stack child).
+  Widget _enter(
+    int block,
+    Widget child, {
+    EntranceFlavor flavor = EntranceFlavor.standard,
+  }) {
     final pd = child is Positioned ? child : null;
     final inner = pd?.child ?? child;
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    Widget animated = inner;
-    if (r.blockRise > 0) {
-      animated = Transform.translate(
-        offset: Offset(0, (1 - bt) * r.blockRise * s),
-        child: animated,
-      );
-    }
-    if (r.blockScaleFrom < 1) {
-      animated = Transform.scale(
-        scale: r.blockScaleFrom + (1 - r.blockScaleFrom) * bt,
-        child: animated,
-      );
-    }
-    animated = Opacity(opacity: bt, child: animated);
+    final animated = motionCascade(
+      context,
+      widget.style,
+      block,
+      inner,
+      flavor: flavor,
+    );
     if (pd == null) return animated;
     return Positioned(
       left: pd.left,
@@ -599,6 +606,11 @@ class _ModeSegments extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final strings = AppStrings.of(context);
+    // v1.0.2 — the segment's timing follows the SELECTED style through
+    // [MotionScope] (the audit's zero-hardcode rule; was a fixed 260 ms).
+    final ms = MotionScope.of(context);
+    final ctrl = Duration(milliseconds: ms.recipe.controlMs);
+    final ctrlCurve = ms.recipe.controlCurve;
     final h = AethGeometry.protoSegmentH * s;
     final r = AethGeometry.protoSegmentRadius * s;
 
@@ -608,8 +620,8 @@ class _ModeSegments extends StatelessWidget {
         child: GestureDetector(
           onTap: () => onSelect(mode),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOut,
+            duration: ctrl,
+            curve: ctrlCurve,
             height: h,
             decoration: BoxDecoration(
               color: isSel ? AethColors.accentConnected : AethColors.cardDark,
@@ -656,6 +668,7 @@ class _TileRow extends StatelessWidget {
     required this.labels,
     required this.selected,
     required this.pulse,
+    required this.style,
     required this.onSelect,
   });
 
@@ -666,21 +679,34 @@ class _TileRow extends StatelessWidget {
   /// a family member is committed.
   final ProtocolId? selected;
   final ProtocolId? pulse;
+
+  /// v8a — the ambient style (the Circle-Selector impulse's tempo,
+  /// owner round 18: «Circle Selector رو در صفحه انتخاب پروتکل هم
+  /// استفاده کن»).
+  final MotionStyle style;
   final void Function(ProtocolId) onSelect;
 
   @override
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl, // first child at the visual RIGHT
-      child: Row(
+      // v8a — the CIRCLE SELECTOR row: the selected tile springs up and
+      // PUSHES its row siblings aside for the impulse's duration, then
+      // everything settles back to the committed tile geometry (the old
+      // 0.97→1.0 tap pulse is superseded by this — same fire seams: the
+      // tap AND the committed-selection edge).
+      child: CircleSelectRow(
+        style: style,
+        rtl: true,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        selectedIndex: selected == null ? null : ids.indexOf(selected!),
+        pulseIndex: pulse == null ? null : ids.indexOf(pulse!),
         children: [
           for (var i = 0; i < ids.length; i++)
             _ProtoTile(
               id: ids[i],
               label: labels[i],
               isSelected: selected == ids[i],
-              pulsing: pulse == ids[i],
               onSelect: onSelect,
             ),
         ],
@@ -689,67 +715,41 @@ class _TileRow extends StatelessWidget {
   }
 }
 
-class _ProtoTile extends StatefulWidget {
+class _ProtoTile extends StatelessWidget {
   const _ProtoTile({
     required this.id,
     required this.label,
     required this.isSelected,
-    required this.pulsing,
     required this.onSelect,
   });
 
   final ProtocolId id;
   final String label;
   final bool isSelected;
-  final bool pulsing;
   final void Function(ProtocolId) onSelect;
 
-  @override
-  State<_ProtoTile> createState() => _ProtoTileState();
-}
-
-class _ProtoTileState extends State<_ProtoTile>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 300),
-    lowerBound: 0.97,
-  );
-
-  @override
-  void didUpdateWidget(covariant _ProtoTile old) {
-    super.didUpdateWidget(old);
-    if (widget.pulsing && !old.pulsing) {
-      _pulse.forward(); // 0.97 → 1.0 spring-ish settle
-    }
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
+  // v8a — the pulse controller is GONE: the parent CircleSelectRow owns
+  // the impulse (grow + sibling push) for the whole row.
 
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final ms = MotionScope.of(context);
     final w = AethGeometry.protoTileW * s;
-    final iconBox = _tileIconBox(widget.id);
+    final iconBox = _tileIconBox(id);
 
     return SizedBox(
       width: w,
       height: AethGeometry.protoTileRow1H * s,
-      child: ScaleTransition(
-        scale: _pulse,
-        child: GestureDetector(
-          key: ValueKey('proto-tile-${widget.id.name}'),
-          behavior: HitTestBehavior.opaque,
-          onTap: () => widget.onSelect(widget.id),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOut,
+      child: GestureDetector(
+        key: ValueKey('proto-tile-${id.name}'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onSelect(id),
+        child: AnimatedContainer(
+            duration: Duration(milliseconds: ms.recipe.controlMs),
+            curve: ms.recipe.controlCurve,
             decoration: BoxDecoration(
-              color: widget.isSelected
+              color: isSelected
                   ? AethColors.accentConnected
                   : AethColors.cardDark,
               borderRadius:
@@ -769,9 +769,9 @@ class _ProtoTileState extends State<_ProtoTile>
                   top: (AethGeometry.protoTileIconCenter - iconBox / 2) * s,
                   child: Center(
                     child: ProtocolGlyph(
-                      id: widget.id,
+                      id: id,
                       size: iconBox * s,
-                      white: widget.isSelected,
+                      white: isSelected,
                     ),
                   ),
                 ),
@@ -782,7 +782,7 @@ class _ProtoTileState extends State<_ProtoTile>
                   top: (AethGeometry.protoTileLabelCenter - 6) * s,
                   child: Center(
                     child: Text(
-                      widget.label,
+                      label,
                       style: TextStyle(
                         fontFamily: 'IRANYekanX',
                         fontWeight: FontWeight.w500,
@@ -796,10 +796,8 @@ class _ProtoTileState extends State<_ProtoTile>
             ),
           ),
         ),
-      ),
     );
   }
-
 }
 
 
@@ -839,6 +837,7 @@ class _FamilyCard extends StatelessWidget {
     required this.logoAsset,
     required this.selected,
     required this.pulse,
+    required this.style,
     required this.onSelect,
   });
 
@@ -850,6 +849,10 @@ class _FamilyCard extends StatelessWidget {
   /// v4.20 — the CHAIN overlay selection (null = no overlay active).
   final ProtocolId? selected;
   final ProtocolId? pulse;
+
+  /// v8a — the ambient style (the subtile row's Circle-Selector
+  /// impulse, owner round 18).
+  final MotionStyle style;
   final void Function(ProtocolId) onSelect;
 
   @override
@@ -920,20 +923,32 @@ class _FamilyCard extends StatelessWidget {
               ),
               // NO separator: the main zone + 3 subtiles + gaps exactly
               // fill the 346 card (95 + 3×66 + 2×20 + 13 inset).
-              for (final id in family)
-                Padding(
-                  padding: EdgeInsets.only(
-                    right:
-                        id == family.last ? 0 : AethGeometry.protoSubtileGap * s,
-                  ),
-                  child: _SubTile(
-                    id: id,
-                    isPsiphon: isPsiphon,
-                    isSelected: selected == id,
-                    pulsing: pulse == id,
-                    onSelect: onSelect,
-                  ),
-                ),
+              // v8a — the CIRCLE SELECTOR row for the family's own
+              // subtiles (owner round 18): the selected subtile springs
+              // up and pushes its subtile siblings aside, then settles.
+              CircleSelectRow(
+                style: style,
+                rtl: false, // LTR by design (see the Directionality above)
+                selectedIndex:
+                    selected == null ? null : family.indexOf(selected!),
+                pulseIndex: pulse == null ? null : family.indexOf(pulse!),
+                children: [
+                  for (final id in family)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        right: id == family.last
+                            ? 0
+                            : AethGeometry.protoSubtileGap * s,
+                      ),
+                      child: _SubTile(
+                        id: id,
+                        isPsiphon: isPsiphon,
+                        isSelected: selected == id,
+                        onSelect: onSelect,
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -942,99 +957,74 @@ class _FamilyCard extends StatelessWidget {
   }
 }
 
-class _SubTile extends StatefulWidget {
+class _SubTile extends StatelessWidget {
   const _SubTile({
     required this.id,
     required this.isPsiphon,
     required this.isSelected,
-    required this.pulsing,
     required this.onSelect,
   });
 
   final ProtocolId id;
   final bool isPsiphon;
   final bool isSelected;
-  final bool pulsing;
   final void Function(ProtocolId) onSelect;
 
-  @override
-  State<_SubTile> createState() => _SubTileState();
-}
-
-class _SubTileState extends State<_SubTile>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 300),
-    lowerBound: 0.95,
-  );
-
-  @override
-  void didUpdateWidget(covariant _SubTile old) {
-    super.didUpdateWidget(old);
-    if (widget.pulsing && !old.pulsing) _pulse.forward();
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
+  // v8a — the pulse controller is GONE: the parent CircleSelectRow
+  // owns the impulse (grow + sibling push) for the whole subtile row.
 
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final chain = widget.id.isPsiphon
-        ? widget.id == ProtocolId.psiphonChain
-        : widget.id == ProtocolId.torChain;
-    final reverse = widget.id.isPsiphon
-        ? widget.id == ProtocolId.psiphonReverse
-        : widget.id == ProtocolId.torReverse;
+    final ms = MotionScope.of(context);
+    final chain = id.isPsiphon
+        ? id == ProtocolId.psiphonChain
+        : id == ProtocolId.torChain;
+    final reverse = id.isPsiphon
+        ? id == ProtocolId.psiphonReverse
+        : id == ProtocolId.torReverse;
 
-    return ScaleTransition(
-      scale: _pulse,
-      child: GestureDetector(
-        key: ValueKey('proto-subtile-${widget.id.name}'),
-        behavior: HitTestBehavior.opaque,
-        onTap: () => widget.onSelect(widget.id),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOut,
-          width: AethGeometry.protoSubtile * s,
-          height: AethGeometry.protoSubtile * s,
-          decoration: BoxDecoration(
-            color: widget.isSelected
-                ? AethColors.accentConnected
-                : AethColors.sheetSubtile,
-            borderRadius:
-                BorderRadius.circular(AethGeometry.protoSubtileRadius * s),
-          ),
-          child: Center(
-            // v4.33 (owner round 9): the combined modes carry their OWN
-            // owner-drawn logos — now through the shared [ProtocolGlyph]
-            // (v4.35: theme ink + the rebuilt drop shadow, owner items 4/5);
-            // the plain ONLY tiles keep the family's real logo.
-            child: (chain || reverse)
-                ? ProtocolGlyph(
-                    id: widget.id,
-                    size: AethGeometry.protoCombinedGlyphH * s,
-                    // v4.41 (owner round 17, item 11): «آیکون وارپ اور تور
-                    // و وارپ اور سایفون باید وقتی در حالت انتخاب هستن
-                    // سفید رنگ باشن» — the v4.40 verbatim-artwork rewrite
-                    // dropped the selected-tile all-ink rule for the
-                    // combined modes; their green artworks (#1AD995) are
-                    // the tile's own fill and vanished when selected.
-                    white: widget.isSelected,
-                  )
-                : ProtocolGlyph(
-                    id: widget.id,
-                    size: (widget.isPsiphon
-                            ? AethGeometry.protoPsiphonGlyphBox
-                            : AethGeometry.protoTorGlyphBox)
-                        * s,
-                    white: widget.isSelected,
-                  ),
-          ),
+    return GestureDetector(
+      key: ValueKey('proto-subtile-${id.name}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onSelect(id),
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: ms.recipe.controlMs),
+        curve: ms.recipe.controlCurve,
+        width: AethGeometry.protoSubtile * s,
+        height: AethGeometry.protoSubtile * s,
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AethColors.accentConnected
+              : AethColors.sheetSubtile,
+          borderRadius:
+              BorderRadius.circular(AethGeometry.protoSubtileRadius * s),
+        ),
+        child: Center(
+          // v4.33 (owner round 9): the combined modes carry their OWN
+          // owner-drawn logos — now through the shared [ProtocolGlyph]
+          // (v4.35: theme ink + the rebuilt drop shadow, owner items 4/5);
+          // the plain ONLY tiles keep the family's real logo.
+          child: (chain || reverse)
+              ? ProtocolGlyph(
+                  id: id,
+                  size: AethGeometry.protoCombinedGlyphH * s,
+                  // v4.41 (owner round 17, item 11): «آیکون وارپ اور تور
+                  // و وارپ اور سایفون باید وقتی در حالت انتخاب هستن
+                  // سفید رنگ باشن» — the v4.40 verbatim-artwork rewrite
+                  // dropped the selected-tile all-ink rule for the
+                  // combined modes; their green artworks (#1AD995) are
+                  // the tile's own fill and vanished when selected.
+                  white: isSelected,
+                )
+              : ProtocolGlyph(
+                  id: id,
+                  size: (isPsiphon
+                          ? AethGeometry.protoPsiphonGlyphBox
+                          : AethGeometry.protoTorGlyphBox)
+                      * s,
+                  white: isSelected,
+                ),
         ),
       ),
     );
@@ -1065,6 +1055,7 @@ class _ScanPills extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final ms = MotionScope.of(context);
     final h = AethGeometry.protoPillH * s;
     final r = AethGeometry.protoPillRadius * s;
 
@@ -1086,8 +1077,8 @@ class _ScanPills extends StatelessWidget {
                   key: ValueKey('proto-pill-$level'),
                   onTap: () => onSelect(level),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeOut,
+                    duration: Duration(milliseconds: ms.recipe.controlMs),
+                    curve: ms.recipe.controlCurve,
                     width: _w[level - 1] * s,
                     height: h,
                     decoration: BoxDecoration(

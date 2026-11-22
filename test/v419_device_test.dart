@@ -143,10 +143,10 @@ void main() {
         .setMockMethodCallHandler(const MethodChannel(_channelName), null);
   });
 
-  group('#4 — the cold default protocol is WireGuard (owner decree)', () {
-    test('fresh store starts on wireguard, not the core default masque', () {
+  group('#4 — the cold default protocol is MASQUE (v1.0.1 decree)', () {
+    test('fresh store starts on masque — Aether\'s own default', () {
       final store = ConnectionStore(engine: _ParkedEngine());
-      expect(store.selectedProtocol, ProtocolId.wireguard);
+      expect(store.selectedProtocol, ProtocolId.masque);
     });
   });
 
@@ -295,10 +295,12 @@ void main() {
       expect(failure.errorCode, 'coreExited');
       expect(failure.message, contains('warp registration failed'));
       // torChain walks on the 1820 listener, and the core still received
-      // the full v4.20 argument set (leg + overlay + PT + state dir).
+      // the full v4.20 argument set (leg + overlay + PT + state dir). The
+      // v1.0.1 family-leg default is MASQUE (owner decree), so the leg
+      // argument carries masque under --tor.
       expect(
         core.startedArgs.single,
-        containsAllInOrder(['--protocol', 'wg', '--tor']),
+        containsAllInOrder(['--protocol', 'masque', '--tor']),
       );
       expect(
         core.startedArgs.single,
@@ -441,7 +443,7 @@ void main() {
 
     test('store getters follow the selected protocol', () {
       final store = ConnectionStore(engine: _ParkedEngine());
-      expect(store.wheelSelectable, isFalse); // wireguard default
+      expect(store.wheelSelectable, isFalse); // masque default (plain mode)
       store.selectProtocol(ProtocolId.psiphonChain);
       expect(store.wheelSelectable, isTrue);
       expect(store.wheelAllowedCodes?.first, LocationWheelPolicy.autoCode);
@@ -563,7 +565,7 @@ void main() {
       final store = ConnectionStore(engine: _ParkedEngine());
       await persistence.restore(store);
 
-      expect(store.selectedProtocol, ProtocolId.wireguard); // v4.19 default
+      expect(store.selectedProtocol, ProtocolId.masque); // v1.0.1 default
       expect(store.connectionMode, ConnectionMode.proxy);
       // v4.44 — the out-of-range value falls back to the constructor
       // default, now 4 (balanced, the pinned core's own default).

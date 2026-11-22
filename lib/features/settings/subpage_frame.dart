@@ -25,6 +25,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
+import '../../core/fx/smoke_burst.dart';
 import '../../core/motion.dart';
 import '../home/widgets/pattern_sides.dart';
 import '../shared/theme_toggle_tile.dart';
@@ -43,9 +44,10 @@ Widget subpageEnter(
   BuildContext context,
   MotionStyle style,
   int block,
-  Widget child,
-) {
-  return motionCascade(context, style, block, child);
+  Widget child, {
+  EntranceFlavor flavor = EntranceFlavor.standard,
+}) {
+  return motionCascade(context, style, block, child, flavor: flavor);
 }
 
 /// One sub-page: [title] in the chrome, [children] as the cascading body
@@ -89,11 +91,19 @@ class SubPageFrame extends StatelessWidget {
             // The home patterns behind (v4.21 decree; v4.22: gated by the
             // appearance switch; v4.25: ONE composition for every page —
             // exactly the main screen's placement, single code path).
+            // v8a (owner round 18): the green connected-state ambience
+            // (smoke + drift) lives on EVERY page now, under the home
+            // screen's own condition.
+            if (store.isConnected && store.showPatterns && style != MotionStyle.off)
+              Positioned.fill(
+                child: SmokeField(style: style),
+              ),
             if (store.showPatterns)
               Positioned.fill(
                 child: PatternSides(
                   connected: store.isConnected,
                   style: style,
+                  active: store.patternsAlive,
                 ),
               ),
             // LTR-locked geometry (the settings-page precedent): the
@@ -124,23 +134,37 @@ class SubPageFrame extends StatelessWidget {
                             ),
                           ),
                           SizedBox(height: 22 * s),
-                          Builder(
-                            builder: (context) {
-                              final blocks = children();
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  for (var i = 0; i < blocks.length; i++)
-                                    subpageEnter(
-                                      context,
-                                      style,
-                                      i + 1,
-                                      blocks[i],
-                                    ),
-                                  SizedBox(height: 30 * s),
-                                ],
-                              );
-                            },
+                          // v1.0.2 — the body column resizes SOFTLY when a
+                          // conditional section (export panel, bridge/ECH
+                          // fields, per-app router rows) appears or folds:
+                          // the style's own sectionResizeMs through the
+                          // scope (OFF = instant, the audit's jump fix).
+                          AnimatedSize(
+                            duration: Duration(
+                              milliseconds: MotionScope.of(context)
+                                  .recipe
+                                  .sectionResizeMs,
+                            ),
+                            curve: Curves.easeOutCubic,
+                            alignment: Alignment.topCenter,
+                            child: Builder(
+                              builder: (context) {
+                                final blocks = children();
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    for (var i = 0; i < blocks.length; i++)
+                                      subpageEnter(
+                                        context,
+                                        style,
+                                        i + 1,
+                                        blocks[i],
+                                      ),
+                                    SizedBox(height: 30 * s),
+                                  ],
+                                );
+                              },
+                            ),
                           ),
                         ],
                       ),
@@ -195,7 +219,7 @@ class _SubPageTopBar extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 child: Text(
                   title,
-                  textDirection: TextDirection.rtl,
+                  textDirection: appContentDirection(context),
                   maxLines: 1,
                   style: TextStyle(
                     fontFamily: 'IRANYekanX',
@@ -305,7 +329,7 @@ class SubSectionHeading extends StatelessWidget {
               fit: BoxFit.scaleDown,
               child: Text(
                 title,
-                textDirection: TextDirection.rtl,
+                textDirection: appContentDirection(context),
                 style: TextStyle(
                   fontFamily: 'IRANYekanX',
                   fontWeight: FontWeight.w700,

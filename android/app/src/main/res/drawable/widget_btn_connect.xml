@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v1.0.1 — the connect pill: the brand's connected accent #1AD995
+     (design_tokens.accentConnected), night-ink text. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#1AD995"/>
+    <corners android:radius="14dp"/>
+</shape>

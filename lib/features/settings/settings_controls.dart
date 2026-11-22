@@ -27,10 +27,12 @@ class SettingInfoText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      // v1.0.2 — the content follows the app's own locale (fa keeps the
+      // exact rtl look; the other four languages read naturally now).
+      textDirection: appContentDirection(context),
       child: Text(
         text,
-        textAlign: TextAlign.right,
+        textAlign: TextAlign.start,
         style: TextStyle(
           fontFamily: 'IRANYekanX',
           fontWeight: FontWeight.w400,
@@ -53,10 +55,12 @@ class SettingLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      // v1.0.2 — the content follows the app's own locale (fa keeps the
+      // exact rtl look; the other four languages read naturally now).
+      textDirection: appContentDirection(context),
       child: Text(
         text,
-        textAlign: TextAlign.right,
+        textAlign: TextAlign.start,
         style: TextStyle(
           fontFamily: 'IRANYekanX',
           fontWeight: FontWeight.w600,
@@ -96,7 +100,7 @@ class SettingToggleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: appContentDirection(context),
       child: Row(
         children: [
           // Optional leading glyph (icon-less for the dense expert rows).
@@ -166,7 +170,11 @@ class _CustomSwitch extends StatelessWidget {
       button: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => onChanged(!value),
+        // v1.0.2 — the light haptic word lands with the flip.
+        onTap: () {
+          AethHaptics.tap();
+          onChanged(!value);
+        },
         child: AnimatedContainer(
           duration: duration,
           curve: recipe.controlCurve,
@@ -223,7 +231,7 @@ class SettingPills<T> extends StatelessWidget {
     // v4.25 — the highlight snap follows the ambient motion style.
     final recipe = MotionScope.of(context).recipe;
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: appContentDirection(context),
       child: Wrap(
         spacing: 8 * s,
         runSpacing: 8 * s,
@@ -231,7 +239,10 @@ class SettingPills<T> extends StatelessWidget {
           for (final (v, label) in options)
             GestureDetector(
               key: keyId == null ? null : ValueKey('pill-$keyId-$label'),
-              onTap: () => onSelect(v),
+              onTap: () {
+                AethHaptics.tap(); // v1.0.2 — the light word on pick
+                onSelect(v);
+              },
               child: AnimatedContainer(
                 duration: Duration(milliseconds: recipe.controlMs),
                 curve: recipe.controlCurve,
@@ -301,7 +312,7 @@ class _SettingFieldState extends State<SettingField> {
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: appContentDirection(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -387,7 +398,7 @@ class SettingStepperRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: appContentDirection(context),
       child: Row(
         children: [
           _IconGlyph(asset: icon, size: 20 * s),
@@ -508,7 +519,7 @@ class SettingNavRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: appContentDirection(context),
       child: GestureDetector(
         key: keyId == null ? null : ValueKey('nav-$keyId'),
         behavior: HitTestBehavior.opaque,
@@ -637,7 +648,7 @@ class FlagPickStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     return Directionality(
-      textDirection: TextDirection.rtl, // first tile at the visual RIGHT
+      textDirection: appContentDirection(context), // first tile at the visual RIGHT
       child: SizedBox(
         height: 72 * s,
         child: ListView.separated(

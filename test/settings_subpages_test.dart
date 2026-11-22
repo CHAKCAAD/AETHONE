@@ -95,7 +95,7 @@ void main() {
       // باید باشه»); the repo / Telegram / Instagram link rows are back
       // from the beta-window drop (this round's decree).
       expect(find.byKey(const ValueKey('nav-app-version')), findsOneWidget);
-      expect(find.text(appVersion), findsOneWidget); // == '1.0.0' (fa)
+      expect(find.text(appVersion), findsOneWidget); // == '1.0.1' (fa)
       expect(find.byKey(const ValueKey('nav-repository')), findsOneWidget);
       expect(find.byKey(const ValueKey('nav-telegram')), findsOneWidget);
       expect(find.byKey(const ValueKey('nav-instagram')), findsOneWidget);
@@ -813,19 +813,19 @@ void main() {
 
       expect(
         store.coreSettings.torLegProtocol,
-        AetherLegProtocol.wireguard,
+        AetherLegProtocol.masque,
       );
       await tester.ensureVisible(
-        find.byKey(const ValueKey('pill-tor-leg-ماسک')),
+        find.byKey(const ValueKey('pill-tor-leg-گول')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('pill-tor-leg-ماسک')));
+      await tester.tap(find.byKey(const ValueKey('pill-tor-leg-گول')));
       await tester.pumpAndSettle();
-      expect(store.coreSettings.torLegProtocol, AetherLegProtocol.masque);
+      expect(store.coreSettings.torLegProtocol, AetherLegProtocol.gool);
       // The OTHER family's leg is untouched — per family, not shared.
       expect(
         store.coreSettings.psiphonLegProtocol,
-        AetherLegProtocol.wireguard,
+        AetherLegProtocol.masque,
       );
     });
 
@@ -837,18 +837,18 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.ensureVisible(
-        find.byKey(const ValueKey('pill-psiphon-leg-ماسک')),
+        find.byKey(const ValueKey('pill-psiphon-leg-گول')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('pill-psiphon-leg-ماسک')));
+      await tester.tap(find.byKey(const ValueKey('pill-psiphon-leg-گول')));
       await tester.pumpAndSettle();
       expect(
         store.coreSettings.psiphonLegProtocol,
-        AetherLegProtocol.masque,
+        AetherLegProtocol.gool,
       );
       expect(
         store.coreSettings.torLegProtocol,
-        AetherLegProtocol.wireguard,
+        AetherLegProtocol.masque,
       );
     });
 

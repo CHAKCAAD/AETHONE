@@ -35,6 +35,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/app_assets.dart';
+import '../../../core/app_theme.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 
@@ -148,16 +149,21 @@ class _PatternSidesState extends State<PatternSides>
                   breathFloor: recipe.swayBreathFloor,
                   child: AnimatedSwitcher(
                     duration: duration,
-                    child: Image.asset(
-                      key: ValueKey(
-                        'pattern-left-${widget.connected ? 'on' : 'off'}',
-                      ),
-                      widget.connected
-                          ? AppAssets.patternConnectedLeft
-                          : AppAssets.patternDisconnectedLeft,
-                      fit: BoxFit.fill,
-                      filterQuality: FilterQuality.medium,
-                    ),
+                    child: widget.connected
+                        ? Image.asset(
+                            key: const ValueKey('pattern-left-on'),
+                            AppAssets.patternConnectedLeft,
+                            fit: BoxFit.fill,
+                            filterQuality: FilterQuality.medium,
+                          )
+                        : _NightInk(
+                            child: Image.asset(
+                              key: const ValueKey('pattern-left-off'),
+                              AppAssets.patternDisconnectedLeft,
+                              fit: BoxFit.fill,
+                              filterQuality: FilterQuality.medium,
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -173,16 +179,21 @@ class _PatternSidesState extends State<PatternSides>
                   breathFloor: recipe.swayBreathFloor,
                   child: AnimatedSwitcher(
                     duration: duration,
-                    child: Image.asset(
-                      key: ValueKey(
-                        'pattern-right-${widget.connected ? 'on' : 'off'}',
-                      ),
-                      widget.connected
-                          ? AppAssets.patternConnectedRight
-                          : AppAssets.patternDisconnectedRight,
-                      fit: BoxFit.fill,
-                      filterQuality: FilterQuality.medium,
-                    ),
+                    child: widget.connected
+                        ? Image.asset(
+                            key: const ValueKey('pattern-right-on'),
+                            AppAssets.patternConnectedRight,
+                            fit: BoxFit.fill,
+                            filterQuality: FilterQuality.medium,
+                          )
+                        : _NightInk(
+                            child: Image.asset(
+                              key: const ValueKey('pattern-right-off'),
+                              AppAssets.patternDisconnectedRight,
+                              fit: BoxFit.fill,
+                              filterQuality: FilterQuality.medium,
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -190,6 +201,40 @@ class _PatternSidesState extends State<PatternSides>
           ),
         );
       },
+    );
+  }
+}
+
+/// v5.1 (owner round 20) — the NIGHT-ink seam: the DISCONNECTED artwork
+/// recolors to WHITE on the night theme (owner: «پترن های کناری در حالت
+/// قطع اتصال دارک مود رنگشون باید سفید باشه»). The art is a pure
+/// #110000 line drawing, so `srcIn` with the art's own ink is
+/// byte-identical on the light theme and flips to white on night; the
+/// 420 ms tween rides the palette's own cross-fade clock. ONE constant
+/// tree — the wrapper never changes shape, so the AnimatedSwitcher's
+/// crossfade element survives (the v4.15.1 lesson).
+class _NightInk extends StatelessWidget {
+  const _NightInk({required this.child});
+
+  final Widget child;
+
+  /// The artwork's own stroke ink (measured on the committed PNG:
+  /// rgb(17,0,0)) and its night-mode white.
+  static const Color _dayInk = Color(0xFF110000);
+  static const Color _nightInk = Color(0xFFFFFFFF);
+
+  @override
+  Widget build(BuildContext context) {
+    final white = !AethThemeSync.light;
+    return TweenAnimationBuilder<Color>(
+      tween: Tween<Color>(end: white ? _nightInk : _dayInk),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeInOutCubic,
+      builder: (context, ink, kid) => ColorFiltered(
+        colorFilter: ColorFilter.mode(ink, BlendMode.srcIn),
+        child: kid,
+      ),
+      child: child,
     );
   }
 }

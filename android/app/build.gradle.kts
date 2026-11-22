@@ -38,13 +38,36 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        // v1.0.1 — the PERMANENT release key (owner: «آپدیت رو با امضا
+        // نسخه قبلی ریلیز کن که قابلیت آپدیت روی نسخه قبل رو داشته
+        // باشه»): committed at android/app/aethone-release.keystore so
+        // every CI run and every local clone signs IDENTICALLY — updates
+        // install in place from v1.0.1 onward. v1.0.0 itself was signed
+        // by a throwaway CI debug key that died with its runner, so that
+        // one version needs a one-time uninstall (recorded honestly in
+        // the v1.0.1 release notes). The passwords travel with the repo
+        // BY DESIGN: this key exists for signature CONTINUITY of a
+        // sideload-distributed app, not for secrecy — anyone could sign
+        // their own build either way; only this exact key lets an install
+        // update over another.
+        create("release") {
+            storeFile = file("aethone-release.keystore")
+            storePassword = "aethone-release"
+            keyAlias = "aethone-release"
+            keyPassword = "aethone-release"
+        }
+    }
+
     buildTypes {
         release {
-            // Test-install signing ONLY: release builds are signed with the
-            // debug keystore so the CI APK installs on a real phone. A real
-            // release keystore + signing workflow is a recorded open item —
-            // no public release may ship from this config.
-            signingConfig = signingConfigs.getByName("debug")
+            // v1.0.1+ — the PERMANENT release key (owner: «آپدیت رو با
+            // امضا نسخه قبل ریلیز کن که قابلیت آپدیت روی نسخه قبل رو
+            // داشته باشه»): committed at android/app/aethone-release.keystore
+            // so every CI run and every local clone signs IDENTICALLY —
+            // updates install in place. The passwords travel with the repo
+            // BY DESIGN: signature CONTINUITY for a sideload-distributed app.
+            signingConfig = signingConfigs.getByName("release")
             // The launcher label of the MAIN package (the manifest reads
             // @string/app_name so the DA variant below can differ).
             resValue("string", "app_name", "AETHONE")

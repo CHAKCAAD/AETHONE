@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v1.0.1 — the home-screen widget's provider metadata: a 4x2 card
+     (targetCellWidth/Height for Android 12+, the dp fallbacks below it),
+     resizable, refreshed BY PUSH (updatePeriodMillis 0 — the services and
+     the Dart walk push every transition; a periodic alarm would only
+     burn battery to show the same state). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="70dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/aethone_home_widget"
+    android:previewImage="@mipmap/ic_launcher"
+    android:previewLayout="@layout/aethone_home_widget"
+    android:description="@string/widget_description"/>

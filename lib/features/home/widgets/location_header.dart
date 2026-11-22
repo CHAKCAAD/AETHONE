@@ -55,14 +55,17 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/app_assets.dart';
 import '../../../core/country_names.dart';
 import '../../../core/design_tokens.dart';
+import '../../../core/motion.dart';
 import '../../../l10n/app_strings.dart';
 import '../../../connection/transport_modes.dart' show LocationWheelPolicy;
+import '../../shared/hyper_text.dart';
 
 class LocationHeader extends StatefulWidget {
   const LocationHeader({
@@ -76,6 +79,7 @@ class LocationHeader extends StatefulWidget {
     required this.pingMs,
     required this.exitCountryCode,
     required this.onCountrySelected,
+    required this.style,
   });
 
   final bool connected;
@@ -113,6 +117,10 @@ class LocationHeader extends StatefulWidget {
   /// Wheel selection committed (page settle / tap). The store routes it
   /// into the current family's remembered pick.
   final void Function(String code) onCountrySelected;
+
+  /// The motion personality — the circles-selector arrival pop rides its
+  /// tempos and dies under its kill-switch (OFF).
+  final MotionStyle style;
 
   @override
   State<LocationHeader> createState() => _LocationHeaderState();
@@ -529,18 +537,20 @@ class _LocationHeaderState extends State<LocationHeader> {
         : strings.offline;
 
     Widget slot({required Alignment alignment, required EdgeInsets pad, required String text, required TextStyle style, TextDirection? dir}) {
+      // v8a (owner round 18: «روی متن قسمت نام کشور و قسمت نمایش پینگ هم
+      // Hyper Text رو اعمال کن») — the flutterfx fx_10_hyper_text decode,
+      // native. The RESTING render is byte-identical to the old Text
+      // (style/ellipsis/direction preserved); only CHANGES animate.
       return Expanded(
         child: Align(
           alignment: alignment,
           child: Padding(
             padding: pad,
-            child: Text(
+            child: HyperText(
               text,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
+              style: widget.style,
+              textStyle: style,
               textDirection: dir,
-              style: style,
             ),
           ),
         ),
@@ -676,6 +686,7 @@ class _LocationHeaderState extends State<LocationHeader> {
       codes: _codes,
       controller: _pageController!,
       locked: locked,
+      style: widget.style,
       onTapFlag: locked
           ? null
           : (page) {
@@ -847,11 +858,26 @@ class FlagSaturation extends StatelessWidget {
 /// first layout, so the items re-read the REAL page from the very first
 /// seconds and the theme toggle can no longer be the thing that "fixes"
 /// the wheel.
+///
+/// THE CIRCLES-SELECTOR ARRIVAL (the flutterfx round): when a flag lands
+/// under the centre mark it POPS the flutterfx way — the
+/// `circles_selector` demo's selected circle: a quick overshoot spring
+/// (mass 2 / stiffness 600 / damping 8, verbatim) swings it up to the
+/// selected size, past it a hair, and back; the ±1/±2 neighbours are
+/// SHOVED outward with the demo's radial falloff while the selection
+/// lives; the departing flag sags back onto its falloff size on the
+/// demo's softer collapse spring (mass 2 / stiffness 150 / damping 20).
+/// The RESTING geometry stays the committed Group-9 falloff exactly
+/// (52/42/35, pitch 72) — the owner's pixel-verified frames own the
+/// steady state; the circles-selector owns the ARRIVAL (owner: «زمانی که
+/// پرچم کشور انتخابی وسط قرار گرفت انیمیشن روی پرچم‌ها … به این سبک
+/// اعمال بشه»). OFF parks every spring.
 class _FlagsWheel extends StatefulWidget {
   const _FlagsWheel({
     required this.codes,
     required this.controller,
     required this.locked,
+    required this.style,
     required this.onTapFlag,
     required this.onPageSettled,
     required this.onPageChanged,
@@ -860,6 +886,7 @@ class _FlagsWheel extends StatefulWidget {
   final List<String> codes;
   final PageController controller;
   final bool locked;
+  final MotionStyle style;
   final void Function(int page)? onTapFlag;
   final void Function(int page) onPageSettled;
   final void Function(int page) onPageChanged;
@@ -868,7 +895,8 @@ class _FlagsWheel extends StatefulWidget {
   State<_FlagsWheel> createState() => _FlagsWheelState();
 }
 
-class _FlagsWheelState extends State<_FlagsWheel> {
+class _FlagsWheelState extends State<_FlagsWheel>
+    with TickerProviderStateMixin {
   /// Set after the one-shot post-layout rebuild (see the class doc).
   bool _primed = false;
 
@@ -877,6 +905,44 @@ class _FlagsWheelState extends State<_FlagsWheel> {
   /// everything past ±2 is off the 301-wide strip anyway).
   static const List<double> _sizes = [52, 42, 35];
   static const List<double> _opacities = [1.0, 0.5, 0.2];
+
+  // ------------------------------------------------------------------
+  // The circles-selector port (flutterfx `circles_selector`, verbatim
+  // springs; the grid became the 1-D wheel).
+  // ------------------------------------------------------------------
+
+  /// The demo's `quickOvershootSpring` — the arrival pop.
+  static const SpringDescription _popSpring = SpringDescription(
+    mass: 2,
+    stiffness: 600,
+    damping: 8,
+  );
+
+  /// The demo's `spring` — the release/collapse.
+  static const SpringDescription _collapseSpring = SpringDescription(
+    mass: 2,
+    stiffness: 150,
+    damping: 20,
+  );
+
+  /// Live arrival pops, keyed by CODE index (page % n) — the demo's
+  /// `Map<int, AnimationController>` pattern. Bounded: a new centre
+  /// retires every other entry, so at most a handful ever live.
+  final Map<int, AnimationController> _pops = {};
+
+  /// The last centre page seen (the rounded controller page) — the pop
+  /// fires when it CHANGES (arrive / pass / land).
+  int? _centerPage;
+
+  /// How far past the resting size the overshoot may peak (× selected
+  /// size). The demo's selected circle rests 2×; the wheel's frames own
+  /// the resting 52, so the pop is the ARRIVAL and the overshoot the
+  /// flourish: peak ≈ 52 × 1.08.
+  static const double _overshootAmp = 0.25;
+
+  /// The ±1 neighbours' outward shove at full pop (design px) — the
+  /// demo's neighbour displacement, scaled to the 72-px pitch strip.
+  static const double _pushMax = 6.0;
 
   (double, double) _lookFor(double distance) {
     final d = distance.abs();
@@ -890,12 +956,137 @@ class _FlagsWheelState extends State<_FlagsWheel> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onWheelScrolled);
+  }
+
+  @override
+  void didUpdateWidget(covariant _FlagsWheel old) {
+    super.didUpdateWidget(old);
+    if (old.controller != widget.controller) {
+      old.controller.removeListener(_onWheelScrolled);
+      widget.controller.addListener(_onWheelScrolled);
+      _centerPage = null; // re-arm against the new controller
+    }
+    // A family/manifest switch re-keys every pop (page % n changed its
+    // meaning) — retire them all and let the next centre re-arm. CONTENT
+    // comparison: the store's wheel lists are rebuilt as fresh instances
+    // on every notify (same entries), and retiring on an identical set
+    // would kill the live pop on every selection commit.
+    if (!_sameCodes(old.codes, widget.codes)) {
+      _retireAllPops();
+      _centerPage = null;
+    }
+    // The kill-switch: OFF parks every spring.
+    if (old.style != MotionStyle.off && widget.style == MotionStyle.off) {
+      _retireAllPops();
+    }
+  }
+
+  /// Element-wise equality (the lists are short; the store hands the
+  /// wheel a freshly-built instance on every notify).
+  static bool _sameCodes(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onWheelScrolled);
+    for (final c in _pops.values) {
+      c.dispose();
+    }
+    _pops.clear();
+    super.dispose();
+  }
+
+  void _retireAllPops() {
+    final live = Map.of(_pops);
+    _pops.clear();
+    for (final e in live.entries) {
+      _retireController(e.key, e.value);
+    }
+    if (live.isNotEmpty) setState(() {});
+  }
+
+  /// The demo's deselect: collapse toward zero on the soft spring, then
+  /// dispose. [key] is only used to guard the removal (a re-fired pop
+  /// replaces the map entry and adopts the controller).
+  void _retireController(int key, AnimationController c) {
+    if (c.isAnimating) {
+      // Keep rendering while it sags home.
+      _pops[key] = c;
+      c
+          .animateWith(
+              SpringSimulation(_collapseSpring, c.value, 0, -1))
+          .then((_) {
+        if (!mounted) {
+          c.dispose();
+          return;
+        }
+        if (_pops[key] == c) {
+          setState(() => _pops.remove(key));
+          c.dispose();
+        }
+      });
+    } else {
+      c.dispose();
+    }
+  }
+
+  /// The centre mark moved onto a new page — the circles-selector's
+  /// "tap": the new centre pops, everyone else retires.
+  void _onWheelScrolled() {
+    final controller = widget.controller;
+    if (!controller.hasClients ||
+        controller.positions.length != 1 ||
+        !controller.positions.first.haveDimensions) {
+      return;
+    }
+    final p = controller.page;
+    if (p == null) return;
+    final center = p.round();
+    if (center == _centerPage) return;
+    _centerPage = center;
+    if (widget.style == MotionStyle.off) return;
+    final n = widget.codes.length;
+    if (n == 0) return;
+    final key = center % n;
+
+    for (final k in _pops.keys.toList()) {
+      if (k == key) continue;
+      final c = _pops.remove(k)!;
+      _retireController(k, c);
+    }
+
+    final existing = _pops[key];
+    if (existing != null) {
+      // Re-centered mid-release (a bounce back / a re-tap): re-pop from
+      // wherever it is now.
+      existing.animateWith(
+          SpringSimulation(_popSpring, existing.value, 1, 1));
+      return;
+    }
+    final c = AnimationController.unbounded(vsync: this);
+    _pops[key] = c;
+    c.animateWith(SpringSimulation(_popSpring, 0, 1, 1));
+    setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (!_primed) {
       // One extra build after this frame: by then the controller has
       // dimensions and every item's falloff re-reads the REAL page.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _primed = true);
+        if (mounted) {
+          setState(() => _primed = true);
+          _onWheelScrolled(); // arm the centre mark (the welcome pop)
+        }
       });
     }
     final controller = widget.controller;
@@ -920,7 +1111,12 @@ class _FlagsWheelState extends State<_FlagsWheel> {
           return false;
         },
         child: SizedBox(
-          height: AethGeometry.flagSizeSelected * s,
+          // The circles-selector overshoot peaks ≈ 8 % past the selected
+          // size — the strip gets that much headroom so the pop never
+          // clips against the PageView's own viewport edge. The resting
+          // geometry is untouched: the flags still centre on the same
+          // line and the committed frames keep their sizes.
+          height: AethGeometry.flagSizeSelected * 1.15 * s,
           child: PageView.builder(
             controller: controller,
             physics: widget.locked ? const NeverScrollableScrollPhysics() : null,
@@ -928,8 +1124,24 @@ class _FlagsWheelState extends State<_FlagsWheel> {
             itemCount: null, // unbounded both directions
             itemBuilder: (context, page) {
               final code = codes[page % n];
+              // The flutterfx reading: a neighbour's displacement is driven
+              // by the SELECTED circle's controller, never its own — every
+              // visible item therefore listens to the centre mark's pop as
+              // well as its own (the departing sag).
+              final ownPop = _pops[page % n];
+              final centerKey =
+                  _centerPage == null ? null : _centerPage! % n;
+              final centerPop =
+                  centerKey == null ? null : _pops[centerKey];
+              final listen = <Listenable>[
+                controller,
+                ?ownPop,
+                if (centerPop != null && centerPop != ownPop) centerPop,
+              ];
               return AnimatedBuilder(
-                animation: controller,
+                animation: listen.length == 1
+                    ? controller
+                    : Listenable.merge(listen),
                 builder: (context, _) {
                   // Safe read: never touch controller.page during a
                   // multi-position rebuild window.
@@ -938,16 +1150,56 @@ class _FlagsWheelState extends State<_FlagsWheel> {
                       controller.positions.first.haveDimensions;
                   final pos = safe ? (controller.page ?? page.toDouble()) : page.toDouble();
                   final (size, opacity) = _lookFor((pos - page).abs());
+                  var sz = size;
+                  var dx = 0.0;
+                  if (ownPop != null || centerPop != null) {
+                    // The circles-selector arrival mapped onto the wheel.
+                    // The GROW rides the flag's OWN pop (only the flag
+                    // under the centre mark — or the one sagging off it —
+                    // owns one); the SHOVE rides the CENTRE's pop (the
+                    // demo's selected circle displacing its neighbours).
+                    final own = ownPop?.value ?? 0.0;
+                    final v = (centerPop?.value ?? own).clamp(0.0, 1.35);
+                    final d = pos - page; // signed offset from the centre
+                    final u = d.abs();
+                    // Grow: only the flag under the centre mark blends up
+                    // to the selected size (gone by one slot out).
+                    final growGate =
+                        (1.0 - (u - 0.35) / 0.5).clamp(0.0, 1.0);
+                    final blend = own.clamp(0.0, 1.0) * growGate;
+                    final target = size +
+                        (AethGeometry.flagSizeSelected - size) * blend;
+                    // The flourish: the spring's past-1 swing (and its
+                    // below-0 sag on release) rides the same gate, clamped
+                    // so the overshoot stays inside the strip's headroom.
+                    final wobble = own > 1
+                        ? (own - 1).clamp(0.0, 0.35)
+                        : own < 0
+                            ? own.clamp(-0.35, 0.0)
+                            : 0.0;
+                    sz = target * (1 + _overshootAmp * wobble * growGate);
+                    // Shove: the demo's radial neighbour displacement —
+                    // an ODD ramp of the signed offset (zero at the
+                    // centre, full at ±1, gone by ±3).
+                    final mag = u <= 1
+                        ? u
+                        : (1.0 - (u - 1) / 2).clamp(0.0, 1.0);
+                    final ramp = d < 0 ? -mag : mag;
+                    dx = -_pushMax * v * ramp;
+                  }
                   return Center(
                     child: Opacity(
                       opacity: opacity,
-                      child: _FlagItem(
-                        key: ValueKey<int>(page),
-                        asset: AppAssets.flag(code),
-                        size: size * s,
-                        onTap: widget.onTapFlag == null
-                            ? null
-                            : () => widget.onTapFlag!(page),
+                      child: Transform.translate(
+                        offset: Offset(dx * s, 0),
+                        child: _FlagItem(
+                          key: ValueKey<int>(page),
+                          asset: AppAssets.flag(code),
+                          size: sz * s,
+                          onTap: widget.onTapFlag == null
+                              ? null
+                              : () => widget.onTapFlag!(page),
+                        ),
                       ),
                     ),
                   );

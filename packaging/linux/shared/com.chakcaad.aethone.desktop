@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=AETHONE
+GenericName=VPN Client
+GenericName[fa]=کلاینت وی‌پی‌ان
+Comment=Cross-platform VPN client (MASQUE, WireGuard, VLESS-WS, Tor, Psiphon)
+Comment[fa]=کلاینت چندسکویی وی‌پی‌ان (ماسک، وایرگارد، VLESS، تور، سایفون)
+Exec=aethone
+Icon=com.chakcaad.aethone
+Terminal=false
+Categories=Network;Security;
+StartupWMClass=com.chakcaad.aethone
+SingleMainWindow=true
+X-Purism-FormFactor=Workstation;Mobile;

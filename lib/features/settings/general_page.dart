@@ -22,6 +22,7 @@ import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 import 'settings_controls.dart';
 import 'subpage_frame.dart';
+import '../../core/motion.dart';
 
 class GeneralSettingsPage extends StatefulWidget {
   const GeneralSettingsPage({super.key, required this.store});
@@ -85,9 +86,12 @@ class _GeneralSettingsPageState extends State<GeneralSettingsPage> {
 
   Future<void> _confirmReset() async {
     final strings = AppStrings.of(context);
-    final confirmed = await showDialog<bool>(
+    // v1.0.2 — the app's OWN style-aware dialog transition (fade + a soft
+    // 0.94→1 zoom; OFF lands instantly) — was Material's default, the
+    // audit's «دیالوگ تأیید ریست بی‌شخصیت» finding.
+    final confirmed = await showAethDialog<bool>(
       context: context,
-      barrierColor: Colors.black54,
+      style: widget.store.effectiveMotionStyle(context),
       builder: (dialogContext) => _ResetConfirmDialog(strings: strings),
     );
     if (confirmed != true) return;
@@ -285,7 +289,8 @@ class _ResetConfirmDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     return Directionality(
-      textDirection: TextDirection.rtl,
+      // v1.0.2 — the content follows the app's own locale.
+      textDirection: appContentDirection(context),
       child: Dialog(
         backgroundColor: Colors.transparent,
         child: Container(

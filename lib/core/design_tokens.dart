@@ -297,6 +297,11 @@ abstract final class AethGeometry {
   /// Hero logo: 164dp, top 292.7 (Figma XML) → horizontal center.
   static const double heroSize = 164;
 
+  /// v8a — the hero's ShimmerEdge frame: the rounded-rect that reads
+  /// as the connect button's own edge in look 1. The ratio mirrors the
+  /// app's squircle language (the Group-45 core is r41 on 108.17 ≈ 0.38).
+  static const double heroEdgeRadius = 62;
+
   /// Bottom connect button (look 1): ~48×48 at (312,784)–(360,832);
   /// moves UP by 72px when connected (pixel-verified 784 → 712).
   static const double connectButtonSize = 48;
@@ -404,28 +409,36 @@ abstract final class AethGeometry {
   /// curved sheet's empty crown above the stats row).
   static const double panelTopPad = 62;
 
-  /// The speed row (74 tall: button 164–238 × 532–606) → the flags band:
-  /// design y 606 → 636.
-  static const double gapStatsToFlags = 30;
+  /// The speed row (74 tall: button 164–238 × 532–606) → the flags band's
+  /// RING top (the Ellipse-74 ring starts at design y 633, 3px above the
+  /// 52px flags it centres): design y 606 → 633.
+  static const double gapStatsToFlags = 27;
 
-  /// The flags band (52 tall, y 636–688) → the country row block
-  /// («Group 115», 45 tall, y 703–748).
-  static const double gapFlagsToRow = 15;
+  /// The flags band (the 58-tall ring, y 633–691) → the country row block
+  /// («Group 115», 45 tall, y 703–748): design y 691 → 703.
+  static const double gapFlagsToRow = 12;
   static const double countryRowHeight = 45;
 
   /// The country row block → the protocol card: design y 748 → 775.
   static const double gapRowToCard = 27;
 
-  /// The protocol card (62 tall, y 775–837) → the screen bottom (874): 37,
-  /// of which ~34 is the reference home-indicator inset — the app renders
-  /// 3 + the live bottom inset (the panel itself bleeds edge-to-edge).
-  static const double gapCardToBottomBase = 3;
+  /// The protocol card (62 tall, y 775–837) → the screen bottom (874):
+  /// the FULL 37px design margin, measured crown-down on the mockup —
+  /// the sheet's content is TOP-anchored from its crown, so the card
+  /// lands at design y 837 on every device and this margin is what
+  /// remains below it (the reference's ~34px home-indicator zone rides
+  /// INSIDE it). A taller live nav inset (3-button bar) lifts the card
+  /// above the bar via the max() in the sheet.
+  static const double gapCardToBottom = 37;
 
-  /// The stats row's stat groups (mockup-measured): Graph glyph 26×26 at
+  /// The stats row's stat groups (mockup-measured): Graph glyph 27×27 at
   /// x 34 (DOWN) / x 282 (UP), 20px icon→text gap, label 10px over value
   /// 14px — the SAME «DOWN:»/«UP:» type ramp the look-1 cards carry.
-  static const double statGlyphSize = 26;
+  /// The groups sit 6px BELOW the speed band's centre (mockup: their
+  /// centre rides at y 575, the band's at 569) — [statGroupNudge].
+  static const double statGlyphSize = 27;
   static const double statGlyphTextGap = 20;
+  static const double statGroupNudge = 6;
 
   /// Speed Test button group — v5 owner CSS (Group 13): 74×74 at
   /// (164,532); layers 74 r32 / 62 r27 / 44 r17; icon 28×28 in WHITE.

@@ -49,6 +49,8 @@ import '../../connection/core_log.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
+import '../../core/motion_widgets.dart';
+import '../../core/fx/smoke_burst.dart';
 import '../../l10n/app_strings.dart';
 import '../home/widgets/pattern_sides.dart';
 import '../shared/theme_toggle_tile.dart';
@@ -110,6 +112,8 @@ class SettingsScreen extends StatelessWidget {
         builder: (_) => CoreLogPage(
           showPatterns: store.showPatterns,
           connected: store.isConnected,
+          // v8a — the every-page drift rule (owner round 18).
+          alive: store.patternsAlive,
           style: store.effectiveMotionStyle(context),
         ),
       ),
@@ -150,11 +154,20 @@ class SettingsScreen extends StatelessWidget {
             // تنطیمات استفاده کن دقیقا همونا با همون مکان»; v4.25 — one
             // single composition, no per-page variant left in the code).
             // v4.22 — gated by the appearance switch (bare bg when off).
+            // v8a (owner round 18: «از انمیشن حاله سبز در حالت اتصال
+            // در صفحه اصلی در سایر صفحات هم استفاده کن») — the green
+            // connected-state ambience (smoke + drift) is EVERY page's
+            // rule now, under the home screen's own condition.
+            if (store.isConnected && store.showPatterns && style != MotionStyle.off)
+              Positioned.fill(
+                child: SmokeField(style: style),
+              ),
             if (store.showPatterns)
               Positioned.fill(
                 child: PatternSides(
                   connected: store.isConnected,
                   style: style,
+                  active: store.patternsAlive,
                 ),
               ),
             // v4.10 lesson (main-screen defect): under the fa/RTL locale a
@@ -549,12 +562,14 @@ class _SettingsCard extends StatelessWidget {
               left: 6 * s,
               right: 6 * s,
               child: Center(
-                child: Text(
+                // v1.0.2 — the status value lands softly (ON/OFF, the
+                // routing region, the protocol name — was a raw swap).
+                child: AnimatedValueText(
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  textStyle: TextStyle(
                     fontFamily: 'IRANYekanX',
                     fontWeight: FontWeight.w400,
                     fontSize: AethGeometry.settingsCardSubSize * s,
@@ -751,7 +766,7 @@ class _SectionHeading extends StatelessWidget {
         children: [
           Text(
             title,
-            textDirection: TextDirection.rtl,
+            textDirection: appContentDirection(context),
             style: TextStyle(
               fontFamily: 'IRANYekanX',
               fontWeight: FontWeight.w700,
@@ -1018,6 +1033,7 @@ class CoreLogPage extends StatefulWidget {
     super.key,
     this.showPatterns = true,
     this.connected = false,
+    this.alive = false,
     this.style = MotionStyle.standard,
   });
 
@@ -1029,6 +1045,10 @@ class CoreLogPage extends StatefulWidget {
   /// app's #1 rule (animation reflects state) whenever the log was opened
   /// from a CONNECTED session.
   final bool connected;
+
+  /// v8a — the every-page drift rule (owner round 18): the patterns
+  /// breathe here too while the tunnel is up / the walk is in flight.
+  final bool alive;
   final MotionStyle style;
 
   @override
@@ -1083,7 +1103,8 @@ class _CoreLogPageState extends State<CoreLogPage> {
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     return Directionality(
-      textDirection: TextDirection.rtl,
+      // v1.0.2 — the content follows the app's own locale.
+      textDirection: appContentDirection(context),
       child: Scaffold(
         backgroundColor: AethColors.bgScreen,
         // v4.25 — the pattern-placement fix (see the settings page's Stack):
@@ -1094,11 +1115,19 @@ class _CoreLogPageState extends State<CoreLogPage> {
             // The home patterns behind (v4.21 — same composition as every
             // page; v4.22 — honors the appearance switch; v4.25 — the
             // honest connected state + the effective motion style).
+            // v8a — the every-page drift rule (owner round 18).
+            if (widget.connected &&
+                widget.showPatterns &&
+                widget.style != MotionStyle.off)
+              Positioned.fill(
+                child: SmokeField(style: widget.style),
+              ),
             if (widget.showPatterns)
               Positioned.fill(
                 child: PatternSides(
                   connected: widget.connected,
                   style: widget.style,
+                  active: widget.alive,
                 ),
               ),
             SafeArea(
@@ -1193,11 +1222,33 @@ class _CoreLogPageState extends State<CoreLogPage> {
                         color: AethColors.cardDark,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: _loading
-                          ? const Center(
-                              child: CircularProgressIndicator(
-                                color: AethColors.accentConnected,
-                              ),
+                      // v1.0.2 — the loading->content swap crossfades and
+                      // the spinner obeys the kill-switch (a STATIC ring
+                      // with animations off — was an always-spinning
+                      // CircularProgressIndicator, the audit's finding).
+                      child: AnimatedSwitcher(
+                        duration: motionDuration(
+                          widget.style,
+                          MotionDurations.quick,
+                        ),
+                        child: _loading
+                          ? Center(
+                              key: const ValueKey('core-log-loading'),
+                              child: widget.style == MotionStyle.off
+                                ? Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: AethColors.accentConnected,
+                                        width: 4,
+                                      ),
+                                    ),
+                                  )
+                                : const CircularProgressIndicator(
+                                    color: AethColors.accentConnected,
+                                  ),
                             )
                           : _snapshot.isEmpty
                               ? Center(
@@ -1212,6 +1263,7 @@ class _CoreLogPageState extends State<CoreLogPage> {
                                   ),
                                 )
                           : Scrollbar(
+                              key: const ValueKey('core-log-content'),
                               child: SingleChildScrollView(
                                 // The core's own lines are LTR (English +
                                 // timestamps); one line per log record.
@@ -1238,6 +1290,7 @@ class _CoreLogPageState extends State<CoreLogPage> {
                                 ),
                               ),
                             ),
+                          ),
                     ),
                   ),
                 ],

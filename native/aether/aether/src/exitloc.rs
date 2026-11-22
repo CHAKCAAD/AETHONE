@@ -10,6 +10,18 @@ const TRACE_PORT: u16 = 80;
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(10);
 const DEFAULT_INTERVAL_SECS: u64 = 60;
 
+/// v1.0.1 — the settle retries (owner log 2026-11-17, «بدون لاگ ایتن»):
+/// a WireGuard tunnel that had JUST passed the handshake + data-plane
+/// validation was torn down exactly one LOOKUP_TIMEOUT later by the
+/// exit-location trace ("the exit location could not be read, so the
+/// policy cannot be honoured; reconnecting") — the /cdn-cgi/trace read
+/// raced the freshly-established netstack on some networks (the DNS
+/// resolve inside the stack not answering yet), and one miss killed a
+/// VERIFIED tunnel, looping connect → validate → serve → 10 s → kill.
+/// The trace now gets three attempts before the tunnel is judged.
+const SETTLE_ATTEMPTS: usize = 3;
+const SETTLE_RETRY_PAUSE: Duration = Duration::from_secs(2);
+
 #[derive(Debug, Clone)]
 pub struct Policy {
     allow: Vec<String>,

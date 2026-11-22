@@ -6,36 +6,48 @@
 /// lands on the owner's 58°).
 ///
 /// v4.15 — owner home round #1 gave the turn its dedicated 600 ms ease curve
-/// («کاملا نرم») — kept. The v4.15 CLOCKWISE direction is superseded by
-/// v4.17 (counter-clockwise 58°, see above). Tint animates red ↔ green with
-/// the state as before.
+/// («کاملا نرم») — kept (the landing/settle tempo).
 ///
-/// While the engine is walking toward a connection (starting / connecting /
-/// reconnecting) an animated scanning halo (expanding rings, defect #10)
-/// plays BEHIND the logo — see [ScanRings].
+/// CONNECTING (the flutterfx round): the walk's motion language on this
+/// look is now the SPARK LOADER — the logo itself marches in 90° steps,
+/// each an easeOutBack swing with a rest between ([SparkLoaderSpin], the
+/// flutterfx `particles-spark-loader` port; owner: «هرچی انیمیشن برای
+/// حالت در حال اتصال نمای ۱ دکمه اتصال در نظر گرفته بودی حذف کن و به
+/// جاش از چرخش لوگو Spark Loader … استفاده کن»). The retired walk
+/// vocabulary (ignition ring / held dashes / march / seek arcs) is
+/// suppressed on THIS look only — [HomeScreen] hides the halo's walk
+/// states in look 1; look 2 keeps them. When the walk resolves, the logo
+/// settles onto the resting pose by the shortest equivalent turn.
 ///
-/// CONNECTED IDLE: the logo breathes — a slow, gentle scale pulse driven by
-/// [AuroraBloom]'s phase — and the [AuroraBloom] glow/ripple halo breathes
-/// BEHIND it (see home_screen: the halo is mounted for BOTH looks).
-/// MotionStyle.off disables the idle motion (accessibility rule) — the
+/// CONNECTED IDLE: the logo breathes — a slow, gentle scale pulse (its own
+/// clock, the recipe's hero tempo) — while the shared halo breathes with
+/// it. MotionStyle.off disables the idle motion (accessibility rule) — the
 /// state change animations stay.
 library;
-
-import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
+import '../../../core/fx/spark_loader.dart';
 import '../../../core/motion.dart';
 
 class HeroLogo extends StatelessWidget {
-  const HeroLogo({super.key, required this.connected, required this.style});
+  const HeroLogo({
+    super.key,
+    required this.connected,
+    required this.style,
+    this.sparking = false,
+  });
 
   final bool connected;
   final MotionStyle style;
+
+  /// The engine-walk flag (starting / waiting / connecting / reconnecting):
+  /// the spark-march runs while true. [HomeScreen] derives it from the REAL
+  /// [VpnState] — nothing here fakes a walk.
+  final bool sparking;
 
   /// v4.17 pose: 58° to the LEFT (counter-clockwise) on connection —
   /// Flutter `turns` are clockwise-positive, so LEFT is negative.
@@ -48,13 +60,10 @@ class HeroLogo extends StatelessWidget {
     final duration = motionDuration(style, MotionDurations.state);
     final curve = style.curve;
 
-    // v4.15 #1: the rotation gets its own slower base (600 ms) — «کاملا نرم».
-    final turnDuration = motionDuration(style, 600);
-
-    final Widget logo = AnimatedRotation(
-      turns: connected ? _connectedTurns : 0.0,
-      duration: turnDuration,
-      curve: curve,
+    final Widget logo = SparkLoaderSpin(
+      active: sparking,
+      style: style,
+      restTurns: connected ? _connectedTurns : 0.0,
       child: TweenAnimationBuilder<Color?>(
         tween: ColorTween(
           begin: connected
@@ -161,168 +170,6 @@ class _BreathingWhileConnectedState extends State<_BreathingWhileConnected>
       child: widget.child,
     );
   }
-}
-
-/// The connected halo (v4.15 — owner home round #2: «انیمیشن بعد از اتصال
-/// پشت آیکون وسط صفحه زیبا نیست یک انیمیشن زیبا ایجاد کن و این انیمیشن
-/// رو بردار»: the v4.13 rotating comet sweep is RETIRED). AURORA BLOOM in
-/// its place: a soft breathing glow + three slow water-ripples that expand
-/// and fade behind the icon — one quiet 3.9 s ripple cycle (a new ring is
-/// born every 1.3 s) and a 2.6 s breath that matches the logo's own pulse
-/// (they breathe together, like v4.12). It lives BEHIND the central icon in
-/// BOTH looks; the home_screen mounts it only while connected.
-class AuroraBloom extends StatefulWidget {
-  const AuroraBloom({
-    super.key,
-    required this.color,
-    required this.size,
-    this.style = MotionStyle.standard,
-  });
-
-  final Color color;
-  final double size;
-
-  /// v4.25 — the halo's tempo follows the style's recipe (TIDE's ripples
-  /// expand slow and wide, SPRING's race at 2.8 s, SILK keeps the owner's
-  /// approved 3.9 s).
-  final MotionStyle style;
-
-  @override
-  State<AuroraBloom> createState() => _AuroraBloomState();
-}
-
-class _AuroraBloomState extends State<AuroraBloom>
-    with TickerProviderStateMixin {
-  /// One ripple phase cycle — every 1/3 of it a new ring is born; each
-  /// ring takes the full cycle to expand and dissolve (the recipe's
-  /// [MotionRecipe.rippleMs]).
-  late final AnimationController _ripple = AnimationController(
-    vsync: this,
-    duration: Duration(milliseconds: widget.style.recipe.rippleMs),
-  );
-
-  /// The breathing phase (the recipe's hero tempo — the logo pulse and
-  /// the halo breathe together).
-  late final AnimationController _breath = AnimationController(
-    vsync: this,
-    duration: Duration(milliseconds: widget.style.recipe.heroBreathMs),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    _ripple.repeat();
-    _breath.repeat(reverse: true);
-  }
-
-  @override
-  void didUpdateWidget(covariant AuroraBloom old) {
-    super.didUpdateWidget(old);
-    // v4.25 — a style change mid-session retunes the halo's tempo.
-    _ripple.duration = Duration(milliseconds: widget.style.recipe.rippleMs);
-    _breath.duration =
-        Duration(milliseconds: widget.style.recipe.heroBreathMs);
-  }
-
-  @override
-  void dispose() {
-    _ripple.dispose();
-    _breath.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: Listenable.merge([_ripple, _breath]),
-      builder: (context, _) {
-        final breath = Curves.easeInOut.transform(_breath.value);
-        return CustomPaint(
-          size: Size.square(widget.size),
-          painter: _AuroraBloomPainter(
-            color: widget.color,
-            ripple: _ripple.value,
-            breath: breath,
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Paints the aurora bloom — all soft edges, no hard rings:
-///  1. a faint outer halo (breathes 0.05 ↔ 0.09 alpha);
-///  2. a breathing core glow (0.14 ↔ 0.26 alpha, radius 0.28 ↔ 0.35 of the
-///     box) that fades to nothing at its edge;
-///  3. three staggered water-ripples (phase 0, ⅓, ⅔): each expands from
-///     0.16 to 0.46 of the box over 3.9 s while its stroke thins and its
-///     alpha decays quadratically — heavily blurred (MaskFilter), so the
-///     rings read as soft light, never as hard circles.
-class _AuroraBloomPainter extends CustomPainter {
-  _AuroraBloomPainter({
-    required this.color,
-    required this.ripple,
-    required this.breath,
-  });
-
-  final Color color;
-  final double ripple;
-  final double breath;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height / 2);
-    final col = color;
-
-    // 1) Faint outer halo.
-    final halo = Paint()
-      ..shader = ui.Gradient.radial(
-        c,
-        size.width * 0.5,
-        [
-          col.withValues(alpha: 0.05 + 0.04 * breath),
-          col.withValues(alpha: 0.0),
-        ],
-      );
-    canvas.drawCircle(c, size.width * 0.5, halo);
-
-    // 2) Breathing core glow.
-    final glowRadius = size.width * (0.28 + 0.07 * breath);
-    final glow = Paint()
-      ..shader = ui.Gradient.radial(
-        c,
-        glowRadius,
-        [
-          col.withValues(alpha: 0.14 + 0.12 * breath),
-          col.withValues(alpha: 0.0),
-        ],
-      );
-    canvas.drawCircle(c, glowRadius, glow);
-
-    // 3) The three water-ripples.
-    for (var i = 0; i < 3; i++) {
-      final p = (ripple + i / 3) % 1.0;
-      final e = Curves.easeOutCubic.transform(p);
-      final fade = math.pow(1 - e, 2).toDouble();
-      final ring = Paint()
-        ..color = col.withValues(alpha: 0.24 * fade)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = size.width * (0.008 + 0.024 * fade)
-        ..maskFilter = MaskFilter.blur(
-          BlurStyle.normal,
-          size.width * (0.007 + 0.014 * fade),
-        );
-      canvas.drawCircle(
-        c,
-        size.width * (0.16 + 0.30 * e),
-        ring,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_AuroraBloomPainter old) =>
-      old.ripple != ripple || old.breath != breath || old.color != color;
 }
 
 /// Scanning halo behind the central icon while the engine is trying to

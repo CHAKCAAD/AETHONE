@@ -145,8 +145,11 @@ class CoreSettings {
     this.torDirectSecs = 75,
     this.torBridgeSecs = 360,
     this.torLog = TorLogLevel.info,
-    this.torLegProtocol = AetherLegProtocol.wireguard,
-    this.psiphonLegProtocol = AetherLegProtocol.wireguard,
+    // v1.0.1 — the combined Tor and Psiphon modes' AETHER leg defaults to
+    // MASQUE (owner decree: «پروتکل دیفالت حالت های ترکیبی سایفون و تور
+    // رو هم ماسک قرار بده») — the v4.31c WireGuard leg default retired.
+    this.torLegProtocol = AetherLegProtocol.masque,
+    this.psiphonLegProtocol = AetherLegProtocol.masque,
     this.ipVersion = IpVersion.v4,
     this.upstreamProxy = '',
     this.echMode = EchMode.off,
