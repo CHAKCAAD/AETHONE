@@ -19,4 +19,12 @@
     <string name="widget_state_disconnected">غیرفعال</string>
     <string name="widget_toggle_desc">قطع و وصل اتصال</string>
     <string name="widget_description">کارت اتصال AETHONE</string>
+
+    <!-- v1.0.1 (motion-line merge) — ویجت ۴×۲ صفحه اصلی گوشی. -->
+    <string name="widget_label">AETHONE</string>
+    <string name="widget_status_connected">تحت حفاظت — تونل برقرار است</string>
+    <string name="widget_status_connecting">در حال اتصال…</string>
+    <string name="widget_status_idle">متصل نیستید</string>
+    <string name="widget_action_connect">اتصال</string>
+    <string name="widget_action_disconnect">قطع اتصال</string>
 </resources>

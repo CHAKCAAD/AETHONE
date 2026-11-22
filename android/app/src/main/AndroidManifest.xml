@@ -99,6 +99,20 @@
         <receiver
             android:name=".WidgetToggleReceiver"
             android:exported="false"/>
+        <!-- v1.0.1 (motion-line merge) — THE 4×2 BRAND-DARK HOME WIDGET
+             (AethoneHomeWidget): the status line + one big action, pushed
+             by the holder services and the Dart walk; no periodic alarm. -->
+        <receiver
+            android:name=".AethoneHomeWidget"
+            android:exported="false"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/aethone_home_widget_info"/>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

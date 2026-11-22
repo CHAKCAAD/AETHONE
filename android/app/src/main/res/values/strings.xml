@@ -22,4 +22,14 @@
     <string name="widget_state_disconnected">Disconnected</string>
     <string name="widget_toggle_desc">Toggle the connection</string>
     <string name="widget_description">The AETHONE connection card</string>
+
+    <!-- v1.0.1 (motion-line merge) — the 4×2 brand-dark home widget
+         (AethoneHomeWidget): its own label + the live status line and
+         action button the services and the Dart walk push. -->
+    <string name="widget_label">AETHONE</string>
+    <string name="widget_status_connected">Protected — the tunnel is up</string>
+    <string name="widget_status_connecting">Connecting…</string>
+    <string name="widget_status_idle">You are not connected</string>
+    <string name="widget_action_connect">Connect</string>
+    <string name="widget_action_disconnect">Disconnect</string>
 </resources>

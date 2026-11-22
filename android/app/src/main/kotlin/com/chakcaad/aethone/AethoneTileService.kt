@@ -29,6 +29,30 @@ import android.service.quicksettings.TileService
  */
 class AethoneTileService : TileService() {
 
+    companion object {
+        private const val TAG = "AethoneTile"
+
+        /// v1.0.1 (motion-line merge) — ask the system to re-deliver
+        /// onStartListening to the tile (the documented cross-component
+        /// refresh path): the home widget's state push and the services'
+        /// up/down transitions call it so an open shade flips the tile the
+        /// moment the tunnel does.
+        fun requestRefresh(context: android.content.Context) {
+            try {
+                TileService.requestListeningState(
+                    context,
+                    android.content.ComponentName(
+                        context,
+                        AethoneTileService::class.java,
+                    ),
+                )
+            } catch (t: Throwable) {
+                // Refresh only — never take a transition down with it.
+                android.util.Log.w(TAG, "tile refresh request failed", t)
+            }
+        }
+    }
+
     override fun onStartListening() {
         super.onStartListening()
         refresh()

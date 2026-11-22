@@ -371,7 +371,17 @@ class MainActivity : FlutterActivity() {
                 "takeQuickConnect" -> {
                     val ask = pendingQuickConnect
                     pendingQuickConnect = false
-                    result.success(ask)
+                    // v1.0.1 shape: the Dart side reads answer['connect'].
+                    result.success(mapOf("connect" to ask))
+                }
+                // v1.0.1 — the transient walk phases for the home widget
+                // ("connecting" while the engine walks, "idle" on a failed
+                // walk); the steady states come from the holder services.
+                "widgetState" -> {
+                    val state = call.argument<String>("state")
+                        ?: AethoneHomeWidget.STATE_IDLE
+                    AethoneHomeWidget.pushNamed(this, state)
+                    result.success(null)
                 }
                 // v4.41 (round 17, item 4) — the launchable-app list for
                 // the per-app tunneling picker (label + package, the app
