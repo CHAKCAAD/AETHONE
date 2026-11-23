@@ -64,8 +64,8 @@ void main() {
   // داشته باشه و باید قفل باشه» — the v4.15 HIDE rule is RETIRED: for
   // non-Tor/Psiphon protocols the location band stays ON SCREEN while
   // disconnected, GREYSCALE + locked (the CSS «قطع» frame).
-  testWidgets('disconnected home shows قــطــع! pill; MASQUE keeps the '
-      'location band GREYSCALE + locked (v5 round 19)', (
+  testWidgets('disconnected home shows غیرفعال pill (the v6 look-1 CSS); '
+      'MASQUE keeps the location band GREYSCALE + locked (v5 round 19)', (
     tester,
   ) async {
     await useReferenceSurface(tester);
@@ -74,7 +74,9 @@ void main() {
     await tester.pumpWidget(_booth(HomeScreen(store: store)));
     await tester.pumpAndSettle();
 
-    expect(find.text('قــطــع!'), findsOneWidget);
+    // v6 (owner round 23) — LOOK 1's disconnected label is the new CSS's
+    // own «غیرفعال» (look 2 keeps «قــطــع!»).
+    expect(find.text('غیرفعال'), findsOneWidget);
     // The band is FULLY laid out (never zero-height anymore)…
     expect(tester.getSize(find.byKey(const ValueKey('location-band'))).height,
         greaterThan(100.0));
@@ -126,7 +128,7 @@ void main() {
 
     expect(store.state, VpnState.connected);
     expect(find.text('مــتـصـل'), findsOneWidget);
-    expect(find.text('قــطــع!'), findsNothing);
+    expect(find.text('غیرفعال'), findsNothing);
     expect(find.text('146 ms'), findsOneWidget);
     // v5.3 — the KB grammar: 145 MB reads as 148480KB on the DOWN card
     // («میزان دانلود و آپلود باید از کیلوبایت ثبت بشه نه از مگابایت»).

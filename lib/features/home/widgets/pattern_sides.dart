@@ -44,6 +44,7 @@ class PatternSides extends StatefulWidget {
     required this.connected,
     required this.style,
     this.active = false,
+    this.lookOne = false,
   });
 
   final bool connected;
@@ -54,6 +55,16 @@ class PatternSides extends StatefulWidget {
   /// the owner asked for the motion on the HOME screen; the speed-test
   /// page passes its own running state).
   final bool active;
+
+  /// v6 (owner round 23: «در نمای 1 صفحه اصلی جایگاه پترن های چپ و راست
+  /// باید متفاوت از نمای 2 باشه … پترن سمت چپ یک سوم پایین تر از وسط
+  /// صفحه و پترن سمت راست باید یک سوم بالاتر از وسط صفحه») — the HOME
+  /// screen's LOOK 1 placement: each art's INK CENTRE rides a THIRD of
+  /// the live screen height away from the middle (left BELOW at 5/6,
+  /// right ABOVE at 1/6), in BOTH connection states. The default `false`
+  /// keeps the committed look-2 mockup placement (the speed-test page
+  /// and every other carrier).
+  final bool lookOne;
 
   @override
   State<PatternSides> createState() => _PatternSidesState();
@@ -125,12 +136,29 @@ class _PatternSidesState extends State<PatternSides>
 
         // v5 placement (mockup-measured): the LEFT art's CENTRE at 27 % of
         // the LIVE height, the RIGHT art's ink BOTTOM at 48.5 %.
+        // v6 — LOOK 1's own placement (owner round 23): each art's INK
+        // CENTRE a third of the screen away from the middle — the LEFT
+        // art BELOW (5/6 of the height), the RIGHT art ABOVE (1/6) — in
+        // both connection states.
         const leftArtMidRow = AethGeometry.patternLeftArtTopRow +
             AethGeometry.patternLeftArtRows / 2;
-        final leftTop = AethGeometry.patternLeftAnchor * h -
+        const rightArtMidRow = (AethGeometry.patternRightArtTopRow +
+                AethGeometry.patternRightArtBottomRow) /
+            2;
+        final leftTop = (widget.lookOne
+                ? AethGeometry.patternLeftAnchorLookOne
+                : AethGeometry.patternLeftAnchor) *
+            h -
             leftArtMidRow * leftH / 1593;
-        final rightTop = AethGeometry.patternRightAnchor * h -
-            AethGeometry.patternRightArtBottomRow * rightH / 1848;
+        final rightTop = (widget.lookOne
+                ? AethGeometry.patternRightAnchorLookOne
+                : AethGeometry.patternRightAnchor) *
+            h -
+            (widget.lookOne
+                ? rightArtMidRow
+                : AethGeometry.patternRightArtBottomRow) *
+                rightH /
+                1848;
 
         return IgnorePointer(
           child: Stack(

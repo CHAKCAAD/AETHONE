@@ -41,6 +41,14 @@
 /// window), and the DOWN/UP readouts decode through the ping readout's
 /// own [HyperText] walk (bottom_panel.dart).
 ///
+/// v6 (owner round 23) — the look-1 re-cut lands on the MOTION LINE
+/// (feature/motion-phase3, the branch that owns the app): the spark
+/// loader owns look 1's walk again, the flutterfx ripple family owns
+/// look 2's, the GitHub-spark burst owns the landing on both, look 1
+/// grows its own three-layer status chip + its own pattern placement +
+/// a real speed-button/pill gap, and the look-2 connect button rides
+/// the re-cut three-layer «Group 45».
+///
 /// State honesty: every visual (colors, ping, speed button, stats) derives
 /// from the REAL [ConnectionStore] state — nothing shows "connected" before
 /// the engine reports it.
@@ -53,6 +61,8 @@ import '../../connection/connection_state.dart';
 import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
+import '../../core/fx/connect_ripple.dart';
+import '../../core/fx/github_spark.dart';
 import '../../core/motion.dart';
 import '../../core/motion_widgets.dart';
 import '../../l10n/app_strings.dart';
@@ -149,10 +159,17 @@ class HomeScreen extends StatelessWidget {
             (store.state == VpnState.starting ||
                 store.state == VpnState.connecting ||
                 store.state == VpnState.reconnecting);
-        // v5.3 — the SPARK LOADER's walk flag is RETIRED with the march
-        // itself (the owner: «در نمای 1 انیمیشن روی دکمه اتصال وسط صفحه
-        // باید حذف بشه»); the hero is a static pose machine now and the
-        // halo's own walk vocabulary keeps sleeping on look 1.
+        // v6 (owner round 23: «انیمیشن دکمه اتصال وسط صفحه در نمای 1 حین
+        // تلاش برای اتصال رو چرا حذف کردی؟ برشگردون به حالت قبل») — the
+        // SPARK LOADER's walk flag is BACK: every state in which the
+        // engine walks toward a session marches look 1's logo in quarter
+        // turns ([SparkLoaderSpin]); look 2's connecting story is the
+        // flutterfx RIPPLE family instead ([ConnectRipple]).
+        final walking = !connected &&
+            (store.state == VpnState.starting ||
+                store.state == VpnState.waitingForPermissions ||
+                store.state == VpnState.connecting ||
+                store.state == VpnState.reconnecting);
 
         final locationHeader = LocationHeader(
           connected: connected,
@@ -207,6 +224,14 @@ class HomeScreen extends StatelessWidget {
                       connected: connected,
                       style: style,
                       active: store.patternsAlive,
+                      // v6 (owner round 23: «در نمای 1 صفحه اصلی جایگاه
+                      // پترن های چپ و راست باید متفاوت از نمای 2 باشه …
+                      // پترن سمت چپ یک سوم پایین تر از وسط صفحه و پترن
+                      // سمت راست باید یک سوم بالاتر از وسط صفحه») — the
+                      // home's LOOK 1 carries its own placement: each
+                      // art's ink centre a third of the screen away from
+                      // the middle (left BELOW, right ABOVE), both states.
+                      lookOne: isLookOne,
                     ),
                   ),
                 SafeArea(
@@ -229,7 +254,8 @@ class HomeScreen extends StatelessWidget {
                         // Hero band: the logo centers in the flex region.
                         Expanded(
                           child: Center(
-                            child: heroStack(context, s, style, connected),
+                            child: heroStack(
+                              context, s, style, connected, walking),
                           ),
                         ),
                         // v5.3 (the owner's decrees) — the session TABLE
@@ -249,8 +275,19 @@ class HomeScreen extends StatelessWidget {
                           style: style,
                           onTap: () => _openSpeedTest(context),
                         ),
+                        // v6 — the owner's «باید کمی فاصله داشته باشن»:
+                        // the 1px kiss is gone; the speed button and the
+                        // (now 38px-tall, three-layer) pill breathe apart.
                         SizedBox(height: AethGeometry.gapSpeedToPill * s),
-                        StatusPill(state: store.state, style: style),
+                        // v6 — LOOK 1's own three-layer chip («Group 119»,
+                        // 140×38): the layered composition + the
+                        // «غیرفعال» label. Look 2 keeps the 126×30 gradient
+                        // chip above the hero.
+                        StatusPill(
+                          state: store.state,
+                          style: style,
+                          layered: true,
+                        ),
                         failureCaption(context, s),
                         SizedBox(height: AethGeometry.gapPillToPanel * s),
                         Padding(
@@ -290,7 +327,8 @@ class HomeScreen extends StatelessWidget {
                         Expanded(
                           child: Align(
                             alignment: Alignment.bottomCenter,
-                            child: heroStack(context, s, style, connected),
+                            child: heroStack(
+                              context, s, style, connected, walking),
                           ),
                         ),
                         SizedBox(height: AethGeometry.gapHeroToPanel * s),
@@ -323,11 +361,20 @@ class HomeScreen extends StatelessWidget {
   /// v4.14 scan rings unified and extended to all EIGHT states: ignition /
   /// held / march / aurora+celebration / seek / collapse / error ring),
   /// wrapped by [ConnectShake] on the failed edge; v8a (owner round 18)
-  /// retired the connected AURORA on both looks, and v5.3 retires the
-  /// round-18 [ShimmerEdge] lap too (the owner: «انیمیشن حاله سبز در حالت
-  /// اتصال رو کلا حذف کن و فقط پترن ها باشن» — nothing animated rides the
-  /// CONNECTED button on either look; look 1's walk states sleep as well
-  /// per «در نمای 1 انیمیشن روی دکمه اتصال وسط صفحه باید حذف بشه»).
+  /// retired the connected AURORA on both looks, and v5.3 retired the
+  /// round-18 [ShimmerEdge] lap too.
+  ///
+  /// v6 (owner round 23) — the WALK and the LANDING are re-cut, one look
+  /// each: the halo's own walk vocabulary sleeps on BOTH looks now —
+  /// LOOK 1's walk is the RESTORED spark-loader march on the logo itself
+  /// («برشگردون به حالت قبل»), LOOK 2's is the flutterfx RIPPLE family
+  /// breathing behind the button ([ConnectRipple]), and the walk's
+  /// landing flourish — the connecting→connected edge — is the GITHUB
+  /// SPARK burst ([GitHubSparkBurst]): sparks pour from BEHIND the
+  /// button in every direction, once («وقتی اتصال شکل گرفت باید از
+  /// انیمیشن GitHub Spark استفاده بشه و از پشت دکمه اتصال وسط صفحه به
+  /// سرعت اسپارک به جهات مختلف بریزه»). The CONNECTED steady state
+  /// stays perfectly still (the round-22 decree stands).
   ///
   /// v5.1 (owner round 20) — THE HALOS ARE LAYOUT-NEUTRAL: every layer
   /// bigger than the central element rides an [OverflowBox] pinned to the
@@ -336,12 +383,13 @@ class HomeScreen extends StatelessWidget {
   /// mounted — and because look 2 anchors the hero to its BOTTOM, the
   /// centered button RODE UP ~35px the moment the walk started. The
   /// button's box is now constant: tap it and it stays exactly where it
-  /// is (owner: «جایگاهش همونجا بمونه و بالا نره»).
+  /// is (owner: «جایگاهش همونجا بمونه و بالا نره").
   Widget heroStack(
     BuildContext context,
     double s,
     MotionStyle style,
     bool connected,
+    bool walking,
   ) {
     final isLookOne = store.homeLook == HomeLook.one;
     final elementSize = (isLookOne
@@ -353,22 +401,47 @@ class HomeScreen extends StatelessWidget {
       alignment: Alignment.center,
       clipBehavior: Clip.none,
       children: [
-        // The state halo — paints AROUND the element (up to ×1.25 of it)
-        // without ever resizing the Stack: IgnorePointer keeps it pure
-        // decoration, the OverflowBox frees it from the element's tight
-        // constraints, Clip.none lets it spill into the band's air.
+        // The state halo family — paints AROUND the element (up to ×1.25
+        // of it) without ever resizing the Stack: IgnorePointer keeps it
+        // pure decoration, the OverflowBox frees it from the element's
+        // tight constraints, Clip.none lets it spill into the band's air.
+        // v6: the walk story is per-look (the spark march on the logo for
+        // look 1, the ripple family for look 2) and the landing flourish
+        // is the GitHub-spark burst on both — the halo keeps the collapse
+        // and the error ring.
         IgnorePointer(
           child: SizedBox.square(
             dimension: elementSize,
             child: OverflowBox(
               maxWidth: haloSize,
               maxHeight: haloSize,
-              child: ConnectHalo(
-                state: store.state,
-                style: style,
-                hideWalkStates: isLookOne,
-                hideConnectedAura: true,
-                size: haloSize,
+              child: Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  ConnectHalo(
+                    state: store.state,
+                    style: style,
+                    hideWalkStates: true,
+                    hideConnectedAura: true,
+                    size: haloSize,
+                  ),
+                  // LOOK 2's connecting animation — the flutterfx ripple
+                  // family behind the button (owner round 23).
+                  if (!isLookOne)
+                    ConnectRipple(
+                      state: store.state,
+                      style: style,
+                      size: haloSize,
+                    ),
+                  // The landing flourish, both looks — the GitHub-spark
+                  // one-shot on the connecting→connected edge.
+                  GitHubSparkBurst(
+                    state: store.state,
+                    style: style,
+                    size: haloSize,
+                  ),
+                ],
               ),
             ),
           ),
@@ -380,13 +453,13 @@ class HomeScreen extends StatelessWidget {
               ? PressSpring(
                   style: style,
                   onTap: _toggleConnection,
-                  // v5.3 — the STATIC logo: no spark march, no breathing
-                  // (owner: «در نمای 1 انیمیشن روی دکمه اتصال وسط صفحه
-                  // باید حذف بشه»); the 58° pose + the gradient tint are
-                  // state APPEARANCE, not looping motion, and stay.
+                  // v6 — the spark march is BACK for the walk (owner
+                  // round 23); the 58° pose + the gradient tint stay the
+                  // state APPEARANCE, never looping motion.
                   child: HeroLogo(
                     connected: connected,
                     style: style,
+                    sparking: walking,
                   ),
                 )
               : _CenterConnectButton(

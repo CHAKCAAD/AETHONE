@@ -51,19 +51,30 @@ void main() {
       expect(AethGeometry.heroSize, 164);
       expect(AethGeometry.connectButtonSize, 48);
       expect(AethGeometry.connectButtonRise, 72);
-      // v5 («نمای 2», owner round 19) — the look-2 connect button is the
-      // owner's NEW CSS composition «Group 45»: the WHITE 160² r60 base +
-      // the 108.17² r41 gradient core + the 48×48 Off glyph (the v4.33
-      // 236 glow stack is retired).
+      // v6 (owner round 23) — the look-2 connect button is the re-cut
+      // THREE-layer «Group 45»: the 160² r62 outer · the 132² r46 mid ·
+      // the 108.17² r41 gradient core + the 48×48 Off glyph.
       expect(AethGeometry.connectGroupSize, 160);
+      expect(AethGeometry.connectMidSize, 132);
       expect(AethGeometry.connectCoreSize, 108.17);
       expect(AethGeometry.connectIconSize, 48);
-      expect(AethRadius.connectBase, 60);
+      expect(AethRadius.connectBase, 62);
+      expect(AethRadius.connectMid, 46);
       expect(AethRadius.connectCore, 41);
-      // v5 — the pill is ONE gradient layer: 126×30 r9 («لایه 1»).
+      // v5 — the pill is ONE gradient layer: 126×30 r9 («لایه 1»). v6:
+      // LOOK 1's own chip is the three-layer 140×38 «Group 119».
       expect(AethGeometry.pillWidth, 126);
       expect(AethGeometry.pillHeight, 30);
       expect(AethGeometry.pillIconSize, 20);
+      expect(AethGeometry.pillL1Width, 140);
+      expect(AethGeometry.pillL1Height, 38);
+      expect(AethGeometry.pillL1MidWidth, 132.88);
+      expect(AethGeometry.pillL1MidHeight, 32);
+      expect(AethGeometry.pillL1CoreWidth, 125.76);
+      expect(AethGeometry.pillL1CoreHeight, 26);
+      expect(AethRadius.pillL1Halo, 13);
+      expect(AethRadius.pillL1Mid, 11);
+      expect(AethRadius.pillL1Core, 9);
       // v5 — owner CSS «Group 13»: the home speed-test group is 74/62/44.
       expect(AethGeometry.speedGroupSize, 74);
       expect(AethGeometry.speedMidSize, 62);
@@ -133,7 +144,7 @@ void main() {
       expect(AethGeometry.countryRowHeight, 45);
       expect(AethGeometry.gapRowToCard, 27);
       expect(AethGeometry.gapCardToBottom, 37);
-      expect(AethGeometry.statGlyphSize, 30);
+      expect(AethGeometry.statGlyphSize, 36);
       expect(AethGeometry.statGlyphTextGap, 17);
       expect(AethGeometry.statGroupNudge, 6);
       // v5.3 — the owner's new CSS «Group 124»: the row spans x 32–348.
@@ -150,6 +161,10 @@ void main() {
       expect(AethGeometry.patternRightAspect, 1848 / 594);
       expect(AethGeometry.patternLeftAnchor, 0.27);
       expect(AethGeometry.patternRightAnchor, 0.485);
+      // v6 — LOOK 1's own placement: each art's ink centre a third of the
+      // screen away from the middle (left BELOW, right ABOVE).
+      expect(AethGeometry.patternLeftAnchorLookOne, closeTo(1 / 2 + 1 / 3, 1e-9));
+      expect(AethGeometry.patternRightAnchorLookOne, closeTo(1 / 2 - 1 / 3, 1e-9));
       // The circular flag clips + the «Ellipse 74» ring.
       expect(AethGeometry.flagRadiusFactor, 0.47);
       expect(AethGeometry.flagRingSize, 58);

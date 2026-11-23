@@ -16,9 +16,18 @@
 ///  * a process-wide slot ([ThemeReveal]) carries the request — the same
 ///    idiom as [AethThemeSync] — so every page's tile can reach the host
 ///    the shell mounts, without threading anything through the tree;
-///  * style-gated: the OFF style (and a failed capture) falls back to the
-///    plain cross-fade; SILK/TIDE/SPRING/BLINK each keep their curve and
-///    their tempo;
+///  * v6 (owner round 23: «انیمیشن تغیر حالت از دارک به لایت و ... باید
+///    در حالت های انیمیشنی مختلف که از طریق تنظیمات در دسترس قرار میگیره
+///    یکسان عمل کنه و از حالت های انیمیشنی مختلف نباید تبعیت کنه») —
+///    the reveal is STYLE-INDEPENDENT: every personality (SILK/TIDE/
+///    SPRING/BLINK) runs the EXACT SAME 420 ms easeInOut wipe as the
+///    palette lerp underneath, so the circle completes the very frame the
+///    colors settle — the old style-scaled durations desynced the two
+///    clocks (TIDE's 630 ms wipe outlived the 420 ms palette, leaving
+///    whole cards showing the PREVIOUS mode for another quarter second:
+///    «بعضی از کارت ها هم در حالت قبلی میمونن و بعد از مدتی تغیر به حالت
+///    دیگه براشون اتفاق میفته»). Only the خاموش kill-switch keeps the
+///    plain flip (nothing moves — an accessibility cut, not a look);
 ///  * the AUTO schedule's 06:00/18:00 flips take the plain lerp (no finger
 ///    was involved — the reveal is a TOUCH affordance, not a state cue);
 ///  * a circle has no reading order — RTL-safe by construction.
@@ -113,8 +122,9 @@ class _ThemeRevealHostState extends State<ThemeRevealHost>
       return;
     }
     final style = widget.styleOf();
-    // The kill-switch and the BLINK-fast end of the scale keep the plain
-    // cross-fade: the reveal is decoration, OFF means NO decoration.
+    // The kill-switch keeps the plain flip (OFF means NO decoration —
+    // and the palette jumps with it). Every OTHER personality runs the
+    // ONE shared 420 ms reveal (v6 — identical across the styles).
     if (style == MotionStyle.off) {
       apply();
       return;
@@ -150,21 +160,21 @@ class _ThemeRevealHostState extends State<ThemeRevealHost>
     apply();
     if (before == null) return;
 
-    // 4) Play the wipe over the fresh capture. v5.2 — the wipe rides the
-    //    SAME 420 ms window as the palette lerp underneath (the first
-    //    cut ran 650 ms: the colors finished at 420 while a patch of the
-    //    OLD frame still covered the screen for another quarter second —
-    //    the reveal read as lagging, «مشکل داره»). The circle completes
-    //    exactly as the palette settles.
+    // 4) Play the wipe over the fresh capture. v6 — the wipe rides the
+    //    SAME 420 ms window as the palette lerp underneath, with the
+    //    SAME easeInOut shape the palette's own clock applies — for EVERY
+    //    motion personality (the owner: the transition must not follow
+    //    the animation styles). The circle completes exactly as the
+    //    palette settles; no card ever lingers in the previous mode.
     setState(() {
       _before = before;
       _origin = origin;
       _size = boundary.size;
-      _curve = style.curve;
+      _curve = Curves.easeInOut;
     });
     _wipe = AnimationController(
       vsync: this,
-      duration: motionDuration(style, 420),
+      duration: const Duration(milliseconds: 420),
     )
       ..addListener(() {
         if (mounted) setState(() {});

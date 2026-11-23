@@ -8,14 +8,17 @@
 /// v4.15 — owner home round #1 gave the turn its dedicated 600 ms ease curve
 /// («کاملا نرم») — kept (the landing/settle tempo).
 ///
-/// v5.3 (the owner: «در نمای 1 انیمیشن روی دکمه اتصال وسط صفحه باید حذف
-/// بشه» + «انیمیشن حاله سبز در حالت اتصال رو کلا حذف کن و فقط پترن ها
-/// باشن») — the button is STATIC: the SPARK LOADER march (the walk's
-/// quarter-turn spin) and the CONNECTED breathing pulse are both RETIRED,
-/// alongside the round-18 ShimmerEdge lap. What stays is the button's
-/// state APPEARANCE — the 58° pose (a plain [AnimatedRotation] between the
-/// two resting poses) and the red↔green gradient tint (round 21's decree,
-/// untouched) — a state-change crossfade, never looping motion.
+/// CONNECTING (RESTORED, owner round 23: «انیمیشن دکمه اتصال وسط صفحه در
+/// نمای 1 حین تلاش برای اتصال رو چرا حذف کردی؟ برشگردون به حالت قبل، از
+/// انیمیشن Spark Loader ریپو flutterfx_widgets استفاده شده بود») — the
+/// walk's motion language on this look is the SPARK LOADER again: the logo
+/// itself marches in 90° steps, each an easeOutBack swing with a rest
+/// between ([SparkLoaderSpin], the flutterfx `particles-spark-loader`
+/// port). The round-22 stillness decree is reverted for the WALK states
+/// only — the CONNECTED state stays perfectly still (no breathing pulse,
+/// no shimmer: «انیمیشن حاله سبز در حالت اتصال رو کلا حذف کن و فقط پترن
+/// ها باشن» still owns it). When the walk resolves, the logo settles onto
+/// the resting pose by the shortest equivalent turn.
 library;
 
 import 'package:flutter/material.dart';
@@ -23,6 +26,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
+import '../../../core/fx/spark_loader.dart';
 import '../../../core/motion.dart';
 
 class HeroLogo extends StatelessWidget {
@@ -30,10 +34,16 @@ class HeroLogo extends StatelessWidget {
     super.key,
     required this.connected,
     required this.style,
+    this.sparking = false,
   });
 
   final bool connected;
   final MotionStyle style;
+
+  /// The engine-walk flag (starting / waiting / connecting / reconnecting):
+  /// the spark-march runs while true. [HomeScreen] derives it from the REAL
+  /// [VpnState] — nothing here fakes a walk.
+  final bool sparking;
 
   /// v4.17 pose: 58° to the LEFT (counter-clockwise) on connection —
   /// Flutter `turns` are clockwise-positive, so LEFT is negative.
@@ -46,14 +56,13 @@ class HeroLogo extends StatelessWidget {
     final duration = motionDuration(style, MotionDurations.state);
     final curve = style.curve;
 
-    // v5.3 — the STATIC logo: the pose crossfade is a plain
-    // [AnimatedRotation] between the two resting turns (0° ⇄ −58°); the
-    // spark march and the connected breathing are retired by the owner's
-    // decree. The gradient tint keeps round 21's sweep.
-    return AnimatedRotation(
-      turns: connected ? _connectedTurns : 0.0,
-      duration: duration,
-      curve: curve,
+    // The spark march owns the walk; the landing settles onto the resting
+    // pose (0° ⇄ the v4.17 −58°) by the SHORTEST equivalent turn, and the
+    // gradient tint (round 21's decree) crossfades underneath untouched.
+    return SparkLoaderSpin(
+      active: sparking,
+      style: style,
+      restTurns: connected ? _connectedTurns : 0.0,
       child: TweenAnimationBuilder<double>(
         tween: Tween(end: connected ? 1.0 : 0.0),
         duration: duration,

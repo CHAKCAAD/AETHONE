@@ -324,37 +324,63 @@ void main() {
       await tester.pumpWidget(_booth(HomeScreen(store: homeStore)));
       await settleImages(tester);
       final homeRects = patternRects(tester);
-      // The shared placement is the v5 mockup-measured band: the LEFT
-      // art's middle row sits at 27% of the screen height, the RIGHT
-      // art's ink bottom at 48.5% (both template-matched on the committed
-      // «نمای 2» frames).
+      // --- HOME: look 1's OWN placement (v6, owner round 23: «در نمای 1
+      // پترن سمت چپ یک سوم پایین تر از وسط صفحه و پترن سمت راست یک سوم
+      // بالاتر از وسط صفحه») — each art's INK CENTRE rides a third of the
+      // screen away from the middle: the LEFT art BELOW (5/6), the RIGHT
+      // art ABOVE (1/6). The look-2 mockup band (27% / 48.5%) stays the
+      // SPEED-TEST page's placement below. ---
       const h = AethGeometry.refHeight * 1.0;
       final left = homeRects.first;
       final leftArtMidPx = (AethGeometry.patternLeftArtTopRow +
               AethGeometry.patternLeftArtRows / 2) /
           1593 *
           left.height;
-      expect(left.top + leftArtMidPx, closeTo(0.27 * h, 0.5));
+      expect(
+        left.top + leftArtMidPx,
+        closeTo(AethGeometry.patternLeftAnchorLookOne * h, 0.5),
+      );
       final right = homeRects.last;
-      final rightArtBottomPx =
-          AethGeometry.patternRightArtBottomRow / 1848 * right.height;
-      expect(right.top + rightArtBottomPx, closeTo(0.485 * h, 0.5));
+      final rightArtMidPx = (AethGeometry.patternRightArtTopRow +
+              AethGeometry.patternRightArtBottomRow) /
+          2 /
+          1848 *
+          right.height;
+      expect(
+        right.top + rightArtMidPx,
+        closeTo(AethGeometry.patternRightAnchorLookOne * h, 0.5),
+      );
 
       // --- THE SPEED-TEST PAGE: the composition's other home (v4.33's
-      // «از پترن‌های صفحه اصلی برای پس زمینه این صفحه استفاده کن») ---
+      // «از پترن‌های صفحه اصلی برای پس زمینه این صفحه استفاده کن») —
+      // it keeps the committed LOOK-2 placement (27% / 48.5%); v6 gave the
+      // home's LOOK 1 its own thirds placement, so the two pages no longer
+      // share rects — the speed page keeps the mockup band. ---
       final speedStore = makeStore();
       await tester.pumpWidget(_booth(
         SpeedTestPage(store: speedStore, style: MotionStyle.standard),
       ));
       await settleImages(tester);
       final speedRects = patternRects(tester);
-      for (var i = 0; i < 2; i++) {
-        expect(
-          speedRects[i],
-          homeRects[i],
-          reason: 'the speed page pattern $i must equal the home one',
-        );
-      }
+      final speedLeft = speedRects.first;
+      final speedLeftArtMidPx = (AethGeometry.patternLeftArtTopRow +
+              AethGeometry.patternLeftArtRows / 2) /
+          1593 *
+          speedLeft.height;
+      expect(
+        speedLeft.top + speedLeftArtMidPx,
+        closeTo(AethGeometry.patternLeftAnchor * h, 0.5),
+        reason: 'the speed page keeps the v5 mockup band (the LEFT art\'s '
+            'centre at 27 %)',
+      );
+      final speedRight = speedRects.last;
+      final speedRightArtBottomPx =
+          AethGeometry.patternRightArtBottomRow / 1848 * speedRight.height;
+      expect(
+        speedRight.top + speedRightArtBottomPx,
+        closeTo(AethGeometry.patternRightAnchor * h, 0.5),
+        reason: 'the RIGHT art\'s ink bottom stays at 48.5 %',
+      );
 
       // --- THE SETTINGS MAIN PAGE + A SUB-PAGE: NO patterns at all ---
       // v5.3 (the owner: «پترن های سمت راست و چپ فقط باید در صفحه اصلی و

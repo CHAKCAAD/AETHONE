@@ -300,6 +300,12 @@ abstract final class AethRadius {
   /// halo/mid stack and the soft under-shadow are RETIRED by the redesign.
   static const double pillCore = 9;
 
+  /// v6 (owner round 23) — the LOOK-1 pill's three radii («Group 119»):
+  /// the halo 140×38 r13 · the mid 132.88×32 r11 · the core 125.76×26 r9.
+  static const double pillL1Halo = 13;
+  static const double pillL1Mid = 11;
+  static const double pillL1Core = 9;
+
   /// Speed Test button radii — v5 owner CSS (Group 13): 74 r32 / 62 r27 /
   /// 44 r17 (the home button's three crisp layers; the blurred 96 glow
   /// is gone from HOME — the speed PAGE's own start button keeps it as
@@ -312,11 +318,13 @@ abstract final class AethRadius {
   /// (the v4.33 «Group 11» composition the page still renders).
   static const double speedStartGlow = 32;
 
-  /// v5 — the look-2 CONNECT button (owner CSS «Group 45»): the WHITE base
-  /// 160×160 r60 («3») + the gradient core 108.17² r41 («1») with the Off
-  /// glyph 48×48 in WHITE on top. The v4.33 glow/halo/mid alpha stack is
-  /// RETIRED — the redesign is two crisp squircles.
-  static const double connectBase = 60;
+  /// v5 — the look-2 CONNECT button (owner CSS «Group 45», re-cut round
+  /// 23): the THREE-layer composition — the outer squircle 160×160 r62
+  /// («3», state-tinted α .16) · the mid 132×132 r46 («4», state-tinted
+  /// α .45) · the gradient core 108.17² r41 («1») with the Off glyph
+  /// 48×48 in WHITE on top.
+  static const double connectBase = 62;
+  static const double connectMid = 46;
   static const double connectCore = 41;
 
   /// Dark cards — corner radius pixel-measured on the reference frames:
@@ -372,6 +380,7 @@ abstract final class AethGeometry {
   /// cols 324–593).
   static const double patternLeftArtTopRow = 372;
   static const double patternLeftArtRows = 639; // 372..1011
+  static const double patternRightArtTopRow = 656;
   static const double patternRightArtBottomRow = 1147; // art rows 656..1147
 
   /// v5 placement anchors (fractions of the LIVE screen height, from the
@@ -380,16 +389,27 @@ abstract final class AethGeometry {
   static const double patternLeftAnchor = 0.27;
   static const double patternRightAnchor = 0.485;
 
+  /// v6 (owner round 23: «در نمای 1 صفحه اصلی جایگاه پترن های چپ و راست
+  /// باید متفاوت از نمای 2 باشه … پترن سمت چپ یک سوم پایین تر از وسط
+  /// صفحه و پترن سمت راست باید یک سوم بالاتر از وسط صفحه») — LOOK 1's
+  /// own placement, both connection states: each art's INK CENTRE rides a
+  /// THIRD of the screen away from the middle — the LEFT art a third BELOW
+  /// (5/6 of the height), the RIGHT art a third ABOVE (1/6).
+  static const double patternLeftAnchorLookOne = 1 / 2 + 1 / 3;
+  static const double patternRightAnchorLookOne = 1 / 2 - 1 / 3;
+
   /// v4.12 — owner «کمی از بالا کل اپ رو فاصله بده تا اپ وارد فرورفتگی
   /// نمایش درصد شارژ و ... گوشی نشه»: extra top gap UNDER the SafeArea so
   /// the content never crowds the status bar / notch on any device.
   static const double topSafeExtraGap = 12;
 
-  /// v5 — the look-2 CONNECT button composition (the owner's new CSS
-  /// «Group 45», 160×160 at the hero position left:121 top:307): the WHITE
-  /// base 160² r60 («3») + the gradient core 108.17² r41 («1») + the Off
-  /// glyph 48×48 in WHITE. The whole group IS the button's layout box.
+  /// v5 — the look-2 CONNECT button composition (the owner's round-23 CSS
+  /// «Group 45», 160×160 at the hero position left:121 top:307): the outer
+  /// squircle 160² r62 («3») + the mid 132² r46 («4») + the gradient core
+  /// 108.17² r41 («1») + the Off glyph 48×48 in WHITE. The whole group IS
+  /// the button's layout box.
   static const double connectGroupSize = 160;
+  static const double connectMidSize = 132;
   static const double connectCoreSize = 108.17;
   static const double connectIconSize = 48;
 
@@ -404,6 +424,19 @@ abstract final class AethGeometry {
   static const double pillWidth = 126;
   static const double pillHeight = 30;
   static const double pillIconSize = 20;
+
+  /// v6 (owner round 23, the look-1 CSS «Group 119»/«Group 8») — the LOOK-1
+  /// status pill is the THREE-LAYER chip 140×38 at (131, 605): the halo
+  /// 140×38 r13 · the mid 132.88×32 r11 · the core 125.76×26 r9, with the
+  /// Shield glyph 20×20 and the 16px/600 label. Look 2 keeps the single
+  /// 126×30 gradient chip above.
+  static const double pillL1Width = 140;
+  static const double pillL1Height = 38;
+  static const double pillL1MidWidth = 132.88;
+  static const double pillL1MidHeight = 32;
+  static const double pillL1CoreWidth = 125.76;
+  static const double pillL1CoreHeight = 26;
+  static const double pillL1IconSize = 20;
 
   /// Top-bar icon tile (owner CSS Rectangle 9): 50×50; v5 («نمای 2»): the
   /// glyph ink measures ≈28–30 on the committed frames → glyph ≈32.
@@ -491,7 +524,7 @@ abstract final class AethGeometry {
   /// band's at 569) — [statGroupNudge]. The ROW itself spans x 32–348
   /// (the UP group ends 54px short of the right edge, clear of the right
   /// pattern's ink) — [statRowPadLeft]/[statRowPadRight].
-  static const double statGlyphSize = 30;
+  static const double statGlyphSize = 36;
   static const double statGlyphTextGap = 17;
   static const double statGroupNudge = 6;
   static const double statRowPadLeft = 32;
@@ -545,7 +578,11 @@ abstract final class AethGeometry {
   /// v5: the old location→flags gap is retired with the v4.13 band order
   /// — the new band owns [gapFlagsToRow] instead.)
   static const double gapTopbarToLocation = 21;
-  static const double gapSpeedToPill = 1;
+  /// v6 (owner round 23: «در نمای 1 دکمه تست سرعت به دکمه نمای وضعیت
+  /// اتصال چسبیده … باید کمی فاصله داشته باشن») — the v4.11 1px kiss is
+  /// retired; the speed button and the (now 38px-tall) look-1 pill breathe
+  /// 14 design px apart.
+  static const double gapSpeedToPill = 14;
   static const double gapPillToPanel = 63;
   static const double gapPanelToBottom = 30;
 

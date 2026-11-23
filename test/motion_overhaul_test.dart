@@ -118,7 +118,8 @@ void main() {
       }
 
       expect(store.state, VpnState.disconnected);
-      await at(VpnState.disconnected, 'قــطــع!');
+      // v6 — look 1's disconnected label is the new CSS's «غیرفعال».
+      await at(VpnState.disconnected, 'غیرفعال');
 
       await store.connect();
       await at(VpnState.starting, 'در حال شروع');
@@ -156,7 +157,7 @@ void main() {
       await at(VpnState.disconnecting, 'در حال قطع');
       await at(
         VpnState.disconnected,
-        'قــطــع!',
+        'غیرفعال', // v6 — look 1's own disconnected word
         emit: const EngineStateChanged(VpnState.disconnected),
       );
 
@@ -187,7 +188,11 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.byType(ConnectHalo), findsOneWidget);
-        expect(find.text('قــطــع!'), findsOneWidget);
+        // v6 — look 1's own «غیرفعال» / look 2's «قــطــع!».
+        expect(
+          find.text(look == HomeLook.one ? 'غیرفعال' : 'قــطــع!'),
+          findsOneWidget,
+        );
 
         // The central control of EITHER look routes through the one
         // toggle: tap → starting (tap-to-connect), tap → cancel.
@@ -281,13 +286,14 @@ void main() {
 
       await store.connect();
       await tester.pump(const Duration(milliseconds: 80));
-      // Mid-crossfade: the old and the new label co-exist briefly.
-      expect(find.text('قــطــع!'), findsOneWidget);
+      // Mid-crossfade: the old and the new label co-exist briefly
+      // (v6 — look 1's disconnected word is «غیرفعال» now).
+      expect(find.text('غیرفعال'), findsOneWidget);
       expect(find.text('در حال شروع'), findsOneWidget);
 
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('در حال شروع'), findsOneWidget);
-      expect(find.text('قــطــع!'), findsNothing);
+      expect(find.text('غیرفعال'), findsNothing);
     });
 
     testWidgets('stat values land softly, exactly one text per value',

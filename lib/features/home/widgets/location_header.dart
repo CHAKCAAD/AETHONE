@@ -527,7 +527,13 @@ class _LocationHeaderState extends State<LocationHeader> {
   /// and ping flank them on the row that is vertically centred on the map.
   Widget _buildCountryRow(BuildContext context, AppStrings strings, double s) {
     final connected = widget.connected;
-    final nameText = countryName(_selected) ?? '';
+    // v6 (owner round 23: «در زبان های مختلف لوکیشن اتصال همچنان به زبان
+    // فارسی نوشته میشه … نام لوکیشن های اتصال هم باید برای همه زبان های
+    // اپ ترجمه بشه») — the name reads the ACTIVE LOCALE's own table
+    // (fa/en/ru/zh/tk), falling back to English, then the upper-cased
+    // code — never the Persian spelling under a non-Persian tongue.
+    final languageCode = Localizations.maybeLocaleOf(context)?.languageCode;
+    final nameText = countryName(_selected, locale: languageCode) ?? '';
 
     // Ping slot: green «146 ms» when measured, «آفلاین» in the theme ink
     // when disconnected (owner CSS «حالت قطع»: #141C16, w400/15), empty
@@ -922,6 +928,18 @@ class _FlagsWheelState extends State<_FlagsWheel>
   /// Set after the one-shot post-layout rebuild (see the class doc).
   bool _primed = false;
 
+  /// v6 (owner round 23: «وقتی روی دکمه تغیر حالت دارک مود و لایت مود
+  /// کلیک میشه اسکیل پرچم های نمایش لوکیشن به هم میریزه و بعد از مدتی
+  /// خودش درست میشه») — the LAST page the controller reported while SAFE
+  /// (dimensions live, exactly one position). Any rebuild/reattach window
+  /// that leaves the controller unreadable now falls back to THIS memo
+  /// instead of the item's own index: the old fallback rendered EVERY
+  /// visible flag at distance 0 — full-size, full-opacity, the scrambled
+  /// wheel — until the next store notification happened to rebuild the
+  /// tree (the self-correcting lag the owner saw). The memo keeps the
+  /// REAL falloff on screen through any such window.
+  double? _lastSafePage;
+
   /// v4.15 #3 — owner CSS «Group 9» falloff, restated from the 402 frame:
   /// centre 52 @ 1.0 · ±1 42 @ 0.5 · ±2 35 @ 0.2 (flat beyond ±2 —
   /// everything past ±2 is off the 301-wide strip anyway).
@@ -1166,11 +1184,16 @@ class _FlagsWheelState extends State<_FlagsWheel>
                     : Listenable.merge(listen),
                 builder: (context, _) {
                   // Safe read: never touch controller.page during a
-                  // multi-position rebuild window.
+                  // multi-position rebuild window. v6 — an unsafe window
+                  // falls back to the LAST SAFE page memo (never the
+                  // item's own index — that rendered every flag
+                  // full-size), so the falloff survives any rebind.
                   final safe = controller.hasClients &&
                       controller.positions.length == 1 &&
                       controller.positions.first.haveDimensions;
-                  final pos = safe ? (controller.page ?? page.toDouble()) : page.toDouble();
+                  final live = safe ? controller.page : null;
+                  if (safe && live != null) _lastSafePage = live;
+                  final pos = live ?? _lastSafePage ?? page.toDouble();
                   final (size, opacity) = _lookFor((pos - page).abs());
                   var sz = size;
                   var dx = 0.0;

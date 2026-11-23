@@ -50,10 +50,17 @@ class RoutingSettingsPage extends StatelessWidget {
               SettingPills<String>(
                 keyId: 'routing-area',
                 options: [
-                  ('ir', countryName('ir')!),
-                  ('tm', countryName('tm')!),
-                  ('ru', countryName('ru')!),
-                  ('cn', countryName('cn')!),
+                  // v6 — the routing area's names read the ACTIVE LOCALE's
+                  // own table (owner round 23: the location names must
+                  // follow the app's language everywhere).
+                  ('ir',
+                      countryName('ir', locale: _lang(context))!),
+                  ('tm',
+                      countryName('tm', locale: _lang(context))!),
+                  ('ru',
+                      countryName('ru', locale: _lang(context))!),
+                  ('cn',
+                      countryName('cn', locale: _lang(context))!),
                   ('none', strings.routingNone),
                 ],
                 selected: current,
@@ -317,3 +324,9 @@ class _AppRow extends StatelessWidget {
     );
   }
 }
+
+/// The routing pills' country names read the ACTIVE LOCALE's own table —
+/// v6 (owner round 23): the location names follow the app's language
+/// everywhere, this page included.
+String? _lang(BuildContext context) =>
+    Localizations.maybeLocaleOf(context)?.languageCode;

@@ -199,11 +199,12 @@ class _ConnectHaloState extends State<ConnectHalo>
             _fire(motionDuration(widget.style, 400));
           }
         case VpnState.connected:
-          // Celebrate the transition, never the steady state.
-          if (previous == VpnState.connecting ||
-              previous == VpnState.reconnecting) {
-            _fire(Duration(milliseconds: r.celebrationMs));
-          }
+          // v6 (owner round 23) — the landing flourish is the GITHUB-SPARK
+          // burst ([GitHubSparkBurst], mounted beside this halo in the
+          // hero stack): sparks pour from behind the button in every
+          // direction, once. The halo's own ring celebration is RETIRED
+          // — one landing story, not two.
+          break;
         case VpnState.disconnecting:
           _fire(motionDuration(widget.style, 320));
         default:
@@ -314,11 +315,11 @@ class _ConnectHaloPainter extends CustomPainter {
       case VpnState.connected:
         // v8a — the steady AURORA BLOOM behind the button is RETIRED by
         // the owner's decree; v5.3 — nothing animated replaces it on the
-        // connected button. The ONE-SHOT landing celebration stays — it
-        // belongs to the walk vocabulary's finale, never to the steady
-        // state.
+        // connected button. v6 (owner round 23) — the ONE-SHOT ring
+        // celebration is RETIRED too: the landing flourish is the
+        // GITHUB-SPARK burst ([GitHubSparkBurst] beside this halo in the
+        // hero stack) — one landing story, not two.
         if (!hideConnectedAura) _aurora(canvas, size, c, col);
-        if (shot > 0 && shot < 1) _celebration(canvas, size, c, col);
 
       case VpnState.reconnecting:
         _seek(canvas, size, c, col);
@@ -447,28 +448,11 @@ class _ConnectHaloPainter extends CustomPainter {
     }
   }
 
-  /// The connecting→connected EDGE celebration: three quick rings race
-  /// outward (staggered starts) under a glow flash — once, then the calm
-  /// aurora carries the steady state.
-  void _celebration(Canvas canvas, Size size, Offset c, Color col) {
-    final t = shot;
-    final flash = Paint()
-      ..shader = ui.Gradient.radial(
-        c,
-        size.width * 0.5,
-        [col.withValues(alpha: 0.30 * (1 - t)), col.withValues(alpha: 0)],
-      );
-    canvas.drawCircle(c, size.width * 0.5, flash);
-    for (var i = 0; i < 3; i++) {
-      final lt = ((t - i * 0.15) / 0.85).clamp(0.0, 1.0);
-      if (lt <= 0) continue;
-      final e = Curves.easeOutCubic.transform(lt);
-      final ring = _stroke(
-        col.withValues(alpha: 0.5 * math.pow(1 - lt, 2).toDouble()),
-      );
-      canvas.drawCircle(c, size.width * (0.42 + 0.20 * e), ring);
-    }
-  }
+  // (The connecting→connected EDGE's ring celebration is RETIRED, owner
+  // round 23 — the landing flourish is the GITHUB-SPARK burst in
+  // core/fx/github_spark.dart, mounted beside this halo in the hero stack:
+  // «وقتی اتصال شکل گرفت باید از انیمیشن GitHub Spark استفاده بشه و از
+  // پشت دکمه اتصال وسط صفحه به سرعت اسپارک به جهات مختلف بریزه».)
 
   /// DISCONNECTING — the collapse: the ring contracts INTO the element and
   /// dissolves (t = the one-shot progress).

@@ -20,12 +20,21 @@
 ///   rgba(17,0,0,.19) / rgba(17,0,0,.45) / #363636 — the button stays on
 ///   screen in a dark, disabled pose (the old build hid it entirely).
 ///
-/// Connect button («Group 45») — two crisp squircles:
-///   «3» 160×160 r60 #FFFFFF (the base; themed dark-card at night)
+/// Connect button («Group 45», re-cut round 23) — three crisp squircles:
+///   «3» 160×160 r62, rgba(47,248,177,0.16) connected /
+///       rgba(234,35,35,0.16) disconnected
+///   «4» 132×132 r46, rgba(47,248,177,0.45) / rgba(234,35,35,0.45)
 ///   «1» 108.17² r41, gradient 180deg #2FF8B1→#1AD995 (connected) /
 ///       #FF5B5E→#FF383C (disconnected)
 ///   Off glyph 48×48, 3.5px WHITE in both states.
-///   The v4.33 236-glow/halo/mid alpha stack is RETIRED.
+///
+/// v6 (owner round 23) — the LOOK-1 status pill is its OWN composition
+/// (the new CSS «Group 119», 140×38 at left:131 top:605): the THREE-LAYER
+/// chip — 140×38 r13 rgba(26,217,149,.19) · 132.88×32 r11
+/// rgba(26,217,149,.45) · 125.76×26 r9 with the FLAT #1AD995 core when
+/// connected; the same geometry on the red family (rgba(234,35,35,α) +
+/// the 180° red gradient core) when not, the content ink on the palette's
+/// own pill members and the Shield stroke #800000 on red.
 library;
 
 import 'dart:ui' as ui;
@@ -162,19 +171,37 @@ class _LayerStackPainter extends CustomPainter {
   }
 }
 
-/// Status pill — v5: one 126×30 r9 gradient chip (green connected / red
-/// disconnected, crossfaded) with the WHITE Shield glyph + label. Content
-/// row keeps the INHERITED (RTL) directionality — under the fa locale it
-/// lays out like the reference frames: text visual-left, shield
-/// visual-right.
+/// Status pill — TWO compositions, one widget ([layered]):
 ///
-/// The CONNECTING icon stays the set's Send glyph (v4.15 #6), Shield Cross
-/// for disconnected/failed/reconnecting, Shield Tick when connected.
+///  * LOOK 2 (default, `layered: false`) — the v5 single gradient chip,
+///    126×30 r9, with the WHITE Shield glyph + label.
+///
+///  * LOOK 1 (`layered: true`, owner round 23) — the three-layer 140×38
+///    chip («Group 119»): halo 140×38 r13 α.19 · mid 132.88×32 r11 α.45 ·
+///    core 125.76×26 r9 (FLAT #1AD995 connected / the 180° red gradient
+///    disconnected), the content ink on the palette's own pill members
+///    (theme-aware: #141C16-ish on green, #75160F on red) and the Shield
+///    stroke #800000 on the red family. The label is the state's own word
+///    («مــتـصـل» / «غیرفعال» / «در حال اتصال» …).
+///
+/// Content row keeps the INHERITED (RTL) directionality — under the fa
+/// locale it lays out like the reference frames: text visual-left, shield
+/// visual-right. The CONNECTING icon stays the set's Send glyph (v4.15
+/// #6), Shield Cross for disconnected/failed/reconnecting, Shield Tick
+/// when connected.
 class StatusPill extends StatelessWidget {
-  const StatusPill({super.key, required this.state, required this.style});
+  const StatusPill({
+    super.key,
+    required this.state,
+    required this.style,
+    this.layered = false,
+  });
 
   final VpnState state;
   final MotionStyle style;
+
+  /// v6 — the LOOK-1 three-layer composition (see the class doc).
+  final bool layered;
 
   @override
   Widget build(BuildContext context) {
@@ -187,7 +214,9 @@ class StatusPill extends StatelessWidget {
     // previously-unlabelled middle states — starting / waiting / —
     // disconnecting — folded into «غیرفعال» before; the audit's dead-middle
     // finding). The glyph mapping is the ONE shared [connectGlyphFor] so
-    // the pill, the center button and the halo can never disagree.
+    // the pill, the center button and the halo can never disagree. v6:
+    // look 1's own «غیرفعال» label (the new CSS) replaces look 2's
+    // «قــطــع!» in the disconnected slot.
     final label = switch (state) {
       VpnState.connected => strings.statusConnected,
       VpnState.connecting => strings.statusConnecting,
@@ -196,9 +225,21 @@ class StatusPill extends StatelessWidget {
       VpnState.reconnecting => strings.statusReconnecting,
       VpnState.disconnecting => strings.statusDisconnecting,
       VpnState.failed => strings.statusFailed,
-      VpnState.disconnected => strings.statusDisconnected,
+      VpnState.disconnected =>
+        layered ? strings.statusIdle : strings.statusDisconnected,
     };
     final iconAsset = connectGlyphFor(state);
+
+    if (layered) {
+      return _LayeredStatusPill(
+        connected: connected,
+        label: label,
+        iconAsset: iconAsset,
+        duration: duration,
+        curve: style.curve,
+        s: s,
+      );
+    }
 
     return SizedBox(
       width: AethGeometry.pillWidth * s,
@@ -280,6 +321,186 @@ class StatusPill extends StatelessWidget {
       ),
     );
   }
+}
+
+/// v6 (owner round 23) — the LOOK-1 three-layer status chip («Group
+/// 119»): 140×38 r13 α.19 · 132.88×32 r11 α.45 · 125.76×26 r9 core, the
+/// accent family rgba(26,217,149,α) when connected and rgba(234,35,35,α)
+/// when not (the core FLAT #1AD995 on green, the 180° gradient on red).
+/// ONE crossfade tween drives every layer; the content ink rides the
+/// palette's own pill members (lerped through the 420 ms mode tween with
+/// every other surface) and the Shield stroke is the CSS's own #800000 on
+/// the red family.
+class _LayeredStatusPill extends StatelessWidget {
+  const _LayeredStatusPill({
+    required this.connected,
+    required this.label,
+    required this.iconAsset,
+    required this.duration,
+    required this.curve,
+    required this.s,
+  });
+
+  final bool connected;
+  final String label;
+  final String iconAsset;
+  final Duration duration;
+  final Curve curve;
+  final double s;
+
+  /// The CSS's own pair: rgba(26,217,149,α) on green, rgba(234,35,35,α)
+  /// on red — α .19 ≈ 0x30, α .45 ≈ 0x73.
+  static const Color _greenHalo = Color(0x301AD995);
+  static const Color _greenMid = Color(0x731AD995);
+  static const Color _redHalo = Color(0x30EA2323);
+  static const Color _redMid = Color(0x73EA2323);
+
+  /// The Shield stroke on the red family (the CSS's own value, both
+  /// modes — readable on the bright red core everywhere).
+  static const Color _redIconInk = Color(0xFF800000);
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: AethGeometry.pillL1Width * s,
+      height: AethGeometry.pillL1Height * s,
+      child: TweenAnimationBuilder<double>(
+        // 0 = the red family, 1 = the green one — one tween, every layer.
+        tween: Tween(end: connected ? 1.0 : 0.0),
+        duration: duration,
+        curve: curve,
+        builder: (context, t, _) => Stack(
+          alignment: Alignment.center,
+          children: [
+            // The three crisp layers, painted centre-out (the halo is the
+            // chip's own box; the layout size comes from the outer SizedBox).
+            CustomPaint(
+              size: Size(AethGeometry.pillL1Width * s, AethGeometry.pillL1Height * s),
+              painter: _PillLayersPainter(t: t, s: s),
+            ),
+            // The content — the palette's own pill ink on the core (the
+            // CSS pair «مــتـصـل #141C16» / «غیرفعال #75160F»), the Shield
+            // stroke #800000 on the red family.
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: AnimatedSwitcher(
+                duration: duration,
+                child: Row(
+                  key: ValueKey('pill-l1-$label'),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SvgPicture.asset(
+                      iconAsset,
+                      width: AethGeometry.pillL1IconSize * s,
+                      height: AethGeometry.pillL1IconSize * s,
+                      colorFilter: ColorFilter.mode(
+                        connected
+                            ? AethColors.onPillConnected
+                            : _redIconInk,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    SizedBox(width: 8 * s),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'IRANYekanX',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16 * s,
+                        height: 18 / 16,
+                        color: connected
+                            ? AethColors.onPillConnected
+                            : AethColors.onPillDisconnected,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The look-1 pill's three rounded-rect layers (one painter, one crossfade
+/// tween): the halo 140×38 r13 · the mid 132.88×32 r11 · the core 125.76×26
+/// r9 — the core FLAT #1AD995 when connected, the 180° red gradient when
+/// not (equal stops paint the flat solid, so one shader covers the tween).
+class _PillLayersPainter extends CustomPainter {
+  _PillLayersPainter({required this.t, required this.s});
+
+  /// 0 = the red family, 1 = the green one.
+  final double t;
+  final double s;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    void layer(
+      double w,
+      double h,
+      double r,
+      Color green,
+      Color red, {
+      List<Color>? greenStops,
+      List<Color>? redStops,
+    }) {
+      final rect = Rect.fromCenter(
+        center: c,
+        width: w * s,
+        height: h * s,
+      );
+      final paint = Paint();
+      if (greenStops != null && redStops != null) {
+        paint.shader = ui.Gradient.linear(
+          rect.topCenter,
+          rect.bottomCenter,
+          [
+            Color.lerp(redStops[0], greenStops[0], t)!,
+            Color.lerp(redStops[1], greenStops[1], t)!,
+          ],
+        );
+      } else {
+        paint.color = Color.lerp(red, green, t)!;
+      }
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, Radius.circular(r * s)),
+        paint,
+      );
+    }
+
+    // Bottom-first: the halo, the mid, then the core on top.
+    layer(
+      AethGeometry.pillL1Width,
+      AethGeometry.pillL1Height,
+      AethRadius.pillL1Halo,
+      _LayeredStatusPill._greenHalo,
+      _LayeredStatusPill._redHalo,
+    );
+    layer(
+      AethGeometry.pillL1MidWidth,
+      AethGeometry.pillL1MidHeight,
+      AethRadius.pillL1Mid,
+      _LayeredStatusPill._greenMid,
+      _LayeredStatusPill._redMid,
+    );
+    layer(
+      AethGeometry.pillL1CoreWidth,
+      AethGeometry.pillL1CoreHeight,
+      AethRadius.pillL1Core,
+      AethColors.accentConnected,
+      AethColors.statusDisconnected,
+      // The core: FLAT #1AD995 on green (the CSS's own solid), the 180°
+      // red gradient on red — equal stops paint the flat solid.
+      greenStops: [AethColors.accentConnected, AethColors.accentConnected],
+      redStops: AethColors.redStops,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PillLayersPainter old) => old.t != t || old.s != s;
 }
 
 /// Speed Test entry — v5 owner CSS «Group 13»: three crisp layers
@@ -410,12 +631,15 @@ class SpeedTestButton extends StatelessWidget {
   }
 }
 
-/// v5 — the look-2 CONNECT button (the owner's new «Group 45», round 19):
-/// the WHITE 160×160 r60 base + the 108.17² r41 gradient core + the Off
-/// glyph 48×48 in WHITE. The gradient runs top→bottom in both states
-/// (green #2FF8B1→#1AD995 connected, red #FF5B5E→#FF383C disconnected)
-/// and the whole composition crossfades on the state edge. [scale] renders
-/// the composition smaller (the look page's preview) without recomputing a
+/// v6 (owner round 23, the re-cut «Group 45») — the look-2 CONNECT button
+/// is the THREE-LAYER composition: the outer squircle 160² r62 («3»,
+/// rgba(47,248,177,.16) connected / rgba(234,35,35,.16) disconnected) ·
+/// the mid 132² r46 («4», α .45 on the same pair) · the gradient core
+/// 108.17² r41 («1», 180° green #2FF8B1→#1AD995 / red #FF5B5E→#FF383C) ·
+/// the Off glyph 48×48 in WHITE. The layers are the accent family's own
+/// constants (no theme dependence — the state owns them) and the whole
+/// composition crossfades on the state edge. [scale] renders the
+/// composition smaller (the look page's preview) without recomputing a
 /// single layer.
 ///
 /// v1.0.2 motion overhaul (the motion-line merge) — the press is a REAL
@@ -425,7 +649,7 @@ class SpeedTestButton extends StatelessWidget {
 /// the non-interactive previews (the onboarding look page), which keep
 /// rendering the connected pose exactly as before. While DISCONNECTING
 /// the tap is a deliberate no-op — one transition is already in flight,
-/// the collapse tells the story. The glyph stays the round-19 CSS's own
+/// the collapse tells the story. The glyph stays the CSS's own
 /// Off (power) glyph in WHITE for both states.
 class ConnectButtonGlow extends StatefulWidget {
   const ConnectButtonGlow({
@@ -463,6 +687,12 @@ class ConnectButtonGlow extends StatefulWidget {
 /// v4.43 — owns the [TapRippleController] so the flutterfx tap-ripple
 /// burst (owner-approved new dependency round) survives the rebuilds.
 class _ConnectButtonGlowState extends State<ConnectButtonGlow> {
+  /// The round-23 CSS's own state tints for the outer/mid layers:
+  /// rgba(47,248,177,α) connected / rgba(234,35,35,α) disconnected (the
+  /// α rides in [LayerSpec.opacity]).
+  static const Color _greenOuter = Color(0xFF2FF8B1);
+  static const Color _redOuter = Color(0xFFEA2323);
+
   final TapRippleController _ripple = TapRippleController();
 
   @override
@@ -507,79 +737,73 @@ class _ConnectButtonGlowState extends State<ConnectButtonGlow> {
               Duration(milliseconds: (duration.inMilliseconds * 1.5).round()),
           curve: curve,
           // Ring one is born on the core's own edge (108.17/2 design px,
-          // style-scaled) and dies just past the white base (x2.2).
+          // style-scaled) and dies just past the outer squircle (x2.2).
           baseRadius: AethGeometry.connectCoreSize * k / 2,
           maxScale: 2.2,
           child: Stack(
             alignment: Alignment.center,
             clipBehavior: Clip.none,
             children: [
-              // The BASE («3»: 160² r60) — v5.3: a STATE-tinted TRANSLUCENT
-              // layer (the owner's new CSS — the solid white squircle is
-              // retired): disconnected rgba(54,54,54,.10) light /
-              // rgba(66,66,66,.19) night; connected the vertical pair
-              // rgba(26,217,149,.10)→rgba(47,248,177,.10) light /
-              // rgba(26,217,149,.05) night. ONE two-stop shader covers
-              // every state and mode (equal stops = the flat solid), and
-              // the palette's own lerped members keep it in lockstep with
-              // the 420 ms mode tween.
+              // The three-layer composition («3»/«4»/«1», one crossfade
+              // tween): the outer 160² r62 and the mid 132² r46 ride the
+              // CSS's own state tints — rgba(47,248,177,α) connected /
+              // rgba(234,35,35,α) disconnected, α .16/.45 — and the core
+              // carries the 180° gradient pair. [LayerStack] paints the
+              // family centre-out (its layout size is the core; the outer
+              // SizedBox owns the group's own 160 box).
               TweenAnimationBuilder<double>(
                 tween: Tween(end: connected ? 1.0 : 0.0),
-              duration: duration,
-              curve: curve,
-              builder: (context, t, _) => DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color.lerp(
-                        AethColors.connectBaseIdle,
-                        AethColors.connectBaseLiveTop,
+                duration: duration,
+                curve: curve,
+                builder: (context, t, _) => LayerStack(
+                  scale: k,
+                  color: accent,
+                  layers: [
+                    LayerSpec(
+                      width: AethGeometry.connectGroupSize,
+                      height: AethGeometry.connectGroupSize,
+                      radius: AethRadius.connectBase,
+                      opacity: 0.16,
+                      color: Color.lerp(
+                        _redOuter,
+                        _greenOuter,
                         t,
                       )!,
-                      Color.lerp(
-                        AethColors.connectBaseIdle,
-                        AethColors.connectBaseLiveBottom,
+                    ),
+                    LayerSpec(
+                      width: AethGeometry.connectMidSize,
+                      height: AethGeometry.connectMidSize,
+                      radius: AethRadius.connectMid,
+                      opacity: 0.45,
+                      color: Color.lerp(
+                        _redOuter,
+                        _greenOuter,
                         t,
                       )!,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(
-                    AethRadius.connectBase * k,
-                  ),
-                ),
-                child: Center(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      // The gradient core («1»: 108.17² r41, 180deg).
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Color.lerp(
-                            AethColors.pillRedFrom,
-                            AethColors.pillGreenFrom,
-                            t,
-                          )!,
-                          Color.lerp(
-                            AethColors.pillRedTo,
-                            AethColors.accentConnected,
-                            t,
-                          )!,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(
-                        AethRadius.connectCore * k,
-                      ),
                     ),
-                    child: SizedBox.square(
-                      dimension: AethGeometry.connectCoreSize * k,
+                    LayerSpec(
+                      width: AethGeometry.connectCoreSize,
+                      height: AethGeometry.connectCoreSize,
+                      radius: AethRadius.connectCore,
+                      opacity: 1,
+                      // The 180° gradient core («1»): green connected /
+                      // red disconnected, crossfaded stop by stop.
+                      gradient: [
+                        Color.lerp(
+                          AethColors.redStops[0],
+                          AethColors.greenStops[0],
+                          t,
+                        )!,
+                        Color.lerp(
+                          AethColors.redStops[1],
+                          AethColors.greenStops[1],
+                          t,
+                        )!,
+                      ],
                     ),
-                  ),
+                  ],
                 ),
               ),
-            ),
             // The Off glyph — 48×48, WHITE in both states (owner CSS
             // «border: 3.5px solid #FFFFFF»).
             SvgPicture.asset(

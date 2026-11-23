@@ -22,6 +22,11 @@ class AppStrings {
 
   String get offline => _v['offline']!;
   String get statusDisconnected => _v['statusDisconnected']!;
+
+  /// v6 (owner round 23) — LOOK 1's own disconnected label (the new CSS
+  /// spells «غیرفعال» on the three-layer 140×38 chip; look 2 keeps the
+  /// «قــطــع!» of its own frame).
+  String get statusIdle => _v['statusIdle']!;
   String get statusConnected => _v['statusConnected']!;
   String get statusConnecting => _v['statusConnecting']!;
   String get statusReconnecting => _v['statusReconnecting']!;
@@ -508,6 +513,7 @@ class AppStrings {
       // v5 («نمای 2»): the owner's own pill labels — tatweel-stretched
       // exactly as the committed CSS spells them («قــطــع!»).
       'statusDisconnected': 'قــطــع!',
+      'statusIdle': 'غیرفعال',
       'statusConnected': 'مــتـصـل',
       'statusConnecting': 'در حال اتصال',
       'statusReconnecting': 'اتصال مجدد',
@@ -822,6 +828,7 @@ class AppStrings {
     'en': {
       'offline': 'Offline',
       'statusDisconnected': 'Offline!',
+      'statusIdle': 'Inactive',
       'statusConnected': 'Connected',
       'statusConnecting': 'Connecting',
       'statusReconnecting': 'Reconnecting',
@@ -1128,6 +1135,7 @@ class AppStrings {
     'ru': {
       'offline': 'Офлайн',
       'statusDisconnected': 'Оффлайн!',
+      'statusIdle': 'Неактивно',
       'statusConnected': 'Подключено',
       'statusConnecting': 'Подключение',
       'statusReconnecting': 'Переподключение',
@@ -1430,6 +1438,7 @@ class AppStrings {
     'zh': {
       'offline': '离线',
       'statusDisconnected': '未连接!',
+      'statusIdle': '未连接',
       'statusConnected': '已连接',
       'statusConnecting': '连接中',
       'statusReconnecting': '重新连接',
@@ -1738,6 +1747,7 @@ class AppStrings {
     'tk': {
       'offline': 'Oflaýn',
       'statusDisconnected': 'Offline!',
+      'statusIdle': 'Işlemeýär',
       'statusConnected': 'Berkidildi',
       'statusConnecting': 'Birikdirilýär',
       'statusReconnecting': 'Täzeden birikdirilýär',
