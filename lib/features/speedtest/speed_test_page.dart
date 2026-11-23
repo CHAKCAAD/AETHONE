@@ -999,33 +999,48 @@ class _StartButton extends StatelessWidget {
                     ],
                   ),
                 ),
-                // The core (44 r17) — #080C09 at rest, #1AD995 running.
-                AnimatedContainer(
+                // The core (44 r17) — #080C09 at rest, the redesign's own
+                // GREEN gradient sweep while running (v5.2, owner round
+                // 21: «گردینت سبز و قرمز … برای المان های سبز و قرمز رنگ
+                // دیگه هم اعمال کن» — the speed-page core matches the
+                // home button's). ONE tween crossfades the two poses
+                // (equal stops = the flat rest solid), so a single shader
+                // covers the whole state edge.
+                TweenAnimationBuilder<double>(
+                  tween: Tween(end: running ? 1.0 : 0.0),
                   duration: duration,
                   curve: Curves.easeOut,
-                  width: AethGeometry.speedCoreSize * s,
-                  height: AethGeometry.speedCoreSize * s,
-                  decoration: BoxDecoration(
-                    color: running
-                        ? AethColors.accentConnected
-                        : AethColors.speedCoreRest,
-                    borderRadius:
-                        BorderRadius.circular(AethRadius.speedCore * s),
-                  ),
-                  child: Center(
-                    child: SvgPicture.asset(
-                      AppAssets.iconActivity4,
-                      width: AethGeometry.speedButtonIcon * s,
-                      height: AethGeometry.speedButtonIcon * s,
-                      fit: BoxFit.contain,
-                      colorFilter: ColorFilter.mode(
-                        // v4.35 (owner round 11, item 9): the REST glyph is
-                        // WHITE in BOTH modes (the owner's light CSS); the
-                        // running glyph stays the dark on-core green.
-                        running
-                            ? AethColors.onCoreDark
-                            : AethColors.speedIconRest,
-                        BlendMode.srcIn,
+                  builder: (context, t, _) => Container(
+                    width: AethGeometry.speedCoreSize * s,
+                    height: AethGeometry.speedCoreSize * s,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: AethColors.lerpGradientStops(
+                          AethColors.greenStops,
+                          AethColors.speedCoreRest,
+                          t,
+                        ),
+                      ),
+                      borderRadius:
+                          BorderRadius.circular(AethRadius.speedCore * s),
+                    ),
+                    child: Center(
+                      child: SvgPicture.asset(
+                        AppAssets.iconActivity4,
+                        width: AethGeometry.speedButtonIcon * s,
+                        height: AethGeometry.speedButtonIcon * s,
+                        fit: BoxFit.contain,
+                        colorFilter: ColorFilter.mode(
+                          // v4.35 (owner round 11, item 9): the REST glyph is
+                          // WHITE in BOTH modes (the owner's light CSS); the
+                          // running glyph stays the dark on-core green.
+                          running
+                              ? AethColors.onCoreDark
+                              : AethColors.speedIconRest,
+                          BlendMode.srcIn,
+                        ),
                       ),
                     ),
                   ),

@@ -35,7 +35,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/app_assets.dart';
-import '../../../core/app_theme.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 
@@ -209,30 +208,29 @@ class _PatternSidesState extends State<PatternSides>
 /// recolors to WHITE on the night theme (owner: «پترن های کناری در حالت
 /// قطع اتصال دارک مود رنگشون باید سفید باشه»). The art is a pure
 /// #110000 line drawing, so `srcIn` with the art's own ink is
-/// byte-identical on the light theme and flips to white on night; the
-/// 420 ms tween rides the palette's own cross-fade clock. ONE constant
-/// tree — the wrapper never changes shape, so the AnimatedSwitcher's
-/// crossfade element survives (the v4.15.1 lesson).
+/// byte-identical on the light theme and flips to white on night.
+///
+/// v5.2 (the round-21 theme-transition fix) — the ink is the PALETTE'S
+/// OWN lerped member ([AethColors.patternInk]): the shell's 420 ms mode
+/// tween recolors it IN LOCKSTEP with every other surface. The first
+/// cut read the binary `AethThemeSync.light` slot through a second
+/// `Tween<Color>` — which cannot lerp (Color implements no `+`/`-`/`*`),
+/// so EVERY mid-transition rebuild threw and the whole mode switch
+/// glitched (owner: «انیمیشن تغیر از حالت دارک مود به لایت مود و بلعکس
+/// مشکل داره»). One constant tree — the wrapper never changes shape, so
+/// the AnimatedSwitcher's crossfade element survives (the v4.15.1
+/// lesson).
 class _NightInk extends StatelessWidget {
   const _NightInk({required this.child});
 
   final Widget child;
 
-  /// The artwork's own stroke ink (measured on the committed PNG:
-  /// rgb(17,0,0)) and its night-mode white.
-  static const Color _dayInk = Color(0xFF110000);
-  static const Color _nightInk = Color(0xFFFFFFFF);
-
   @override
   Widget build(BuildContext context) {
-    final white = !AethThemeSync.light;
-    return TweenAnimationBuilder<Color>(
-      tween: Tween<Color>(end: white ? _nightInk : _dayInk),
-      duration: const Duration(milliseconds: 420),
-      curve: Curves.easeInOutCubic,
-      builder: (context, ink, kid) => ColorFiltered(
-        colorFilter: ColorFilter.mode(ink, BlendMode.srcIn),
-        child: kid,
+    return ColorFiltered(
+      colorFilter: ColorFilter.mode(
+        AethColors.patternInk,
+        BlendMode.srcIn,
       ),
       child: child,
     );

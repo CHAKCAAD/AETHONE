@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:aethone/core/app_theme.dart';
 import 'package:aethone/core/design_tokens.dart';
 import 'package:aethone/core/motion.dart';
 import 'package:aethone/connection/transport_modes.dart';
@@ -79,6 +80,44 @@ void main() {
       expect(AethRadius.speedCore, 17);
       expect(AethRadius.speedStartGlow, 32);
       expect(AethRadius.protocolCard, 17);
+    });
+
+    test('v5.2 — the green/red gradient pair rides every green/red element', () {
+      // Owner round 21: «گردینت سبز و قرمزی که توی تغیرات جدید داریم رو
+      // برای المان های سبز و قرمز رنگ دیگه هم اعمال کن» — the shared
+      // stops ARE the redesign's own CSS values.
+      expect(AethColors.greenStops, const [
+        Color(0xFF2FF8B1),
+        Color(0xFF1AD995),
+      ]);
+      expect(AethColors.redStops, const [
+        Color(0xFFFF5B5E),
+        Color(0xFFFF383C),
+      ]);
+      // The crossfade helper: t = 0 paints the flat solid (equal stops),
+      // t = 1 the full gradient.
+      const rest = AethColors.speedIdleCore;
+      expect(
+        AethColors.lerpGradientStops(AethColors.greenStops, rest, 0),
+        [rest, rest],
+      );
+      expect(
+        AethColors.lerpGradientStops(AethColors.greenStops, rest, 1),
+        AethColors.greenStops,
+      );
+      // The pattern ink is the palette's own lerped member (the round-21
+      // theme-transition fix): the committed art's #110000 by day, WHITE
+      // at night.
+      expect(AethPal.light.patternInk, const Color(0xFF110000));
+      expect(AethPal.night.patternInk, const Color(0xFFFFFFFF));
+      expect(
+        AethPal.lerp(AethPal.light, AethPal.night, 0.5).patternInk,
+        Color.lerp(
+          AethPal.light.patternInk,
+          AethPal.night.patternInk,
+          0.5,
+        ),
+      );
     });
 
     test('v5 «نمای 2» — the look-2 vertical rhythm and the panel crown', () {

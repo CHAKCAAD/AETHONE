@@ -536,22 +536,41 @@ class _LocationHeaderState extends State<LocationHeader> {
         ? (widget.pingMs != null ? strings.pingMs(widget.pingMs!) : '')
         : strings.offline;
 
-    Widget slot({required Alignment alignment, required EdgeInsets pad, required String text, required TextStyle style, TextDirection? dir}) {
+    Widget slot({required Alignment alignment, required EdgeInsets pad, required String text, required TextStyle style, TextDirection? dir, bool gradientInk = false}) {
       // v8a (owner round 18: «روی متن قسمت نام کشور و قسمت نمایش پینگ هم
       // Hyper Text رو اعمال کن») — the flutterfx fx_10_hyper_text decode,
       // native. The RESTING render is byte-identical to the old Text
       // (style/ellipsis/direction preserved); only CHANGES animate.
+      //
+      // v5.2 (owner round 21) — [gradientInk] paints the resting accent
+      // through the redesign's own GREEN gradient sweep («گردینت سبز و
+      // قرمز … برای المان های سبز و قرمز رنگ دیگه هم اعمال کن»): a
+      // ShaderMask in srcIn mode over the decoded glyphs, exactly the
+      // trick the look-1 logo tint carries. The style's own color still
+      // sets the OFF/flat pose.
+      Widget content = HyperText(
+        text,
+        style: widget.style,
+        textStyle: style,
+        textDirection: dir,
+      );
+      if (gradientInk) {
+        content = ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (bounds) => const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: AethColors.greenStops,
+          ).createShader(bounds),
+          child: content,
+        );
+      }
       return Expanded(
         child: Align(
           alignment: alignment,
           child: Padding(
             padding: pad,
-            child: HyperText(
-              text,
-              style: widget.style,
-              textStyle: style,
-              textDirection: dir,
-            ),
+            child: content,
           ),
         ),
       );
@@ -566,11 +585,13 @@ class _LocationHeaderState extends State<LocationHeader> {
       fontSize: 15 * s,
       color: AethColors.textPrimary,
     );
+    // v5.2: the measured ping renders through the GREEN gradient sweep.
+    final pingMeasured = connected && widget.pingMs != null;
     final pingStyle = TextStyle(
       fontFamily: 'IRANYekanX',
       fontWeight: FontWeight.w400,
       fontSize: 15 * s,
-      color: connected && widget.pingMs != null
+      color: pingMeasured
           ? AethColors.accentConnected
           : AethColors.textPrimary,
     );
@@ -648,6 +669,7 @@ class _LocationHeaderState extends State<LocationHeader> {
                       text: pingText,
                       style: pingStyle,
                       dir: TextDirection.ltr,
+                      gradientInk: pingMeasured,
                     ),
                   ],
                 ),

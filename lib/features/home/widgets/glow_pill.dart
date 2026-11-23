@@ -28,6 +28,8 @@
 ///   The v4.33 236-glow/halo/mid alpha stack is RETIRED.
 library;
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -50,6 +52,7 @@ class LayerSpec {
     this.blurSigma = 0,
     this.dy = 0,
     this.color,
+    this.gradient,
   });
 
   /// Size in design px (scaled by [LayerStack.scale] at paint time).
@@ -69,6 +72,12 @@ class LayerSpec {
   /// #363636 core over its rgba(17,0,0,α) halo/mid needs a second ink).
   /// Null = the stack's own [LayerStack.color].
   final Color? color;
+
+  /// v5.2 (owner round 21) — an optional per-layer VERTICAL gradient; when
+  /// set it replaces the flat color (the green/red gradient family the
+  /// redesign carries on every green/red element). Equal stops paint the
+  /// flat solid, so a crossfade tween can drive ONE shader end to end.
+  final List<Color>? gradient;
 }
 
 /// Paints a stack of concentric rounded-rect layers, bottom-first.
@@ -107,6 +116,12 @@ class _LayerStackPainter extends CustomPainter {
   final LayerStack widget;
 
   @override
+  bool shouldRepaint(_LayerStackPainter oldDelegate) =>
+      oldDelegate.widget.color != widget.color ||
+      oldDelegate.widget.scale != widget.scale ||
+      oldDelegate.widget.layers != widget.layers;
+
+  @override
   void paint(Canvas canvas, Size size) {
     final s = widget.scale;
     final center = Offset(size.width / 2, size.height / 2);
@@ -116,8 +131,23 @@ class _LayerStackPainter extends CustomPainter {
         width: spec.width * s,
         height: spec.height * s,
       );
-      final paint = Paint()
-        ..color = (spec.color ?? widget.color).withValues(alpha: spec.opacity);
+      final paint = Paint();
+      final gradient = spec.gradient;
+      if (gradient != null && gradient.length >= 2) {
+        // v5.2 — the vertical gradient sweep (the redesign's green/red
+        /// family); equal stops paint the flat solid.
+        paint.shader = ui.Gradient.linear(
+          rect.topCenter,
+          rect.bottomCenter,
+          [
+            gradient[0].withValues(alpha: spec.opacity),
+            gradient[1].withValues(alpha: spec.opacity),
+          ],
+        );
+      } else {
+        paint.color =
+            (spec.color ?? widget.color).withValues(alpha: spec.opacity);
+      }
       if (spec.blurSigma > 0) {
         paint.maskFilter = MaskFilter.blur(
           BlurStyle.normal,
@@ -130,12 +160,6 @@ class _LayerStackPainter extends CustomPainter {
       );
     }
   }
-
-  @override
-  bool shouldRepaint(_LayerStackPainter oldDelegate) =>
-      oldDelegate.widget.color != widget.color ||
-      oldDelegate.widget.scale != widget.scale ||
-      oldDelegate.widget.layers != widget.layers;
 }
 
 /// Status pill — v5: one 126×30 r9 gradient chip (green connected / red
@@ -346,9 +370,15 @@ class SpeedTestButton extends StatelessWidget {
                           height: AethGeometry.speedCoreSize,
                           radius: AethRadius.speedCore,
                           opacity: 1,
-                          color: Color.lerp(
+                          // v5.2 (owner round 21) — the CONNECTED core
+                          /// carries the redesign's own GREEN gradient
+                          /// («گردینت سبز … برای المان های سبز و قرمز رنگ
+                          /// دیگه هم اعمال کن»); the idle pose keeps its
+                          /// #363636, and ONE shader crossfades between
+                          /// them (equal stops = the flat solid).
+                          gradient: AethColors.lerpGradientStops(
+                            AethColors.greenStops,
                             AethColors.speedIdleCore,
-                            AethColors.accentConnected,
                             t,
                           ),
                         ),

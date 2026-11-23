@@ -52,6 +52,14 @@ abstract final class ThemeReveal {
 
 /// Mounts once in the shell: the app under a capture boundary, the reveal
 /// overlay above it. `styleOf` re-reads the live motion style per request.
+///
+/// v5.2 (the round-21 theme-transition fix) — the host is a
+/// [TickerProviderStateMixin], not a SingleTickerProviderStateMixin: it
+/// vends ONE FRESH [AnimationController] per reveal, so over the State's
+/// lifetime MANY tickers come and go. The Single- variant threw «multiple
+/// tickers were created» on every toggle AFTER the first — the theme
+/// still flipped (apply had already run) but the reveal died mid-flight
+/// with an error flash, glitching the whole mode switch.
 class ThemeRevealHost extends StatefulWidget {
   const ThemeRevealHost({
     super.key,
@@ -67,7 +75,7 @@ class ThemeRevealHost extends StatefulWidget {
 }
 
 class _ThemeRevealHostState extends State<ThemeRevealHost>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final GlobalKey _boundaryKey = GlobalKey();
 
   AnimationController? _wipe;
@@ -95,7 +103,15 @@ class _ThemeRevealHostState extends State<ThemeRevealHost>
     required Offset origin,
     required VoidCallback apply,
   }) async {
-    if (_capturing) return; // a capture in flight — run the plain flip
+    // v5.2 (the round-21 fix) — a capture already in flight must NEVER
+    // swallow the flip: the theme still changes (plainly, under whatever
+    // the running wipe is showing); only the SECOND reveal is dropped.
+    // The first cut simply returned, and a quick double-tap lost the
+    // second toggle entirely.
+    if (_capturing) {
+      apply();
+      return;
+    }
     final style = widget.styleOf();
     // The kill-switch and the BLINK-fast end of the scale keep the plain
     // cross-fade: the reveal is decoration, OFF means NO decoration.
@@ -134,7 +150,12 @@ class _ThemeRevealHostState extends State<ThemeRevealHost>
     apply();
     if (before == null) return;
 
-    // 4) Play the wipe over the fresh capture.
+    // 4) Play the wipe over the fresh capture. v5.2 — the wipe rides the
+    //    SAME 420 ms window as the palette lerp underneath (the first
+    //    cut ran 650 ms: the colors finished at 420 while a patch of the
+    //    OLD frame still covered the screen for another quarter second —
+    //    the reveal read as lagging, «مشکل داره»). The circle completes
+    //    exactly as the palette settles.
     setState(() {
       _before = before;
       _origin = origin;
@@ -143,7 +164,7 @@ class _ThemeRevealHostState extends State<ThemeRevealHost>
     });
     _wipe = AnimationController(
       vsync: this,
-      duration: motionDuration(style, 650),
+      duration: motionDuration(style, 420),
     )
       ..addListener(() {
         if (mounted) setState(() {});

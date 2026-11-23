@@ -60,6 +60,7 @@ class AethPal {
     required this.topTile,
     required this.connectBase,
     required this.flagRing,
+    required this.patternInk,
     required this.textPrimary,
     required this.textSecondary,
     required this.onPillConnected,
@@ -108,6 +109,15 @@ class AethPal {
   /// night `#1A261C` (the sheet-subtile relation — just visible on the
   /// night panel).
   final Color flagRing;
+
+  /// v5.2 — the DISCONNECTED pattern artwork's ink: the committed PNG's
+  /// own `#110000` by day, WHITE at night (owner round 20: «پترن های کناری
+  /// در حالت قطع اتصال دارک مود رنگشون باید سفید باشه»). A LERPED palette
+  /// member by design: the ink rides the shell's own 420 ms mode tween
+  /// (the round-21 fix — the first cut read the binary `AethThemeSync.light`
+  /// slot through a second `Tween<Color>`, which cannot lerp and threw on
+  /// every mid-transition rebuild, glitching the whole mode switch).
+  final Color patternInk;
 
   /// Primary text / icon ink — night `#FFFFFF` / light `#141C16` (owner:
   /// «متن ها و آیکون های روی کارت … باید به رنگ 141C16 در لایت مود»).
@@ -210,6 +220,7 @@ class AethPal {
     topTile: Color(0xFF0F1510),
     connectBase: Color(0xFF0F1511),
     flagRing: Color(0xFF1A261C),
+    patternInk: Color(0xFFFFFFFF),
     textPrimary: Color(0xFFFFFFFF),
     textSecondary: Color(0xFF8E8E93),
     onPillConnected: Color(0xFF123E2B),
@@ -246,6 +257,7 @@ class AethPal {
     topTile: Color(0xFFF4F4F4),
     connectBase: Color(0xFFFFFFFF),
     flagRing: Color(0xFFF4F4F4),
+    patternInk: Color(0xFF110000),
     textPrimary: Color(0xFF141C16),
     textSecondary: Color(0xFFA3A3A3),
     onPillConnected: Color(0xFF141C16),
@@ -281,6 +293,7 @@ class AethPal {
         topTile: Color.lerp(a.topTile, b.topTile, t)!,
         connectBase: Color.lerp(a.connectBase, b.connectBase, t)!,
         flagRing: Color.lerp(a.flagRing, b.flagRing, t)!,
+        patternInk: Color.lerp(a.patternInk, b.patternInk, t)!,
         textPrimary: Color.lerp(a.textPrimary, b.textPrimary, t)!,
         textSecondary: Color.lerp(a.textSecondary, b.textSecondary, t)!,
         onPillConnected: Color.lerp(a.onPillConnected, b.onPillConnected, t)!,

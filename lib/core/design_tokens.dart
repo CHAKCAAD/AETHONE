@@ -53,6 +53,24 @@ abstract final class AethColors {
   static const Color pillRedFrom = Color(0xFFFF5B5E);
   static const Color pillRedTo = Color(0xFFFF383C);
 
+  /// v5.2 (owner round 21: «گردینت سبز و قرمزی که توی تغیرات جدید داریم
+  /// رو برای المان های سبز و قرمز رنگ دیگه هم اعمال کن») — the new
+  /// changes' own gradient pair, carried to EVERY other green/red element
+  /// in the app: the home + speed-page Speed Test cores, the look-1 FAB,
+  /// the look-1 hero logo tint, the ping readout and the failure caption.
+  /// Vertical 180° stops (equal stops = the flat solid at either end of a
+  /// crossfade — see [lerpGradientStops]).
+  static const List<Color> greenStops = [pillGreenFrom, accentConnected];
+  static const List<Color> redStops = [pillRedFrom, pillRedTo];
+
+  /// Crossfades a gradient's stops toward a flat [solid] (t = 0 → the
+  /// solid, 1 → the full gradient): a two-stop LinearGradient with EQUAL
+  /// colors paints the flat solid, so ONE shader covers the whole tween —
+  /// the same trick the pill's own gradient crossfade uses.
+  static List<Color> lerpGradientStops(
+          List<Color> stops, Color solid, double t) =>
+      [Color.lerp(solid, stops[0], t)!, Color.lerp(solid, stops[1], t)!];
+
   /// The look-2 connect button's WHITE base («3»: 160×160, r60,
   /// `background: #FFFFFF`) — theme-dependent: light `#FFFFFF`, night the
   /// dark-card family `#0F1511` (the new design ships light frames only;
@@ -63,6 +81,13 @@ abstract final class AethColors {
   /// on the white panel, night `#1A261C` (the sheet-subtile relation — a
   /// just-visible ring on the night panel).
   static Color get flagRing => AethThemeSync.palette.flagRing;
+
+  /// v5.2 — the DISCONNECTED pattern artwork's ink (the round-21
+  /// theme-transition fix): the art's own `#110000` by day, WHITE at
+  /// night, LERPED by the shell's own 420 ms mode tween so the patterns
+  /// recolor in lockstep with every other surface (never a binary snap,
+  /// never a second, offset tween).
+  static Color get patternInk => AethThemeSync.palette.patternInk;
 
   /// The speed-test button's DISCONNECTED core («1»: 44×44 r17,
   /// `background: #363636`) — const: the CSS names one value for the dark

@@ -32,6 +32,7 @@ import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 import '../../../core/motion_widgets.dart';
+import '../../shared/hyper_text.dart';
 import '../../shared/protocol_glyph.dart';
 import 'glow_pill.dart';
 
@@ -198,6 +199,7 @@ class HomeStatsRow extends StatelessWidget {
                     label: 'DOWN:',
                     valueText: BottomPanel.formatBytesAdaptive(downBytes),
                     pack: MainAxisAlignment.start,
+                    style: style,
                   ),
                 ),
               ),
@@ -218,6 +220,7 @@ class HomeStatsRow extends StatelessWidget {
                     label: 'UP:',
                     valueText: BottomPanel.formatBytesAdaptive(upBytes),
                     pack: MainAxisAlignment.end,
+                    style: style,
                   ),
                 ),
               ),
@@ -241,17 +244,28 @@ class HomeStatsRow extends StatelessWidget {
 /// «DOWN:»/value text block (LTR-locked, never bidi-flipped). The Row
 /// FILLS its slot and packs to [pack]'s edge, so the group keeps its
 /// page-margin edge whatever the value text's natural width.
+///
+/// v5.2 (owner round 21: «انیمشنی که برای بخش نمایش پینگ در نظر گرفته
+/// شده رو روی بخش نمایش دانلود و آپلود هم اعمال کن») — the VALUE rides
+/// the same [HyperText] decode the ping readout carries: every stats
+/// tick («--» → «314KB» → «31.1MB») resolves character by character, the
+/// resting render byte-identical to the plain Text it replaces.
 class _StatGroup extends StatelessWidget {
   const _StatGroup({
     required this.iconAsset,
     required this.label,
     required this.valueText,
     required this.pack,
+    required this.style,
   });
 
   final String iconAsset;
   final String label;
   final String valueText;
+
+  /// The ambient motion style — the HyperText decode tempo (and its OFF
+  /// clamp), exactly like the ping readout.
+  final MotionStyle style;
 
   /// `start` = DOWN (hugs the LEFT page margin), `end` = UP (hugs the
   /// RIGHT one) — exactly the mockup's flanks.
@@ -300,10 +314,13 @@ class _StatGroup extends StatelessWidget {
                       color: AethColors.textSecondary,
                     ),
                   ),
-                  Text(
+                  // v5.2 — the VALUE rides the HyperText decode (the
+                  // ping readout's own animation, owner round 21).
+                  HyperText(
                     valueText,
+                    style: style,
                     textDirection: TextDirection.ltr,
-                    style: TextStyle(
+                    textStyle: TextStyle(
                       fontFamily: 'IRANYekanX',
                       fontWeight: FontWeight.w700,
                       fontSize: 14 * s,
@@ -546,9 +563,11 @@ class StatCard extends StatelessWidget {
                         color: AethColors.textSecondary,
                       ),
                     ),
-                    // v1.0.2 — the value swap crossfades (asymmetric fade +
-                    // micro-rise), never pops. LTR-locked like the label.
-                    AnimatedValueText(
+                    // v5.2 (owner round 21) — the value rides the SAME
+                    // [HyperText] decode the ping readout and the look-2
+                    // stats row carry (the v1.0.2 crossfade swap is
+                    // retired). LTR-locked like the label.
+                    HyperText(
                       valueText,
                       style: style,
                       textDirection: TextDirection.ltr,
@@ -615,9 +634,16 @@ class FabColumn extends StatelessWidget {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final duration = motionDuration(style, MotionDurations.state);
     final size = AethGeometry.connectButtonSize * s;
-    final color = connected
-        ? AethColors.accentConnected
-        : AethColors.statusDisconnected;
+    // v5.2 (owner round 21) — the FAB carries the redesign's own
+    // gradient pair (green connected / red disconnected), crossfaded by
+    // the AnimatedContainer's own decoration lerp («گردینت سبز و قرمز …
+    // برای المان های سبز و قرمز رنگ دیگه هم اعمال کن»). The old flat
+    // accentConnected/statusDisconnected fills are retired.
+    final gradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: connected ? AethColors.greenStops : AethColors.redStops,
+    );
     final effective =
         state ?? (connected ? VpnState.connected : VpnState.disconnected);
     final locked = effective == VpnState.disconnecting;
@@ -679,7 +705,7 @@ class FabColumn extends StatelessWidget {
                         width: size,
                         height: size,
                         decoration: BoxDecoration(
-                          color: color,
+                          gradient: gradient,
                           borderRadius: BorderRadius.circular(
                             AethRadius.fab * s,
                           ),

@@ -303,12 +303,21 @@ void main() {
       // The stats tick lands a NEW value: one soft incoming text per
       // surface that reads it — the look-1 DOWN card AND the round-12
       // home widget deck's session-data total (down+up = 145 MB + 0).
+      // v5.2 (owner round 21) — the DOWN card now decodes the value
+      // character by character ([HyperText], the ping readout's own
+      // walk), so MID-decode only the deck's plain text has landed;
+      // after the settle both surfaces read exactly one '145 MB'.
       engine.emit(const EngineStatsUpdated(downBytes: 145 * 1024 * 1024));
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('145 MB'), findsNWidgets(2));
-      await tester.pumpAndSettle();
+      expect(find.text('145 MB'), findsOneWidget); // the deck's plain text
+      // The decode rides a raw 16 ms Timer.periodic — pumpAndSettle
+      // cannot advance it (a timer is not a frame) — so the style's own
+      // window is pumped explicitly: 480 ms of decode + a tick for the
+      // resolved-target commit.
+      await tester.pump(const Duration(milliseconds: 600));
       expect(find.text('145 MB'), findsNWidgets(2));
       expect(find.text('0 MB'), findsNWidgets(1)); // the UP card
+      await tester.pumpAndSettle();
     });
   });
 

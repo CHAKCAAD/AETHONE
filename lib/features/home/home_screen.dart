@@ -28,6 +28,19 @@
 /// (owner: «وقتی روی دکمه اتصال نمای 2 کلیک میکنی باید جایگاهش همونجا
 /// بمونه و بالا نره»).
 ///
+/// v5.2 (owner round 21 — the branch repair + the four decrees): the
+/// round's work now rides THE LINE THAT OWNS THE APP (fix/owner-round-2,
+/// which already carries the motion line via the round-20 merge) — the
+/// old motion-line base still held the pre-retirement app and has no
+/// place under the new changes. On top of it: the green/red gradient
+/// pair is carried to EVERY other green/red element (the speed-page
+/// start core, the look-1 FAB, the look-1 logo tint, the ping readout
+/// and this file's failure caption), the dark↔light mode transition is
+/// repaired (see core/fx/theme_reveal.dart + pattern_sides.dart — the
+/// pattern-ink lerp, the ticker vendor, the double-tap race, the 420 ms
+/// window), and the DOWN/UP readouts decode through the ping readout's
+/// own [HyperText] walk (bottom_panel.dart).
+///
 /// State honesty: every visual (colors, ping, speed button, stats) derives
 /// from the REAL [ConnectionStore] state — nothing shows "connected" before
 /// the engine reports it.
@@ -590,16 +603,32 @@ class _FailureCaption extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Text(
-        '${strings.failureCodeLabel}: $code',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontFamily: 'IRANYekanX',
-          fontWeight: FontWeight.w500,
-          fontSize: 11 * s,
-          height: 1.4,
-          color: AethColors.statusDisconnected.withValues(alpha: 0.85),
+      // v5.2 (owner round 21) — the failure caption carries the
+      // redesign's own RED gradient sweep («گردینت سبز و قرمز … برای
+      // المان های سبز و قرمز رنگ دیگه هم اعمال کن»): a ShaderMask in
+      // srcIn mode over the glyphs, with a matching alpha on both stops
+      // (the old flat .85 pose preserved).
+      child: ShaderMask(
+        blendMode: BlendMode.srcIn,
+        shaderCallback: (bounds) => LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AethColors.redStops[0].withValues(alpha: 0.85),
+            AethColors.redStops[1].withValues(alpha: 0.85),
+          ],
+        ).createShader(bounds),
+        child: Text(
+          '${strings.failureCodeLabel}: $code',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontFamily: 'IRANYekanX',
+            fontWeight: FontWeight.w500,
+            fontSize: 11 * s,
+            height: 1.4,
+            color: AethColors.statusDisconnected.withValues(alpha: 0.85),
+          ),
         ),
       ),
     );

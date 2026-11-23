@@ -64,24 +64,40 @@ class HeroLogo extends StatelessWidget {
       active: sparking,
       style: style,
       restTurns: connected ? _connectedTurns : 0.0,
-      child: TweenAnimationBuilder<Color?>(
-        tween: ColorTween(
-          begin: connected
-              ? AethColors.statusDisconnected
-              : AethColors.accentConnected,
-          end: connected
-              ? AethColors.accentConnected
-              : AethColors.statusDisconnected,
-        ),
+      // v5.2 (owner round 21) — the look-1 logo tint carries the
+      // redesign's own GREEN/RED gradient («گردینت سبز و قرمز … برای
+      // المان های سبز و قرمز رنگ دیگه هم اعمال کن»): a ShaderMask in
+      // srcIn mode tints the white logo art exactly like the old flat
+      // ColorFilter did, but with the sweep. ONE tween drives the whole
+      // crossfade — the stops lerp between the two gradients, so t = 0
+      // paints the flat red pair and t = 1 the flat green pair, and every
+      // frame between is a true gradient mix.
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: connected ? 1.0 : 0.0),
         duration: duration,
         curve: curve,
-        builder: (context, color, _) => SvgPicture.asset(
-          AppAssets.appLogoNeutralWhite,
-          width: size,
-          height: size,
-          colorFilter: ColorFilter.mode(
-            color ?? AethColors.statusDisconnected,
-            BlendMode.srcIn,
+        builder: (context, t, _) => ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (bounds) => LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color.lerp(
+                AethColors.redStops[0],
+                AethColors.greenStops[0],
+                t,
+              )!,
+              Color.lerp(
+                AethColors.redStops[1],
+                AethColors.greenStops[1],
+                t,
+              )!,
+            ],
+          ).createShader(bounds),
+          child: SvgPicture.asset(
+            AppAssets.appLogoNeutralWhite,
+            width: size,
+            height: size,
           ),
         ),
       ),
