@@ -267,6 +267,15 @@ abstract final class AppAssets {
   static const String _protoFirefoxBoth =
       '$_protocols/فایرفاکس هر دو حالت.svg';
 
+  /// v4.45 — the owner's own AUTO protocol mark (the uploaded
+  /// «آیکون پروتکل auto.png», a white-on-transparent 96×92 crown-like
+  /// glyph), committed under the set's single-face naming. The artwork
+  /// is WHITE; ProtocolGlyph tints it with the surface ink (white on the
+  /// selected green card — the file's native face) so it reads on every
+  /// surface in both themes.
+  static const String protocolAutoLogo =
+      '$_protocols/auto هر دو حالت.png';
+
   /// Public protocol-logo paths (the settings Psiphon/Tor pills render the
   /// REAL logos — v4.40: the owner's own «هر دو حالت» files, own colors).
   static const String protocolTorLogo = _protoTorBoth;
@@ -400,6 +409,8 @@ abstract final class AppAssets {
         ...ProtocolId.values.expand(
           (id) => [protocolIcon(id, light: true), protocolIcon(id, light: false)],
         ),
+        // v4.45 — the owner's own AUTO mark (the new protocol-sheet tile).
+        protocolAutoLogo,
         flag('ir'),
         flag('tm'),
         flag('ru'),

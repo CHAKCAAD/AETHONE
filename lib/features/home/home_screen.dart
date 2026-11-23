@@ -17,6 +17,8 @@ import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
 import '../../core/fx/smoke_burst.dart';
+import '../../core/fx/spark_burst.dart';
+import '../../core/fx/spark_loader.dart';
 import '../../core/motion.dart';
 import '../../l10n/app_strings.dart';
 import '../settings/settings_screen.dart';
@@ -29,12 +31,56 @@ import 'widgets/location_header.dart';
 import 'widgets/pattern_sides.dart';
 import 'widgets/top_bar.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.store});
 
   final ConnectionStore store;
 
-  /// v4.24 — the REAL speed test page (promoted from the v4.14
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  /// The widget's store, re-exposed under the old name so every method
+  /// reads exactly like the stateless-era code.
+  ConnectionStore get store => widget.store;
+
+  /// v4.45 — the protocol bottom sheet's handle (the flutterfx controller
+  /// pattern): the home protocol card opens the sheet over the scaling
+  /// home instead of pushing the retired protocol page.
+  final ProtocolSheetController _protocolSheet = ProtocolSheetController();
+
+  /// v4.45 — the connect-moment spark burst (the flutterfx github-spark
+  /// port): fired on the REAL connected edge, never on a tap.
+  final SparkBurstController _sparkBurst = SparkBurstController();
+  bool _wasConnected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _wasConnected = store.isConnected;
+    store.addListener(_onStoreChanged);
+  }
+
+  @override
+  void dispose() {
+    store.removeListener(_onStoreChanged);
+    _protocolSheet.detach();
+    _sparkBurst.detach();
+    super.dispose();
+  }
+
+  /// The store listener: watches the CONNECTED EDGE for the spark burst
+  /// (owner: «موقع وصل شدن جرقه ها از پشت دکمه اتصال پرت بشن»). The burst
+  /// itself no-ops unless a field is mounted and the style allows motion.
+  void _onStoreChanged() {
+    if (!mounted) return;
+    final c = store.isConnected;
+    if (c && !_wasConnected) _sparkBurst.fire();
+    _wasConnected = c;
+  }
+
+  /// v4.19 — the REAL speed test page (promoted from the v4.14
   /// placeholder sheet; pixel-faithful to the three committed frames).
   void _openSpeedTest(BuildContext context) {
     Navigator.of(context).push(
@@ -61,14 +107,13 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// v4.19 — the REAL protocol-selection PAGE (promoted from the v4.16
-  /// floating sheet per the owner: «در یک صفحه جدا مثل صفحه اصلی تنظیمات
-  /// قرار بدیم»). Selecting a protocol auto-returns here (owner: «بعد از
-  /// انتخاب پروتکل به صورت خودکار کاربر باید به صفحه اول بازگردد»).
-  void _openProtocolPage(BuildContext context) {
-    Navigator.of(context).push(
-      protocolPageRoute(store: store, style: store.effectiveMotionStyle(context)),
-    );
+  /// v4.45 — the protocol selection BOTTOM SHEET (the owner's redesign):
+  /// the home protocol card slides the sheet up over the scaling home
+  /// (the flutterfx bottom-sheet choreography), replacing the retired
+  /// v4.17 protocol page. Selecting a protocol still auto-returns (the
+  /// sheet closes itself after the green crossfade lands).
+  void _openProtocolSheet() {
+    _protocolSheet.open();
   }
 
   /// v4.19 (#3) — tap-to-cancel, owner device test: «حین اتصال کاربر باید
@@ -114,12 +159,19 @@ class HomeScreen extends StatelessWidget {
 
         return Scaffold(
           backgroundColor: AethColors.bgScreen,
-          // v4.25 — `StackFit.expand` for uniformity with every other page
-          // (the pattern-placement fix; home already filled via the Column
-          // `Expanded`, but the body now pins itself explicitly).
-          body: Stack(
-            fit: StackFit.expand,
-            children: [
+          // v4.45 — the protocol BOTTOM SHEET host: the whole home is the
+          // sheet's [mainContent] (it scales/slides/rounds while the sheet
+          // opens — the flutterfx recipe); closed, it renders untouched.
+          body: ProtocolSheetHost(
+            controller: _protocolSheet,
+            store: store,
+            mainContent: Stack(
+              // v4.25 — `StackFit.expand` for uniformity with every other
+              // page (the pattern-placement fix; home already filled via
+              // the Column `Expanded`, but the body now pins itself
+              // explicitly).
+              fit: StackFit.expand,
+              children: [
               // v4.43 — the connected SMOKE FIELD (the flutterfx port,
               // owner-approved): four soft green gradient blobs drifting
               // on closed Bézier loops behind everything while the tunnel
@@ -183,13 +235,24 @@ class HomeScreen extends StatelessWidget {
                     // Hero band: logo (look 1) or center connect button (2).
                     // The flex region is the reference's hero band — the
                     // logo centers exactly like the frame. While the engine
-                    // walks (starting/connecting/reconnecting) the scanning
-                    // halo plays BEHIND the central icon (defect #10).
+                    // walks (starting/connecting/reconnecting) the SPARK
+                    // LOADER steps behind the central icon (v4.45 — the
+                    // flutterfx port, replacing the retired ScanRings halo
+                    // on the home surface), and the moment the tunnel
+                    // REALLY comes up the GITHUB-SPARK burst flies out from
+                    // behind the same composition.
                     Expanded(
                       child: Center(
                         child: Stack(
                           alignment: Alignment.center,
+                          clipBehavior: Clip.none,
                           children: [
+                            // v4.45 — the connect-moment celebration (one
+                            // shared field; idle it paints nothing).
+                            SparkBurst(
+                              controller: _sparkBurst,
+                              style: style,
+                            ),
                             AnimatedSwitcher(
                               // v4.25 — style-scaled (was a fixed 250 ms).
                               duration: motionDuration(
@@ -197,12 +260,13 @@ class HomeScreen extends StatelessWidget {
                                 MotionDurations.quick,
                               ),
                               child: showScan
-                                  ? ScanRings(
-                                      key: const ValueKey('scan-rings'),
+                                  ? SparkLoader(
+                                      key: const ValueKey('spark-loader'),
                                       color: connected
                                           ? AethColors.accentConnected
                                           : AethColors.statusDisconnected,
-                                      size: 270 * s,
+                                      size: 250 * s,
+                                      style: style,
                                     )
                                   : const SizedBox.shrink(
                                       key: ValueKey('scan-off'),
@@ -344,7 +408,7 @@ class HomeScreen extends StatelessWidget {
                         downBytes: store.downBytes,
                         upBytes: store.upBytes,
                         showConnectButton: isLookOne,
-                        onProtocolCardTap: () => _openProtocolPage(context),
+                        onProtocolCardTap: _openProtocolSheet,
                         // Tap connect (owner v4.12: «دکمه اتصال رو به حالت
                         // کلیک قبلش برگردون، نمیخوام حالت سوییپ داشته باشه»)
                         // — the FAB toggles: tap connects, tap again
@@ -361,6 +425,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ],
+            ),
           ),
         );
       },

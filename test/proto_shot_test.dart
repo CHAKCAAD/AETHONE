@@ -1,7 +1,8 @@
-/// Visual-capture harness for the v4.16 protocol sheet (the ui_screenshot_
-/// pattern: loads the REAL fonts, disables the debug banner — it flips to
-/// the top-left under RTL and reads as stray artwork — and saves PNGs to
-/// /tmp/ui_shots for pixel QA against the design frame).
+/// Visual-capture harness for the v4.45 protocol BOTTOM SHEET (the
+/// ui_screenshot_ pattern: loads the REAL fonts, disables the debug
+/// banner — it flips to the top-left under RTL and reads as stray
+/// artwork — and saves PNGs to /tmp/ui_shots for pixel QA against the
+/// design frame «انتخاب پروتکل.jpg»).
 library;
 
 import 'dart:async';
@@ -19,7 +20,6 @@ import 'package:aethone/app.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
 import 'package:aethone/features/home/home_screen.dart';
-import 'package:aethone/features/home/protocol_sheet/protocol_sheet.dart';
 
 class ScriptedEngine extends EngineAdapter {
   final StreamController<EngineEvent> _controller =
@@ -30,8 +30,6 @@ class ScriptedEngine extends EngineAdapter {
   Future<void> connect() async {}
   @override
   Future<void> disconnect() async {}
-  @override
-  @override
   @override
   void bind(EngineConfigSource config) {} // scripted — config never read
 }
@@ -93,8 +91,8 @@ void main() {
   Directory('/tmp/ui_shots').createSync(recursive: true);
 
   testWidgets(
-    'render the protocol page (the descriptions popup is gone — v4.33 '
-    'owner decree)',
+    'render the protocol BOTTOM SHEET (the descriptions popup is gone — '
+    'v4.33 owner decree; the retired page is gone with v4.45)',
     (tester) async {
       await _loadRealFonts();
       tester.view.physicalSize = const Size(402 * 3, 874 * 3);
@@ -104,12 +102,17 @@ void main() {
       final store = ConnectionStore(engine: ScriptedEngine());
       await tester.pumpWidget(_shot(HomeScreen(store: store)));
       await tester.pumpAndSettle();
+      // The home protocol card opens the BOTTOM SHEET (the flutterfx
+      // scale-and-slide choreography over the home).
       await tester.tap(find.text('وایرگارد').first);
       await tester.pump();
       await tester.pumpAndSettle();
       await _capture(tester, 'proto_sheet');
-      // v4.33 — no ⓘ badges and no descriptions layer anywhere on the page.
-      expect(find.byType(ProtocolPage), findsOneWidget);
+      // The sheet's own chrome renders; the retired page and every
+      // descriptions layer are gone.
+      expect(find.byKey(const ValueKey('proto-sheet-panel')), findsOneWidget);
+      expect(find.byKey(const ValueKey('proto-sheet-handle')), findsOneWidget);
+      expect(find.text('Auto'), findsOneWidget);
       expect(find.textContaining('اتصال مستقیماً از طریق Psiphon'), findsNothing);
       expect(find.textContaining('اتصال رمزگذاری‌شده'), findsNothing);
     },

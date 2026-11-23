@@ -19,6 +19,7 @@ import '../../core/app_assets.dart';
 import '../../core/app_theme.dart';
 import '../../core/design_tokens.dart';
 import '../../core/fx/theme_reveal.dart';
+import '../../core/motion.dart';
 
 class ThemeToggleTile extends StatelessWidget {
   const ThemeToggleTile({
@@ -43,6 +44,10 @@ class ThemeToggleTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final light = store.themeMode == AethThemeMode.light;
+    // v4.46 — the glyph swap rides the SELECTED STYLE'S tempo like every
+    // other animated surface (it was a fixed 220 ms — one of the theme-
+    // switch's cross-mode inconsistencies).
+    final style = store.effectiveMotionStyle(context);
     return Semantics(
       key: tileKey,
       label: light ? 'Switch to night mode' : 'Switch to light mode',
@@ -80,7 +85,7 @@ class ThemeToggleTile extends StatelessWidget {
           ),
           child: Center(
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
+              duration: motionDuration(style, 220),
               transitionBuilder: (child, anim) => FadeTransition(
                 opacity: anim,
                 child: ScaleTransition(scale: anim, child: child),

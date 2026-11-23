@@ -518,7 +518,11 @@ class _LocationHeaderState extends State<LocationHeader> {
   // ------------------------------------------------------------------
   Widget _buildHeaderRow(BuildContext context, AppStrings strings, double s) {
     final connected = widget.connected;
-    final nameText = countryName(_selected) ?? '';
+    // v4.46 — the country name follows the APP LANGUAGE (owner decree:
+    // it used to read Persian in every locale). The CLDR tables live in
+    // country_names.dart; the sentinel 'auto' entry localizes too.
+    final lang = Localizations.maybeLocaleOf(context)?.languageCode;
+    final nameText = countryName(_selected, languageCode: lang) ?? '';
 
     // Ping slot: green «146 ms» when measured, «آفلاین» grey when
     // disconnected, empty while the engine walks (nothing measured yet).
@@ -789,6 +793,19 @@ class _FlagsWheelState extends State<_FlagsWheel> {
   /// Set after the one-shot post-layout rebuild (see the class doc).
   bool _primed = false;
 
+  /// v4.46 — the last GOOD page read (the honest falloff fallback). While
+  /// the controller is in an unsafe window (a transient second position /
+  /// pre-dimensions — e.g. the theme-reveal capture re-churning the shell
+  /// subtree), the old code fell back to `page` itself — distance ZERO —
+  /// which painted EVERY visible flag at FULL size and FULL opacity (the
+  /// owner's «پرچم‌ها هنگام تعویض تم به‌هم می‌ریزن»), and because the
+  /// controller does not notify while idle, nothing rebuilt the items
+  /// afterwards — the scrambled falloff then STAYED until the next scroll
+  /// (the «کارت‌ها در حالت قدیم می‌مونن» twin). The last real page is a
+  /// pixel-identical stand-in: the strip repeats every cycle, so rest
+  /// positions never move while the theme lerps.
+  double? _lastGoodPage;
+
   /// v4.15 #3 — owner CSS «Group 9» falloff, restated from the 402 frame:
   /// centre 52 @ 1.0 · ±1 42 @ 0.5 · ±2 35 @ 0.2 (flat beyond ±2 —
   /// everything past ±2 is off the 301-wide strip anyway).
@@ -849,11 +866,18 @@ class _FlagsWheelState extends State<_FlagsWheel> {
                 animation: controller,
                 builder: (context, _) {
                   // Safe read: never touch controller.page during a
-                  // multi-position rebuild window.
+                  // multi-position rebuild window. v4.46 — the fallback is
+                  // the LAST GOOD page (never the distance-0 lie).
                   final safe = controller.hasClients &&
                       controller.positions.length == 1 &&
                       controller.positions.first.haveDimensions;
-                  final pos = safe ? (controller.page ?? page.toDouble()) : page.toDouble();
+                  double pos;
+                  if (safe) {
+                    pos = controller.page ?? page.toDouble();
+                    _lastGoodPage = pos;
+                  } else {
+                    pos = _lastGoodPage ?? page.toDouble();
+                  }
                   final (size, opacity) = _lookFor((pos - page).abs());
                   return Center(
                     child: Opacity(

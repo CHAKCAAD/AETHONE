@@ -35,29 +35,15 @@ void main() {
     test('reference frame and key sizes', () {
       expect(AethGeometry.refWidth, 402);
       expect(AethGeometry.refHeight, 874);
-      // PHASE-2 REBUILD (2026-11-09): the scan section MOVED to
-      // Connection Settings; the protocol page's own column ends with
-      // the Firefox card (725 + 116) + the frame's own 62 bottom rhythm
-      // = 903 — the page fits the 874 frame again without scrolling;
-      // the frame constant the pattern composition uses is untouched.
-      expect(AethGeometry.protoPageContentH, 903);
-      expect(AethGeometry.protoPageContentH,
-          AethGeometry.protoCardTopFirefox + AethGeometry.protoCardH + 62);
-      expect(AethGeometry.protoCardTopFirefox,
-          AethGeometry.protoCardTopTor + AethGeometry.protoCardH + 15);
-      expect(AethGeometry.heroSize, 164);
-      expect(AethGeometry.connectButtonSize, 48);
-      expect(AethGeometry.connectButtonRise, 72);
-      // v4.33 — the look-2 connect button is the owner's own CSS
-      // composition (a 236 glow circle over squircle layers).
-      expect(AethGeometry.connectGroupSize, 236);
-      expect(AethGeometry.connectHaloSize, 181.92);
-      expect(AethGeometry.connectMidSize, 152.42);
+      // v4.45 — the look-2 connect button is the owner's NEW three-layer
+      // CSS composition (the retired v4.33 236-glow «Group 45» is gone).
+      expect(AethGeometry.connectGroupSize, 160);
+      expect(AethGeometry.connectOuterSize, 160);
+      expect(AethGeometry.connectMidSize, 132);
       expect(AethGeometry.connectCoreSize, 108.17);
       expect(AethGeometry.connectIconSize, 48);
-      expect(AethRadius.connectGlow, 120);
-      expect(AethRadius.connectHalo, 69);
-      expect(AethRadius.connectMid, 62);
+      expect(AethRadius.connectOuter, 62);
+      expect(AethRadius.connectMid, 46);
       expect(AethRadius.connectCore, 41);
       // v4.11 — owner CSS Group 8: pill group is the 140x38 halo (the old
       // 162x60 blurred 4th layer was REMOVED per the owner's defect report).
@@ -105,6 +91,63 @@ void main() {
       expect(clampForReduceMotion(MotionStyle.smooth), MotionStyle.minimal);
       expect(clampForReduceMotion(MotionStyle.dynamic), MotionStyle.minimal);
       expect(clampForReduceMotion(MotionStyle.off), MotionStyle.off);
+    });
+  });
+
+  group('v4.45/v4.46 owner rounds', () {
+    test('the protocol BOTTOM SHEET geometry (owner CSS + frame)', () {
+      // Panel 402×565, top corners r38, shadow 0 -6 64 rgba(0,0,0,0.09).
+      expect(AethGeometry.protoSheetH, 565);
+      expect(AethGeometry.protoSheetRadius, 38);
+      expect(AethGeometry.protoSheetShadowDy, -6);
+      expect(AethGeometry.protoSheetShadowBlur, 64);
+      expect(AethGeometry.protoSheetShadowAlpha, 0.09);
+      // Handle 97×8, 17 below the top edge.
+      expect(AethGeometry.protoSheetHandleW, 97);
+      expect(AethGeometry.protoSheetHandleH, 8);
+      expect(AethGeometry.protoSheetHandleTop, 17);
+      // Cards 159×67 r17, 17 gaps, 33 inset, first row 53 below the top.
+      expect(AethGeometry.protoSheetCardW, 159);
+      expect(AethGeometry.protoSheetCardH, 67);
+      expect(AethGeometry.protoSheetCardRadius, 17);
+      expect(AethGeometry.protoSheetCardGap, 17);
+      expect(AethGeometry.protoSheetInset, 33);
+      expect(AethGeometry.protoSheetGridTop, 53);
+      // The 2×6 grid arithmetic closes on the 402 frame.
+      expect(
+        AethGeometry.protoSheetInset * 2 +
+            AethGeometry.protoSheetCardW * 2 +
+            AethGeometry.protoSheetCardGap,
+        lessThanOrEqualTo(AethGeometry.refWidth),
+      );
+      // The selected card: the 4px rgba(26,217,149,0.4) ring.
+      expect(AethGeometry.protoSheetCardBorder, 4);
+      expect(AethGeometry.protoSheetCardRingAlpha, 0.4);
+      // The flutterfx entrance recipe: home scale 0.85, rise 24, r16.
+      expect(AethGeometry.protoSheetMainScale, 0.85);
+      expect(AethGeometry.protoSheetMainRise, 24);
+      expect(AethGeometry.protoSheetMainRadius, 16);
+    });
+
+    test('the v4.46 pattern ⅓ diagonal (both states)', () {
+      // LEFT art centre a third of the screen BELOW the midline, RIGHT
+      // art centre a third above it.
+      expect(AethGeometry.patternLeftCenterRow, closeTo(5 / 6, 1e-9));
+      expect(AethGeometry.patternRightCenterRow, closeTo(1 / 6, 1e-9));
+      expect(AethGeometry.patternRightArtTopRow, 357);
+      expect(AethGeometry.patternRightArtBottomRow, 719);
+    });
+
+    test('the standing green/red 180° gradients (owner CSS)', () {
+      expect(
+        AethColors.accentConnectedGradient.colors,
+        const [Color(0xFF2FF8B1), Color(0xFF1AD995)],
+      );
+      expect(
+        AethColors.statusDisconnectedGradient.colors,
+        const [Color(0xFFFF5B5E), Color(0xFFFF383C)],
+      );
+      expect(AethColors.connectOuterOpacity, 0.16);
     });
   });
 

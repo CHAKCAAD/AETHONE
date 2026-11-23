@@ -37,6 +37,7 @@ class LayerSpec {
     required this.opacity,
     this.blurSigma = 0,
     this.dy = 0,
+    this.gradient,
   });
 
   /// Size in design px (scaled by [LayerStack.scale] at paint time).
@@ -51,6 +52,11 @@ class LayerSpec {
   /// Vertical offset from the group center (design px) — used by the soft
   /// under-shadow.
   final double dy;
+
+  /// v4.45 — the owner's standing green/red 180° gradients («گرادینت سبز /
+  /// قرمز روی همه عناصر هم‌رنگ»): when present the layer paints the
+  /// GRADIENT (opacity still applies) instead of [LayerStack.color].
+  final LinearGradient? gradient;
 }
 
 /// Paints a stack of concentric rounded-rect layers, bottom-first.
@@ -98,8 +104,16 @@ class _LayerStackPainter extends CustomPainter {
         width: spec.width * s,
         height: spec.height * s,
       );
-      final paint = Paint()
-        ..color = widget.color.withValues(alpha: spec.opacity);
+      final paint = Paint();
+      final gradient = spec.gradient;
+      if (gradient != null) {
+        // v4.45 — the standing gradient core: the shader carries the
+        // colors, the layer opacity still modulates it.
+        paint.shader = gradient.createShader(rect);
+        paint.color = Colors.white.withValues(alpha: spec.opacity);
+      } else {
+        paint.color = widget.color.withValues(alpha: spec.opacity);
+      }
       if (spec.blurSigma > 0) {
         paint.maskFilter = MaskFilter.blur(
           BlurStyle.normal,
@@ -187,17 +201,19 @@ class StatusPill extends StatelessWidget {
             ],
           ),
           // The three crisp background layers (bottom→top), owner CSS.
+          // v4.45 — the CORE rides the standing green/red 180° gradient
+          // (the owner's «گرادینت روی همه عناصر هم‌رنگ» decree).
           LayerStack(
             scale: s,
             color: accent,
-            layers: const [
-              LayerSpec(
+            layers: [
+              const LayerSpec(
                 width: AethGeometry.pillWidth,
                 height: AethGeometry.pillHeight,
                 radius: AethRadius.pillHalo,
                 opacity: AethColors.pillHaloOpacity,
               ),
-              LayerSpec(
+              const LayerSpec(
                 width: AethGeometry.pillMidWidth,
                 height: AethGeometry.pillMidHeight,
                 radius: AethRadius.pillMid,
@@ -208,6 +224,9 @@ class StatusPill extends StatelessWidget {
                 height: AethGeometry.pillCoreHeight,
                 radius: AethRadius.pillCore,
                 opacity: 1,
+                gradient: connected
+                    ? AethColors.accentConnectedGradient
+                    : AethColors.statusDisconnectedGradient,
               ),
             ],
           ),
@@ -305,34 +324,37 @@ class SpeedTestButton extends StatelessWidget {
                   // Owner CSS layers, bottom→top: glow 96 (blurred halo —
                   // v4.13: lighter α.34 + σ24 so the halo spreads wider and
                   // softer, owner round-4 #5), 74 α0.19, 62 α0.45, 44 solid.
+                  // v4.45 — the 44 core rides the standing green gradient
+                  // (the «گرادینت روی همه عناصر هم‌رنگ» decree).
                   LayerStack(
                     scale: s,
                     color: AethColors.accentConnected,
-                    layers: const [
-                      LayerSpec(
+                    layers: [
+                      const LayerSpec(
                         width: AethGeometry.speedGroupSize,
                         height: AethGeometry.speedGroupSize,
                         radius: AethRadius.speedGlow,
                         opacity: AethGeometry.speedGlowOpacity,
                         blurSigma: AethGeometry.speedGlowBlur,
                       ),
-                      LayerSpec(
+                      const LayerSpec(
                         width: AethGeometry.speedHaloSize,
                         height: AethGeometry.speedHaloSize,
                         radius: AethRadius.speedHalo,
                         opacity: AethColors.pillHaloOpacity,
                       ),
-                      LayerSpec(
+                      const LayerSpec(
                         width: AethGeometry.speedMidSize,
                         height: AethGeometry.speedMidSize,
                         radius: AethRadius.speedMid,
                         opacity: AethColors.pillMidOpacity,
                       ),
-                      LayerSpec(
+                      const LayerSpec(
                         width: AethGeometry.speedCoreSize,
                         height: AethGeometry.speedCoreSize,
                         radius: AethRadius.speedCore,
                         opacity: 1,
+                        gradient: AethColors.accentConnectedGradient,
                       ),
                     ],
                   ),
@@ -356,20 +378,20 @@ class SpeedTestButton extends StatelessWidget {
   }
 }
 
-/// v4.33 — the look-2 CONNECT button (owner round 9): the owner's own
-/// CSS composition «Group 45» — four concentric layers, the outermost a
-/// CIRCULAR blurred glow, the inner three SQUIRCLES (the old all-circle
-/// GlowCircle is retired by decree: «این دکمه رو هم در صفحه اصلی و هم در
-/// این صفحه بد طراحی کردی»):
-///   glow : 236×236,  r120, α0.53, blur 57 — the soft green/red bloom
-///   halo : 181.92²,  r69,  α0.19
-///   mid  : 152.42²,  r62,  α0.45
-///   core : 108.17²,  r41,  solid — the Off glyph 48×48 on top
-///   (#0D5138 stroke on the green core, #75160F on the red one).
-/// Both states share the geometry (the frames agree: «identical shapes,
-/// color only») — green when connected, red when disconnected, colors
-/// crossfaded. [scale] renders the whole composition smaller (the look
-/// page's preview) without recomputing a single layer.
+/// v4.45 — the look-2 CONNECT button, the owner's NEW three-layer CSS
+/// composition (it replaces the v4.33 four-layer «Group 45» — the blurred
+/// glow layer is retired): three concentric SQUIRCLES over the standing
+/// green/red GRADIENT core —
+///   outer : 160×160,  r62, rgba(47,248,177,0.16) / rgba(234,35,35,0.16)
+///   mid   : 132×132,  r46, rgba(47,248,177,0.45) / rgba(234,35,35,0.45)
+///   core  : 108.17²,  r41, 180° #2FF8B1→#1AD995 / #FF5B5E→#FF383C
+///   glyph : the Off.svg 48×48, WHITE in BOTH states (the owner's own
+///           spec — the old #0D5138/#75160F inks are retired).
+/// Both states share the geometry — colors crossfade on one tween.
+/// [scale] renders the whole composition smaller (the look page's
+/// preview) without recomputing a single layer. v4.45: the tap NO LONGER
+/// moves or shrinks the button (owner: «دکمه اتصال موقع کلیک نباید تکون
+/// بخوره») — the flutterfx ripple burst alone answers the finger.
 class ConnectButtonGlow extends StatefulWidget {
   const ConnectButtonGlow({
     super.key,
@@ -383,8 +405,9 @@ class ConnectButtonGlow extends StatefulWidget {
   final bool connected;
   final VoidCallback? onTap;
 
-  /// 1.0 = the full 236px composition (the home hero button); the wizard's
-  /// look page passes [AethGeometry.obPreviewGroupSize] / 236.
+  /// 1.0 = the full 160px composition (the home hero button); the wizard's
+  /// look page passes [AethGeometry.obPreviewGroupSize] /
+  /// [AethGeometry.connectGroupSize].
   final double scale;
   final Duration duration;
   final Curve curve;
@@ -412,101 +435,117 @@ class _ConnectButtonGlowState extends State<ConnectButtonGlow> {
     final curve = widget.curve;
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final k = s * widget.scale;
-    final accent =
-        connected ? AethColors.accentConnected : AethColors.statusDisconnected;
-    final iconOn =
-        connected ? AethColors.onConnectCore : AethColors.onPillDisconnected;
 
-    // The tap target covers the WHOLE composition (glow included) — the
-    // v4.13 halo-taps-too decree carried over from the old circle. The
-    // ripple burst rides the same gesture (v4.43, the flutterfx port):
-    // rings spawn from the tap point the moment the finger lands — pure
-    // decoration, the action itself never waits for them.
+    // The owner's new layer colors: the translucent rings ride the
+    // gradient's own family — #2FF8B1 (the green gradient's light stop)
+    // when connected, the standing #EA2323 red when disconnected.
+    final ringColor = connected
+        ? AethColors.accentConnectedGradient.colors.first
+        : AethColors.statusDisconnected;
+    final coreGradient = connected
+        ? AethColors.accentConnectedGradient
+        : AethColors.statusDisconnectedGradient;
+    final otherGradient = connected
+        ? AethColors.statusDisconnectedGradient
+        : AethColors.accentConnectedGradient;
+
+    // The tap target covers the WHOLE composition (outer layer included)
+    // — the v4.13 halo-taps-too decree carried over. The ripple burst
+    // rides the same gesture (v4.43, the flutterfx port) and is now the
+    // ONLY tap feedback: the button itself never moves or shrinks (the
+    // owner's v4.45 decree).
     return _TouchFeedback(
       onTap: onTap,
       ripple: _ripple,
+      pressScale: false,
       child: SizedBox(
         width: AethGeometry.connectGroupSize * k,
         height: AethGeometry.connectGroupSize * k,
         child: TapRipple(
           controller: _ripple,
-          color: accent,
+          color: ringColor,
           duration:
               Duration(milliseconds: (duration.inMilliseconds * 1.5).round()),
           curve: curve,
           // Ring one is born on the core's own edge (108.17/2 design px,
-          // style-scaled) and dies just past the halo layer (×2.2).
+          // style-scaled) and dies just past the outer layer (×2.2).
           baseRadius: AethGeometry.connectCoreSize * k / 2,
           maxScale: 2.2,
           child: Stack(
             alignment: Alignment.center,
             clipBehavior: Clip.none,
             children: [
-            // The four layers, bottom→top — ONE crossfaded color drives
-            // them all (green ↔ red), the owner's own opacities/radii.
-            TweenAnimationBuilder<Color?>(
-              tween: ColorTween(
-                begin: connected
-                    ? AethColors.statusDisconnected
-                    : AethColors.accentConnected,
-                end: accent,
+              // The three layers, bottom→top — one crossfaded color drives
+              // the translucent rings, the core crossfades between the two
+              // standing gradients.
+              TweenAnimationBuilder<double>(
+                tween: Tween(end: connected ? 1.0 : 0.0),
+                duration: duration,
+                curve: curve,
+                builder: (context, t, _) => Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // outer : 160² r62 α0.16
+                    Container(
+                      width: AethGeometry.connectOuterSize * k,
+                      height: AethGeometry.connectOuterSize * k,
+                      decoration: BoxDecoration(
+                        color: Color.lerp(
+                          AethColors.statusDisconnected,
+                          AethColors.accentConnectedGradient.colors.first,
+                          t,
+                        )!.withValues(alpha: AethColors.connectOuterOpacity),
+                        borderRadius: BorderRadius.circular(
+                          AethRadius.connectOuter * k,
+                        ),
+                      ),
+                    ),
+                    // mid : 132² r46 α0.45
+                    Container(
+                      width: AethGeometry.connectMidSize * k,
+                      height: AethGeometry.connectMidSize * k,
+                      decoration: BoxDecoration(
+                        color: Color.lerp(
+                          AethColors.statusDisconnected,
+                          AethColors.accentConnectedGradient.colors.first,
+                          t,
+                        )!.withValues(alpha: AethColors.pillMidOpacity),
+                        borderRadius: BorderRadius.circular(
+                          AethRadius.connectMid * k,
+                        ),
+                      ),
+                    ),
+                    // core : 108.17² r41, the standing gradient
+                    Container(
+                      width: AethGeometry.connectCoreSize * k,
+                      height: AethGeometry.connectCoreSize * k,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient.lerp(
+                          otherGradient,
+                          coreGradient,
+                          t,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          AethRadius.connectCore * k,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              duration: duration,
-              curve: curve,
-              builder: (context, color, _) => LayerStack(
-                scale: k,
-                color: color ?? accent,
-                layers: const [
-                  LayerSpec(
-                    width: AethGeometry.connectGroupSize,
-                    height: AethGeometry.connectGroupSize,
-                    radius: AethRadius.connectGlow,
-                    opacity: AethColors.pillGlowOpacity,
-                    blurSigma: AethGeometry.connectBlur,
-                  ),
-                  LayerSpec(
-                    width: AethGeometry.connectHaloSize,
-                    height: AethGeometry.connectHaloSize,
-                    radius: AethRadius.connectHalo,
-                    opacity: AethColors.pillHaloOpacity,
-                  ),
-                  LayerSpec(
-                    width: AethGeometry.connectMidSize,
-                    height: AethGeometry.connectMidSize,
-                    radius: AethRadius.connectMid,
-                    opacity: AethColors.pillMidOpacity,
-                  ),
-                  LayerSpec(
-                    width: AethGeometry.connectCoreSize,
-                    height: AethGeometry.connectCoreSize,
-                    radius: AethRadius.connectCore,
-                    opacity: 1,
-                  ),
-                ],
-              ),
-            ),
-            // The Off glyph — 48×48, stroke crossfaded with the state.
-            TweenAnimationBuilder<Color?>(
-              tween: ColorTween(
-                begin: connected
-                    ? AethColors.onPillDisconnected
-                    : AethColors.onConnectCore,
-                end: iconOn,
-              ),
-              duration: duration,
-              curve: curve,
-              builder: (context, color, _) => SvgPicture.asset(
+              // The Off glyph — 48×48, WHITE in both states (the owner's
+              // new spec; the icon file's own stroke carries the weight).
+              SvgPicture.asset(
                 AppAssets.iconOff,
                 width: AethGeometry.connectIconSize * k,
                 height: AethGeometry.connectIconSize * k,
                 fit: BoxFit.contain,
-                colorFilter: ColorFilter.mode(
-                  color ?? iconOn,
+                colorFilter: const ColorFilter.mode(
+                  Color(0xFFFFFFFF),
                   BlendMode.srcIn,
                 ),
               ),
-            ),
-          ],
+            ],
           ),
         ),
       ),
@@ -516,12 +555,16 @@ class _ConnectButtonGlowState extends State<ConnectButtonGlow> {
 
 /// Short, subtle touch feedback (scale 0.97 + opacity — report table 14,
 /// max ~120 ms). Never delays the action. Used with onTap == null by the
-/// swipe-only connect surfaces (defect #11).
+/// swipe-only connect surfaces (defect #11). v4.45 — [pressScale] lets a
+/// surface opt OUT of the scale/opacity squeeze (the look-2 connect
+/// button: the owner decreed it must NOT move on tap — the ripple burst
+/// is its only feedback).
 class _TouchFeedback extends StatefulWidget {
   const _TouchFeedback({
     required this.onTap,
     required this.child,
     this.ripple,
+    this.pressScale = true,
   });
 
   final VoidCallback? onTap;
@@ -530,6 +573,10 @@ class _TouchFeedback extends StatefulWidget {
   /// tap-down spawns a ring burst at the finger's position. Pure
   /// decoration — the action fires on its own schedule, never delayed.
   final TapRippleController? ripple;
+
+  /// Whether the press squeeze (scale 0.97 + opacity) plays. The look-2
+  /// connect button passes false (v4.45).
+  final bool pressScale;
 
   final Widget child;
 
@@ -542,6 +589,7 @@ class _TouchFeedbackState extends State<_TouchFeedback> {
 
   @override
   Widget build(BuildContext context) {
+    final squeeze = widget.pressScale && _pressed;
     return GestureDetector(
       onTapDown: widget.onTap == null
           ? null
@@ -550,20 +598,20 @@ class _TouchFeedbackState extends State<_TouchFeedback> {
               // flutterfx ripple's whole point) — inside the same
               // gesture that drives the press feedback and the action.
               widget.ripple?.tapAt(details.localPosition);
-              setState(() => _pressed = true);
+              if (widget.pressScale) setState(() => _pressed = true);
             },
-      onTapCancel: widget.onTap == null
+      onTapCancel: widget.onTap == null || !widget.pressScale
           ? null
           : () => setState(() => _pressed = false),
-      onTapUp: widget.onTap == null
+      onTapUp: widget.onTap == null || !widget.pressScale
           ? null
           : (_) => setState(() => _pressed = false),
       onTap: widget.onTap,
       child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
+        scale: squeeze ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 120),
         child: AnimatedOpacity(
-          opacity: _pressed ? 0.85 : 1.0,
+          opacity: squeeze ? 0.85 : 1.0,
           duration: const Duration(milliseconds: 120),
           child: widget.child,
         ),

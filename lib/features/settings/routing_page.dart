@@ -29,6 +29,10 @@ class RoutingSettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    // v4.46 — the country names follow the APP LANGUAGE (the CLDR
+    // tables in country_names.dart; the always-Persian display is
+    // retired with the owner's localization decree).
+    final lang = Localizations.maybeLocaleOf(context)?.languageCode;
 
     // The store keeps null = None; the pills speak the sentinel form.
     final current = store.routingRegion ?? 'none';
@@ -49,10 +53,10 @@ class RoutingSettingsPage extends StatelessWidget {
               SettingPills<String>(
                 keyId: 'routing-area',
                 options: [
-                  ('ir', countryName('ir')!),
-                  ('tm', countryName('tm')!),
-                  ('ru', countryName('ru')!),
-                  ('cn', countryName('cn')!),
+                  ('ir', countryName('ir', languageCode: lang)!),
+                  ('tm', countryName('tm', languageCode: lang)!),
+                  ('ru', countryName('ru', languageCode: lang)!),
+                  ('cn', countryName('cn', languageCode: lang)!),
                   ('none', strings.routingNone),
                 ],
                 selected: current,

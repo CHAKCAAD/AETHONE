@@ -68,6 +68,7 @@ class AethPal {
     required this.cardIconBg,
     required this.sheetSubtile,
     required this.sheetDescCard,
+    required this.protoSheetChip,
     required this.speedTrack,
     required this.speedTrackLive,
     required this.speedCoreRest,
@@ -138,6 +139,13 @@ class AethPal {
   /// (the old descriptions-card fill) / light `#E4E7E5` (derived).
   final Color sheetDescCard;
 
+  /// v4.45 — the protocol BOTTOM SHEET's chip family: the unselected
+  /// protocol cards + the drag handle. Light is the owner's own CSS
+  /// `#F4F4F4` (Rectangle 89 / Rectangle 13 on the `#FFFFFF` sheet);
+  /// night derives the same raised-chip relation against the `#0F1511`
+  /// sheet (`#1A261C` — the sheetSubtile relation).
+  final Color protoSheetChip;
+
   /// Speed gauge track at rest — night `#0A0F0B` (a shade darker than the
   /// bg) / light `#E0E0E0` (derived by the same relation against #EDEDED).
   final Color speedTrack;
@@ -205,6 +213,7 @@ class AethPal {
     cardIconBg: Color(0xFF2D323D),
     sheetSubtile: Color(0xFF1A261C),
     sheetDescCard: Color(0xFF0C120F),
+    protoSheetChip: Color(0xFF1A261C),
     speedTrack: Color(0xFF0A0F0B),
     speedTrackLive: Color(0xFF16543B),
     speedCoreRest: Color(0xFF080C09),
@@ -235,6 +244,7 @@ class AethPal {
     cardIconBg: Color(0xFFE8ECEA),
     sheetSubtile: Color(0xFFEFEFEF),
     sheetDescCard: Color(0xFFE4E7E5),
+    protoSheetChip: Color(0xFFF4F4F4), // owner CSS «انتخاب پروتکل»
     speedTrack: Color(0xFFE0E0E0),
     speedTrackLive: Color(0xFFC8E9DA),
     // v4.35 (owner round 11, item 9): the light-mode start button follows
@@ -269,6 +279,7 @@ class AethPal {
         cardIconBg: Color.lerp(a.cardIconBg, b.cardIconBg, t)!,
         sheetSubtile: Color.lerp(a.sheetSubtile, b.sheetSubtile, t)!,
         sheetDescCard: Color.lerp(a.sheetDescCard, b.sheetDescCard, t)!,
+        protoSheetChip: Color.lerp(a.protoSheetChip, b.protoSheetChip, t)!,
         speedTrack: Color.lerp(a.speedTrack, b.speedTrack, t)!,
         speedTrackLive: Color.lerp(a.speedTrackLive, b.speedTrackLive, t)!,
         speedCoreRest: Color.lerp(a.speedCoreRest, b.speedCoreRest, t)!,

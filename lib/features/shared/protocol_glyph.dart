@@ -46,17 +46,28 @@ class ProtocolGlyph extends StatelessWidget {
   Widget build(BuildContext context) {
     final asset = AppAssets.protocolIcon(id, light: AethThemeSync.light);
 
-    // AUTO — no dedicated artwork in the owner's round-16 set (report
-    // §6.9): the gold Shield Tick (ink-white on the selected green tile).
+    // AUTO — v4.45: the owner's OWN mark (the uploaded «آیکون پروتکل
+    // auto.png»): a WHITE crown-like glyph on transparency, rendered as a
+    // raster like the flags. On the selected green tile it keeps its
+    // native white (the standing all-ink rule); everywhere else it takes
+    // the SURFACE INK (the label's own color — the Firefox precedent), so
+    // the white artwork stays readable on the light sheet AND on the dark
+    // surfaces. The retired v4.35 gold Shield-Tick stopgap is gone.
     if (id == ProtocolId.auto) {
-      return SvgPicture.asset(
-        AppAssets.iconShieldTick,
+      final image = Image.asset(
+        AppAssets.protocolAutoLogo,
         width: size,
         height: size,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+      );
+      if (white) return image;
+      return ColorFiltered(
         colorFilter: ColorFilter.mode(
-          white ? AethColors.textPrimary : AethColors.goldAccent,
+          AethColors.textPrimary,
           BlendMode.srcIn,
         ),
+        child: image,
       );
     }
 

@@ -8,6 +8,12 @@ import 'package:aethone/core/country_names.dart';
 /// («KP») for the other ~240 flags. This guard keeps the table COMPLETE:
 /// every flag artwork committed in design/flags_png must resolve to a real
 /// Persian name (never the code fallback).
+///
+/// v4.46 — the names are now LOCALE-AWARE (owner decree: the location
+/// header used to read Persian in every language). The fa table is the
+/// owner's hand-written map, carried over verbatim; en/ru/zh/tk come from
+/// CLDR. The guards below lock BOTH halves: the fa completeness (no code
+/// fallback anywhere) and the per-language resolution.
 void main() {
   final flagDir = Directory('design/flags_png');
   final codes = flagDir.existsSync()
@@ -60,5 +66,38 @@ void main() {
     expect(countryName(null), isNull);
     // v4.21 — the AUTO sentinel of the family location wheels.
     expect(countryName('auto'), 'خودکار');
+  });
+
+  test('v4.46 — the names follow the app language (CLDR)', () {
+    // English
+    expect(countryName('ir', languageCode: 'en'), 'Iran');
+    expect(countryName('de', languageCode: 'en'), 'Germany');
+    expect(countryName('us', languageCode: 'en'), 'United States');
+    expect(countryName('tm', languageCode: 'en'), 'Turkmenistan');
+    expect(countryName('auto', languageCode: 'en'), 'Automatic');
+    // Russian
+    expect(countryName('ir', languageCode: 'ru'), 'Иран');
+    expect(countryName('de', languageCode: 'ru'), 'Германия');
+    expect(countryName('auto', languageCode: 'ru'), 'Автоматически');
+    // Chinese (the app's zh_CN locale)
+    expect(countryName('ir', languageCode: 'zh'), '伊朗');
+    expect(countryName('de', languageCode: 'zh'), '德国');
+    expect(countryName('auto', languageCode: 'zh'), '自动');
+    // Turkmen
+    expect(countryName('ir', languageCode: 'tk'), 'Eýran');
+    expect(countryName('tm', languageCode: 'tk'), 'Türkmenistan');
+    expect(countryName('auto', languageCode: 'tk'), 'Awtomatiki');
+    // The subdivision flags localize too (not only in Persian).
+    expect(countryName('gb-eng', languageCode: 'en'), 'England');
+    expect(countryName('gb-eng', languageCode: 'ru'), 'Англия');
+  });
+
+  test('v4.46 — unknown languages and codes resolve honestly', () {
+    // An unmapped language falls back to the fa design table.
+    expect(countryName('ir', languageCode: 'zz'), 'ایران');
+    // An unmapped code falls back to fa, then to the upper-cased code.
+    expect(countryName('ir', languageCode: 'en'), isNot('ایران'));
+    expect(countryName('qq'), 'QQ');
+    expect(countryName('qq', languageCode: 'en'), 'QQ');
   });
 }

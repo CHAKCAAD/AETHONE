@@ -295,7 +295,10 @@ class StatCard extends StatelessWidget {
                   ? Border.all(color: iconBoxBorder!)
                   : null,
             ),
-            padding: EdgeInsets.all(10 * s),
+            // v4.45 — the DL/UL glyphs grow a touch (owner: «آیکون های
+            // دانلود و آپلود کمی بزرگ‌تر»): the icon box keeps its 48×48
+            // geometry, the inset drops 10 → 7 so the ink itself is larger.
+            padding: EdgeInsets.all(7 * s),
             child: SvgPicture.asset(
               iconAsset,
               colorFilter: ColorFilter.mode(
@@ -328,14 +331,34 @@ class StatCard extends StatelessWidget {
                         color: AethColors.textSecondary,
                       ),
                     ),
-                    Text(
-                      valueText,
-                      textDirection: TextDirection.ltr,
-                      style: TextStyle(
-                        fontFamily: 'IRANYekanX',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14 * s,
-                        color: AethColors.textPrimary,
+                    // v4.45 — the ping display's own value animation,
+                    // ported to the stat blocks (owner: the DL/UL numbers
+                    // crossfade on every refresh like the ping readout,
+                    // never a hard snap).
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      transitionBuilder: (child, anim) => FadeTransition(
+                        opacity: anim,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 0.35),
+                            end: Offset.zero,
+                          ).animate(anim),
+                          child: child,
+                        ),
+                      ),
+                      child: Text(
+                        valueText,
+                        key: ValueKey('stat-value-$valueText'),
+                        textDirection: TextDirection.ltr,
+                        style: TextStyle(
+                          fontFamily: 'IRANYekanX',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14 * s,
+                          color: AethColors.textPrimary,
+                        ),
                       ),
                     ),
                   ],
@@ -378,9 +401,6 @@ class FabColumn extends StatelessWidget {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final duration = motionDuration(style, MotionDurations.state);
     final size = AethGeometry.connectButtonSize * s;
-    final color = connected
-        ? AethColors.accentConnected
-        : AethColors.statusDisconnected;
     final toggle = connected ? onDisconnect : onConnect;
 
     return GestureDetector(
@@ -423,7 +443,11 @@ class FabColumn extends StatelessWidget {
                     width: size,
                     height: size,
                     decoration: BoxDecoration(
-                      color: color,
+                      // v4.45 — the standing green/red 180° gradient (the
+                      // «گرادینت روی همه عناصر هم‌رنگ» decree).
+                      gradient: connected
+                          ? AethColors.accentConnectedGradient
+                          : AethColors.statusDisconnectedGradient,
                       borderRadius: BorderRadius.circular(AethRadius.fab * s),
                     ),
                     child: Center(

@@ -26,6 +26,23 @@ abstract final class AethColors {
   /// Disconnected / error accent — owner + pattern XML `#EA2323`.
   static const Color statusDisconnected = Color(0xFFEA2323);
 
+  /// v4.45 — the owner's standing GREEN gradient (the new protocol-sheet
+  /// selected card + the rebuilt connect compositions): 180°
+  /// `#2FF8B1 0% → #1AD995 100%` (the owner's own Figma CSS).
+  static const LinearGradient accentConnectedGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF2FF8B1), Color(0xFF1AD995)],
+  );
+
+  /// v4.45 — the RED sibling of [accentConnectedGradient]: 180°
+  /// `#FF5B5E 0% → #FF383C 100%` (the owner's own Figma CSS).
+  static const LinearGradient statusDisconnectedGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFFF5B5E), Color(0xFFFF383C)],
+  );
+
   /// Text/icon color on the red status pill — night `#75160F` (Figma CSS)
   /// / light `#141C16` (the owner's light CSS «غیرفعال»). Theme-dependent.
   static Color get onPillDisconnected => AethThemeSync.palette.onPillDisconnected;
@@ -39,6 +56,12 @@ abstract final class AethColors {
   static const double pillGlowOpacity = 0.53;
   static const double pillHaloOpacity = 0.19;
   static const double pillMidOpacity = 0.45;
+
+  /// v4.45 — the look-2 connect composition's OUTER layer alpha (the
+  /// owner's new three-layer CSS: rgba(47,248,177,0.16) connected /
+  /// rgba(234,35,35,0.16) disconnected). The mid layer reuses
+  /// [pillMidOpacity] (0.45 — the same value in the owner's CSS).
+  static const double connectOuterOpacity = 0.16;
 
   /// Gold accent on mim / gool-classic protocol icons (asset XML `#997A35`).
   static const Color goldAccent = Color(0xFF997A35);
@@ -195,6 +218,13 @@ abstract final class AethColors {
   /// Theme-dependent.
   static Color get obCtaBg => AethThemeSync.palette.obCtaBg;
 
+  /// v4.45 — the protocol BOTTOM SHEET's chip family (the owner's
+  /// redesign frame «انتخاب پروتکل.jpg»): the unselected protocol cards
+  /// and the drag handle ride `#F4F4F4` on the white sheet in light mode;
+  /// night derives the same raised-chip relation against the `#0F1511`
+  /// sheet (`#1A261C`, the sheetSubtile relation). Theme-dependent.
+  static Color get protoSheetChip => AethThemeSync.palette.protoSheetChip;
+
   /// Jitter tile bg (night #0A394B / light rgba(0,143,213,0.15) — the CSS
   /// icon-box tint pattern); its icon #008FD5 both modes. Theme-dependent
   /// bg (v4.34).
@@ -234,17 +264,20 @@ abstract final class AethRadius {
   static const double speedMid = 27;
   static const double speedCore = 17;
 
-  /// v4.33 — the look-2 CONNECT button composition (the owner's own CSS,
-  /// «Group 45»/«Group 11», 236×236 at the hero position): four concentric
-  /// layers, the outermost a circular blurred glow, the inner three
-  /// SQUIRCLES (the old circular GlowCircle is retired by decree):
-  ///   glow : 236×236,   r120 (a circle), rgba(26,217,149,0.53), blur(57)
-  ///   halo : 181.92²,   r69,  rgba(26,217,149,0.19)
-  ///   mid  : 152.42²,   r62,  rgba(26,217,149,0.45)
-  ///   core : 108.17²,   r41,  #1AD995 + the Off glyph 48×48, 4.5px #0D5138
-  static const double connectGlow = 120;
-  static const double connectHalo = 69;
-  static const double connectMid = 62;
+  /// v4.45 — the look-2 CONNECT button, the owner's NEW three-layer CSS
+  /// composition (replaces the v4.33 four-layer «Group 45» by decree —
+  /// «آیکون اتصال نمای دوم»): three concentric SQUIRCLES, no blurred
+  /// glow layer, the core on the standing green/red GRADIENT:
+  ///   outer : 160×160,   r62, rgba(47,248,177,0.16) / rgba(234,35,35,0.16)
+  ///   mid   : 132×132,   r46, rgba(47,248,177,0.45) / rgba(234,35,35,0.45)
+  ///   core  : 108.17²,   r41, the 180° green/red gradient + the Off glyph
+  ///   48×48, stroke 3.5px #FFFFFF in BOTH states.
+  static const double connectOuterSize = 160;
+  static const double connectMidSize = 132;
+  static const double connectCoreSize = 108.17;
+  static const double connectIconSize = 48;
+  static const double connectOuter = 62;
+  static const double connectMid = 46;
   static const double connectCore = 41;
 
   /// Dark cards — corner radius pixel-measured on the reference frames:
@@ -311,16 +344,27 @@ abstract final class AethGeometry {
   /// the art itself — not the canvas — on the owner's requested bands.
   static const double patternLeftArtTopRow = 375;
   static const double patternLeftArtRows = 459; // 375..834
+  static const double patternRightArtTopRow = 357; // art rows 357..719
   static const double patternRightArtBottomRow = 719; // art rows 357..719
 
-  /// v4.33 — the look-2 CONNECT button composition sizes (the owner's own
-  /// CSS, 236×236 «Group 45» at the hero position left:83 top:263):
-  /// glow 236 (circle r120, blurred 57) / halo 181.92 / mid 152.42 /
-  /// core 108.17 (squircle r41) with the Off glyph 48×48. The whole group
-  /// IS the button's layout box — the glow spills past it via blur.
-  static const double connectGroupSize = 236;
-  static const double connectHaloSize = 181.92;
-  static const double connectMidSize = 152.42;
+  /// v4.46 — the owner's ⅓ diagonal decree (view 1, both states): the
+  /// LEFT art's centre rides a third of the SCREEN below the midline, the
+  /// RIGHT art's centre a third of the screen above it — the composition
+  /// the committed reference frames carry (measured: left art centre
+  /// ≈ 0.83 h, its halo rising to ≈ 0.42 h; right art centred up in the
+  /// top band). Expressed as fractions of the live screen height so it
+  /// holds on every device.
+  static const double patternLeftCenterRow = 0.5 + 1 / 3; // 5/6 of the height
+  static const double patternRightCenterRow = 0.5 - 1 / 3; // 1/6 of the height
+
+  /// v4.45 — the look-2 CONNECT button composition sizes (the owner's NEW
+  /// three-layer CSS): outer 160×160 (r62) / mid 132×132 (r46) / core
+  /// 108.17 (r41) with the Off glyph 48×48 (stroke 3.5px white). The whole
+  /// group IS the button's layout box — the outer layer is a crisp
+  /// translucent squircle (the v4.33 blurred-glow layer is retired).
+  static const double connectGroupSize = 160;
+  static const double connectOuterSize = 160;
+  static const double connectMidSize = 132;
   static const double connectCoreSize = 108.17;
   static const double connectIconSize = 48;
 
@@ -359,7 +403,9 @@ abstract final class AethGeometry {
   static const double speedGlowBlur = 57;
 
   /// The connect-button glow blur — the owner CSS `filter: blur(57px)`
-  /// on the 236×236 layer (v4.33).
+  /// on the retired v4.33 236×236 layer. v4.45: the NEW three-layer
+  /// composition carries NO blurred layer; the token stays for the speed
+  /// glow below (unchanged surface).
   static const double connectBlur = 57;
 
   /// Speed Test button group — owner CSS (Group 11): 96×96 glow at (153,508),
@@ -425,11 +471,14 @@ abstract final class AethGeometry {
   static const double protocolLogoSize = 30;
 
   /// Vertical rhythm gaps (ref frame): topbar→location 21, location→flags 13,
-  /// speed-group(96)→pill 1 (design y604→605), pill(38)→panel 63
-  /// (design y643→706), panel→bottom 30. (v4.11 — owner CSS Group 8/11.)
+  /// speed-group(96)→pill, pill(38)→panel 63 (design y643→706),
+  /// panel→bottom 30. (v4.11 — owner CSS Group 8/11.)
+  /// v4.45 — the owner's decree «دکمه تست سرعت و دکمه وضعیت بهم چسبیدن،
+  /// یه فاصله بینشون باشه»: the speed group and the status pill gain a
+  /// real 14 ref-px gap (the old 1 px read as glued).
   static const double gapTopbarToLocation = 21;
   static const double gapLocationToFlags = 13;
-  static const double gapSpeedToPill = 1;
+  static const double gapSpeedToPill = 14;
   static const double gapPillToPanel = 63;
   static const double gapPanelToBottom = 30;
 
@@ -521,120 +570,86 @@ abstract final class AethGeometry {
   static const double settingsStatusValueSize = 11;
 
   // -----------------------------------------------------------------
-  // v4.16 — PROTOCOL SELECTION, measured on the design frame «صفحه شناور
-  // انتخاب پروتکل صفحه اصلی.jpg» (402×874, 1:1 ref) and the companion
-  // «صفحه شناور توضیحات پروتکل ها.jpg» (the ⓘ popup).
-  // v4.17 — owner: the floating sheet is PROMOTED to a full PAGE «مثل صفحه
-  // اصلی تنظیمات» (top bar + patterns + back/info tiles). All v4.16
-  // measurement values are preserved and re-anchored to the page: the
-  // sheet's y-coordinates shifted up by the reclaimed sheet-chrome zone and
-  // the family cards grew (owner round: «نمایش زیرمجموعه‌ها فشرده‌ست»).
+  // v4.45 — THE PROTOCOL BOTTOM SHEET (the owner's redesign, frame
+  // «انتخاب پروتکل.jpg» 402×874 @2× + the owner's own Figma CSS): the
+  // protocol selection is no longer a pushed PAGE — the home protocol
+  // card slides a flutterfx-style BOTTOM SHEET up over the shrinking
+  // home (lib/features/home/protocol_sheet/protocol_sheet.dart). The
+  // old v4.17 page tokens are retired with the page; the tokens the
+  // settings/onboarding pages share (protoSegment*, protoPill*,
+  // protoBadgeSize, protoHeadingBadgeGap) stay.
   // -----------------------------------------------------------------
 
-  /// The home TOP BAR band height the page content sits under — the page
-  /// content starts below [topSafeExtraGap] + top tile (50) + 34 gap.
-  static const double protoPageContentTop = 96;
+  /// The sheet panel: 402×565 anchored to the screen bottom (top edge
+  /// y302 on the 874 reference), `#FFFFFF` light / [AethColors.cardDark]
+  /// night, top corners r38 (pixel-measured on the committed frame),
+  /// shadow `0 -6 64 rgba(0,0,0,0.09)` (owner CSS Rectangle 88).
+  static const double protoSheetH = 565;
+  static const double protoSheetRadius = 38;
+  static const double protoSheetShadowDy = -6;
+  static const double protoSheetShadowBlur = 64;
+  static const double protoSheetShadowAlpha = 0.09;
 
-  /// Section headings: text 16 w700 white; the text's right edge sits
-  /// [protoHeadingTextRightInset] from the screen right, then the
-  /// [protoHeadingBadgeGap] gap, then the badge at the content inset
-  /// (right edge x374 → 28 inset).
-  /// v4.17 — owner: the badges were «کمی کوچیکه» → 20 → 26, and the text
-  /// sat «خیلی زیاد از آیکونشون فاصله داره» → gap 26 → 12 (inset follows:
-  /// 28 + 26 + 12 = 66).
-  static const double protoHeadingTextRightInset = 66;
+  /// The drag handle: 97×8 fully-rounded pill, horizontally centred,
+  /// 17 below the sheet's top edge (owner CSS Rectangle 89: top 319 −
+  /// sheet top 302), `#F4F4F4` light / [AethColors.protoSheetChip] night.
+  static const double protoSheetHandleW = 97;
+  static const double protoSheetHandleH = 8;
+  static const double protoSheetHandleTop = 17;
+
+  /// The 2×6 protocol grid: cards 159×67 r17, 17 gaps on BOTH axes, page
+  /// inset 33 (33+159+17+159+17 = 385 ≈ 402 − 33 ✓); the first row's top
+  /// sits 53 below the sheet's top edge (frame y355 − 302), the last row
+  /// ends 25 above the sheet's bottom (867 − 842).
+  static const double protoSheetCardW = 159;
+  static const double protoSheetCardH = 67;
+  static const double protoSheetCardRadius = 17;
+  static const double protoSheetCardGap = 17;
+  static const double protoSheetInset = 33;
+  static const double protoSheetGridTop = 53;
+
+  /// The SELECTED card: the standing green gradient under a 4px
+  /// rgba(26,217,149,0.4) ring, white icon + white label (owner CSS
+  /// «Rectangle 13»).
+  static const double protoSheetCardBorder = 4;
+  static const double protoSheetCardRingAlpha = 0.4;
+
+  /// The tile label: IRANYekanX 400, 16/18 — the frame's own text style
+  /// (Latin protocol names, `text-transform: capitalize`).
+  static const double protoSheetLabelSize = 16;
+
+  /// The icon⇒label gap inside a tile (the frame's centered icon+label
+  /// group; measured 18–20 on the wireguard card).
+  static const double protoSheetIconGap = 18;
+
+  /// The flutterfx entrance: while the sheet slides up, the home behind
+  /// it scales to 0.85, rises 24 ref px and rounds its top corners to
+  /// r16 — the repo's own bottom-sheet recipe
+  /// (flutterfx_widgets/lib/bottom-sheet).
+  static const double protoSheetMainScale = 0.85;
+  static const double protoSheetMainRise = 24;
+  static const double protoSheetMainRadius = 16;
+
+  /// The dimming barrier's peak alpha (the flutterfx recipe: black54
+  /// × 0.7).
+  static const double protoSheetBarrierAlpha = 0.38;
+
+  /// Section-heading badge geometry — shared by the onboarding wizard's
+  /// own heading rows (v4.17 calibration kept: badge 26, gap 12).
   static const double protoHeadingBadgeGap = 12;
   static const double protoBadgeSize = 26;
-  static const double protoRightInset = 28;
-  static const double protoHeadingTextSize = 16;
 
-  /// Heading row tops on the page: حالت اتصال 96, پروتکل 194.
-  /// PHASE-2 REBUILD (2026-11-09): the سرعت اسکن heading is GONE from
-  /// the protocol page (the section lives in Connection Settings now);
-  /// its old top token is retired with the move.
-  static const double protoPageHeadingModeTop = 96;
-  static const double protoPageHeadingProtocolTop = 194;
-
-  /// Segments (تونل | پروکسی): h35 r14, x28..374, gap 21 — RTL order: تونل
-  /// (right, first) then پروکسی; the frame ships پروکسی SELECTED (green
-  /// #1AD995 fill, WHITE text on both states; dark = #0F1511).
-  /// Page top: 37 below its heading top (the sheet's 164→201 rhythm).
+  /// Segments (تونل | پروکسی): h35 r14 gap21 — shared by Connection
+  /// Settings and the onboarding wizard (v4.17 calibration kept).
   static const double protoSegmentTop = 133;
   static const double protoSegmentH = 35;
   static const double protoSegmentRadius = 14;
   static const double protoSegmentGap = 21;
   static const double protoSegmentTextSize = 16;
 
-  /// Tile grid: 3 per row, w103 gap 21 (x27..374), row1 y233 h100, row2 y349
-  /// h94 (the sheet's internal gaps kept: heading→row1 39, row1→row2 16).
-  /// v4.33 — the ⓘ badge tokens are gone (the descriptions are gone).
-  static const double protoTileW = 103;
-  static const double protoTileGap = 21;
-  static const double protoTileRadius = 21;
-  static const double protoTileRow1Top = 233;
-  static const double protoTileRow1H = 100;
-  static const double protoTileRow2Top = 349;
-  static const double protoTileRow2H = 94;
-  static const double protoTileIconCenter = 41;
-  static const double protoTileLabelCenter = 66;
-  static const double protoTileLabelSize = 12;
-
-  /// Family cards (سایفون / تور): v4.17 breathing — the owner called the
-  /// sub-protocol display «جالب نیست و یکم فشردهست»: card h 100 → 116, the
-  /// subtiles stay 66 (the stack-glyph calibration is evidence-locked) but
-  /// gain air (gap 16 → 20) and vertical centering (inset 25), and the main
-  /// block narrows 103 → 95 so everything fits the 346 card: 95 + 3×66 +
-  /// 2×20 + 13 inset = 346. Main block: logo center top+43, label top+80.
-  static const double protoCardTopPsiphon = 463;
-  static const double protoCardTopTor = 594;
-
-  /// PHASE B (Part 1) — the FIREFOX account card: the third full-width
-  /// card, after the Tor card in the same 15-gap rhythm the psiphon→tor
-  /// pair uses (594 + 116 + 15 = 725). Single-member by design — no
-  /// subtiles; the right zone carries the account-state chip instead.
-  static const double protoCardTopFirefox = 725;
-  static const double protoCardH = 116;
-
-  /// PHASE-2 REBUILD (2026-11-09) — the protocol page's OWN
-  /// content-column height: the Firefox card ends at 841
-  /// (protoCardTopFirefox 725 + protoCardH 116) + the frame's own 62
-  /// bottom rhythm (the pre-Firefox column's 874 − 812) = 903. The scan
-  /// section is gone (it lives in Connection Settings); [refHeight]
-  /// stays the DEVICE frame (the pattern composition's constant —
-  /// untouched) and the page no longer needs to scroll for its own
-  /// content on 874-logical viewports.
-  static const double protoPageContentH = 903;
-  static const double protoCardRadius = 21;
-  static const double protoSubtile = 66;
-  static const double protoSubtileRadius = 14;
-  static const double protoSubtileGap = 20;
-  static const double protoSubtileInsetTop = 25;
-  static const double protoMainBlockW = 95;
-  static const double protoMainLogoCenterY = 43;
-  static const double protoMainLabelCenterY = 80;
-
-  /// v4.33 (owner round 9) — the combined-mode subtile glyphs: the owner's
-  /// own SVGs (38×41 «X اور وارپ» / 24×35 «وارپ اور X»), rendered 48 tall
-  /// inside the 66 subtile (the retired aether+chevron stack measured ≈59
-  /// ink-height; the owner's art carries its own breathing room). The
-  /// plain ONLY subtiles keep the family logos at the old stack's own
-  /// calibrated boxes (psiphon 31.2 / tor 26.3 — the _StackGlyph evidence).
-  // v4.41 (owner round 17, item 1): «حداکثر ارتفاع 35 کافیه … آیکون های
-  // اصلی سایفون و تور هم ارتفاعشون اندازه آیکون سمت چپ باشه» — EVERY
-  // family-card glyph (the combined modes AND the plain family logos inside
-  // the three right subtiles) caps at 35 ink-height, matching the
-  // main-block logo on the visual left; the v4.40 48/31.2/26.3 frame
-  // calibration is retired by the decree.
-  static const double protoCombinedGlyphH = 35;
-  static const double protoPsiphonGlyphBox = 35;
-  static const double protoTorGlyphBox = 35;
-
-  /// Scan pills: h36 r8 gap8, CENTERED (row spans x33..367). Widths increase
-  /// toward the right; the widest (rightmost, 87) is the fastest depth.
-  /// GEOMETRY ONLY — PHASE-2 REBUILD (2026-11-09): the section MOVED to
-  /// Connection Settings (scan_speed_pills.dart); the old protocol-page
-  /// position token (protoPillTop) is retired with the move, the pill
-  /// geometry rides along unchanged (the shared widget renders it).
+  /// Scan pills: h36 r8 gap8, widths 28/47/64/77/87 — shared by Connection
+  /// Settings and the onboarding wizard (the v4.16 calibration, kept after
+  /// the section moved off the protocol page).
   static const double protoPillH = 36;
   static const double protoPillRadius = 8;
   static const double protoPillGap = 8;

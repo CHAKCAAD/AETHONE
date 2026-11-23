@@ -89,6 +89,10 @@ flutter:
     - design/آیکون پروتکل ها/گول کلاسیک هردو حالت.svg
     - design/آیکون پروتکل ها/تور هر دو حالت.svg
     - design/آیکون پروتکل ها/سایفون هر دو حالت.svg
+    # v4.45 — the owner's own AUTO mark (the uploaded «آیکون پروتکل
+    # auto.png», committed under the set's single-face naming): a white
+    # crown-like glyph on transparency; ProtocolGlyph owns the ink rule.
+    - design/آیکون پروتکل ها/auto هر دو حالت.png
     # --- PHASE-2 REBUILD (2026-11-09): the OFFICIAL Firefox mark
     #     (owner-delivered mozilla-vpn-seeklogo.svg, the single-face
     #     «هر دو حالت» naming; monochrome — renders through the ink). ---

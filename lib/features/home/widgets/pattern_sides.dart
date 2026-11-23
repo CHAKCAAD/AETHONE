@@ -14,16 +14,29 @@
 /// edge-glued settings variant could still ship in a stale build and read
 /// as "wrong place"; now there is a single code path and it cannot diverge.
 /// The ART (not the canvas) is placed with the measured art bounds
-/// ([AethGeometry.patternLeftArtTopRow] etc.): the LEFT art is centred at
-/// 60% of the screen height (10% below the middle — owner v4.17: «پترن سمت
-/// چپ رو بیار بالا تر در حدی که حدود ۱۰٪ پایین‌تر از وسط صفحه باشه»),
-/// the RIGHT art's bottom edge lands at 40% (10% above the middle — «پترن
-/// سمت راست رو بیار پایین تر در حدی که حدود ۱۰٪ بالاتر از وسط صفحه
-/// باشه») — the diagonal frame the reference screens show, computed from
-/// the LIVE height so it holds on every device.
+/// ([AethGeometry.patternLeftArtTopRow] etc.).
+///
+/// v4.46 — the owner's ⅓ DIAGONAL DECREE (view 1, both states): the LEFT
+/// art's centre rides a third of the SCREEN below the midline
+/// ([AethGeometry.patternLeftCenterRow] = 5/6 of the live height — the
+/// swoosh dips into the bottom third, its faint halo rising through the
+/// hero band), and the RIGHT art's centre a third of the screen ABOVE the
+/// midline ([AethGeometry.patternRightCenterRow] = 1/6 — the climbing
+/// strokes live in the top band). This is the composition the committed
+/// reference frames themselves carry; the previous v4.17 ±10 %-of-screen
+/// offsets are retired with their era.
 ///
 /// The color change is animated as a crossfade between the two artwork
 /// variants (owner: «با انیمیشن به رنگ سبز تغییر پیدا میکنند»).
+///
+/// v4.46 — the DARK + DISCONNECTED variant renders WHITE (owner decree):
+/// the red strokes go muddy against the night background, so while the
+/// theme is night AND the tunnel is down the disconnected artwork is
+/// tinted pure white (same alpha profile, the standing tint rule). The
+/// connected GREEN state keeps its colour in BOTH themes (the accent
+/// reads on either background), and the light theme keeps the red. The
+/// white⇄red swap rides the SAME crossfade as the red⇄green one — a
+/// mid-session theme flip never snaps the pattern.
 ///
 /// v4.41 (owner round 17, item 6): «کمی فلش های رو به بالا پترن های کنار
 /// تمام صفحات رو کوچیک تر کن دقت کن فقط فلش رو به بالا رو کوچیک کن، نه
@@ -50,6 +63,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/app_assets.dart';
+import '../../../core/app_theme.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 
@@ -147,20 +161,60 @@ class _PatternSidesState extends State<PatternSides>
         final h = box.maxHeight;
         final s = w / AethGeometry.refWidth;
 
-        // Canvases at 60% of the screen width (v4.12, art 40% smaller).
+        // Canvases at 70% of the screen width (v4.35, the size half of the
+        // «پر رنگ‌تر و بزرگ‌تر» decree).
         final leftW = w * AethGeometry.patternScale;
         final leftH = leftW * AethGeometry.patternLeftAspect;
         final rightW = w * AethGeometry.patternScale;
         final rightH = rightW * AethGeometry.patternRightAspect;
 
-        // v4.25 — the ONE composition (the v4.17 home placement, from the
-        // LIVE height): the LEFT art centred at 0.60h (10% below the
-        // middle), the RIGHT art's bottom edge at 0.40h (10% above it).
+        // v4.46 — the ⅓ DIAGONAL composition (the owner's decree, measured
+        // on the committed frames): each art's CENTRE rides a third of the
+        // LIVE screen height past the midline — the left art low (5/6 h),
+        // the right art high (1/6 h).
         const leftArtMidRow = AethGeometry.patternLeftArtTopRow +
             AethGeometry.patternLeftArtRows / 2;
-        final leftTop = 0.60 * h - leftArtMidRow * leftH / 1232;
-        final rightTop =
-            0.40 * h - AethGeometry.patternRightArtBottomRow * rightH / 1178;
+        const rightArtMidRow =
+            (AethGeometry.patternRightArtTopRow +
+                    AethGeometry.patternRightArtBottomRow) /
+                2;
+        final leftTop =
+            h * AethGeometry.patternLeftCenterRow - leftArtMidRow * leftH / 1232;
+        final rightTop = h * AethGeometry.patternRightCenterRow -
+            rightArtMidRow * rightH / 1178;
+
+        // v4.46 — the artwork variant: green when connected; RED in the
+        // light theme's disconnected state; WHITE when night + disconnected
+        // (the owner's decree — red goes muddy on the night background).
+        final white = !widget.connected && !AethThemeSync.light;
+        final variant = widget.connected ? 'on' : (white ? 'white' : 'off');
+
+        // The night-white tint (keeps the artwork's own alpha profile) —
+        // chained INSIDE the alpha-boost matrix so the lifted halos stay.
+        // Each variant carries its own key so the AnimatedSwitcher
+        // crossfades red ⇄ white ⇄ green instead of snapping.
+        Widget art(String asset, String side) {
+          final image = Image.asset(
+            asset,
+            fit: BoxFit.fill,
+            filterQuality: FilterQuality.medium,
+          );
+          return ColorFiltered(
+            key: ValueKey('pattern-$side-$variant'),
+            colorFilter: const ColorFilter.matrix(
+              _patternAlphaBoost,
+            ),
+            child: white
+                ? ColorFiltered(
+                    colorFilter: const ColorFilter.mode(
+                      Color(0xFFFFFFFF),
+                      BlendMode.srcIn,
+                    ),
+                    child: image,
+                  )
+                : image,
+          );
+        }
 
         return IgnorePointer(
           child: Stack(
@@ -178,20 +232,11 @@ class _PatternSidesState extends State<PatternSides>
                   breathFloor: recipe.swayBreathFloor,
                   child: AnimatedSwitcher(
                     duration: duration,
-                    child: ColorFiltered(
-                      colorFilter: const ColorFilter.matrix(
-                        _patternAlphaBoost,
-                      ),
-                      child: Image.asset(
-                        key: ValueKey(
-                          'pattern-left-${widget.connected ? 'on' : 'off'}',
-                        ),
-                        widget.connected
-                            ? AppAssets.patternConnectedLeft
-                            : AppAssets.patternDisconnectedLeft,
-                        fit: BoxFit.fill,
-                        filterQuality: FilterQuality.medium,
-                      ),
+                    child: art(
+                      widget.connected
+                          ? AppAssets.patternConnectedLeft
+                          : AppAssets.patternDisconnectedLeft,
+                      'left',
                     ),
                   ),
                 ),
@@ -208,20 +253,11 @@ class _PatternSidesState extends State<PatternSides>
                   breathFloor: recipe.swayBreathFloor,
                   child: AnimatedSwitcher(
                     duration: duration,
-                    child: ColorFiltered(
-                      colorFilter: const ColorFilter.matrix(
-                        _patternAlphaBoost,
-                      ),
-                      child: Image.asset(
-                        key: ValueKey(
-                          'pattern-right-${widget.connected ? 'on' : 'off'}',
-                        ),
-                        widget.connected
-                            ? AppAssets.patternConnectedRight
-                            : AppAssets.patternDisconnectedRight,
-                        fit: BoxFit.fill,
-                        filterQuality: FilterQuality.medium,
-                      ),
+                    child: art(
+                      widget.connected
+                          ? AppAssets.patternConnectedRight
+                          : AppAssets.patternDisconnectedRight,
+                      'right',
                     ),
                   ),
                 ),

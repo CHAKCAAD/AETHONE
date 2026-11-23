@@ -346,20 +346,32 @@ void main() {
         );
       }
 
-      // …and the shared placement is the owner-approved v4.17 home band:
-      // the LEFT art's middle row sits at 60% of the screen height, the
-      // RIGHT art's bottom edge at 40% (10% above the middle).
+      // …and the shared placement is the v4.46 ⅓ DIAGONAL decree (the
+      // owner's «left pattern a third below the midline, right a third
+      // above it», both states — measured on the committed frames): the
+      // LEFT art's centre rides 5/6 of the screen height, the RIGHT
+      // art's centre 1/6.
       const h = AethGeometry.refHeight * 1.0;
       final left = homeRects.first;
       final leftArtMidPx = (AethGeometry.patternLeftArtTopRow +
               AethGeometry.patternLeftArtRows / 2) /
           1232 *
           left.height;
-      expect(left.top + leftArtMidPx, closeTo(0.60 * h, 0.5));
+      expect(
+        left.top + leftArtMidPx,
+        closeTo(AethGeometry.patternLeftCenterRow * h, 0.5),
+      );
       final right = homeRects.last;
-      final rightArtBottomPx =
-          AethGeometry.patternRightArtBottomRow / 1178 * right.height;
-      expect(right.top + rightArtBottomPx, closeTo(0.40 * h, 0.5));
+      final rightArtMidPx =
+          (AethGeometry.patternRightArtTopRow +
+                  AethGeometry.patternRightArtBottomRow) /
+              2 /
+              1178 *
+              right.height;
+      expect(
+        right.top + rightArtMidPx,
+        closeTo(AethGeometry.patternRightCenterRow * h, 0.5),
+      );
     });
   });
 }

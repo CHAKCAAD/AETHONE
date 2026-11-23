@@ -9,6 +9,7 @@ import 'connection/desktop_window.dart';
 import 'core/app_theme.dart';
 import 'core/design_tokens.dart';
 import 'core/fx/theme_reveal.dart';
+import 'core/motion.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/onboarding_flow.dart';
 
@@ -121,9 +122,15 @@ class _AethoneAppState extends State<AethoneApp>
     _armAutoThemeTick();
     if (target == _clockTarget) return;
     _clockTarget = target;
-    // The master animation kill-switch collapses the cross-fade to a jump
-    // (the same decree that freezes every other animated surface).
-    if (!widget.store.animationsEnabled) {
+    // v4.46 — the cross-fade rides the SELECTED STYLE'S OWN tempo (owner
+    // report: the theme switch played differently across the motion
+    // modes — the 420 ms clock was fixed while the v4.43 reveal wipe and
+    // every other animated surface scaled). The OFF style (which
+    // [ConnectionStore.effectiveMotionStyle] also returns under the
+    // master kill-switch and the platform reduce-motion clamp) collapses
+    // to the same instant jump.
+    final style = widget.store.effectiveMotionStyle(context);
+    if (style == MotionStyle.off) {
       _themeClock
         ..stop()
         ..value = target == AethThemeMode.light ? 1 : 0;
@@ -132,6 +139,7 @@ class _AethoneAppState extends State<AethoneApp>
       setState(() {});
       return;
     }
+    _themeClock.duration = motionDuration(style, 420);
     _themeClock.animateTo(
       target == AethThemeMode.light ? 1 : 0,
       curve: Curves.linear,
