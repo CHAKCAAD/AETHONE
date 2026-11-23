@@ -33,6 +33,17 @@
 # recipe, decisions N1/N8) plus the phase-1 Firefox decrees. Actions are
 # pinned by FULL COMMIT SHA with the raw tag->SHA proof recorded in
 # evidence/actions_pins_raw_evidence.txt.
+#
+# 2026-11-24 — THE LEAN V8A ROUND (owner decree: «بیلد بگیر بت اکشن گیت
+#   هاب فقط برای v8a و لینک دانلود رو قرار بده»): the workflow_dispatch
+#   input abi=arm64-v8a builds ONLY the owner's-phone ABI. The engine leg
+#   drops to arm64-v8a + host (the host test vehicle stays — the --login
+#   suite needs it), the native-cores matrix keeps the arm64-v8a leg only,
+#   and the APK is built --target-platform android-arm64 (the owner's
+#   standing rule that the debug build is arm64-v8a ONLY, never universal).
+#   The default ('all') and every push trigger keep the universal behavior
+#   byte-identical. Containment is unchanged: expiring 14-day artifacts
+#   only, nothing public.
 # =============================================================================
 name: AETHONE DA — Firefox Debug APK
 
@@ -42,6 +53,15 @@ name: AETHONE DA — Firefox Debug APK
 # branches; they produce expiring debug artifacts only.
 on:
   workflow_dispatch:
+    inputs:
+      abi:
+        description: "ABI scope — 'all' (universal, 3 ABIs) or 'arm64-v8a' (lean: the owner's-phone ABI only)"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - arm64-v8a
   push:
     branches:
       - feature/firefox-guardian-psiphon-bootstrap
@@ -96,6 +116,9 @@ jobs:
     name: "Firefox engine (Go 1.25.0 — CGO + NDK r28c, all ABIs)"
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    env:
+      # lean v8a round: 'all' keeps the universal behavior byte-identical
+      ABI_SCOPE: ${{ inputs.abi || 'all' }}
     steps:
       - name: Checkout (integration branch, exact commit)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -153,19 +176,30 @@ jobs:
           go vet ./...
           go test ./...
 
-      - name: Build the engine — the official script, every ABI (A1 decree)
+      - name: Build the engine — the official script (A1 decree)
         run: |
           set -euo pipefail
           # ANDROID_HOME is a runner-image variable — it exists in the shell
           # environment, NOT in the expressions env context. Resolve here.
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/${FXV_NDK_PIN}"
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          bash phase1/scripts/build_engine.sh all 2>&1 | tee engine-build.log
+          if [ "$ABI_SCOPE" = "arm64-v8a" ]; then
+            # lean v8a round: the owner's-phone ABI + the host test vehicle
+            # (the host binary is NEVER skipped — the --login suite needs it)
+            bash phase1/scripts/build_engine.sh "arm64-v8a host" 2>&1 | tee engine-build.log
+          else
+            bash phase1/scripts/build_engine.sh all 2>&1 | tee engine-build.log
+          fi
 
       - name: Verify the engine outputs (fail-closed, per ABI + host)
         run: |
           set -euo pipefail
-          for abi in arm64-v8a armeabi-v7a x86_64; do
+          if [ "$ABI_SCOPE" = "arm64-v8a" ]; then
+            ABIS="arm64-v8a"
+          else
+            ABIS="arm64-v8a armeabi-v7a x86_64"
+          fi
+          for abi in $ABIS; do
             f="phase1/build/android/$abi/libfirefoxvpn.so"
             [ -f "$f" ] || { echo "::error::missing $f"; exit 1; }
             file "$f"
@@ -201,20 +235,13 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
+      # lean v8a round (owner decree 2026-11-24): abi=arm64-v8a collapses
+      # the matrix to the owner's-phone leg ONLY; 'all' — and every push
+      # trigger, where inputs.abi is empty — keeps all three legs. The
+      # include list is built by expression because the matrix context is
+      # NOT available in a job-level if (actionlint-verified).
       matrix:
-        include:
-          - abi: arm64-v8a
-            rust_target: aarch64-linux-android
-            goarch: arm64
-            goarm: ""
-          - abi: armeabi-v7a
-            rust_target: armv7-linux-androideabi
-            goarch: arm
-            goarm: "7"
-          - abi: x86_64
-            rust_target: x86_64-linux-android
-            goarch: amd64
-            goarm: ""
+        include: ${{ inputs.abi == 'arm64-v8a' && fromJSON('[{"abi":"arm64-v8a","rust_target":"aarch64-linux-android","goarch":"arm64","goarm":""}]') || fromJSON('[{"abi":"arm64-v8a","rust_target":"aarch64-linux-android","goarch":"arm64","goarm":""},{"abi":"armeabi-v7a","rust_target":"armv7-linux-androideabi","goarch":"arm","goarm":"7"},{"abi":"x86_64","rust_target":"x86_64-linux-android","goarch":"amd64","goarm":""}]') }}
     env:
       ZIG_PREFIX: ${{ github.workspace }}/.tools/zig
       SRC_CACHE: ${{ github.workspace }}/.srccache
@@ -306,10 +333,12 @@ jobs:
   # aapt/ELF presence/hash), and deliver the expiring artifact.
   # ===========================================================================
   firefox-da-debug-apk:
-    name: "DA debug APK (universal, all ABIs — package id .da)"
+    name: "DA debug APK (universal or lean v8a round — package id .da)"
     needs: [firefox-engine, native-cores]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      ABI_SCOPE: ${{ inputs.abi || 'all' }}
     steps:
       - name: Checkout AETHONE repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -393,7 +422,12 @@ jobs:
           [ -f "$EB/SHA256SUMS.txt" ] || { echo "::error::engine SHA256SUMS.txt missing"; exit 1; }
           ( cd "$EB" && sha256sum -c --quiet SHA256SUMS.txt ) \
             || { echo "::error::engine binaries do not match the build's own SHA256 manifest"; exit 1; }
-          for abi in arm64-v8a armeabi-v7a x86_64; do
+          if [ "$ABI_SCOPE" = "arm64-v8a" ]; then
+            ENGINE_ABIS="arm64-v8a"
+          else
+            ENGINE_ABIS="arm64-v8a armeabi-v7a x86_64"
+          fi
+          for abi in $ENGINE_ABIS; do
             src="$EB/android/$abi/libfirefoxvpn.so"
             [ -f "$src" ] || { echo "::error::engine binary missing for $abi"; exit 1; }
             cp "$src" "$JL/$abi/libfirefoxvpn.so"
@@ -415,10 +449,16 @@ jobs:
       - name: Unit + widget tests (incl. the real-engine --login suite)
         run: flutter test
 
-      - name: Build the DA debug APK (universal — all three ABIs)
+      - name: Build the DA debug APK
         run: |
           set -euo pipefail
-          flutter build apk --debug
+          if [ "$ABI_SCOPE" = "arm64-v8a" ]; then
+            # lean v8a round — the owner's standing rule: the debug build is
+            # arm64-v8a ONLY, never universal
+            flutter build apk --debug --target-platform android-arm64
+          else
+            flutter build apk --debug
+          fi
           ls -la build/app/outputs/flutter-apk/
 
       - name: Packaging gates (zipalign -P 16 + apksigner verify)
@@ -455,7 +495,12 @@ jobs:
           #    SIGPIPE the producer the way `unzip -l | grep -q` can under
           #    pipefail — the recorded native-ci run-41438805265 lesson)
           unzip -l "$APK" > apk-contents.txt
-          for abi in arm64-v8a armeabi-v7a x86_64; do
+          if [ "$ABI_SCOPE" = "arm64-v8a" ]; then
+            ABIS="arm64-v8a"
+          else
+            ABIS="arm64-v8a armeabi-v7a x86_64"
+          fi
+          for abi in $ABIS; do
             for so in libfirefoxvpn.so libaether.so liblyrebird.so libpsiphon.so libzeptun-jni.so; do
               grep -q "lib/$abi/$so" apk-contents.txt \
                 || { echo "::error::lib/$abi/$so missing from the APK"; exit 1; }
@@ -466,7 +511,7 @@ jobs:
           #    sizes printed for diagnosis; keepDebugSymbols keeps AGP's
           #    strip task away from the Firefox engine)
           EB="fxv-engine/phase1/build"
-          for abi in arm64-v8a armeabi-v7a x86_64; do
+          for abi in $ABIS; do
             in_apk="$(unzip -p "$APK" "lib/$abi/libfirefoxvpn.so" | sha256sum | cut -d' ' -f1)"
             built="$(sha256sum "$EB/android/$abi/libfirefoxvpn.so" | cut -d' ' -f1)"
             in_sz="$(unzip -l "$APK" "lib/$abi/libfirefoxvpn.so" | tail -2 | head -1 | awk '{print $1}')"
@@ -475,7 +520,7 @@ jobs:
             [ "$in_apk" = "$built" ] \
               || { echo "::error::lib/$abi/libfirefoxvpn.so in APK ($in_apk) != built ($built)"; exit 1; }
           done
-          echo "APK verification: ALL PASS (archive, package id, label, 3 ABIs x 5 libs, engine hashes)"
+          echo "APK verification: ALL PASS (archive, package id, label, [${ABIS// / + }] x 5 libs, engine hashes)"
 
       - name: Dist naming + SHA256SUMS + the build report
         run: |
@@ -515,7 +560,11 @@ jobs:
             echo "package_id=${DA_PACKAGE_ID}"
             echo "label=AETHONE DA"
             echo "variant=debug (debug-keystore signed — TEST INSTALL ONLY, not a release signature)"
-            echo "abis=arm64-v8a,armeabi-v7a,x86_64 (universal)"
+            if [ "$ABI_SCOPE" = "arm64-v8a" ]; then
+              echo "abis=arm64-v8a (lean scope — the owner's v8a-only round, 2026-11-24)"
+            else
+              echo "abis=arm64-v8a,armeabi-v7a,x86_64 (universal)"
+            fi
             echo "apk=AETHONE-DA-Firefox-Debug.apk"
             echo "apk_size_bytes=${APK_SIZE}"
             echo "apk_sha256=${APK_SHA}"
@@ -535,10 +584,20 @@ jobs:
           sha256sum dist/AETHONE-DA-Firefox-Debug.apk | sed 's|dist/||' > dist/SHA256SUMS.txt
           cat dist/SHA256SUMS.txt
 
-      - name: Upload the DA debug APK artifact (expiring — NOT a release)
+      - name: Upload the DA debug APK artifact (universal — expiring, NOT a release)
+        if: inputs.abi != 'arm64-v8a'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: AETHONE-DA-Firefox-Debug
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload the DA debug APK artifact (lean v8a round — expiring, NOT a release)
+        if: inputs.abi == 'arm64-v8a'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: AETHONE-DA-Firefox-Debug-v8a
           path: dist/
           retention-days: 14
           if-no-files-found: error
