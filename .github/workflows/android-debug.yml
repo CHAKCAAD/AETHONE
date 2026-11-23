@@ -569,7 +569,11 @@ jobs:
             echo "apk_size_bytes=${APK_SIZE}"
             echo "apk_sha256=${APK_SHA}"
             echo "archive_check=PASS (unzip -t)"
-            echo "firefox_engine_in_apk=PRESENT in all 3 ABIs, byte-identical to the built binaries (sha256-verified)"
+            if [ "$ABI_SCOPE" = "arm64-v8a" ]; then
+              echo "firefox_engine_in_apk=PRESENT (arm64-v8a — lean scope), byte-identical to the built binary (sha256-verified)"
+            else
+              echo "firefox_engine_in_apk=PRESENT in all 3 ABIs, byte-identical to the built binaries (sha256-verified)"
+            fi
             echo
             echo "# tests run in this workflow"
             echo "go_vet=PASS go_test=PASS (phase1/fxv — the engine job)"
