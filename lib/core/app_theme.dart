@@ -58,11 +58,14 @@ class AethPal {
     required this.bgScreen,
     required this.cardDark,
     required this.topTile,
-    required this.connectBase,
+    required this.connectBaseIdle,
+    required this.connectBaseLiveTop,
+    required this.connectBaseLiveBottom,
     required this.flagRing,
     required this.patternInk,
     required this.textPrimary,
     required this.textSecondary,
+    required this.statLabel,
     required this.onPillConnected,
     required this.onPillDisconnected,
     required this.statDownBg,
@@ -75,6 +78,9 @@ class AethPal {
     required this.speedTrackLive,
     required this.speedCoreRest,
     required this.speedIdleLayer,
+    required this.homeIdleLayer,
+    required this.homeIdleCore,
+    required this.panelShadowInk,
     required this.speedIconDown,
     required this.speedIconUp,
     required this.speedTileJitter,
@@ -86,28 +92,36 @@ class AethPal {
     required this.tileShadow,
   });
 
-  /// Screen background — night `#141C16` (owner-declared) / light `#EDEDED`
-  /// (owner CSS, both home frames).
+  /// Screen background — night `#000000` (the owner's dark-mode round:
+  /// «بکگراند کل صفحه باید کد رنگی 000000 داشته باشه») / light `#FFFFFF`
+  /// (the «نمای 2» light frames, pixel-sampled).
   final Color bgScreen;
 
-  /// Dark cards (protocol / stats / FAB column) — night `#0F1511`
-  /// (pixel-measured, darker than the bg) / light `#FFFFFF` (owner CSS
-  /// «بکگراند بخش انتخاب پروتکل», «بکگراند بخش آپلود/دانلود»).
+  /// Dark cards (protocol / stats / FAB column) — night `#1C1C1C` (the
+  /// owner's dark-mode round: «بکگراند کارت ها باید رنگ 1C1C1C داشته
+  /// باشه») / light `#F4F4F4` (owner CSS «Rectangle 13»).
   final Color cardDark;
 
-  /// Top-bar icon tiles (Rectangle 9/17) — night `#0F1510` / light
-  /// `#F4F4F4` (v5: the «نمای 2» mockup's tiles measure #F4F4F4 on the
-  /// now-white page).
+  /// Top-bar icon tiles (Rectangle 9/17) — night `#1C1C1C` (the owner's
+  /// dark-mode CSS «Group 127»/«Rectangle 9») / light `#F4F4F4`.
   final Color topTile;
 
-  /// v5 («نمای 2») — the look-2 connect button's base squircle («3»:
-  /// 160×160 r60, `#FFFFFF` in the committed light frames); night maps it
-  /// to the dark-card family `#0F1511`.
-  final Color connectBase;
+  /// v5.3 — the look-2 connect button's BASE squircle («3»: 160×160 r60),
+  /// now a STATE-tinted TRANSLUCENT layer (the owner's new CSS — the old
+  /// solid white squircle is retired):
+  ///   disconnected  light rgba(54,54,54,0.10) · night rgba(66,66,66,0.19)
+  /// The alpha rides INSIDE the color so the mode tween lerps it too.
+  final Color connectBaseIdle;
 
-  /// v5 — the selected-flag ring («Ellipse 74»: 4px `#F4F4F4` in light);
-  /// night `#1A261C` (the sheet-subtile relation — just visible on the
-  /// night panel).
+  /// v5.3 — the CONNECTED base: light the vertical pair
+  /// rgba(26,217,149,0.10) → rgba(47,248,177,0.10) (the CSS «گرادینت سبز»
+  /// at 10 %), night the flat rgba(26,217,149,0.05) (equal stops = the
+  /// flat solid, so ONE two-stop shader covers every state and mode).
+  final Color connectBaseLiveTop;
+  final Color connectBaseLiveBottom;
+
+  /// v5 — the selected-flag ring («Ellipse 74»: 4px `#F4F4F4` in light,
+  /// `#1C1C1C` in the owner's new dark CSS).
   final Color flagRing;
 
   /// v5.2 — the DISCONNECTED pattern artwork's ink: the committed PNG's
@@ -126,6 +140,11 @@ class AethPal {
   /// Secondary/muted text — night `#8E8E93` / light `#A3A3A3` (the CSS
   /// «UP:»/«DOWN:» label color).
   final Color textSecondary;
+
+  /// v5.3 — the look-2 «UP:»/«DOWN:» LABEL ink: the owner's new dark CSS
+  /// pins it `#FFFFFF` («UP: … color: #FFFFFF»); light keeps the committed
+  /// light CSS's muted `#A3A3A3`.
+  final Color statLabel;
 
   /// Status-pill ink on the GREEN core — night `#123E2B` / light `#141C16`
   /// (CSS «مــتـصـل» color).
@@ -173,9 +192,25 @@ class AethPal {
   /// 13) / light `#FFFFFF` (derived: the card family).
   final Color speedCoreRest;
 
-  /// The speed button's idle halo/mid layers — night `#110000` (owner CSS
-  /// rgba(17,0,0,α)) / light `#141C16` (the ink tint of the same α layers).
+  /// The speed PAGE button's idle halo/mid layers — night `#110000` (owner
+  /// CSS rgba(17,0,0,α)) / light `#141C16` (the ink tint of the same α
+  /// layers). The PAGE start button keeps its own previous family (owner:
+  /// «دکمه تست سرعت باید به رنگ قبلیش برگرده»).
   final Color speedIdleLayer;
+
+  /// v5.3 — the HOME speed-test button's disconnected family (the owner's
+  /// new CSS «Group 13»): the α layers — light rgba(17,0,0,α) → night
+  /// rgba(66,66,66,α) → and the flat core — light `#363636` / night
+  /// `#424242`. Split from the page button's own [speedIdleLayer] by the
+  /// same decree.
+  final Color homeIdleLayer;
+  final Color homeIdleCore;
+
+  /// v5.3 — the look-2 sheet's committed shadow ink: light
+  /// rgba(0,0,0,0.09) / night rgba(255,255,255,0.09) (the owner's dark
+  /// CSS «box-shadow: 0px -16px 95px rgba(255,255,255,0.09)»). The alpha
+  /// rides inside the color so the mode tween lerps it.
+  final Color panelShadowInk;
 
   /// DOWN stat icon — night `#01D589` / light `#00D589` (CSS Graph Down).
   final Color speedIconDown;
@@ -213,16 +248,24 @@ class AethPal {
   /// every other surface.
   final Color tileShadow;
 
-  /// The standing night palette (the values every earlier build shipped).
+  /// The standing night palette — v5.3: the owner's dark-mode round re-cuts
+  /// it («بکگراند کل صفحه 000000، بکگراند کارت ها 1C1C1C"); every value the
+  /// round names is evidence-locked here, the untouched derivations keep
+  /// their standing relations against the NEW black bg.
   static const AethPal night = AethPal(
-    bgScreen: Color(0xFF141C16),
-    cardDark: Color(0xFF0F1511),
-    topTile: Color(0xFF0F1510),
-    connectBase: Color(0xFF0F1511),
-    flagRing: Color(0xFF1A261C),
+    bgScreen: Color(0xFF000000),
+    cardDark: Color(0xFF1C1C1C),
+    topTile: Color(0xFF1C1C1C),
+    // «3» disconnected: rgba(66,66,66,0.19) — α 0.19 ≈ 0x30.
+    connectBaseIdle: Color(0x30424242),
+    // «3» connected: rgba(26,217,149,0.05) — α 0.05 ≈ 0x0D, flat pair.
+    connectBaseLiveTop: Color(0x0D1AD995),
+    connectBaseLiveBottom: Color(0x0D1AD995),
+    flagRing: Color(0xFF1C1C1C),
     patternInk: Color(0xFFFFFFFF),
     textPrimary: Color(0xFFFFFFFF),
     textSecondary: Color(0xFF8E8E93),
+    statLabel: Color(0xFFFFFFFF),
     onPillConnected: Color(0xFF123E2B),
     onPillDisconnected: Color(0xFF75160F),
     statDownBg: Color(0xFF0A4F33),
@@ -235,6 +278,9 @@ class AethPal {
     speedTrackLive: Color(0xFF16543B),
     speedCoreRest: Color(0xFF080C09),
     speedIdleLayer: Color(0xFF110000),
+    homeIdleLayer: Color(0xFF424242),
+    homeIdleCore: Color(0xFF424242),
+    panelShadowInk: Color(0x17FFFFFF), // rgba(255,255,255,0.09)
     speedIconDown: Color(0xFF01D589),
     speedIconUp: Color(0xFFE83946),
     speedTileJitter: Color(0xFF0A394B),
@@ -242,7 +288,7 @@ class AethPal {
     speedTilePing: Color(0xFF3A3C17),
     speedIconPing: Color(0xFFE6D83A),
     stepDim: Color(0xFF15553B),
-    obCtaBg: Color(0xFF0F1510),
+    obCtaBg: Color(0xFF1C1C1C),
     tileShadow: Color(0x40000000), // rgba(0,0,0,0.25) 0 4 4
   );
 
@@ -255,11 +301,16 @@ class AethPal {
     bgScreen: Color(0xFFFFFFFF),
     cardDark: Color(0xFFF4F4F4),
     topTile: Color(0xFFF4F4F4),
-    connectBase: Color(0xFFFFFFFF),
+    // «3» disconnected: rgba(54,54,54,0.10) — α 0.10 ≈ 0x1A.
+    connectBaseIdle: Color(0x1A363636),
+    // «3» connected: rgba(26,217,149,0.10) → rgba(47,248,177,0.10).
+    connectBaseLiveTop: Color(0x1A1AD995),
+    connectBaseLiveBottom: Color(0x1A2FF8B1),
     flagRing: Color(0xFFF4F4F4),
     patternInk: Color(0xFF110000),
     textPrimary: Color(0xFF141C16),
     textSecondary: Color(0xFFA3A3A3),
+    statLabel: Color(0xFFA3A3A3),
     onPillConnected: Color(0xFF141C16),
     onPillDisconnected: Color(0xFF141C16),
     statDownBg: Color(0x4D00D589), // rgba(0,213,137,0.30)
@@ -275,6 +326,9 @@ class AethPal {
     // back on the rgba(17,0,0,α) family (SAME as night), a WHITE glyph.
     speedCoreRest: Color(0xFF4C4C4C),
     speedIdleLayer: Color(0xFF110000),
+    homeIdleLayer: Color(0xFF110000),
+    homeIdleCore: Color(0xFF363636),
+    panelShadowInk: Color(0x17000000), // rgba(0,0,0,0.09)
     speedIconDown: Color(0xFF00D589),
     speedIconUp: Color(0xFFE63946),
     speedTileJitter: Color(0x26008FD5), // 15 % of the jitter blue
@@ -291,11 +345,16 @@ class AethPal {
         bgScreen: Color.lerp(a.bgScreen, b.bgScreen, t)!,
         cardDark: Color.lerp(a.cardDark, b.cardDark, t)!,
         topTile: Color.lerp(a.topTile, b.topTile, t)!,
-        connectBase: Color.lerp(a.connectBase, b.connectBase, t)!,
+        connectBaseIdle: Color.lerp(a.connectBaseIdle, b.connectBaseIdle, t)!,
+        connectBaseLiveTop:
+            Color.lerp(a.connectBaseLiveTop, b.connectBaseLiveTop, t)!,
+        connectBaseLiveBottom:
+            Color.lerp(a.connectBaseLiveBottom, b.connectBaseLiveBottom, t)!,
         flagRing: Color.lerp(a.flagRing, b.flagRing, t)!,
         patternInk: Color.lerp(a.patternInk, b.patternInk, t)!,
         textPrimary: Color.lerp(a.textPrimary, b.textPrimary, t)!,
         textSecondary: Color.lerp(a.textSecondary, b.textSecondary, t)!,
+        statLabel: Color.lerp(a.statLabel, b.statLabel, t)!,
         onPillConnected: Color.lerp(a.onPillConnected, b.onPillConnected, t)!,
         onPillDisconnected:
             Color.lerp(a.onPillDisconnected, b.onPillDisconnected, t)!,
@@ -309,6 +368,9 @@ class AethPal {
         speedTrackLive: Color.lerp(a.speedTrackLive, b.speedTrackLive, t)!,
         speedCoreRest: Color.lerp(a.speedCoreRest, b.speedCoreRest, t)!,
         speedIdleLayer: Color.lerp(a.speedIdleLayer, b.speedIdleLayer, t)!,
+        homeIdleLayer: Color.lerp(a.homeIdleLayer, b.homeIdleLayer, t)!,
+        homeIdleCore: Color.lerp(a.homeIdleCore, b.homeIdleCore, t)!,
+        panelShadowInk: Color.lerp(a.panelShadowInk, b.panelShadowInk, t)!,
         speedIconDown: Color.lerp(a.speedIconDown, b.speedIconDown, t)!,
         speedIconUp: Color.lerp(a.speedIconUp, b.speedIconUp, t)!,
         speedTileJitter: Color.lerp(a.speedTileJitter, b.speedTileJitter, t)!,

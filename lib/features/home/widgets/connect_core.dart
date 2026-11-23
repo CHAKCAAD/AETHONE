@@ -67,25 +67,25 @@ String connectGlyphFor(VpnState state) => switch (state) {
 /// from ×1.25 of their element, so 0.40 is exact for both) and the state
 /// rings ride just outside at ~0.48.
 ///
-/// [hideWalkStates] — the flutterfx round: look 1's walk vocabulary is the
-/// SPARK LOADER now (the logo itself marches, see [HeroLogo] /
-/// [SparkLoaderSpin]; owner: «هرچی انیمیشن برای حالت در حال اتصال نمای ۱
-/// … حذف کن»), so the halo paints NOTHING for the four walk states on that
-/// look and their ambient loops park too. The connected edge's celebration,
-/// the aurora, the collapse and the error ring stay — only the walk
-/// vocabulary is suppressed, and look 2 keeps everything.
+/// [hideWalkStates] — v5.3: look 1's walk vocabulary is RETIRED entirely
+/// (the owner: «در نمای 1 انیمیشن روی دکمه اتصال وسط صفحه باید حذف بشه»
+/// — the round-18 spark march went with it), so the halo paints NOTHING
+/// for the four walk states on that look and their ambient loops park
+/// too. The connected edge's celebration, the collapse and the error ring
+/// stay — only the walk vocabulary is suppressed, and look 2 keeps
+/// everything.
 ///
 /// [hideConnectedAura] — v8a (owner round 18: «انیمیشنی که در حالت متصل
 /// نمای 1 پشت دکمه اتصال وسط صفحه وجود داره رو از اپ حذف کن و به جاش
 /// Shimmer Button رو اعمال کن»): the connected state's AURORA BLOOM —
 /// the soft breathing glow + water ripples that played in the AREA
 /// AROUND the button — is RETIRED from the app (both looks pass true);
-/// the connected idle life now rides the button's OWN EDGE instead
-/// ([ShimmerEdge], shimmer_edge.dart — «دقیقا رو لبه های دکمه حرکت
-/// کنه نه رو لبه محدوده اون»). The ONE-SHOT celebration on the
-/// connecting→connected edge stays (it is the walk vocabulary's landing
-/// flourish, not a steady-state ambience), as do the collapse and the
-/// error ring; the walk states keep their full vocabulary on look 2.
+/// v5.3 retires the round-18 edge lap that replaced it too (the owner:
+/// «انیمیشن حاله سبز در حالت اتصال رو کلا حذف کن و فقط پترن ها باشن» —
+/// nothing animated rides the CONNECTED button). The ONE-SHOT celebration
+/// on the connecting→connected edge stays (it is the walk vocabulary's
+/// landing flourish, not a steady-state ambience), as do the collapse and
+/// the error ring; the walk states keep their full vocabulary on look 2.
 class ConnectHalo extends StatefulWidget {
   const ConnectHalo({
     super.key,
@@ -292,9 +292,9 @@ class _ConnectHaloPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // The spark-loader look: the walk states own NOTHING here — the logo
-    // itself is the motion (the calm-before/the march/the landing all
-    // live in SparkLoaderSpin).
+    // v5.3 — the walk states own NOTHING here on look 1 (the button is
+    // static; the calm-before/the march/the landing all retired with the
+    // spark loader).
     if (hideWalkStates && _isWalkState(state)) return;
     final c = Offset(size.width / 2, size.height / 2);
     final col = connectAccentFor(state);
@@ -313,10 +313,10 @@ class _ConnectHaloPainter extends CustomPainter {
 
       case VpnState.connected:
         // v8a — the steady AURORA BLOOM behind the button is RETIRED by
-        // the owner's decree (the ShimmerEdge on the button's own edge
-        // carries the connected idle life now); the ONE-SHOT landing
-        // celebration stays — it belongs to the walk vocabulary's finale,
-        // never to the steady state.
+        // the owner's decree; v5.3 — nothing animated replaces it on the
+        // connected button. The ONE-SHOT landing celebration stays — it
+        // belongs to the walk vocabulary's finale, never to the steady
+        // state.
         if (!hideConnectedAura) _aurora(canvas, size, c, col);
         if (shot > 0 && shot < 1) _celebration(canvas, size, c, col);
 

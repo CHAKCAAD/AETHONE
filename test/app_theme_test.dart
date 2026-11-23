@@ -33,9 +33,17 @@ void main() {
       expect(l.textSecondary, const Color(0xFFA3A3A3)); // «UP:»/«DOWN:»
       expect(l.onPillConnected, const Color(0xFF141C16)); // «مــتـصـل»
       expect(l.onPillDisconnected, const Color(0xFF141C16)); // «قــطــع!»
-      // v5 — the look-2 connect base + the flag ring.
-      expect(l.connectBase, const Color(0xFFFFFFFF)); // «Group 45»/«3»
+      // v5.3 — the look-2 connect BASE is the state-tinted translucent
+      // layer now: rgba(54,54,54,.10) idle, the vertical green pair
+      // rgba(26,217,149,.10) → rgba(47,248,177,.10) connected.
+      expect(l.connectBaseIdle, const Color(0x1A363636));
+      expect(l.connectBaseLiveTop, const Color(0x1A1AD995));
+      expect(l.connectBaseLiveBottom, const Color(0x1A2FF8B1));
       expect(l.flagRing, const Color(0xFFF4F4F4)); // «Ellipse 74»
+      // v5.3 — the home speed button's idle family + the sheet shadow ink.
+      expect(l.homeIdleLayer, const Color(0xFF110000));
+      expect(l.homeIdleCore, const Color(0xFF363636));
+      expect(l.panelShadowInk, const Color(0x17000000));
     });
 
     test('the stat icon boxes go translucent (Rectangle 11 / 12)', () {
@@ -48,9 +56,11 @@ void main() {
 
     test('the night palette keeps every evidence-locked value', () {
       const n = AethPal.night;
-      expect(n.bgScreen, const Color(0xFF141C16));
-      expect(n.cardDark, const Color(0xFF0F1511));
-      expect(n.topTile, const Color(0xFF0F1510));
+      // v5.3 — the owner's dark-mode round: «بکگراند کل صفحه باید کد رنگی
+      // 000000 داشته باشه و بکگراند کارت ها باید رنگ 1C1C1C داشته باشه».
+      expect(n.bgScreen, const Color(0xFF000000));
+      expect(n.cardDark, const Color(0xFF1C1C1C));
+      expect(n.topTile, const Color(0xFF1C1C1C));
       expect(n.textPrimary, const Color(0xFFFFFFFF));
       expect(n.textSecondary, const Color(0xFF8E8E93));
       expect(n.onPillConnected, const Color(0xFF123E2B));
@@ -58,7 +68,17 @@ void main() {
       expect(n.statDownBg, const Color(0xFF0A4F33));
       expect(n.statUpBg, const Color(0xFF3A1C1C));
       expect(n.speedCoreRest, const Color(0xFF080C09));
-      expect(n.obCtaBg, const Color(0xFF0F1510));
+      expect(n.obCtaBg, const Color(0xFF1C1C1C));
+      // v5.3 — the new dark CSS: the connect BASE tints, the flag ring,
+      // the home speed button's idle family, the WHITE sheet shadow.
+      expect(n.connectBaseIdle, const Color(0x30424242));
+      expect(n.connectBaseLiveTop, const Color(0x0D1AD995));
+      expect(n.connectBaseLiveBottom, const Color(0x0D1AD995));
+      expect(n.flagRing, const Color(0xFF1C1C1C));
+      expect(n.homeIdleLayer, const Color(0xFF424242));
+      expect(n.homeIdleCore, const Color(0xFF424242));
+      expect(n.panelShadowInk, const Color(0x17FFFFFF));
+      expect(n.statLabel, const Color(0xFFFFFFFF));
     });
 
     test('every field differs night → light (the tween has real work)', () {
@@ -72,8 +92,17 @@ void main() {
       cmp('bgScreen', n.bgScreen, l.bgScreen);
       cmp('cardDark', n.cardDark, l.cardDark);
       cmp('topTile', n.topTile, l.topTile);
+      cmp('connectBaseIdle', n.connectBaseIdle, l.connectBaseIdle);
+      cmp('connectBaseLiveTop', n.connectBaseLiveTop, l.connectBaseLiveTop);
+      cmp(
+        'connectBaseLiveBottom',
+        n.connectBaseLiveBottom,
+        l.connectBaseLiveBottom,
+      );
+      cmp('flagRing', n.flagRing, l.flagRing);
       cmp('textPrimary', n.textPrimary, l.textPrimary);
       cmp('textSecondary', n.textSecondary, l.textSecondary);
+      cmp('statLabel', n.statLabel, l.statLabel);
       cmp('onPillConnected', n.onPillConnected, l.onPillConnected);
       cmp('onPillDisconnected', n.onPillDisconnected, l.onPillDisconnected);
       cmp('statDownBg', n.statDownBg, l.statDownBg);
@@ -85,6 +114,9 @@ void main() {
       cmp('speedTrack', n.speedTrack, l.speedTrack);
       cmp('speedTrackLive', n.speedTrackLive, l.speedTrackLive);
       cmp('speedCoreRest', n.speedCoreRest, l.speedCoreRest);
+      cmp('homeIdleLayer', n.homeIdleLayer, l.homeIdleLayer);
+      cmp('homeIdleCore', n.homeIdleCore, l.homeIdleCore);
+      cmp('panelShadowInk', n.panelShadowInk, l.panelShadowInk);
       // v4.35 (owner round 11, item 9): speedIdleLayer is DELIBERATELY
       // mode-stable — the light rest button keeps the night rgba(17,0,0,α)
       // inner layers (the owner's own CSS); it joins the carve-out below.
@@ -119,7 +151,7 @@ void main() {
 
     test('the midpoint is halfway on the screen background', () {
       final mid = AethPal.lerp(AethPal.night, AethPal.light, 0.5);
-      // #141C16 ↔ #EDEDED at t=.5 — channel-wise average.
+      // #000000 ↔ #FFFFFF at t=.5 — channel-wise average.
       expect(mid.bgScreen, Color.lerp(
         AethPal.night.bgScreen,
         AethPal.light.bgScreen,

@@ -173,8 +173,9 @@ void main() {
     });
 
     // v4.33 — the CTA restyle (owner CSS Rectangle 13): the app's own card
-    // corner language (r17) on the dark #0F1510 ink — never a green pill.
-    testWidgets('the CTA is the owner-CSS dark box (r17, #0F1510)', (
+    // corner language (r17) on the dark card ink — never a green pill.
+    // v5.3 — the night card family is the owner's new #1C1C1C.
+    testWidgets('the CTA is the owner-CSS dark box (r17, the card ink)', (
       tester,
     ) async {
       await _useReferenceSurface(tester);

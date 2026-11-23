@@ -4,18 +4,19 @@ import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
 import 'package:aethone/core/app_theme.dart';
 import 'package:aethone/core/fx/circular_reveal.dart';
-import 'package:aethone/core/fx/smoke_burst.dart';
 import 'package:aethone/core/fx/tap_ripple.dart';
 import 'package:aethone/core/fx/theme_reveal.dart';
 import 'package:aethone/core/motion.dart';
 import 'package:aethone/features/shared/theme_toggle_tile.dart';
 
 /// v4.43 — the three flutterfx ports (owner-approved dependency round):
-/// the circular-reveal geometry and host, the connect button's tap ripple,
-/// and the connected smoke field. Every assertion here encodes a HOUSE
-/// RULE (prompt §11.7 / report §10): OFF renders nothing, the action
-/// never waits for decoration, state is never faked. If a test here
-/// fails, one of those rules was broken — do NOT relax the test.
+/// the circular-reveal geometry and host and the connect button's tap
+/// ripple (the connected smoke field joined them in v4.43 and was RETIRED
+/// in v5.3 — the owner: «انیمیشن حاله سبز در حالت اتصال رو کلا حذف کن و
+/// فقط پترن ها باشن»). Every assertion here encodes a HOUSE RULE
+/// (prompt §11.7 / report §10): OFF renders nothing, the action never
+/// waits for decoration, state is never faked. If a test here fails, one
+/// of those rules was broken — do NOT relax the test.
 void main() {
   setUp(() {
     AethThemeSync.palette = AethPal.night;
@@ -110,35 +111,9 @@ void main() {
     });
   });
 
-  group('SmokeField — the connected ambient (flutterfx port)', () {
-    testWidgets('renders while connected-style and never throws', (tester) async {
-      await tester.pumpWidget(const Directionality(
-        textDirection: TextDirection.rtl,
-        child: SmokeField(style: MotionStyle.standard),
-      ));
-      // A few frames of the drift (RTL directionality: the field must be
-      // agnostic — no assert on positions, just survival).
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pumpWidget(const SizedBox.shrink());
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('the OFF style parks the clock — nothing animates', (tester) async {
-      await tester.pumpWidget(const Directionality(
-        textDirection: TextDirection.ltr,
-        child: SmokeField(style: MotionStyle.off),
-      ));
-      // Five seconds pass with NO scheduled frame: if the clock were
-      // running, the test binding would report a pending ticker on
-      // teardown. (pump with a duration only advances; it does not
-      // schedule — a repeating controller would have to be explicitly
-      // pumped each frame, which we do NOT do here.)
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pumpWidget(const SizedBox.shrink());
-      expect(tester.takeException(), isNull);
-    });
-  });
+  // (The SmokeField group is RETIRED with the widget itself — v5.3, the
+  // owner: «انیمیشن حاله سبز در حالت اتصال رو کلا حذف کن و فقط پترن ها
+  // باشن»: the connected green smoke is gone from the app entirely.)
 
   group('ThemeReveal — the shell host (flutterfx port)', () {
     testWidgets('no host mounted: the request applies the flip directly',

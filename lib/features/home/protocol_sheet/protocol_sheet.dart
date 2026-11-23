@@ -48,13 +48,11 @@ import '../../../connection/connection_state.dart';
 import '../../../connection/connection_store.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
-import '../../../core/fx/smoke_burst.dart';
 import '../../../core/motion.dart';
 import '../../../l10n/app_strings.dart';
 import '../../shared/circle_selector.dart';
 import '../../shared/protocol_glyph.dart';
 import '../../shared/theme_toggle_tile.dart';
-import '../widgets/pattern_sides.dart';
 
 /// Pushes the protocol-selection page. v4.25 — the route itself is the
 /// STYLE'S OWN personality via [aethPageRoute] (SILK fade-rise / TIDE
@@ -139,39 +137,16 @@ class _ProtocolPageState extends State<ProtocolPage> {
                 MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
             return Stack(
               // v4.25 — the pattern-placement fix: expand keeps the root
-              // (and the `Positioned.fill` pattern box) at the FULL screen
-              // height — the loose default collapsed it to the content
-              // height and the composition drifted (the owner's decree).
+              // at the FULL screen height — the loose default collapsed
+              // it to the content height and the composition drifted (the
+              // owner's decree).
               fit: StackFit.expand,
               children: [
-                // v4.21 — the owner's decree: the OTHER pages carry the
-                // home screen's patterns, exactly the same, same position
-                // («از پترن های صفحه اصلی برای سایر صفحات مثل انتخاب پروتکل
-                // و تنطیمات استفاده کن دقیقا همونا با همون مکان»; v4.25 —
-                // one single composition, no per-page variant left).
-                // v4.22 — gated by the appearance switch (bare bg when off).
-                // v8a (owner round 18: «از انمیشن حاله سبز در حالت اتصال
-                // در صفحه اصلی در سایر صفحات هم استفاده کن») — the green
-                // connected-state ambience is no longer home-only: the
-                // SMOKE FIELD blooms and the patterns DRIFT under the SAME
-                // condition the home screen always used.
-                if (widget.store.isConnected &&
-                    widget.store.showPatterns &&
-                    widget.store.effectiveMotionStyle(context) !=
-                        MotionStyle.off)
-                  Positioned.fill(
-                    child: SmokeField(
-                      style: widget.store.effectiveMotionStyle(context),
-                    ),
-                  ),
-                if (widget.store.showPatterns)
-                  Positioned.fill(
-                    child: PatternSides(
-                      connected: widget.store.isConnected,
-                      style: widget.store.effectiveMotionStyle(context),
-                      active: widget.store.patternsAlive,
-                    ),
-                  ),
+                // v5.3 (the owner: «پترن های سمت راست و چپ فقط باید در صفحه
+                // اصلی و صفحه تست سرعت نمایش داده بشن و در سایر صفحه ها
+                // نباید نمایش داده شوند») — the protocol page carries NO
+                // patterns (and no smoke) any more: the v4.21/v8a
+                // every-page rules are retired here.
                 SafeArea(
                   child: SingleChildScrollView(
                     child: SizedBox(

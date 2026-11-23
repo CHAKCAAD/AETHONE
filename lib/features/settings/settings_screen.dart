@@ -50,9 +50,7 @@ import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../../core/motion_widgets.dart';
-import '../../core/fx/smoke_burst.dart';
 import '../../l10n/app_strings.dart';
-import '../home/widgets/pattern_sides.dart';
 import '../shared/theme_toggle_tile.dart';
 import 'appearance_page.dart';
 import 'connection_page.dart';
@@ -100,20 +98,14 @@ class SettingsScreen extends StatelessWidget {
 
   /// v4.21 — opens the core diagnostics page (the captured stderr of both
   /// engines — owner: «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا
-  /// بهتر بتونیم دیباگ کنیم»). v4.22 — carries the appearance switch so
-  /// the page honors the patterns-off preference too. v4.25 — the honest
-  /// connected state + the effective motion style ride along (the page's
-  /// patterns were hardcoded red/static — state honesty, the app's #1
-  /// rule), and the push itself is style-personal.
+  /// بهتر بتونیم دیباگ کنیم»). v5.3 — the pattern/carried-state params are
+  /// retired with the page's patterns (the owner: patterns live on the
+  /// HOME and SPEED-TEST pages only).
   void _openCoreLog(BuildContext context) {
     Navigator.of(context).push(
       aethPageRoute<void>(
         style: store.effectiveMotionStyle(context),
         builder: (_) => CoreLogPage(
-          showPatterns: store.showPatterns,
-          connected: store.isConnected,
-          // v8a — the every-page drift rule (owner round 18).
-          alive: store.patternsAlive,
           style: store.effectiveMotionStyle(context),
         ),
       ),
@@ -138,38 +130,13 @@ class SettingsScreen extends StatelessWidget {
       animation: store,
       builder: (context, _) => Scaffold(
         backgroundColor: AethColors.bgScreen,
-        // v4.25 — THE pattern-placement fix: the default `StackFit.loose`
-        // let the Stack collapse to the CONTENT height (~855 of 874 on the
-        // reference frame), so the `Positioned.fill` pattern box was SHORT
-        // and the whole composition shifted up — the owner's «مکان درستی
-        // نداره باید دقیقا مکانش مثل صفحه اصلی باشه». `StackFit.expand`
-        // pins the body (and with it the pattern) to the FULL screen on
-        // every device; the ScrollView simply scrolls inside it.
+        // v5.3 (the owner: «پترن های سمت راست و چپ فقط باید در صفحه اصلی و
+        // صفحه تست سرعت نمایش داده بشن و در سایر صفحه ها نباید نمایش داده
+        // شوند») — the settings pages carry NO patterns (and no smoke) any
+        // more: the v4.21/v8a every-page rules are retired here.
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // v4.21 — the owner's decree: the settings page carries the
-            // HOME screen's patterns, exactly the same, same position
-            // («از پترن های صفحه اصلی برای سایر صفحات مثل انتخاب پروتکل و
-            // تنطیمات استفاده کن دقیقا همونا با همون مکان»; v4.25 — one
-            // single composition, no per-page variant left in the code).
-            // v4.22 — gated by the appearance switch (bare bg when off).
-            // v8a (owner round 18: «از انمیشن حاله سبز در حالت اتصال
-            // در صفحه اصلی در سایر صفحات هم استفاده کن») — the green
-            // connected-state ambience (smoke + drift) is EVERY page's
-            // rule now, under the home screen's own condition.
-            if (store.isConnected && store.showPatterns && style != MotionStyle.off)
-              Positioned.fill(
-                child: SmokeField(style: style),
-              ),
-            if (store.showPatterns)
-              Positioned.fill(
-                child: PatternSides(
-                  connected: store.isConnected,
-                  style: style,
-                  active: store.patternsAlive,
-                ),
-              ),
             // v4.10 lesson (main-screen defect): under the fa/RTL locale a
             // plain Row MIRRORS — the settings frame's pixel layout is
             // LTR-locked here (geometry only; Persian text inside renders
@@ -1031,24 +998,13 @@ class _CoreLogCard extends StatelessWidget {
 class CoreLogPage extends StatefulWidget {
   const CoreLogPage({
     super.key,
-    this.showPatterns = true,
-    this.connected = false,
-    this.alive = false,
     this.style = MotionStyle.standard,
   });
 
-  /// v4.22 — the appearance switch (bare bg when off, like every page).
-  final bool showPatterns;
-
-  /// v4.25 — the HONEST connection state + the effective motion style:
-  /// the page's patterns used to be hardcoded red/static, which broke the
-  /// app's #1 rule (animation reflects state) whenever the log was opened
-  /// from a CONNECTED session.
-  final bool connected;
-
-  /// v8a — the every-page drift rule (owner round 18): the patterns
-  /// breathe here too while the tunnel is up / the walk is in flight.
-  final bool alive;
+  /// v4.25 — the effective motion style (the page's own controls).
+  /// v5.3 — the pattern params (showPatterns/connected/alive) are retired:
+  /// the page carries no patterns any more (the owner's home + speed-page
+  /// only rule).
   final MotionStyle style;
 
   @override
@@ -1107,29 +1063,10 @@ class _CoreLogPageState extends State<CoreLogPage> {
       textDirection: appContentDirection(context),
       child: Scaffold(
         backgroundColor: AethColors.bgScreen,
-        // v4.25 — the pattern-placement fix (see the settings page's Stack):
-        // expand keeps the pattern box at the FULL screen height.
+        // v5.3 — NO patterns here (the owner: home + speed test only).
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // The home patterns behind (v4.21 — same composition as every
-            // page; v4.22 — honors the appearance switch; v4.25 — the
-            // honest connected state + the effective motion style).
-            // v8a — the every-page drift rule (owner round 18).
-            if (widget.connected &&
-                widget.showPatterns &&
-                widget.style != MotionStyle.off)
-              Positioned.fill(
-                child: SmokeField(style: widget.style),
-              ),
-            if (widget.showPatterns)
-              Positioned.fill(
-                child: PatternSides(
-                  connected: widget.connected,
-                  style: widget.style,
-                  active: widget.alive,
-                ),
-              ),
             SafeArea(
               child: Column(
                 children: [

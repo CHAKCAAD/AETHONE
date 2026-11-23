@@ -57,15 +57,12 @@ class SecuritySettingsPage extends StatelessWidget {
             keyId: 'core-log',
             icon: AppAssets.iconInformationCircle,
             title: strings.coreLogTitle,
-            // v4.25 — the style-personal route + the honest pattern state.
+            // v4.25 — the style-personal route. v5.3 — no pattern params
+            // (the page carries no patterns: home + speed test only).
             onTap: () => Navigator.of(context).push(
               aethPageRoute<void>(
                 style: store.effectiveMotionStyle(context),
                 builder: (_) => CoreLogPage(
-                  showPatterns: store.showPatterns,
-                  connected: store.isConnected,
-                  // v8a — the every-page drift rule (owner round 18).
-                  alive: store.patternsAlive,
                   style: store.effectiveMotionStyle(context),
                 ),
               ),

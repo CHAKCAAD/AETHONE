@@ -53,7 +53,6 @@ import '../../connection/connection_state.dart';
 import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
-import '../../core/fx/smoke_burst.dart';
 import '../../core/motion.dart';
 import '../../core/motion_widgets.dart';
 import '../../l10n/app_strings.dart';
@@ -66,9 +65,7 @@ import 'widgets/glow_pill.dart';
 import 'widgets/hero_logo.dart';
 import 'widgets/location_header.dart';
 import 'widgets/pattern_sides.dart';
-import 'widgets/shimmer_edge.dart';
 import 'widgets/top_bar.dart';
-import 'widgets/widget_deck.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, required this.store});
@@ -152,16 +149,10 @@ class HomeScreen extends StatelessWidget {
             (store.state == VpnState.starting ||
                 store.state == VpnState.connecting ||
                 store.state == VpnState.reconnecting);
-        // The flutterfx round — the SPARK LOADER's domain: every state in
-        // which the engine is walking toward a session. On look 1 the logo
-        // marches in quarter-turn steps while any of these is live (owner:
-        // «به جاش از چرخش لوگو Spark Loader برای دکمه اتصال وسط صفحه
-        // نمای ۱ استفاده کن») and the halo's own walk vocabulary sleeps.
-        final walking = !connected &&
-            (store.state == VpnState.starting ||
-                store.state == VpnState.waitingForPermissions ||
-                store.state == VpnState.connecting ||
-                store.state == VpnState.reconnecting);
+        // v5.3 — the SPARK LOADER's walk flag is RETIRED with the march
+        // itself (the owner: «در نمای 1 انیمیشن روی دکمه اتصال وسط صفحه
+        // باید حذف بشه»); the hero is a static pose machine now and the
+        // halo's own walk vocabulary keeps sleeping on look 1.
 
         final locationHeader = LocationHeader(
           connected: connected,
@@ -199,25 +190,17 @@ class HomeScreen extends StatelessWidget {
             body: Stack(
               fit: StackFit.expand,
               children: [
-                // v4.43 — the connected SMOKE FIELD (the flutterfx port,
-                // owner-approved): four soft green gradient blobs drifting
-                // on closed Bézier loops behind everything while the tunnel
-                // is REALLY up. State-honest by construction — it renders
-                // only when [store.isConnected]; the OFF style and the
-                // appearance switch (showPatterns — the background-
-                // decoration family) keep it off. Sits UNDER the pattern
-                // art so the owner's tuned frames keep their exact look.
-                if (connected && store.showPatterns && style != MotionStyle.off)
-                  Positioned.fill(
-                    child: SmokeField(style: style),
-                  ),
-                // Edge patterns (red ↔ green, animated crossfade; they also
-                // DRIFT while the engine walks or the tunnel is up). The
+                // v5.3 (the owner's decree: «انیمیشن حاله سبز در حالت اتصال
+                // رو کلا حذف کن و فقط پترن ها باشن») — the connected SMOKE
+                // FIELD and the pattern DRIFT are both RETIRED: the tunnel's
+                // green state shows ONLY the static pattern artwork (the
+                // green canvases), never a second of ambient motion. The
+                // drift survives solely on the ENGINE WALK (the scan feel
+                // while connecting) — see [ConnectionStore.patternsAlive].
+                // Edge patterns (red ↔ green, animated crossfade). The
                 // appearance switch can turn them off. v5: the look-2 curved
                 // sheet COVERS them below its crown exactly like the
                 // mockups (the sheet is painted above in z-order).
-                // v8a (owner round 18): the green connected-state animation
-                // (the drift) is the HOME rule carried to EVERY page now.
                 if (store.showPatterns)
                   Positioned.fill(
                     child: PatternSides(
@@ -246,18 +229,20 @@ class HomeScreen extends StatelessWidget {
                         // Hero band: the logo centers in the flex region.
                         Expanded(
                           child: Center(
-                            child: heroStack(
-                              context, s, style, connected, walking,
-                            ),
+                            child: heroStack(context, s, style, connected),
                           ),
                         ),
-                        // v2.1.0 (the owner's decree: «برای صفحه اصلی چندتا
-                        // ویجت خلاقانه اضافه کن») — THE HOME WIDGET DECK: the
-                        // live session timer, the ping sparkline and the
-                        // session data card (look 1's hero band; the v5 look-2
-                        // redesign has no deck — its sheet owns the space).
-                        HomeWidgetDeck(store: store, style: style),
-                        SizedBox(height: AethGeometry.gapSpeedToPill * s),
+                        // v5.3 (the owner's decrees) — the session TABLE
+                        // (duration / latency / session data — the old
+                        // [HomeWidgetDeck]) is REMOVED from the app
+                        // entirely («جدولی که مدت اتصال، تاخیر و داده جلسه
+                        // رو نمایش میده باید کلا از اپ حذف بشه»). The
+                        // bottom DOWN/UP cards stay look-1's own surface,
+                        // now recording KILOBYTES exactly like «نمای 2»'s
+                        // readouts («کارت های نمایش دانلود و آپلود باید
+                        // مثل کارت های نمای 2 حتی تغیرات مصرف کیلوبایتی رو
+                        // هم باید ثبت کنن») — the same formatter, the same
+                        // HyperText decode, the same KB ticks.
                         SpeedTestButton(
                           visible: connected,
                           connected: connected,
@@ -305,9 +290,7 @@ class HomeScreen extends StatelessWidget {
                         Expanded(
                           child: Align(
                             alignment: Alignment.bottomCenter,
-                            child: heroStack(
-                              context, s, style, connected, walking,
-                            ),
+                            child: heroStack(context, s, style, connected),
                           ),
                         ),
                         SizedBox(height: AethGeometry.gapHeroToPanel * s),
@@ -339,10 +322,12 @@ class HomeScreen extends StatelessWidget {
   /// plays BEHIND the central element of BOTH looks (the v4.15 aurora + the
   /// v4.14 scan rings unified and extended to all EIGHT states: ignition /
   /// held / march / aurora+celebration / seek / collapse / error ring),
-  /// wrapped by [ConnectShake] on the failed edge; the flutterfx round gave
-  /// look 1's walk states to the SPARK LOADER; v8a (owner round 18) retired
-  /// the connected AURORA on both looks in favour of the button's own
-  /// [ShimmerEdge].
+  /// wrapped by [ConnectShake] on the failed edge; v8a (owner round 18)
+  /// retired the connected AURORA on both looks, and v5.3 retires the
+  /// round-18 [ShimmerEdge] lap too (the owner: «انیمیشن حاله سبز در حالت
+  /// اتصال رو کلا حذف کن و فقط پترن ها باشن» — nothing animated rides the
+  /// CONNECTED button on either look; look 1's walk states sleep as well
+  /// per «در نمای 1 انیمیشن روی دکمه اتصال وسط صفحه باید حذف بشه»).
   ///
   /// v5.1 (owner round 20) — THE HALOS ARE LAYOUT-NEUTRAL: every layer
   /// bigger than the central element rides an [OverflowBox] pinned to the
@@ -357,7 +342,6 @@ class HomeScreen extends StatelessWidget {
     double s,
     MotionStyle style,
     bool connected,
-    bool walking,
   ) {
     final isLookOne = store.homeLook == HomeLook.one;
     final elementSize = (isLookOne
@@ -396,10 +380,13 @@ class HomeScreen extends StatelessWidget {
               ? PressSpring(
                   style: style,
                   onTap: _toggleConnection,
+                  // v5.3 — the STATIC logo: no spark march, no breathing
+                  // (owner: «در نمای 1 انیمیشن روی دکمه اتصال وسط صفحه
+                  // باید حذف بشه»); the 58° pose + the gradient tint are
+                  // state APPEARANCE, not looping motion, and stay.
                   child: HeroLogo(
                     connected: connected,
                     style: style,
-                    sparking: walking,
                   ),
                 )
               : _CenterConnectButton(
@@ -407,38 +394,6 @@ class HomeScreen extends StatelessWidget {
                   style: style,
                   onTap: _toggleConnection,
                 ),
-        ),
-        // v8a (owner round 18) — the ShimmerEdge: a faint static border +
-        // ONE traveling light segment lapping the button's rounded-rect
-        // perimeter — painted ABOVE the button so the edge is never covered
-        // by its own core layer: look 1 = the hero logo's bounds (r62, the
-        // app's squircle ratio), look 2 = the Group-45 core squircle.
-        // IgnorePointer inside — taps stay the button's. Mounted only while
-        // CONNECTED («دقیقا رو لبه های دکمه حرکت کنه نه رو لبه محدوده
-        // اون»); OFF keeps the static edge as status feedback and stops the
-        // lap. Smaller than the element, so it can never resize the Stack.
-        AnimatedSwitcher(
-          duration: motionDuration(style, MotionDurations.state),
-          child: connected
-              ? IgnorePointer(
-                  child: ShimmerEdge(
-                    key: const ValueKey('connect-shimmer'),
-                    style: style,
-                    width: (isLookOne
-                            ? AethGeometry.heroSize
-                            : AethGeometry.connectCoreSize) *
-                        s,
-                    height: (isLookOne
-                            ? AethGeometry.heroSize
-                            : AethGeometry.connectCoreSize) *
-                        s,
-                    radius: (isLookOne
-                            ? AethGeometry.heroEdgeRadius
-                            : AethRadius.connectCore) *
-                        s,
-                  ),
-                )
-              : const SizedBox.shrink(key: ValueKey('shimmer-off')),
         ),
       ],
     );
@@ -721,8 +676,14 @@ class _LookTwoSheet extends StatelessWidget {
         : AethGeometry.gapCardToBottom * s;
     return CustomPaint(
       // The crown paints UNDER the content — the sheet's own fill must
-      // never cover the stats row / flags / card riding on it.
-      painter: _SheetCrownPainter(s),
+      // never cover the stats row / flags / card riding on it. v5.3: the
+      // inks are passed in (palette-read at build time) so the 420 ms
+      // mode tween repaints them — see the painter's shouldRepaint.
+      painter: _SheetCrownPainter(
+        s,
+        AethColors.panelShadowInk,
+        AethColors.bgScreen,
+      ),
       child: Padding(
         // The sheet's empty crown between its top edge and the stats row
         // (design y 470 → 532).
@@ -771,10 +732,18 @@ class _LookTwoSheet extends StatelessWidget {
 /// Paints the sheet's crown: the blurred shadow ABOVE the top edge + the
 /// bg-coloured fill whose top line follows the owner's SVG path (flat rim
 /// 0–96 · U-dip to +30 across the centre · flat rim 301–402, design px).
+///
+/// v5.3 — the shadow ink rides the PALETTE now (light rgba(0,0,0,0.09) /
+/// night rgba(255,255,255,0.09), the owner's dark CSS «Rectangle 87»), and
+/// [shouldRepaint] compares BOTH inks — the old `s`-only test left the
+/// crown painted in the PREVIOUS mode's colors through the whole 420 ms
+/// theme tween (the painter instance changes, but s does not).
 class _SheetCrownPainter extends CustomPainter {
-  _SheetCrownPainter(this.s);
+  _SheetCrownPainter(this.s, this.shadowInk, this.fill);
 
   final double s;
+  final Color shadowInk;
+  final Color fill;
 
   Path _crownPath(Size size) {
     final k = s;
@@ -825,23 +794,26 @@ class _SheetCrownPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final path = _crownPath(size);
     // The committed shadow — the SVG filter: feOffset dy −16, feGaussian
-    // σ47.5, α0.09. Painted FIRST so the fill covers its lower half.
+    // σ47.5 — in the palette's own ink (α 0.09 rides inside the color).
+    // Painted FIRST so the fill covers its lower half.
     canvas.save();
     canvas.translate(0, AethGeometry.panelShadowDy * s);
     canvas.drawPath(
       path,
       Paint()
-        ..color = const Color.fromRGBO(0, 0, 0, AethGeometry.panelShadowAlpha)
+        ..color = shadowInk
         ..maskFilter = MaskFilter.blur(
           BlurStyle.normal,
           AethGeometry.panelShadowSigma * s,
         ),
     );
     canvas.restore();
-    canvas.drawPath(path, Paint()..color = AethColors.bgScreen);
+    canvas.drawPath(path, Paint()..color = fill);
   }
 
   @override
   bool shouldRepaint(_SheetCrownPainter oldDelegate) =>
-      oldDelegate.s != s;
+      oldDelegate.s != s ||
+      oldDelegate.shadowInk != shadowInk ||
+      oldDelegate.fill != fill;
 }

@@ -71,15 +71,22 @@ abstract final class AethColors {
           List<Color> stops, Color solid, double t) =>
       [Color.lerp(solid, stops[0], t)!, Color.lerp(solid, stops[1], t)!];
 
-  /// The look-2 connect button's WHITE base («3»: 160×160, r60,
-  /// `background: #FFFFFF`) — theme-dependent: light `#FFFFFF`, night the
-  /// dark-card family `#0F1511` (the new design ships light frames only;
-  /// the night mapping follows the standing card relation).
-  static Color get connectBase => AethThemeSync.palette.connectBase;
+  /// v5.3 — the look-2 connect button's BASE («3»: 160×160, r60) is now a
+  /// STATE-tinted TRANSLUCENT layer (the owner's new CSS):
+  ///   disconnected  light rgba(54,54,54,0.10) · night rgba(66,66,66,0.19)
+  ///   connected     light rgba(26,217,149,.10)→rgba(47,248,177,.10)
+  ///                 night rgba(26,217,149,0.05)
+  /// The alphas ride inside the palette colors, so the 420 ms mode tween
+  /// lerps them in lockstep. [ConnectButtonGlow] composes the two stops
+  /// into ONE vertical shader (equal stops = the flat solid).
+  static Color get connectBaseIdle => AethThemeSync.palette.connectBaseIdle;
+  static Color get connectBaseLiveTop =>
+      AethThemeSync.palette.connectBaseLiveTop;
+  static Color get connectBaseLiveBottom =>
+      AethThemeSync.palette.connectBaseLiveBottom;
 
-  /// The selected-flag ring («Ellipse 74»: 4px `#F4F4F4`) — light `#F4F4F4`
-  /// on the white panel, night `#1A261C` (the sheet-subtile relation — a
-  /// just-visible ring on the night panel).
+  /// v5 — the selected-flag ring («Ellipse 74»: 4px `#F4F4F4` in light,
+  /// `#1C1C1C` at night — the owner's dark CSS).
   static Color get flagRing => AethThemeSync.palette.flagRing;
 
   /// v5.2 — the DISCONNECTED pattern artwork's ink (the round-21
@@ -89,10 +96,20 @@ abstract final class AethColors {
   /// never a second, offset tween).
   static Color get patternInk => AethThemeSync.palette.patternInk;
 
-  /// The speed-test button's DISCONNECTED core («1»: 44×44 r17,
-  /// `background: #363636`) — const: the CSS names one value for the dark
-  /// idle face in every theme.
-  static const Color speedIdleCore = Color(0xFF363636);
+  /// v5.3 — the HOME speed-test button's DISCONNECTED family (the owner's
+  /// new CSS «Group 13»): the α layers — light rgba(17,0,0,α) → night
+  /// rgba(66,66,66,α) — and the flat core — light `#363636` / night
+  /// `#424242`. Split from the speed PAGE's own [speedIdleLayer] by the
+  /// decree «دکمه تست سرعت باید به رنگ قبلیش برگرده و گرادینت روش اعمال
+  /// نشه»: the PAGE button keeps its previous family, the HOME button
+  /// carries the new dark one.
+  static Color get homeIdleLayer => AethThemeSync.palette.homeIdleLayer;
+  static Color get homeIdleCore => AethThemeSync.palette.homeIdleCore;
+
+  /// v5.3 — the look-2 sheet's committed shadow ink (light
+  /// rgba(0,0,0,0.09) / night rgba(255,255,255,0.09), the owner's dark
+  /// CSS «Rectangle 87»); the alpha rides inside the palette color.
+  static Color get panelShadowInk => AethThemeSync.palette.panelShadowInk;
 
   /// Gold accent on mim / gool-classic protocol icons (asset XML `#997A35`).
   static const Color goldAccent = Color(0xFF997A35);
@@ -182,6 +199,11 @@ abstract final class AethColors {
   /// Secondary/muted text — night `#8E8E93` (VLM read) / light `#A3A3A3`
   /// (the light CSS «UP:»/«DOWN:» label color). Theme-dependent (v4.34).
   static Color get textSecondary => AethThemeSync.palette.textSecondary;
+
+  /// v5.3 — the look-2 «UP:»/«DOWN:» LABEL ink: the owner's new dark CSS
+  /// pins it `#FFFFFF`; light keeps the committed light CSS's muted
+  /// `#A3A3A3`.
+  static Color get statLabel => AethThemeSync.palette.statLabel;
 
   // ---- v4.23 onboarding («صفحه شروع» frames) ----
 
@@ -393,6 +415,11 @@ abstract final class AethGeometry {
   /// reference frames: 37×39 px centered on the wordmark center.
   static const double brandMarkSize = 38;
   static const double wordmarkFontSize = 15;
+
+  /// v5.3 — the HOME wordmark: the owner's new dark CSS pins it 18px/800
+  /// («AETHONE … font-weight: 800; font-size: 18px»); the other pages
+  /// keep the standing 15px lockup above.
+  static const double homeWordmarkFontSize = 18;
   static const double wordmarkLetterSpacing = 1.1;
 
   // (v5 «نمای 2»: the pill's v4.10 tuned blur + Figma box-shadow pair are
@@ -456,14 +483,19 @@ abstract final class AethGeometry {
   /// above the bar via the max() in the sheet.
   static const double gapCardToBottom = 37;
 
-  /// The stats row's stat groups (mockup-measured): Graph glyph 27×27 at
-  /// x 34 (DOWN) / x 282 (UP), 20px icon→text gap, label 10px over value
-  /// 14px — the SAME «DOWN:»/«UP:» type ramp the look-1 cards carry.
-  /// The groups sit 6px BELOW the speed band's centre (mockup: their
-  /// centre rides at y 575, the band's at 569) — [statGroupNudge].
-  static const double statGlyphSize = 27;
-  static const double statGlyphTextGap = 20;
+  /// v5.3 (the owner's new CSS «Group 124»/«Group 4»/«Group 5»): the stat
+  /// groups' Graph glyph 30×30 at x 32 (DOWN) / x 280 (UP), 17px
+  /// icon→text gap (icon 32–62, label 79), the label 13px/w200 over the
+  /// value 14px/w400, both 18px line-height. The groups sit 6px BELOW
+  /// the speed band's centre (the icon's centre rides at y 575, the
+  /// band's at 569) — [statGroupNudge]. The ROW itself spans x 32–348
+  /// (the UP group ends 54px short of the right edge, clear of the right
+  /// pattern's ink) — [statRowPadLeft]/[statRowPadRight].
+  static const double statGlyphSize = 30;
+  static const double statGlyphTextGap = 17;
   static const double statGroupNudge = 6;
+  static const double statRowPadLeft = 32;
+  static const double statRowPadRight = 54;
 
   /// Speed Test button group — v5 owner CSS (Group 13): 74×74 at
   /// (164,532); layers 74 r32 / 62 r27 / 44 r17; icon 28×28 in WHITE.

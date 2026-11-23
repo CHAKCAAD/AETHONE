@@ -41,7 +41,6 @@ import '../../connection/speed_test.dart';
 import '../../connection/transport_modes.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
-import '../../core/fx/smoke_burst.dart';
 import '../../core/motion.dart';
 import '../../core/motion_widgets.dart';
 import '../../l10n/app_strings.dart';
@@ -165,15 +164,11 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
             // این صفحه استفاده کن دقیقا همون پترن») — the HOME composition
             // itself, same position, same strength, no per-page wash; gated
             // by the appearance switch; alive while a test runs.
-            // v8a (owner round 18) — the every-page drift rule on top of
-            // the page's own running state + the green smoke blooms while
-            // the tunnel is up, exactly like the home screen.
-            if (widget.store.isConnected &&
-                widget.store.showPatterns &&
-                widget.style != MotionStyle.off)
-              Positioned.fill(
-                child: SmokeField(style: widget.style),
-              ),
+            // v5.3 (the owner: «انیمیشن حاله سبز در حالت اتصال رو کلا حذف
+            // کن و فقط پترن ها باشن») — the connected SMOKE FIELD is
+            // RETIRED here too, and the drift runs only while a TEST runs
+            // (the page's own feedback) or the engine walks — never merely
+            // because the tunnel is up.
             if (widget.store.showPatterns)
               Positioned.fill(
                 child: PatternSides(
@@ -999,13 +994,12 @@ class _StartButton extends StatelessWidget {
                     ],
                   ),
                 ),
-                // The core (44 r17) — #080C09 at rest, the redesign's own
-                // GREEN gradient sweep while running (v5.2, owner round
-                // 21: «گردینت سبز و قرمز … برای المان های سبز و قرمز رنگ
-                // دیگه هم اعمال کن» — the speed-page core matches the
-                // home button's). ONE tween crossfades the two poses
-                // (equal stops = the flat rest solid), so a single shader
-                // covers the whole state edge.
+                // The core (44 r17) — v5.3 (the owner's decree: «در هر دو
+                // نما دکمه تست سرعت باید به رنگ قبلیش برگرده و گرادینت
+                // روش اعمال نشه»): the round-21 GREEN GRADIENT sweep is
+                // RETIRED — the core is the FLAT accent again (#1AD995
+                // running over the previous rest solid `#080C09`), ONE
+                // crossfade tween between the two poses.
                 TweenAnimationBuilder<double>(
                   tween: Tween(end: running ? 1.0 : 0.0),
                   duration: duration,
@@ -1014,15 +1008,11 @@ class _StartButton extends StatelessWidget {
                     width: AethGeometry.speedCoreSize * s,
                     height: AethGeometry.speedCoreSize * s,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: AethColors.lerpGradientStops(
-                          AethColors.greenStops,
-                          AethColors.speedCoreRest,
-                          t,
-                        ),
-                      ),
+                      color: Color.lerp(
+                        AethColors.speedCoreRest,
+                        AethColors.accentConnected,
+                        t,
+                      )!,
                       borderRadius:
                           BorderRadius.circular(AethRadius.speedCore * s),
                     ),

@@ -25,9 +25,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
-import '../../core/fx/smoke_burst.dart';
 import '../../core/motion.dart';
-import '../home/widgets/pattern_sides.dart';
 import '../shared/theme_toggle_tile.dart';
 
 /// The Telegram channel — the info tile's destination on every page.
@@ -80,32 +78,12 @@ class SubPageFrame extends StatelessWidget {
       animation: store,
       builder: (context, _) => Scaffold(
         backgroundColor: AethColors.bgScreen,
-        // v4.25 — the pattern-placement fix: `StackFit.expand` pins the
-        // body (and the `Positioned.fill` pattern box behind it) to the
-        // FULL screen height — the default loose fit collapsed it to the
-        // content height and the composition drifted off the main page's
-        // placement (the owner's «مکانش دقیقا مثل صفحه اصلی باشه»).
+        // v5.3 (the owner: «پترن های سمت راست و چپ فقط باید در صفحه اصلی و
+        // صفحه تست سرعت نمایش داده بشن و در سایر صفحه ها نباید نمایش داده
+        // شوند») — the sub-pages carry NO patterns (and no smoke) any more.
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // The home patterns behind (v4.21 decree; v4.22: gated by the
-            // appearance switch; v4.25: ONE composition for every page —
-            // exactly the main screen's placement, single code path).
-            // v8a (owner round 18): the green connected-state ambience
-            // (smoke + drift) lives on EVERY page now, under the home
-            // screen's own condition.
-            if (store.isConnected && store.showPatterns && style != MotionStyle.off)
-              Positioned.fill(
-                child: SmokeField(style: style),
-              ),
-            if (store.showPatterns)
-              Positioned.fill(
-                child: PatternSides(
-                  connected: store.isConnected,
-                  style: style,
-                  active: store.patternsAlive,
-                ),
-              ),
             // LTR-locked geometry (the settings-page precedent): the
             // chrome rows land on the frame's measured positions while
             // Persian text inside keeps its natural bidi direction.

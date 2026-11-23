@@ -28,6 +28,7 @@ import 'package:aethone/features/home/home_screen.dart';
 import 'package:aethone/features/home/widgets/pattern_sides.dart';
 import 'package:aethone/features/settings/appearance_page.dart';
 import 'package:aethone/features/settings/settings_screen.dart';
+import 'package:aethone/features/speedtest/speed_test_page.dart';
 
 Widget _booth(Widget child) => MaterialApp(
       locale: const Locale('fa'),
@@ -313,44 +314,18 @@ void main() {
     }
 
     testWidgets(
-        'home, settings and the sub-pages place the patterns IDENTICALLY',
+        'v5.3 — the patterns live on the HOME and SPEED-TEST pages ONLY; '
+        'the settings pages carry none (the owner\'s new decree)',
         (tester) async {
       await _useReferenceSurface(tester);
 
-      // --- HOME ---
+      // --- HOME: the one composition, at the mockup-measured placement ---
       final homeStore = makeStore();
       await tester.pumpWidget(_booth(HomeScreen(store: homeStore)));
       await settleImages(tester);
       final homeRects = patternRects(tester);
-
-      // --- SETTINGS MAIN PAGE ---
-      final settingsStore = makeStore();
-      await tester.pumpWidget(_booth(SettingsScreen(store: settingsStore)));
-      await settleImages(tester);
-      final settingsRects = patternRects(tester);
-
-      // --- A SETTINGS SUB-PAGE (the frame every sub-page shares) ---
-      final subStore = makeStore();
-      await tester.pumpWidget(_booth(AppearanceSettingsPage(store: subStore)));
-      await settleImages(tester);
-      final subRects = patternRects(tester);
-
-      // The decree: «مکانش دقیقا مثل صفحه اصلی باشه» — identical rects.
-      for (var i = 0; i < 2; i++) {
-        expect(
-          settingsRects[i],
-          homeRects[i],
-          reason: 'the settings page pattern $i must equal the home one',
-        );
-        expect(
-          subRects[i],
-          homeRects[i],
-          reason: 'the sub-page pattern $i must equal the home one',
-        );
-      }
-
-      // …and the shared placement is the v5 mockup-measured band: the
-      // LEFT art's middle row sits at 27% of the screen height, the RIGHT
+      // The shared placement is the v5 mockup-measured band: the LEFT
+      // art's middle row sits at 27% of the screen height, the RIGHT
       // art's ink bottom at 48.5% (both template-matched on the committed
       // «نمای 2» frames).
       const h = AethGeometry.refHeight * 1.0;
@@ -364,6 +339,38 @@ void main() {
       final rightArtBottomPx =
           AethGeometry.patternRightArtBottomRow / 1848 * right.height;
       expect(right.top + rightArtBottomPx, closeTo(0.485 * h, 0.5));
+
+      // --- THE SPEED-TEST PAGE: the composition's other home (v4.33's
+      // «از پترن‌های صفحه اصلی برای پس زمینه این صفحه استفاده کن») ---
+      final speedStore = makeStore();
+      await tester.pumpWidget(_booth(
+        SpeedTestPage(store: speedStore, style: MotionStyle.standard),
+      ));
+      await settleImages(tester);
+      final speedRects = patternRects(tester);
+      for (var i = 0; i < 2; i++) {
+        expect(
+          speedRects[i],
+          homeRects[i],
+          reason: 'the speed page pattern $i must equal the home one',
+        );
+      }
+
+      // --- THE SETTINGS MAIN PAGE + A SUB-PAGE: NO patterns at all ---
+      // v5.3 (the owner: «پترن های سمت راست و چپ فقط باید در صفحه اصلی و
+      // صفحه تست سرعت نمایش داده بشن و در سایر صفحه ها نباید نمایش داده
+      // شوند») — the v4.21/v4.25 every-page decree is retired.
+      final settingsStore = makeStore();
+      await tester.pumpWidget(_booth(SettingsScreen(store: settingsStore)));
+      await settleImages(tester);
+      expect(find.byType(PatternSides), findsNothing,
+          reason: 'the settings main page carries no patterns');
+
+      final subStore = makeStore();
+      await tester.pumpWidget(_booth(AppearanceSettingsPage(store: subStore)));
+      await settleImages(tester);
+      expect(find.byType(PatternSides), findsNothing,
+          reason: 'the settings sub-pages carry no patterns');
     });
   });
 }

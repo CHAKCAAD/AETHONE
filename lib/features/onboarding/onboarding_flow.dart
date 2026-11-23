@@ -35,7 +35,6 @@ import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../../l10n/app_strings.dart';
 import '../home/home_screen.dart';
-import '../home/widgets/pattern_sides.dart';
 import 'onboarding_steps.dart';
 
 /// The four wizard steps, in wizard order (RTL: step 0 lands rightmost).
@@ -131,26 +130,12 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
             style: style,
             child: Scaffold(
             backgroundColor: AethColors.bgScreen,
-            // v4.25 — the pattern-placement fix: expand keeps the body
-            // (and the pattern box) at the FULL screen height.
+            // v5.3 (the owner: «پترن های سمت راست و چپ فقط باید در صفحه
+            // اصلی و صفحه تست سرعت نمایش داده بشن و در سایر صفحه ها نباید
+            // نمایش داده شوند») — the wizard carries NO patterns any more.
             body: Stack(
               fit: StackFit.expand,
               children: [
-                // The main-page patterns (owner decree; v4.25 — the ONE
-                // composition), green variant at the frames' low opacity,
-                // gated by the appearance switch.
-                if (store.showPatterns)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Opacity(
-                        opacity: AethColors.obPatternOpacity,
-                        child: PatternSides(
-                          connected: true,
-                          style: style,
-                        ),
-                      ),
-                    ),
-                  ),
                 AnimatedSwitcher(
                   duration: duration,
                   switchInCurve: Curves.easeOutCubic,

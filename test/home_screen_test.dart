@@ -128,8 +128,10 @@ void main() {
     expect(find.text('مــتـصـل'), findsOneWidget);
     expect(find.text('قــطــع!'), findsNothing);
     expect(find.text('146 ms'), findsOneWidget);
-    expect(find.text('145 MB'), findsOneWidget);
-    expect(find.text('45 MB'), findsOneWidget);
+    // v5.3 — the KB grammar: 145 MB reads as 148480KB on the DOWN card
+    // («میزان دانلود و آپلود باید از کیلوبایت ثبت بشه نه از مگابایت»).
+    expect(find.text('148480KB'), findsOneWidget);
+    expect(find.text('46080KB'), findsOneWidget);
   });
 
   testWidgets('unwired engine fails honestly instead of faking connected', (
@@ -274,8 +276,11 @@ void main() {
       expect(down.dx, lessThan(up.dx));
       expect(down.dy, greaterThan(0));
 
-      // The Latin value renders digits-first ("0 MB"), never "MB 0".
-      expect(find.text('0 MB'), findsNWidgets(2));
+      // The Latin value renders digits-first ("0KB"→"--" idle, digits
+      // first once live), never bidi-flipped. v5.3 — the idle pose is the
+      // honest dash exactly like «نمای 2»'s readouts (the MB format is
+      // retired).
+      expect(find.text('--'), findsNWidgets(2));
 
       // The protocol card shows the SELECTED protocol's name, not the generic
       // word (owner prompt: the chosen protocol's logo/name shows on the card).
@@ -658,10 +663,11 @@ void main() {
 
       expect(find.text('مــتـصـل'), findsOneWidget);
       expect(find.text('146 ms'), findsOneWidget);
-      // The stats row renders the live counters on the sheet (the v5
-      // adaptive format: «145.0MB» / «45.0MB», one decimal, no space).
-      expect(find.text('145.0MB'), findsOneWidget);
-      expect(find.text('45.0MB'), findsOneWidget);
+      // The stats row renders the live counters on the sheet (the v5.3 KB
+      // grammar: «148480KB» / «46080KB» — the MB branch is retired by the
+      // owner's decree).
+      expect(find.text('148480KB'), findsOneWidget);
+      expect(find.text('46080KB'), findsOneWidget);
       expect(
         tester
             .widget<FlagSaturation>(
@@ -857,58 +863,11 @@ void main() {
     });
 
     // ----------------------------------------------------------------
-    // v2.1.0 (the owner's decree: «برای صفحه اصلی چندتا ویجت خلاقانه
-    // اضافه کن») — THE HOME WIDGET DECK: the three cards render, live
-    // honestly while connected, and hold their idle placeholders while
-    // disconnected.
+    // v2.1.0's THE HOME WIDGET DECK is RETIRED (v5.3 — the owner:
+    // «در نمای 1 جدولی که مدت اتصال، تاخیر و داده جلسه رو نمایش میده
+    // باید کلا از اپ حذف بشه»): the session timer, the ping sparkline and
+    // the session-data card are gone from the app, and their tests went
+    // with them.
     // ----------------------------------------------------------------
-    testWidgets('v2.1.0: the home widget deck renders all three cards '
-        '(idle placeholders while disconnected)', (tester) async {
-      await useReferenceSurface(tester);
-      final engine = ScriptedEngine();
-      final store = ConnectionStore(engine: engine);
-      await tester.pumpWidget(_booth(HomeScreen(store: store)));
-      await tester.pumpAndSettle();
-
-      // The three labels (the Persian set).
-      expect(find.text('مدت اتصال'), findsOneWidget);
-      expect(find.text('تأخیر'), findsOneWidget);
-      expect(find.text('داده جلسه'), findsOneWidget);
-
-      // Idle: every value is the honest dash — nothing invented.
-      expect(find.text('—'), findsNWidgets(3));
-    });
-
-    testWidgets('v2.1.0: connected, the deck shows live values '
-        '(a ticking timer, the ping, the session data)', (tester) async {
-      await useReferenceSurface(tester);
-      final engine = ScriptedEngine();
-      final store = ConnectionStore(engine: engine);
-      await tester.pumpWidget(_booth(HomeScreen(store: store)));
-      await tester.pumpAndSettle();
-
-      await store.connect();
-      engine.emit(const EngineStateChanged(VpnState.connecting));
-      await tester.pump(const Duration(milliseconds: 300));
-      engine.emit(const EngineStateChanged(VpnState.connected));
-      engine.emit(const EngineStatsUpdated(
-        pingMs: 146,
-        downBytes: 2 * 1024 * 1024,
-        upBytes: 1 * 1024 * 1024,
-        exitCountryCode: 'ir',
-      ));
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // The timer started at the engine's own Connected moment.
-      expect(find.text('0:00'), findsOneWidget);
-      // A second later it ticks (bounded pumps — the ticker repeats).
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('0:01'), findsOneWidget);
-
-      // The ping card names the live sample; the data card totals it.
-      expect(find.text('146'), findsOneWidget);
-      expect(find.text('3 MB'), findsOneWidget);
-    });
   });
 }

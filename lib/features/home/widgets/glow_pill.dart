@@ -285,8 +285,15 @@ class StatusPill extends StatelessWidget {
 /// Speed Test entry — v5 owner CSS «Group 13»: three crisp layers
 /// (74 r32 α.19 / 62 r27 α.45 / 44 r17 solid) + the Activity 4 glyph 28×28
 /// in WHITE. While DISCONNECTED the button keeps its geometry but flips to
-/// the idle family (rgba(17,0,0,α) halo/mid + #363636 core) — the dark,
+/// the idle family — light rgba(17,0,0,α) + `#363636`, night
+/// rgba(66,66,66,α) + `#424242` (the owner's new dark CSS) — the dark,
 /// disabled pose of the «حالت قطع» frame (it no longer vanishes).
+///
+/// v5.3 (the owner's decree «در هر دو نما دکمه تست سرعت باید به رنگ
+/// قبلیش برگرده و گرادینت روش اعمال نشه»): the round-21 GREEN GRADIENT
+/// sweep on the connected core is RETIRED — the core is the flat
+/// `#1AD995` again (with the α layers at rgba(26,217,149,α)), exactly
+/// the CSS pair, in BOTH looks.
 class SpeedTestButton extends StatelessWidget {
   const SpeedTestButton({
     super.key,
@@ -331,59 +338,57 @@ class SpeedTestButton extends StatelessWidget {
                 alignment: Alignment.center,
                 clipBehavior: Clip.none,
                 children: [
-                  // v5 layers, bottom→top: 74 α0.19 / 62 α0.45 / 44 solid —
-                  // the accent family when connected, the CSS idle family
-                  // (rgba(17,0,0,α) + the #363636 core) when not, one
+                  // v5.3 — flat inks on every layer (the gradient sweep is
+                  // retired by the owner's decree): the accent family when
+                  // connected — rgba(26,217,149,α) + the flat #1AD995 core
+                  // — the idle family when not (light rgba(17,0,0,α) +
+                  // #363636, night rgba(66,66,66,α) + #424242), ONE
                   // crossfade tween driving every ink.
                   TweenAnimationBuilder<double>(
                     tween: Tween(end: connected ? 1.0 : 0.0),
                     duration: duration,
                     curve: style.curve,
-                    builder: (context, t, _) => LayerStack(
-                      scale: s,
-                      color: AethColors.accentConnected,
-                      layers: [
-                        LayerSpec(
-                          width: AethGeometry.speedGroupSize,
-                          height: AethGeometry.speedGroupSize,
-                          radius: AethRadius.speedHalo,
-                          opacity: AethColors.pillHaloOpacity,
-                          color: Color.lerp(
-                            AethColors.speedIdleLayer,
-                            AethColors.accentConnected,
-                            t,
+                    builder: (context, t, _) {
+                      final layerInk = Color.lerp(
+                        AethColors.homeIdleLayer,
+                        AethColors.accentConnected,
+                        t,
+                      )!;
+                      return LayerStack(
+                        scale: s,
+                        color: AethColors.accentConnected,
+                        layers: [
+                          LayerSpec(
+                            width: AethGeometry.speedGroupSize,
+                            height: AethGeometry.speedGroupSize,
+                            radius: AethRadius.speedHalo,
+                            opacity: AethColors.pillHaloOpacity,
+                            color: layerInk,
                           ),
-                        ),
-                        LayerSpec(
-                          width: AethGeometry.speedMidSize,
-                          height: AethGeometry.speedMidSize,
-                          radius: AethRadius.speedMid,
-                          opacity: AethColors.pillMidOpacity,
-                          color: Color.lerp(
-                            AethColors.speedIdleLayer,
-                            AethColors.accentConnected,
-                            t,
+                          LayerSpec(
+                            width: AethGeometry.speedMidSize,
+                            height: AethGeometry.speedMidSize,
+                            radius: AethRadius.speedMid,
+                            opacity: AethColors.pillMidOpacity,
+                            color: layerInk,
                           ),
-                        ),
-                        LayerSpec(
-                          width: AethGeometry.speedCoreSize,
-                          height: AethGeometry.speedCoreSize,
-                          radius: AethRadius.speedCore,
-                          opacity: 1,
-                          // v5.2 (owner round 21) — the CONNECTED core
-                          /// carries the redesign's own GREEN gradient
-                          /// («گردینت سبز … برای المان های سبز و قرمز رنگ
-                          /// دیگه هم اعمال کن»); the idle pose keeps its
-                          /// #363636, and ONE shader crossfades between
-                          /// them (equal stops = the flat solid).
-                          gradient: AethColors.lerpGradientStops(
-                            AethColors.greenStops,
-                            AethColors.speedIdleCore,
-                            t,
+                          LayerSpec(
+                            width: AethGeometry.speedCoreSize,
+                            height: AethGeometry.speedCoreSize,
+                            radius: AethRadius.speedCore,
+                            opacity: 1,
+                            // v5.3 — the FLAT core (the round-21 gradient is
+                            // retired: «دکمه تست سرعت باید به رنگ قبلیش
+                            // برگرده و گرادینت روش اعمال نشه»).
+                            color: Color.lerp(
+                              AethColors.homeIdleCore,
+                              AethColors.accentConnected,
+                              t,
+                            )!,
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      );
+                    },
                   ),
                   SvgPicture.asset(
                     AppAssets.iconActivity4,
@@ -509,16 +514,37 @@ class _ConnectButtonGlowState extends State<ConnectButtonGlow> {
             alignment: Alignment.center,
             clipBehavior: Clip.none,
             children: [
-              // The WHITE base («3»: 160² r60) — themed (light #FFFFFF,
-              // night the dark-card family), crossfaded with the core so
-              // the whole button breathes on the state edge.
+              // The BASE («3»: 160² r60) — v5.3: a STATE-tinted TRANSLUCENT
+              // layer (the owner's new CSS — the solid white squircle is
+              // retired): disconnected rgba(54,54,54,.10) light /
+              // rgba(66,66,66,.19) night; connected the vertical pair
+              // rgba(26,217,149,.10)→rgba(47,248,177,.10) light /
+              // rgba(26,217,149,.05) night. ONE two-stop shader covers
+              // every state and mode (equal stops = the flat solid), and
+              // the palette's own lerped members keep it in lockstep with
+              // the 420 ms mode tween.
               TweenAnimationBuilder<double>(
                 tween: Tween(end: connected ? 1.0 : 0.0),
               duration: duration,
               curve: curve,
               builder: (context, t, _) => DecoratedBox(
                 decoration: BoxDecoration(
-                  color: AethColors.connectBase,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color.lerp(
+                        AethColors.connectBaseIdle,
+                        AethColors.connectBaseLiveTop,
+                        t,
+                      )!,
+                      Color.lerp(
+                        AethColors.connectBaseIdle,
+                        AethColors.connectBaseLiveBottom,
+                        t,
+                      )!,
+                    ],
+                  ),
                   borderRadius: BorderRadius.circular(
                     AethRadius.connectBase * k,
                   ),

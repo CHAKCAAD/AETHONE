@@ -50,7 +50,13 @@ class HomeTopBar extends StatelessWidget {
               onTap: onSettings,
             ),
             const Spacer(),
-            const _Wordmark(),
+            // v5.3 — NOT const (deliberate): a canonicalized const child is
+            // skipped by updateChild on every rebuild, so its build ran
+            // exactly ONCE and the theme ink never re-read — the owner's
+            // wordmark report («در هردوحالت رنگ سفید داره»). The palette
+            // tick must be able to rebuild this subtree.
+            // ignore: prefer_const_constructors
+            _Wordmark(),
             const Spacer(),
             ThemeToggleTile(
               store: store,
@@ -128,6 +134,16 @@ class _IconTile extends StatelessWidget {
 /// The AETHONE wordmark — v5 («نمای 2»): plain bold text, NO brand mark
 /// behind it (the committed mockups show the bare wordmark; the v4.11
 /// mark-behind-the-letters is retired with the redesign).
+///
+/// v5.3 (the owner's dark-mode round) — TWO fixes:
+///  * «نوشته AETHONE بالای صفحه اصلی حالت دارک و لایت رو رعایت نمیکنه و
+///    در هردوحالت رنگ سفید داره»: the mark was mounted as a `const`
+///    instance — a canonicalized const child is SKIPPED by Flutter's
+///    updateChild on every rebuild, so its build ran exactly ONCE and the
+///    theme ink never re-read. It is a plain (non-const) widget now, so
+///    every palette tick of the 420 ms mode tween re-reads [wordmarkInk]
+///    (white at night, black in light).
+///  * the owner's new CSS pins the home lockup at 18px / weight 800.
 class _Wordmark extends StatelessWidget {
   const _Wordmark();
 
@@ -138,8 +154,8 @@ class _Wordmark extends StatelessWidget {
       'AETHONE',
       style: TextStyle(
         fontFamily: 'IRANYekanX',
-        fontWeight: FontWeight.w700,
-        fontSize: AethGeometry.wordmarkFontSize * s,
+        fontWeight: FontWeight.w800,
+        fontSize: AethGeometry.homeWordmarkFontSize * s,
         letterSpacing: AethGeometry.wordmarkLetterSpacing * s,
         // v4.41 (round 17, item 10) + v1.0.0 (round 18): white at night,
         // black in light — the resolved slots, never the lerped palette.

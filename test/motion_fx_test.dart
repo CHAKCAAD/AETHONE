@@ -1,20 +1,25 @@
 /// v8a (owner round 18) — the four animation decrees, regression-pinned
-/// on the motion line (feature/motion-phase3, r109 base):
+/// on the motion line (feature/motion-phase3, r109 base); v5.3 re-pins
+/// decrees 1 and 4 to the owner's NEW round:
 ///
-///  1. SHIMMER BUTTON — the behind-the-button AURORA of the connected
-///     state is RETIRED (the halo is wired with hideConnectedAura: true
-///     for BOTH looks); the connected idle life rides the button's OWN
-///     EDGE ([ShimmerEdge]) instead; disconnected renders no edge.
+///  1. THE CONNECTED BUTTON IS STILL — the behind-the-button AURORA and
+///     the round-18 edge lap ([ShimmerEdge], retired) are BOTH gone
+///     (the halo is wired with hideConnectedAura: true for BOTH looks);
+///     nothing animated rides the connected button on either look
+///     (owner: «انیمیشن حاله سبز در حالت اتصال رو کلا حذف کن و فقط پترن
+///     ها باشن» + «در نمای 1 انیمیشن روی دکمه اتصال وسط صفحه باید حذف
+///     بشه»).
 ///  2. HYPER TEXT — the country-name and ping texts DECODE on change
 ///     (scramble → resolve); OFF lands instantly; the resting render is
 ///     the plain text.
 ///  3. CIRCLE SELECTOR — the selected protocol tile springs up and
 ///     PUSHES its row siblings aside for the impulse, then everything
 ///     settles back to the committed geometry; OFF never travels.
-///  4. THE GREEN DRIFT EVERYWHERE — the home screen's connected-state
-///     animation (the smoke field + the pattern drift) now lives on the
-///     OTHER pages too (the protocol page pinned here), under the home
-///     rule ([ConnectionStore.patternsAlive]).
+///  4. THE PATTERNS' HOME — v5.3: the edge patterns live ONLY on the
+///     home screen and the speed-test page (owner: «پترن های سمت راست و
+///     چپ فقط باید در صفحه اصلی و صفحه تست سرعت نمایش داده بشن»), and
+///     they go STILL the moment the tunnel is up — the drift belongs to
+///     the ENGINE WALK alone ([ConnectionStore.patternsAlive]).
 library;
 
 import 'dart:async';
@@ -27,12 +32,11 @@ import 'package:aethone/app.dart';
 import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
-import 'package:aethone/core/fx/smoke_burst.dart';
 import 'package:aethone/core/motion.dart';
 import 'package:aethone/features/home/home_screen.dart';
 import 'package:aethone/features/home/protocol_sheet/protocol_sheet.dart';
 import 'package:aethone/features/home/widgets/connect_core.dart';
-import 'package:aethone/features/home/widgets/shimmer_edge.dart';
+import 'package:aethone/features/home/widgets/pattern_sides.dart';
 import 'package:aethone/features/shared/circle_selector.dart';
 import 'package:aethone/features/shared/hyper_text.dart';
 
@@ -238,35 +242,32 @@ void main() {
   });
 
   // -------------------------------------------------------------------
-  // SHIMMER EDGE — the connected button's own edge.
+  // THE CONNECTED BUTTON IS STILL — v5.3 (the shimmer lap is retired).
   // -------------------------------------------------------------------
-  group('shimmer edge (the connect button)', () {
-    testWidgets('look 1: no edge disconnected — the edge appears connected '
-        'and repeats (bounded pumps); the aura is retired', (tester) async {
+  group('the connected connect-button is still (v5.3)', () {
+    testWidgets('look 1: nothing animated rides the connected hero — the '
+        'whole connected tree settles; the aura stays retired', (tester) async {
       await _useReferenceSurface(tester);
       final engine = ScriptedEngine();
       final store = ConnectionStore(engine: engine);
       await tester.pumpWidget(_booth(HomeScreen(store: store)));
       await tester.pumpAndSettle();
 
-      // Disconnected: NOTHING rides the hero (the frames' contract).
-      expect(find.byType(ShimmerEdge), findsNothing);
-
       await _connect(tester, engine, store);
-      // Bounded pumps — the shimmer laps forever.
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.byKey(const ValueKey('connect-shimmer')), findsOneWidget);
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.byKey(const ValueKey('connect-shimmer')), findsOneWidget);
+      // v5.3 — the round-18 shimmer lap is RETIRED with the smoke field
+      // and the drift: the connected home carries NO repeating ticker at
+      // all, so the WHOLE tree settles (the landing tweens, the roulette
+      // and the Hyper-Text decodes all run out inside it).
+      await tester.pumpAndSettle();
 
-      // v8a decree 1 — the connected AURORA behind the button is RETIRED
-      // on BOTH looks: the halo director is wired with the suppression.
+      // v8a decree 1 (kept) — the connected AURORA behind the button is
+      // RETIRED on BOTH looks: the halo director keeps the suppression.
       final halo = tester.widget<ConnectHalo>(find.byType(ConnectHalo));
       expect(halo.hideConnectedAura, isTrue,
           reason: 'the behind-the-button aurora is retired app-wide');
     });
 
-    testWidgets('look 2: the edge rides the Group-45 core squircle',
+    testWidgets('look 2: the same stillness — the whole tree settles',
         (tester) async {
       await _useReferenceSurface(tester);
       final engine = ScriptedEngine();
@@ -274,33 +275,12 @@ void main() {
         ..setHomeLook(HomeLook.two);
       await tester.pumpWidget(_booth(HomeScreen(store: store)));
       await tester.pumpAndSettle();
-      expect(find.byType(ShimmerEdge), findsNothing);
 
       await _connect(tester, engine, store);
-      await tester.pump(const Duration(milliseconds: 300));
-      final edge = find.byKey(const ValueKey('connect-shimmer'));
-      expect(edge, findsOneWidget);
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(edge, findsOneWidget);
+      await tester.pumpAndSettle();
 
       final halo = tester.widget<ConnectHalo>(find.byType(ConnectHalo));
       expect(halo.hideConnectedAura, isTrue);
-    });
-
-    testWidgets('OFF style: the static edge stays, nothing repeats — '
-        'pumpAndSettle settles', (tester) async {
-      await _useReferenceSurface(tester);
-      final engine = ScriptedEngine();
-      final store = ConnectionStore(engine: engine)
-        ..animationStyle = MotionStyle.off;
-      await tester.pumpWidget(_booth(HomeScreen(store: store)));
-      await tester.pumpAndSettle();
-
-      await _connect(tester, engine, store);
-      // The OFF recipe keeps the edge as status feedback (no motion):
-      // the whole connected tree settles — no repeating ticker anywhere.
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('connect-shimmer')), findsOneWidget);
     });
   });
 
@@ -462,35 +442,26 @@ void main() {
   });
 
   // -------------------------------------------------------------------
-  // THE GREEN DRIFT EVERYWHERE — the other pages' ambience goes alive.
+  // THE PATTERNS' HOME — v5.3: home + speed page only, still while up.
   // -------------------------------------------------------------------
-  group('the green connected-state animation on the other pages', () {
-    testWidgets('the protocol page smokes + drifts while connected (the '
-        'home rule) and rests static while disconnected', (tester) async {
+  group("the patterns' home (v5.3)", () {
+    testWidgets('the protocol page carries NO patterns, connected or not '
+        '(the smoke + the drift are retired there)', (tester) async {
       await _useReferenceSurface(tester);
       final engine = ScriptedEngine();
       final store = ConnectionStore(engine: engine);
       await tester.pumpWidget(_booth(HomeScreen(store: store)));
       await tester.pumpAndSettle();
 
-      // Disconnected: the protocol page's patterns are STATIC — the page
-      // settles (no repeating sway ticker) and NO smoke mounts.
+      // Disconnected: the protocol page shows NO pattern canvases at all.
       await tester.tap(find.text('ماسک').first);
       await tester.pump();
       await tester.pumpAndSettle();
       expect(find.byType(ProtocolPage), findsOneWidget);
-      expect(find.byType(SmokeField), findsNothing);
-      final staticA = tester
-          .getTopLeft(find.byKey(const ValueKey('pattern-left-off')))
-          .dy;
-      await tester.pump(const Duration(seconds: 1));
-      final staticB = tester
-          .getTopLeft(find.byKey(const ValueKey('pattern-left-off')))
-          .dy;
-      expect(staticB, staticA, reason: 'disconnected ⇒ no drift');
+      expect(find.byType(PatternSides), findsNothing,
+          reason: 'the patterns live on the home + speed pages only');
 
-      // Leave the page, connect, come back: the SAME page now smokes and
-      // drifts.
+      // Leave, connect, come back: STILL no patterns, no smoke, no drift.
       await tester.tap(find.byKey(const ValueKey('proto-page-back')));
       await tester.pump();
       await tester.pumpAndSettle();
@@ -498,30 +469,57 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
       await tester.tap(find.text('ماسک').first);
       await tester.pump();
-      // Bounded pumps ONLY — the connected page's ambience (smoke +
-      // patterns + the home behind it) repeats forever; pumpAndSettle
-      // would never settle.
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.byType(ProtocolPage), findsOneWidget);
-      expect(find.byType(SmokeField), findsOneWidget,
-          reason: 'the home screen\'s green smoke now lives here too');
+      expect(find.byType(PatternSides), findsNothing,
+          reason: 'the connected ambience is retired on every other page');
+    });
 
-      final aliveA = tester
-          .getTopLeft(find.byKey(const ValueKey('pattern-left-on')))
+    testWidgets('the home patterns DRIFT on the walk, then go STILL the '
+        'moment the tunnel is up', (tester) async {
+      await _useReferenceSurface(tester);
+      final engine = ScriptedEngine();
+      final store = ConnectionStore(engine: engine);
+      await tester.pumpWidget(_booth(HomeScreen(store: store)));
+      await tester.pumpAndSettle();
+      expect(find.byType(PatternSides), findsOneWidget);
+
+      // The engine walk: the canvases drift (the scan feel).
+      await store.connect();
+      engine.emit(const EngineStateChanged(VpnState.connecting));
+      await tester.pump(const Duration(milliseconds: 300));
+      final walkingA = tester
+          .getTopLeft(find.byKey(const ValueKey('pattern-left-off')))
           .dy;
       await tester.pump(const Duration(seconds: 1));
-      final aliveB = tester
-          .getTopLeft(find.byKey(const ValueKey('pattern-left-on')))
-          .dy;
-      await tester.pump(const Duration(seconds: 1));
-      final aliveC = tester
-          .getTopLeft(find.byKey(const ValueKey('pattern-left-on')))
+      final walkingB = tester
+          .getTopLeft(find.byKey(const ValueKey('pattern-left-off')))
           .dy;
       expect(
-        <double>{aliveA, aliveB, aliveC}.length,
-        greaterThan(1),
-        reason: 'connected ⇒ the green patterns drift like the home screen',
+        walkingB != walkingA,
+        isTrue,
+        reason: 'the engine walk keeps the scan drift',
       );
+
+      // Connected: the drift stops dead — the green state is the STATIC
+      // artwork (nothing else animates: no smoke, no lap, no breath).
+      engine.emit(const EngineStateChanged(VpnState.connected));
+      engine.emit(const EngineStatsUpdated(
+        pingMs: 146,
+        downBytes: 0,
+        upBytes: 0,
+        exitCountryCode: 'ir',
+      ));
+      await tester.pumpAndSettle();
+      final stillA = tester
+          .getTopLeft(find.byKey(const ValueKey('pattern-left-on')))
+          .dy;
+      await tester.pump(const Duration(seconds: 1));
+      final stillB = tester
+          .getTopLeft(find.byKey(const ValueKey('pattern-left-on')))
+          .dy;
+      expect(stillB, stillA,
+          reason: 'connected ⇒ the patterns are the still artwork');
     });
   });
 }

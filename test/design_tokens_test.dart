@@ -11,7 +11,10 @@ import 'package:aethone/connection/transport_modes.dart';
 void main() {
   group('colors (report table 7)', () {
     test('owner-declared values win over pixel drift', () {
-      expect(AethColors.bgScreen, const Color(0xFF141C16));
+      // v5.3 — the night slot is the owner's dark-mode round
+      // («بکگراند کل صفحه 000000»); the slot starts at night in every
+      // test (no shell tween ran).
+      expect(AethColors.bgScreen, const Color(0xFF000000));
       expect(AethColors.accentConnected, const Color(0xFF1AD995));
       expect(AethColors.statusDisconnected, const Color(0xFFEA2323));
       expect(AethColors.onPillDisconnected, const Color(0xFF75160F));
@@ -95,8 +98,9 @@ void main() {
         Color(0xFFFF383C),
       ]);
       // The crossfade helper: t = 0 paints the flat solid (equal stops),
-      // t = 1 the full gradient.
-      const rest = AethColors.speedIdleCore;
+      // t = 1 the full gradient. v5.3 — the HOME button's idle core is
+      // the palette getter now (light #363636 / night #424242).
+      final rest = AethColors.homeIdleCore;
       expect(
         AethColors.lerpGradientStops(AethColors.greenStops, rest, 0),
         [rest, rest],
@@ -129,8 +133,12 @@ void main() {
       expect(AethGeometry.countryRowHeight, 45);
       expect(AethGeometry.gapRowToCard, 27);
       expect(AethGeometry.gapCardToBottom, 37);
-      expect(AethGeometry.statGlyphSize, 27);
+      expect(AethGeometry.statGlyphSize, 30);
+      expect(AethGeometry.statGlyphTextGap, 17);
       expect(AethGeometry.statGroupNudge, 6);
+      // v5.3 — the owner's new CSS «Group 124»: the row spans x 32–348.
+      expect(AethGeometry.statRowPadLeft, 32);
+      expect(AethGeometry.statRowPadRight, 54);
       expect(AethGeometry.panelShadowSigma, 47.5);
       expect(AethGeometry.panelShadowDy, -16);
       expect(AethGeometry.panelShadowAlpha, 0.09);

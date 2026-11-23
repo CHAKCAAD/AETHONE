@@ -58,7 +58,8 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    // ---- 1. LOOK 1 CONNECTING — the spark march mid-swing, no halo ----
+    // ---- 1. LOOK 1 CONNECTING — the STATIC hero (v5.3: the spark march
+    // is retired; the walk holds the 0° pose), no halo ----
     final engine = ScriptedEngine();
     final store = ConnectionStore(engine: engine);
     await tester.pumpWidget(_booth(HomeScreen(store: store)));
@@ -70,7 +71,7 @@ void main() {
     for (var i = 0; i < 8; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
-    await _shot(tester, 'round2_look1_spark_connecting');
+    await _shot(tester, 'round2_look1_connecting_static');
 
     // Land connected (the −58° pose) for the after-shot.
     engine.emit(const EngineStateChanged(VpnState.connected));

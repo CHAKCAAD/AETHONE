@@ -298,25 +298,27 @@ void main() {
       await tester.pumpWidget(_booth(HomeScreen(store: store)));
       await tester.pumpAndSettle();
 
-      expect(find.text('0 MB'), findsNWidgets(2));
+      // v5.3 — the KB grammar: zero renders the honest '--' on BOTH
+      // look-1 cards (the whole-megabyte format and the round-12 widget
+      // deck's session-data total are both retired).
+      expect(find.text('--'), findsNWidgets(2));
 
-      // The stats tick lands a NEW value: one soft incoming text per
-      // surface that reads it — the look-1 DOWN card AND the round-12
-      // home widget deck's session-data total (down+up = 145 MB + 0).
-      // v5.2 (owner round 21) — the DOWN card now decodes the value
-      // character by character ([HyperText], the ping readout's own
-      // walk), so MID-decode only the deck's plain text has landed;
-      // after the settle both surfaces read exactly one '145 MB'.
+      // The stats tick lands a NEW value: the look-1 DOWN card decodes it
+      // character by character ([HyperText], the ping readout's own walk —
+      // v5.2), so MID-decode nothing has landed; after the style's own
+      // window exactly one '148480KB' reads (145 MB in the KB grammar,
+      // «میزان دانلود و آپلود باید از کیلوبایت ثبت بشه نه از مگابایت»).
       engine.emit(const EngineStatsUpdated(downBytes: 145 * 1024 * 1024));
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('145 MB'), findsOneWidget); // the deck's plain text
+      expect(find.text('148480KB'), findsNothing,
+          reason: 'mid-decode — the walk has not resolved yet');
       // The decode rides a raw 16 ms Timer.periodic — pumpAndSettle
       // cannot advance it (a timer is not a frame) — so the style's own
       // window is pumped explicitly: 480 ms of decode + a tick for the
       // resolved-target commit.
       await tester.pump(const Duration(milliseconds: 600));
-      expect(find.text('145 MB'), findsNWidgets(2));
-      expect(find.text('0 MB'), findsNWidgets(1)); // the UP card
+      expect(find.text('148480KB'), findsOneWidget);
+      expect(find.text('--'), findsOneWidget); // the UP card
       await tester.pumpAndSettle();
     });
   });

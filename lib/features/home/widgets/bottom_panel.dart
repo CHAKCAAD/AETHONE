@@ -123,34 +123,33 @@ class BottomPanel extends StatelessWidget {
     );
   }
 
-  /// MB display like the reference («145 MB»); sub-MB shows 0 MB — honest
-  /// cumulative counters, no fabricated values.
-  static String formatBytes(int bytes) {
-    final mb = bytes ~/ (1024 * 1024);
-    return '$mb MB';
-  }
+  /// v5.3 (the owner's decree: «کارت های نمایش دانلود و آپلود باید مثل
+  /// کارت های نمای 2 حتی تغیرات مصرف کیلوبایتی رو هم باید ثبت کنن و
+  /// میزان دانلود و آپلود باید از کیلوبایت ثبت بشه نه از مگابایت») —
+  /// KB display for BOTH looks: the counters tick at KILOBYTE granularity
+  /// («314KB», never a whole-megabyte jump); zero renders the honest
+  /// «--». Look 1's cards ride the SAME formatter as look 2's row.
+  static String formatBytes(int bytes) => formatBytesAdaptive(bytes);
 
-  /// v5 («نمای 2») — the look-2 stat row's own adaptive format, exactly
-  /// like the committed mockups: «314KB» under a megabyte, «31.1MB» with
-  /// one decimal above it (no space, per the frames). Zero shows «--».
+  /// v5 — the look-2 stat row's own format; v5.3: KILOBYTES, always (the
+  /// MB branch is retired by the decree above).
   static String formatBytesAdaptive(int bytes) {
     if (bytes <= 0) return '--';
-    const kb = 1024;
-    const mb = 1024 * 1024;
-    if (bytes < mb) {
-      return '${bytes ~/ kb}KB';
-    }
-    return '${(bytes / mb).toStringAsFixed(1)}MB';
+    return '${bytes ~/ 1024}KB';
   }
 }
 
 /// v5 («نمای 2») — the look-2 stats row: the DOWN/UP counters flank the
-/// Speed Test entry on the curved sheet (mockup-measured: the Graph
-/// glyphs 26×26 at x 34 / x 282, y 562–588, the texts 20px right of each
-/// glyph; the speed group sits dead-centre). The glyphs are the icon
-/// set's own «Graph Down»/«Graph Up» OUTLINES (no filled box — the v4.10
-/// stat-card boxes are a look-1-only treatment), green #00D589 / red
-/// #E63946 in BOTH connection states.
+/// Speed Test entry on the curved sheet. v5.3 (the owner's new CSS
+/// «Group 124»): the Graph glyphs 30×30 at x 32 (DOWN) / x 280 (UP), the
+/// two-line text blocks (label 13px/w200 over value 14px/w400) 17px right
+/// of each glyph, and the ROW spans x 32–348 — the UP block ends 54px
+/// short of the right edge, clear of the right pattern's ink, while the
+/// speed group still sits dead-centre (the asymmetric pads are carried as
+/// fixed slot widths so the button can never drift). The glyphs are the
+/// icon set's own «Graph Down»/«Graph Up» OUTLINES (no filled box — the
+/// v4.10 stat-card boxes are a look-1-only treatment), green #00D589 /
+/// red #E63946 in BOTH connection states.
 class HomeStatsRow extends StatelessWidget {
   const HomeStatsRow({
     super.key,
@@ -176,50 +175,56 @@ class HomeStatsRow extends StatelessWidget {
       textDirection: TextDirection.ltr,
       child: SizedBox(
         height: AethGeometry.speedGroupSize * s,
-        // The speed group rides the EXACT screen centre (mockup:
-        // 164–238 on the 402 frame) because both stat groups take EQUAL
-        // slots — and the whole row rides the 33px page margins
-        // (mockup: the DOWN glyph starts at x 34, the UP value ends at
-        // x 369), so the symmetric padding can never shift the button.
+        // v5.3 — the CSS's own row box («Group 124»: x 32–348 on the 402
+        // frame): the DOWN glyph hugs the LEFT 32px pad, the UP block
+        // ends 54px short of the right edge. The two flanking slots are
+        // FIXED (132 / 110 design px — glyph+air+text, mockup-measured),
+        // so the speed group keeps the EXACT screen centre whatever the
+        // value texts read; only the block's own text can shrink
+        // (FittedBox), never the button's position.
         child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AethGeometry.pageHPadding * s,
+          padding: EdgeInsets.only(
+            left: AethGeometry.statRowPadLeft * s,
+            right: AethGeometry.statRowPadRight * s,
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // DOWN packs to the slot's LEFT edge (the page margin),
-              // UP to its RIGHT — the group itself fills the slot so its
-              // text can shrink (FittedBox) without ever losing the edge.
-              Expanded(
+              // v5.3 — the CSS's 6px optical drop: the groups' icon centre
+              // rides at y 575 while the band's sits at 569 (a pure
+              // translate — the row's own layout height stays the 74px
+              // band, so the button never moves).
+              SizedBox(
+                width: 132 * s,
                 child: _nudged(
                   s,
                   _StatGroup(
                     iconAsset: AppAssets.iconGraphDown,
                     label: 'DOWN:',
                     valueText: BottomPanel.formatBytesAdaptive(downBytes),
-                    pack: MainAxisAlignment.start,
                     style: style,
                   ),
                 ),
               ),
               // v5: the entry stays on screen in BOTH states — green while
-              // connected, the CSS idle family (#363636 over rgba(17,0,0,α))
-              // while disconnected; taps stay dead without a tunnel.
+              // connected, the CSS idle family (light rgba(17,0,0,α) +
+              // #363636, night rgba(66,66,66,α) + #424242) while
+              // disconnected; taps stay dead without a tunnel.
               SpeedTestButton(
                 visible: true,
                 connected: connected,
                 style: style,
                 onTap: onSpeedTap,
               ),
-              Expanded(
+              SizedBox(
+                width: 110 * s,
                 child: _nudged(
                   s,
                   _StatGroup(
                     iconAsset: AppAssets.iconGraphUp,
                     label: 'UP:',
                     valueText: BottomPanel.formatBytesAdaptive(upBytes),
-                    pack: MainAxisAlignment.end,
+                    packEnd: true,
                     style: style,
                   ),
                 ),
@@ -241,22 +246,24 @@ class HomeStatsRow extends StatelessWidget {
 }
 
 /// One look-2 stat group: the outline Graph glyph + the two-line
-/// «DOWN:»/value text block (LTR-locked, never bidi-flipped). The Row
-/// FILLS its slot and packs to [pack]'s edge, so the group keeps its
-/// page-margin edge whatever the value text's natural width.
+/// «DOWN:»/value text block (LTR-locked, never bidi-flipped).
+///
+/// v5.3 (the owner's new CSS «Group 5»/«Group 4»): the label is 13px/w200
+/// in the stat-label ink (white at night, #A3A3A3 in light), the value
+/// 14px/w400 in the theme ink, both 18px line-height.
 ///
 /// v5.2 (owner round 21: «انیمشنی که برای بخش نمایش پینگ در نظر گرفته
 /// شده رو روی بخش نمایش دانلود و آپلود هم اعمال کن») — the VALUE rides
 /// the same [HyperText] decode the ping readout carries: every stats
-/// tick («--» → «314KB» → «31.1MB») resolves character by character, the
+/// tick («--» → «314KB» → «631KB») resolves character by character, the
 /// resting render byte-identical to the plain Text it replaces.
 class _StatGroup extends StatelessWidget {
   const _StatGroup({
     required this.iconAsset,
     required this.label,
     required this.valueText,
-    required this.pack,
     required this.style,
+    this.packEnd = false,
   });
 
   final String iconAsset;
@@ -267,15 +274,17 @@ class _StatGroup extends StatelessWidget {
   /// clamp), exactly like the ping readout.
   final MotionStyle style;
 
-  /// `start` = DOWN (hugs the LEFT page margin), `end` = UP (hugs the
-  /// RIGHT one) — exactly the mockup's flanks.
-  final MainAxisAlignment pack;
+  /// v5.3 — false (DOWN): the group packs to its slot's LEFT edge (the
+  /// row's own left pad already sits at the CSS x 32); true (UP): the
+  /// block hugs its slot's RIGHT end (the CSS's x 348 edge).
+  final bool packEnd;
 
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     return Row(
-      mainAxisAlignment: pack,
+      mainAxisAlignment:
+          packEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SvgPicture.asset(
@@ -291,16 +300,18 @@ class _StatGroup extends StatelessWidget {
         // non-flex child in a Row sizes to its intrinsic width and can
         // overflow the shrunken slot) while letting the Row stay packed:
         // a long value scales DOWN instead of pushing the icon off its
-        // page-margin edge.
+        // slot edge.
         Flexible(
           child: Directionality(
             textDirection: TextDirection.ltr,
             child: FittedBox(
               fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
+              alignment: packEnd ? Alignment.centerRight : Alignment.centerLeft,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: packEnd
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
@@ -308,10 +319,10 @@ class _StatGroup extends StatelessWidget {
                     textDirection: TextDirection.ltr,
                     style: TextStyle(
                       fontFamily: 'IRANYekanX',
-                      fontWeight: FontWeight.w400,
-                      fontSize: 11 * s,
-                      letterSpacing: 0.5,
-                      color: AethColors.textSecondary,
+                      fontWeight: FontWeight.w200,
+                      fontSize: 13 * s,
+                      height: 18 / 13,
+                      color: AethColors.statLabel,
                     ),
                   ),
                   // v5.2 — the VALUE rides the HyperText decode (the
@@ -322,8 +333,9 @@ class _StatGroup extends StatelessWidget {
                     textDirection: TextDirection.ltr,
                     textStyle: TextStyle(
                       fontFamily: 'IRANYekanX',
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w400,
                       fontSize: 14 * s,
+                      height: 18 / 14,
                       color: AethColors.textPrimary,
                     ),
                   ),
@@ -724,16 +736,19 @@ class FabColumn extends StatelessWidget {
                                     child: child,
                                   ),
                                 ),
+                            // v5.3 (the owner's decree: «در نمای 1 آیکون one
+                            // روی دکمه اتصال پایین صفحه باید سفید باشه»)
+                            // — the Off glyph is WHITE in BOTH states now
+                            // (the old on-pill dark-green/dark-red inks are
+                            // retired).
                             child: SvgPicture.asset(
                               AppAssets.iconOff,
                               key: ValueKey(connected ? 'fab-on' : 'fab-off'),
                               width: 24 * s,
                               height: 24 * s,
                               fit: BoxFit.contain,
-                              colorFilter: ColorFilter.mode(
-                                connected
-                                    ? AethColors.onPillConnected
-                                    : AethColors.onPillDisconnected,
+                              colorFilter: const ColorFilter.mode(
+                                Color(0xFFFFFFFF),
                                 BlendMode.srcIn,
                               ),
                             ),
