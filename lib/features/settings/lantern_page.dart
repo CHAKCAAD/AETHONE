@@ -33,7 +33,10 @@ class LanternSettingsPage extends StatelessWidget {
     final strings = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final core = store.coreSettings;
-    final countries = store.liveLanternCountries ?? const <String>[];
+    // Read INSIDE the builder: the frame rebuilds on store changes, and
+    // the sidecar's /servers report lands after the page is open.
+    List<String> countries() =>
+        store.liveLanternCountries ?? const <String>[];
 
     return SubPageFrame(
       store: store,
@@ -51,13 +54,13 @@ class LanternSettingsPage extends StatelessWidget {
             children: [
               // The SAME list the home wheel's Lantern band offers.
               FlagPickStrip(
-                codes: [LocationWheelPolicy.autoCode, ...countries],
+                codes: [LocationWheelPolicy.autoCode, ...countries()],
                 selected: store.lanternLocation,
                 onSelect: store.setLanternLocation,
               ),
               const SubSectionDivider(),
               SettingInfoText(
-                countries.isEmpty
+                countries().isEmpty
                     ? strings.lanternLocationEmpty
                     : strings.lanternLocationDesc,
               ),

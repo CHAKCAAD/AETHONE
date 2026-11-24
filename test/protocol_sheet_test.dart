@@ -191,7 +191,8 @@ void main() {
         greaterThan(tester.getCenter(sheetText('M I M')).dx),
       );
 
-      // The last row ends 25 above the panel's bottom (867 − 842).
+      // The grid's last row now sits one Lantern row (84) above the
+      // wide Lantern card, which ends 25 above the panel's bottom.
       final panel = tester.getRect(
         find.byKey(const ValueKey('proto-sheet-panel')),
       );
@@ -200,7 +201,7 @@ void main() {
       );
       expect(
         panel.bottom - lastRow.bottom,
-        closeTo(25, 2),
+        closeTo(25 + AethGeometry.protoSheetLanternRow, 2),
       );
     },
   );
