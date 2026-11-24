@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v6.1 — the splash background: ALWAYS white. The factory app theme
+         is LIGHT (owner: «اپ باید به صورت دیفالت روی حالت لایت مود باشه»)
+         and «برای اولین ورود باید بکگراند سفید داشته باشه», so the native
+         layer never follows the OS night mode; the in-app SplashGate is
+         what makes the splash follow the APP's own theme pick. -->
+    <color name="splash_bg">#FFFFFF</color>
+</resources>

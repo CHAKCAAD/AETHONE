@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- v6.1 — THE SPLASH («اسپلش اسکرین»): the owner's decree — a WHITE
+     background with the app logo centred «با ابعاد مناسب» (140 dp via
+     the per-density splash_logo.png buckets). Deliberately NOT
+     ?android:colorBackground (the template default, which turns dark
+     under the OS night mode): the factory app theme is LIGHT, so the
+     first entry must read white whatever the system says. The in-app
+     SplashGate takes over from the first Flutter frame and follows the
+     APP's own theme pick (night/auto render the dark face there). -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
-
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
+    <item android:drawable="@color/splash_bg" />
+    <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+            android:src="@drawable/splash_logo" />
+    </item>
 </layer-list>

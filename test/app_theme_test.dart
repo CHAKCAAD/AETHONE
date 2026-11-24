@@ -203,16 +203,16 @@ void main() {
     ConnectionStore store() =>
         ConnectionStore(engine: EngineNotWiredAdapter());
 
-    test('default is night; toggle flips and notifies', () {
+    test('v6.1 default is light; toggle flips and notifies', () {
       final s = store();
-      expect(s.themeMode, AethThemeMode.night);
+      expect(s.themeMode, AethThemeMode.light);
       var notified = 0;
       s.addListener(() => notified++);
       s.toggleThemeMode();
-      expect(s.themeMode, AethThemeMode.light);
+      expect(s.themeMode, AethThemeMode.night);
       expect(notified, 1);
       s.toggleThemeMode();
-      expect(s.themeMode, AethThemeMode.night);
+      expect(s.themeMode, AethThemeMode.light);
       expect(notified, 2);
     });
 
@@ -220,23 +220,23 @@ void main() {
       final s = store();
       var notified = 0;
       s.addListener(() => notified++);
-      s.setThemeMode(AethThemeMode.night);
+      s.setThemeMode(AethThemeMode.light);
       expect(notified, 0);
     });
 
-    test('the mode persists and restores (missing key = night)', () async {
+    test('the mode persists and restores (missing key = light)', () async {
       SharedPreferences.setMockInitialValues({});
       final a = store();
       // v4.40 — the PICK owns the preference (night / light / auto);
       // [themeMode] is the resolved render mode.
-      a.setThemePick(AethThemePick.light);
+      a.setThemePick(AethThemePick.night);
       await SettingsPersistence().save(a);
 
       final b = store();
-      expect(b.themeMode, AethThemeMode.night); // before: the default
+      expect(b.themeMode, AethThemeMode.light); // before: the v6.1 default
       await SettingsPersistence().restore(b);
-      expect(b.themeMode, AethThemeMode.light); // after: the saved pick
-      expect(b.themePick, AethThemePick.light);
+      expect(b.themeMode, AethThemeMode.night); // after: the saved pick
+      expect(b.themePick, AethThemePick.night);
     });
 
     test('v4.40 — a legacy install (only the old themeMode key) seeds the '
@@ -304,7 +304,7 @@ void main() {
   });
 
   group('ThemeToggleTile — the sun/moon switch itself', () {
-    testWidgets('night shows the Moon glyph; a tap flips to Sun 1', (
+    testWidgets('light shows the Sun glyph; a tap flips to Moon', (
       tester,
     ) async {
       final s = ConnectionStore(engine: EngineNotWiredAdapter());
@@ -329,29 +329,8 @@ void main() {
         ),
       );
 
-      // Night: the Moon glyph (keyed false), and the semantics promise a
-      // switch TO light mode.
-      expect(
-        find.byWidgetPredicate(
-          (w) => w.key == const ValueKey<bool>(false),
-        ),
-        findsOneWidget,
-        reason: 'night renders the moon-keyed glyph',
-      );
-      expect(
-        find.byWidgetPredicate(
-          (w) =>
-              w is Semantics &&
-              (w.properties.label ?? '').contains('light mode'),
-        ),
-        findsOneWidget,
-      );
-      expect(s.themeMode, AethThemeMode.night);
-
-      // Tap the tile — the mode flips.
-      await tester.tap(find.byKey(const ValueKey('theme-tile')));
-      await tester.pumpAndSettle();
-      expect(s.themeMode, AethThemeMode.light);
+      // Light (the v6.1 default): the Sun glyph (keyed true), and the
+      // semantics promise a switch TO night mode.
       expect(
         find.byWidgetPredicate(
           (w) => w.key == const ValueKey<bool>(true),
@@ -359,12 +338,33 @@ void main() {
         findsOneWidget,
         reason: 'light renders the sun-keyed glyph',
       );
-      // The semantic label tells the switcher what it does.
       expect(
         find.byWidgetPredicate(
           (w) =>
               w is Semantics &&
               (w.properties.label ?? '').contains('night mode'),
+        ),
+        findsOneWidget,
+      );
+      expect(s.themeMode, AethThemeMode.light);
+
+      // Tap the tile — the mode flips.
+      await tester.tap(find.byKey(const ValueKey('theme-tile')));
+      await tester.pumpAndSettle();
+      expect(s.themeMode, AethThemeMode.night);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w.key == const ValueKey<bool>(false),
+        ),
+        findsOneWidget,
+        reason: 'night renders the moon-keyed glyph',
+      );
+      // The semantic label tells the switcher what it does.
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              (w.properties.label ?? '').contains('light mode'),
         ),
         findsOneWidget,
       );

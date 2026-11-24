@@ -139,7 +139,7 @@ void main() {
       // the tile still flips the mode, just without the wipe.
       await tester.tap(find.byKey(const ValueKey('theme-tile')));
       await tester.pumpAndSettle();
-      expect(s.themeMode, AethThemeMode.light);
+      expect(s.themeMode, AethThemeMode.night);
       applied = true;
       expect(applied, isTrue);
       expect(find.byType(ClipPath), findsNothing);
@@ -167,7 +167,7 @@ void main() {
           ),
         ),
       ));
-      expect(s.themeMode, AethThemeMode.night);
+      expect(s.themeMode, AethThemeMode.light);
 
       // Tap: the OLD frame is captured first, THEN the flip lands.
       await tester.tap(find.byKey(const ValueKey('theme-tile')));
@@ -180,14 +180,14 @@ void main() {
       expect(find.byType(RepaintBoundary), findsAtLeastNWidgets(1),
           reason: 'the capture boundary wraps the app');
       // The theme ALREADY flipped underneath (never delayed by art).
-      expect(s.themeMode, AethThemeMode.light);
+      expect(s.themeMode, AethThemeMode.night);
 
       // SILK: 650 ms wipe — run it out.
       await tester.pump(const Duration(milliseconds: 700));
       await tester.pump();
       expect(find.byType(ClipPath), findsNothing,
           reason: 'the wipe finished and the overlay is gone');
-      expect(s.themeMode, AethThemeMode.light);
+      expect(s.themeMode, AethThemeMode.night);
     });
 
     testWidgets('the OFF style takes the plain flip — no overlay at all',
@@ -215,7 +215,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 700));
       // The kill-switch: the mode flipped, no wipe was ever mounted.
-      expect(s.themeMode, AethThemeMode.light);
+      expect(s.themeMode, AethThemeMode.night);
       expect(find.byType(ClipPath), findsNothing);
     });
   });

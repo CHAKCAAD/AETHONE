@@ -8,6 +8,13 @@
 /// tests, hosts without the plugin): the flow never blocks, never flashes
 /// an empty band, and the loop fades in over its own first frame when
 /// ready, so the seam is invisible.
+///
+/// v6.1 — the asset moved to the ASCII `design/login/` path: the v6 build
+/// shipped the video beside the frames under «صفحه ورود», whose non-ASCII
+/// path lands PERCENT-ENCODED inside the APK while video_player's media3
+/// AssetDataSource opens it raw — a lookup that can never hit, so the
+/// owner's device fell back to the poster («به جای عکسی که الان وجود
+/// داره…»). See [AppAssets.loginVideo].
 library;
 
 import 'package:flutter/material.dart';

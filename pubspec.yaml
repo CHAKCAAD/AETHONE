@@ -3,7 +3,7 @@ description: >-
   AETHONE — cross-platform VPN client. Flutter UI layer; network engines are
   Aether (Rust, WARP client) and zeptun (Zig, userspace TUN router).
 publish_to: none
-version: 2.6.0+1
+version: 2.7.0+1
 
 environment:
   sdk: ^3.13.0
@@ -213,7 +213,12 @@ flutter:
     # pre-rendered GRAYSCALE flag faces (the unselected state's own soft
     # grays, gamma-matched to the frames — the flags_png precedent). ---
     - design/آیکون های اپ/Filter 1.svg
-    - design/صفحه ورود/app-icon-mockup-1080x1350-6s.mp4
+    # v6.1 — the loop video lives under the ASCII `design/login/` path:
+    # non-ASCII asset paths ship percent-encoded inside the APK and
+    # video_player's raw AssetManager.open() can never match them (the
+    # engine's own loader compensates — the poster/SVGs stay where they
+    # are). Byte-identical file, ASCII folder, a loop that plays.
+    - design/login/app-icon-mockup-1080x1350-6s.mp4
     - design/صفحه ورود/poster.png
     - design/صفحه ورود/gray-us.png
     - design/صفحه ورود/gray-tm.png

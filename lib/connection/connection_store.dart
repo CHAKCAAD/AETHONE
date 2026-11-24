@@ -477,20 +477,23 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
 
   // ---- v4.34 LIGHT MODE (owner round 10) · v4.40 the AUTO pick (round 15) ----
 
-  /// The app theme — night by default (every earlier build shipped dark;
-  /// the wizard frames are dark). The top-bar sun/moon tile flips it and
-  /// the shell cross-fades the whole palette (see AethoneApp).
+  /// The app theme — LIGHT by default (v6.1, owner: «اپ باید به صورت
+  /// دیفالت روی حالت لایت مود باشه»; every build before v6.1 shipped
+  /// night). The top-bar sun/moon tile flips it and the shell cross-fades
+  /// the whole palette (see AethoneApp).
   ///
   /// v4.40 — this is the RESOLVED mode; the PERSISTED preference is
   /// [themePick] (night / light / auto). While the pick is AUTO the store
   /// keeps re-resolving this field by the local clock (06:00–18:00 light —
   /// see [resolveAutoTheme]); a fixed pick writes its own mode here.
-  AethThemeMode themeMode = AethThemeMode.night;
+  AethThemeMode themeMode = AethThemeMode.light;
 
   /// The persisted appearance pick (owner round 15: «حالت خودکار … از ساعت
   /// 6 صبح تا 6 عصر لایت، از 6 عصر تا 6 صبح نایت»). AUTO delegates the
-  /// mode to the clock; the other two pin it.
-  AethThemePick themePick = AethThemePick.night;
+  /// mode to the clock; the other two pin it. v6.1 — the factory pick is
+  /// LIGHT (the owner's default-mode decree); an existing install's saved
+  /// pick always wins on restore.
+  AethThemePick themePick = AethThemePick.light;
 
   void setThemeMode(AethThemeMode mode) {
     if (themeMode == mode) return;
@@ -559,8 +562,8 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     animationStyle = MotionStyle.standard;
     animationsEnabled = true;
     showPatterns = true;
-    themePick = AethThemePick.night;
-    themeMode = AethThemeMode.night;
+    themePick = AethThemePick.light;
+    themeMode = AethThemeMode.light;
     closeBehavior = CloseBehavior.ask;
     scanSpeed = 4;
     selectedProtocol = ProtocolId.auto;

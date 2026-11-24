@@ -75,14 +75,14 @@ abstract final class SettingsKeys {
   /// v4.25 — the master animation kill-switch (default ON).
   static const animationsEnabled = 'aethone.settings.animationsEnabled';
 
-  /// v4.34 — the app theme ('night' | 'light'; default night). v4.40: the
-  /// RESOLVED mode — the persisted PREFERENCE is [themePick]; this key
+  /// v4.34 — the app theme ('night' | 'light'; v6.1 default light). v4.40:
+  /// the RESOLVED mode — the persisted PREFERENCE is [themePick]; this key
   /// stays written (the shell reads it before the store binds on cold
   /// start) and doubles as the legacy seed for themePick.
   static const themeMode = 'aethone.settings.themeMode';
 
-  /// v4.40 — the appearance pick ('night' | 'light' | 'auto'; default
-  /// seeded from the legacy themeMode key, else night).
+  /// v4.40 — the appearance pick ('night' | 'light' | 'auto'; v6.1 default
+  /// seeded from the legacy themeMode key, else light).
   static const themePick = 'aethone.settings.themePick';
 
   /// v4.40 — the desktop close behavior ('ask' | 'close' | 'tray'; default

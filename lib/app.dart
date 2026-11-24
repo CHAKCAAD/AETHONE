@@ -13,6 +13,7 @@ import 'core/fx/theme_reveal.dart';
 import 'core/motion.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/login_flow.dart';
+import 'features/shared/splash_gate.dart';
 
 /// The AETHONE app shell. Locale: device locale when supported, else Persian
 /// (the design language). The first-run login (v6, «صفحه ورود» — the five
@@ -220,9 +221,16 @@ class _AethoneAppState extends State<AethoneApp>
             _TkWidgetsLocalizationsDelegate(),
             _TkCupertinoLocalizationsDelegate(),
           ],
-          home: widget.store.onboardingComplete
-              ? HomeScreen(store: widget.store)
-              : LoginFlow(store: widget.store),
+          home: SplashGate(
+            // v6.1 — the splash beat («اسپلش اسکرین») over whichever first
+            // screen this cold start owes: the home screen or the login.
+            // White under the factory light face, the app's own dark face
+            // under a night/auto pick — see SplashGate.
+            store: widget.store,
+            child: widget.store.onboardingComplete
+                ? HomeScreen(store: widget.store)
+                : LoginFlow(store: widget.store),
+          ),
         );
       },
     );

@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- v6.1 — the values-night/styles.xml override is RETIRED: the
+         splash is ALWAYS white (the factory theme is light and «برای
+         اولین ورود باید بکگراند سفید داشته باشه»), and the old night
+         variant's Theme.Black window put LIGHT status glyphs over that
+         white field — invisible. The light theme (dark glyphs) applies
+         in every configuration; the in-app SplashGate follows the APP's
+         own theme pick once Flutter paints. -->
     <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is off -->
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <!-- Show a splash screen on the activity. Automatically removed when

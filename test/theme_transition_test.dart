@@ -68,7 +68,7 @@ void main() {
     store.completeOnboarding();
     await tester.pumpWidget(_shell(store));
     await tester.pumpAndSettle();
-    expect(store.themeMode, AethThemeMode.night);
+    expect(store.themeMode, AethThemeMode.light);
     // The disconnected patterns are mounted (the night-ink seam is live).
     expect(find.byKey(const ValueKey('pattern-left-off')), findsOneWidget);
     expect(find.byKey(const ValueKey('pattern-right-off')), findsOneWidget);
@@ -76,25 +76,25 @@ void main() {
     final tile = find.byType(ThemeToggleTile);
     expect(tile, findsOneWidget);
 
-    // Night → light: ride the 420 ms reveal + palette lerp in frame steps.
-    await tester.tap(tile);
-    for (var i = 0; i < 24; i++) {
-      await tester.pump(const Duration(milliseconds: 40));
-    }
-    await tester.pumpAndSettle();
-    expect(store.themeMode, AethThemeMode.light);
-    expect(AethThemeSync.palette.bgScreen, isNot(AethPal.night.bgScreen),
-        reason: 'the palette slot must hold the LIGHT family at rest');
-
-    // Light → night: the SECOND reveal — the exact tap that used to throw
-    // «multiple tickers were created» on the shipped build.
+    // Light → night: ride the 420 ms reveal + palette lerp in frame steps.
     await tester.tap(tile);
     for (var i = 0; i < 24; i++) {
       await tester.pump(const Duration(milliseconds: 40));
     }
     await tester.pumpAndSettle();
     expect(store.themeMode, AethThemeMode.night);
-    expect(AethThemeSync.palette.bgScreen, AethPal.night.bgScreen);
+    expect(AethThemeSync.palette.bgScreen, AethPal.night.bgScreen,
+        reason: 'the palette slot must hold the NIGHT family at rest');
+
+    // Night → light: the SECOND reveal — the exact tap that used to throw
+    // «multiple tickers were created» on the shipped build.
+    await tester.tap(tile);
+    for (var i = 0; i < 24; i++) {
+      await tester.pump(const Duration(milliseconds: 40));
+    }
+    await tester.pumpAndSettle();
+    expect(store.themeMode, AethThemeMode.light);
+    expect(AethThemeSync.palette.bgScreen, AethPal.light.bgScreen);
   });
 
   testWidgets('a quick double-tap lands BOTH flips (the capture race)', (
@@ -117,8 +117,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 40));
     }
     await tester.pumpAndSettle();
-    expect(store.themeMode, AethThemeMode.night,
-        reason: 'night → light → night: neither flip may be swallowed');
+    expect(store.themeMode, AethThemeMode.light,
+        reason: 'light → night → light: neither flip may be swallowed');
   });
 
   testWidgets('the mid-transition frames stay honest — the palette lerps '
@@ -137,19 +137,19 @@ void main() {
     await tester.tap(tile);
 
     // Sample the palette slot's luminance across the transition: it must
-    // move strictly toward light and land exactly on the light family —
+    // move strictly toward night and land exactly on the night family —
     // no throw-induced freeze, no snap back.
     var last = _lum(AethThemeSync.palette.bgScreen);
     var monotone = true;
     for (var i = 0; i < 30; i++) {
       await tester.pump(const Duration(milliseconds: 25));
       final now = _lum(AethThemeSync.palette.bgScreen);
-      if (now + 0.5 < last) monotone = false;
+      if (last + 0.5 < now) monotone = false;
       last = now;
     }
     await tester.pumpAndSettle();
-    expect(monotone, isTrue, reason: 'the night → light lerp never rewinds');
-    expect(AethThemeSync.palette.bgScreen, AethPal.light.bgScreen);
+    expect(monotone, isTrue, reason: 'the light → night lerp never rewinds');
+    expect(AethThemeSync.palette.bgScreen, AethPal.night.bgScreen);
 
     // The wipe finished with the palette: after settle, a capture of the
     // shell equals a fresh build's frame (no overlay residue) — proven by

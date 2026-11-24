@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v6.1 — THE SPLASH on Android 12+ (API 31+): the system splash
+         screen replaces the pre-12 windowBackground dance with its own
+         icon view, so the same WHITE field + the owner's own app icon are
+         pinned through the windowSplashScreen* attributes:
+
+           * windowSplashScreenBackground — the always-white field (the
+             factory theme is light; the in-app SplashGate follows the
+             app's own pick from the first Flutter frame);
+
+           * windowSplashScreenAnimatedIcon — splash_icon_12: a 1152 px
+             (xxxhdpi ⇒ 288 dp canvas) PNG carrying the icon at 540 px,
+             fully inside the 768 px safe circle the system masks to.
+
+         The parents stay the Flutter template's own (Theme.Light…) — the
+         engine's NormalTheme meta-data handoff is untouched. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_12</item>
+    </style>
+</resources>

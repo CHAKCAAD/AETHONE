@@ -278,6 +278,19 @@ abstract final class AethColors {
   /// (`#787878`, Group 144's two vectors).
   static const Color loginLookGray = Color(0xFF787878);
 
+  // ---- v6.1 THE SPLASH («اسپلش اسکرین», owner: «یک اسپلش اسکرین با بگراند
+  // سفید … لوگو اپ رو هم در وسط صفحه با ابعاد مناسب») ----
+
+  /// The in-app splash's background: PURE WHITE under the light face (the
+  /// owner's decree — brighter than the light [bgScreen] `#EDEDED`, so the
+  /// native white launch screen hands off without a seam), the night
+  /// screen family otherwise («اسپلش اسکرین هم باید از تم تبعیت کنه» —
+  /// a night/auto pick renders the splash in the app's own dark face).
+  /// Binary by design: the splash lives ~1 s at cold start, when the
+  /// restored palette is already at rest — no cross-fade to ride.
+  static Color get splashBg =>
+      AethThemeSync.light ? const Color(0xFFFFFFFF) : AethThemeSync.palette.bgScreen;
+
   // ---- v4.24 speed test («صفحه تست سرعت») — measured programmatically on
   // the three committed frames (قبل از شروع / در حال تست سرعت / اتمام
   // تست سرعت): tile-box corner grids + polar midline sampling. ----
@@ -1200,4 +1213,17 @@ abstract final class AethGeometry {
   static const double loginBtnNextLeft = 213;
   static const double loginBtnTextSize = 16;
   static const double loginBtnChevron = 26;
+
+  // -------------------------------------------------------------------
+  // v6.1 — THE SPLASH («اسپلش اسکرین»): the app logo centred on the
+  // splash background with «ابعاد مناسب». The reference value is the
+  // ~35 % of the 402 ref width that the owner's own login mockup gives
+  // its icon (the video band's 1080×1350 frame), landing close to the
+  // 140 dp the NATIVE launch screen draws (pre-12 layer-list and the
+  // API-31 splash icon) so the native→Flutter handoff reads as ONE
+  // continuous splash.
+  // -------------------------------------------------------------------
+
+  /// The in-app splash logo's edge (ref px, scaled by screenWidth/402).
+  static const double splashLogoSize = 140;
 }

@@ -216,10 +216,23 @@ abstract final class AppAssets {
   // the widget tests included), and the five pre-rendered GRAYSCALE flag
   // faces — the frames' unselected state is a SOFT gray no linear ColorFilter
   // matrix can express (a gamma ≈ 0.75 lift), so the gray faces are baked
-  // once the flags_png way and shipped as assets. ---
+  // once the flags_png way and shipped as assets.
+  //
+  // v6.1 — THE VIDEO LIVES UNDER THE ASCII `design/login/` PATH, not beside
+  // the frames in «صفحه ورود»: the build pipeline percent-encodes non-ASCII
+  // asset paths inside the APK (the zip entry reads
+  // `design/%D8%B5%D9%81%D8%AD%D9%87%20%D9%88%D8%B1%D9%88%D8%AF/…`), and
+  // while the ENGINE's own asset loader compensates for that (the poster and
+  // every Persian-named SVG load fine), video_player's media3
+  // `AssetDataSource` opens the asset with the RAW path via
+  // `AssetManager.open()` — a byte-for-byte match against the encoded entry
+  // that can never hit, so the loop died on the owner's device and only the
+  // poster showed («به جای عکسی که الان وجود داره…»). An ASCII path ships
+  // as a raw zip entry both sides agree on. The FILENAME stays the owner's
+  // own, byte-identical — only the folder moved. ---
   static const String _loginAssets = 'design/صفحه ورود';
   static const String loginVideo =
-      '$_loginAssets/app-icon-mockup-1080x1350-6s.mp4';
+      'design/login/app-icon-mockup-1080x1350-6s.mp4';
   static const String loginPoster = '$_loginAssets/poster.png';
 
   /// The grayscale face of a login flag by ISO code (lowercase) —
