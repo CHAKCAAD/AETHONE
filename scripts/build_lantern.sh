@@ -58,7 +58,7 @@ GOV="$(go env GOVERSION)"
 TAGS="novpn,with_gvisor,with_quic,with_wireguard,with_utls,with_grpc"
 # 16 KB page alignment (Android 15+), full RELRO — same rules as the other
 # AETHONE natives (scripts/inspect_elf.sh).
-LDFLAGS="-s -w -checklinkname=0 -extldflags '-Wl,-z,max-page-size=16384 -Wl,-z,relro -Wl,-z,now'"
+LDFLAGS="-s -w -checklinkname=0 -extldflags '-Wl,-z,max-page-size=16384 -Wl,-z,relro -Wl,-z,now -static-libstdc++'"
 
 mkdir -p "$OUT"
 cd "$BRIDGE"
