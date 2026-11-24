@@ -1062,10 +1062,10 @@ abstract final class AethGeometry {
   /// Round 25 — the [icon ⇒ label] group packs to the tile's LEFT edge
   /// (the owner: «لوگو ها به سمت چپ تراز بشن» — the round-24 uniform
   /// 24 ref-px icon box is retired, the per-tile calibrated heights are
-  /// back): every logo in a column leads from the same x (the 4 px
-  /// selected ring only PAINTS over the tile's edge band — a BoxDecoration
-  /// border never layout-insets the child) and the grid reads as two
-  /// tidy aligned logo columns.
+  /// back): a Container with BOTH the 4 px ring and this pad MERGES them
+  /// (_paddingIncludingDecoration), so every logo in a column leads from
+  /// the same x (tile edge + 4 + 16) and the grid reads as two tidy
+  /// aligned logo columns.
   static const double protoSheetTilePadLeft = 16;
 
   /// The icon⇒label gap inside a tile (the frame's icon+label group,

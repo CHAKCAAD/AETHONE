@@ -110,11 +110,11 @@ void main() {
       await tester.pumpAndSettle();
       await _capture(tester, 'proto_sheet');
       // The sheet's own chrome renders; the retired page and every
-      // descriptions layer are gone. Round 24 — the labels are the app's
-      // own localized fa names.
+      // descriptions layer are gone. Round 25 — the labels ride the
+      // FRAME's own Latin cut again («اسامی پروتکل ها … به حالت قبل»).
       expect(find.byKey(const ValueKey('proto-sheet-panel')), findsOneWidget);
       expect(find.byKey(const ValueKey('proto-sheet-handle')), findsOneWidget);
-      expect(find.text('اتوماتیک'), findsOneWidget);
+      expect(find.text('Auto'), findsOneWidget);
       expect(find.textContaining('اتصال مستقیماً از طریق Psiphon'), findsNothing);
       expect(find.textContaining('اتصال رمزگذاری‌شده'), findsNothing);
     },

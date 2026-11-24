@@ -417,16 +417,18 @@ void main() {
 
       // The column anchors are derived from the tiles' OWN rects (the
       // grid rides Expanded slots, so the right column starts at 209.5,
-      // not the frame's nominal 209): every glyph leads its column from
-      // the tile's left edge + the round-25 pad (the 4px ring PAINTS
-      // over the edge band; a BoxDecoration border never layout-insets
-      // the child).
+      // not the frame's nominal 209): a Container with BOTH a decoration
+      // border and padding MERGES them (_paddingIncludingDecoration), so
+      // every glyph leads its column from the tile's left edge + the
+      // 4px ring band + the round-25 left pad.
       final colLeft = tester
               .getRect(find.byKey(const ValueKey('proto-tile-wireguard')))
               .left +
+          AethGeometry.protoSheetCardBorder +
           AethGeometry.protoSheetTilePadLeft;
       final colRight =
           tester.getRect(find.byKey(const ValueKey('proto-tile-auto'))).left +
+              AethGeometry.protoSheetCardBorder +
               AethGeometry.protoSheetTilePadLeft;
       for (final id in [
         ProtocolId.wireguard,

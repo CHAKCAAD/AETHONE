@@ -230,7 +230,7 @@ void main() {
       expect(AethGeometry.protoSheetCardBorder, 4);
       expect(AethGeometry.protoSheetCardRingAlpha, 0.4);
       // Round 25 — the LEFT-packed tile group: every logo leads its
-      // column from the same x (the ring only paints, never insets).
+      // column from the same x (the pad merges with the 4px ring).
       expect(AethGeometry.protoSheetTilePadLeft, 16);
       expect(AethGeometry.protoSheetIconGap, 18);
       // The flutterfx entrance recipe: home scale 0.85, rise 24, r16.

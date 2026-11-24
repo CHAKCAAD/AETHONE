@@ -585,12 +585,12 @@ class _ProtoTileState extends State<_ProtoTile>
                 ),
                 // Round 25 — the group packs to the tile's LEFT edge
                 // (the owner: «لوگو ها به سمت چپ تراز بشن»): every logo
-                // in a column leads from the same x, so the grid reads
-                // as two tidy aligned logo columns (the 4 px selected
-                // ring only paints over the edge band — it never
-                // layout-insets the child). The grid itself is
-                // LTR-locked (see _grid), so «start» is the VISUAL left
-                // under the fa locale too.
+                // in a column leads from the same x (the Container MERGES
+                // this pad with the 4 px ring — _paddingIncludingDecoration
+                // — so the glyph starts at tile edge + 4 + 16), and the
+                // grid reads as two tidy aligned logo columns. The grid
+                // itself is LTR-locked (see _grid), so «start» is the
+                // VISUAL left under the fa locale too.
                 padding: EdgeInsets.only(
                   left: AethGeometry.protoSheetTilePadLeft * s,
                 ),
