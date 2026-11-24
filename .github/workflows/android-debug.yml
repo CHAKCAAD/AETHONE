@@ -28,6 +28,15 @@
 # Pins mirror .github/workflows/native-ci.yml (the project's frozen
 # recipe, decisions N1/N8). Actions are pinned by FULL COMMIT SHA with
 # the raw tag->SHA proof recorded in evidence/actions_pins_raw_evidence.txt.
+#
+# 2026-11-24 — THE LEAN V8A ROUND (owner decree: «بیلد بگیر بت اکشن گیت
+#   هاب فقط برای v8a و لینک دانلود رو قرار بده»): the workflow_dispatch
+#   input abi=arm64-v8a builds ONLY the owner's-phone ABI. The native-cores
+#   matrix keeps the arm64-v8a leg only, and the APK is built
+#   --target-platform android-arm64 (the owner's standing rule that the
+#   debug build is arm64-v8a ONLY, never universal). The default ('all')
+#   and every push trigger keep the universal behavior byte-identical.
+#   Containment is unchanged: expiring 14-day artifacts only, nothing public.
 # =============================================================================
 name: AETHONE DA — Debug APK
 
@@ -37,9 +46,19 @@ name: AETHONE DA — Debug APK
 # they produce expiring debug artifacts only.
 on:
   workflow_dispatch:
+    inputs:
+      abi:
+        description: "ABI scope — 'all' (universal, 3 ABIs) or 'arm64-v8a' (lean: the owner's-phone ABI only)"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - arm64-v8a
   push:
     branches:
       - fix/owner-round-2
+      - feature/flutterfx-animations
 
 permissions:
   contents: read
@@ -86,20 +105,13 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
+      # lean v8a round (owner decree 2026-11-24): abi=arm64-v8a collapses
+      # the matrix to the owner's-phone leg ONLY; 'all' — and every push
+      # trigger, where inputs.abi is empty — keeps all three legs. The
+      # include list is built by expression because the matrix context is
+      # NOT available in a job-level if (actionlint-verified).
       matrix:
-        include:
-          - abi: arm64-v8a
-            rust_target: aarch64-linux-android
-            goarch: arm64
-            goarm: ""
-          - abi: armeabi-v7a
-            rust_target: armv7-linux-androideabi
-            goarch: arm
-            goarm: "7"
-          - abi: x86_64
-            rust_target: x86_64-linux-android
-            goarch: amd64
-            goarm: ""
+        include: ${{ inputs.abi == 'arm64-v8a' && fromJSON('[{"abi":"arm64-v8a","rust_target":"aarch64-linux-android","goarch":"arm64","goarm":""}]') || fromJSON('[{"abi":"arm64-v8a","rust_target":"aarch64-linux-android","goarch":"arm64","goarm":""},{"abi":"armeabi-v7a","rust_target":"armv7-linux-androideabi","goarch":"arm","goarm":"7"},{"abi":"x86_64","rust_target":"x86_64-linux-android","goarch":"amd64","goarm":""}]') }}
     env:
       ZIG_PREFIX: ${{ github.workspace }}/.tools/zig
       SRC_CACHE: ${{ github.workspace }}/.srccache
@@ -191,10 +203,13 @@ jobs:
   # presence), and deliver the expiring artifact.
   # ===========================================================================
   da-debug-apk:
-    name: "DA debug APK (universal, all ABIs — package id .da)"
+    name: "DA debug APK (universal or lean v8a round — package id .da)"
     needs: [native-cores]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      # lean v8a round: 'all' keeps the universal behavior byte-identical
+      ABI_SCOPE: ${{ inputs.abi || 'all' }}
     steps:
       - name: Checkout AETHONE repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -276,10 +291,16 @@ jobs:
       - name: Unit + widget tests
         run: flutter test
 
-      - name: Build the DA debug APK (universal — all three ABIs)
+      - name: Build the DA debug APK
         run: |
           set -euo pipefail
-          flutter build apk --debug
+          if [ "$ABI_SCOPE" = "arm64-v8a" ]; then
+            # lean v8a round — the owner's standing rule: the debug build is
+            # arm64-v8a ONLY, never universal
+            flutter build apk --debug --target-platform android-arm64
+          else
+            flutter build apk --debug
+          fi
           ls -la build/app/outputs/flutter-apk/
 
       - name: Packaging gates (zipalign -P 16 + apksigner verify)
@@ -316,7 +337,12 @@ jobs:
           #    SIGPIPE the producer the way `unzip -l | grep -q` can under
           #    pipefail — the recorded native-ci run-41438805265 lesson)
           unzip -l "$APK" > apk-contents.txt
-          for abi in arm64-v8a armeabi-v7a x86_64; do
+          if [ "$ABI_SCOPE" = "arm64-v8a" ]; then
+            ABIS="arm64-v8a"
+          else
+            ABIS="arm64-v8a armeabi-v7a x86_64"
+          fi
+          for abi in $ABIS; do
             for so in libaether.so liblyrebird.so libpsiphon.so libzeptun-jni.so; do
               grep -q "lib/$abi/$so" apk-contents.txt \
                 || { echo "::error::lib/$abi/$so missing from the APK"; exit 1; }
@@ -327,7 +353,7 @@ jobs:
           if grep -q 'libfirefoxvpn' apk-contents.txt; then
             echo "::error::libfirefoxvpn.so still in the APK — the Firefox removal is incomplete"; exit 1
           fi
-          echo "APK verification: ALL PASS (archive, package id, label, 3 ABIs x 4 cores, no firefox engine)"
+          echo "APK verification: ALL PASS (archive, package id, label, [${ABIS// / + }] x 4 cores, no firefox engine)"
 
       - name: Dist naming + SHA256SUMS + the build report
         run: |
@@ -361,7 +387,11 @@ jobs:
             echo "package_id=${DA_PACKAGE_ID}"
             echo "label=AETHONE DA"
             echo "variant=debug (debug-keystore signed — TEST INSTALL ONLY, not a release signature)"
-            echo "abis=arm64-v8a,armeabi-v7a,x86_64 (universal)"
+            if [ "$ABI_SCOPE" = "arm64-v8a" ]; then
+              echo "abis=arm64-v8a (lean v8a round — the owner's-phone ABI only)"
+            else
+              echo "abis=arm64-v8a,armeabi-v7a,x86_64 (universal)"
+            fi
             echo "apk=AETHONE-DA-Debug.apk"
             echo "apk_size_bytes=${APK_SIZE}"
             echo "apk_sha256=${APK_SHA}"
