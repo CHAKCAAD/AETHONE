@@ -117,8 +117,8 @@ class _HeroBobState extends State<HeroBob>
   /// `easeOutBack` snap (a hair past the lift, settling back).
   double _offset(double amp) {
     final t = _cycle.value;
-    final swing = _swingMs / _cycleMs; // 0.318
-    final rest = _restMs / _cycleMs; // 0.182
+    const swing = _swingMs / _cycleMs; // 0.318
+    const rest = _restMs / _cycleMs; // 0.182
     if (t < swing) {
       // Rising: 0 → 1 with the march swing's overshoot.
       return -amp * Curves.easeOutBack.transform(t / swing);
