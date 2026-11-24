@@ -21,6 +21,7 @@ import 'package:aethone/connection/engine.dart';
 import 'package:aethone/core/design_tokens.dart';
 import 'package:aethone/features/home/home_screen.dart';
 import 'package:aethone/features/home/protocol_sheet/protocol_sheet.dart';
+import 'package:aethone/features/shared/protocol_glyph.dart';
 import 'package:aethone/l10n/app_strings.dart';
 
 class ScriptedEngine extends EngineAdapter {
@@ -157,38 +158,37 @@ void main() {
       final store = ConnectionStore(engine: ScriptedEngine());
       await _openSheet(tester, store);
 
-      // Round 24 — the APP'S OWN localized fa names (the retired frame
-      // Latin labels are gone; the four combined modes carry their full
-      // names, the owner's TOW/WOT/POW/WOP definitions). The finders are
-      // SCOPED to the sheet panel: the scaled home behind the barrier
-      // still carries its own protocol card (its «ماسک» would collide
-      // with the tile's).
+      // Round 25 — the frame's OWN Latin labels are BACK (the owner:
+      // «اسامی پروتکل ها در صفحه پروتکل رو به حالت قبل برگردون» — the
+      // round-24 localized re-cut is retired; the app's localized names
+      // keep riding the home card + settings). The finders are SCOPED
+      // to the sheet panel so a future label can never collide with the
+      // scaled home behind the barrier.
       Finder sheetText(String label) => find.descendant(
             of: find.byKey(const ValueKey('proto-sheet-panel')),
             matching: find.text(label),
           );
       for (final label in [
-        'وایرگارد', 'اتوماتیک', 'میم', 'ماسک', 'گول کلاسیک', 'گول',
-        'تور', 'سایفون', 'تور اور وارپ', 'سایفون اور وارپ',
-        'وارپ اور تور', 'وارپ اور سایفون',
+        'Wireguard', 'Auto', 'M I M', 'Masq', 'G Classic', 'Gool',
+        'Tor', 'Psiphon', 'T O W', 'P O W', 'W O T', 'W O P',
       ]) {
         expect(sheetText(label), findsOneWidget, reason: label);
       }
 
       // LTR-locked reading (the grid never bidi-flips under the fa
       // locale): wireguard on the visual LEFT, auto on the RIGHT.
-      final wg = tester.getCenter(sheetText('وایرگارد'));
-      final auto = tester.getCenter(sheetText('اتوماتیک'));
+      final wg = tester.getCenter(sheetText('Wireguard'));
+      final auto = tester.getCenter(sheetText('Auto'));
       expect(auto.dx, greaterThan(wg.dx));
 
       // Column order down the rows: mim below wireguard, masq below auto.
       expect(
-        tester.getCenter(sheetText('میم')).dy,
+        tester.getCenter(sheetText('M I M')).dy,
         greaterThan(wg.dy),
       );
       expect(
-        tester.getCenter(sheetText('ماسک')).dx,
-        greaterThan(tester.getCenter(sheetText('میم')).dx),
+        tester.getCenter(sheetText('Masq')).dx,
+        greaterThan(tester.getCenter(sheetText('M I M')).dx),
       );
 
       // The last row ends 25 above the panel's bottom (867 − 842).
@@ -392,10 +392,81 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('proto-sheet-panel')),
-          matching: find.text('وارپ اور سایفون'),
+          matching: find.text('W O P'),
         ),
         findsOneWidget,
       ); // the last row is laid out
+    },
+  );
+
+  testWidgets(
+    'round 25 — the logos pack to the tile\'s LEFT edge (two aligned '
+    'columns) and the per-tile calibrated heights are back', (tester) async {
+      tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+
+      final store = ConnectionStore(engine: ScriptedEngine());
+      await _openSheet(tester, store);
+
+      // The glyph inside a tile (the view is 402 logical — s = 1).
+      Finder glyph(ProtocolId id) => find.descendant(
+            of: find.byKey(ValueKey('proto-tile-${id.name}')),
+            matching: find.byType(ProtocolGlyph),
+          );
+
+      // The column anchors are derived from the tiles' OWN rects (the
+      // grid rides Expanded slots, so the right column starts at 209.5,
+      // not the frame's nominal 209): every glyph leads its column from
+      // the tile's left edge + the round-25 pad (the 4px ring PAINTS
+      // over the edge band; a BoxDecoration border never layout-insets
+      // the child).
+      final colLeft = tester
+              .getRect(find.byKey(const ValueKey('proto-tile-wireguard')))
+              .left +
+          AethGeometry.protoSheetTilePadLeft;
+      final colRight =
+          tester.getRect(find.byKey(const ValueKey('proto-tile-auto'))).left +
+              AethGeometry.protoSheetTilePadLeft;
+      for (final id in [
+        ProtocolId.wireguard,
+        ProtocolId.mim,
+        ProtocolId.goolClassic,
+        ProtocolId.torOnly,
+        ProtocolId.torChain,
+        ProtocolId.torReverse,
+      ]) {
+        expect(tester.getTopLeft(glyph(id)).dx, closeTo(colLeft, 0.5),
+            reason: '${id.name} leads the left column');
+      }
+
+      // RIGHT COLUMN — same rule, its own anchor.
+      for (final id in [
+        ProtocolId.auto,
+        ProtocolId.masque,
+        ProtocolId.gool,
+        ProtocolId.psiphonOnly,
+        ProtocolId.psiphonChain,
+        ProtocolId.psiphonReverse,
+      ]) {
+        expect(tester.getTopLeft(glyph(id)).dx, closeTo(colRight, 0.5),
+            reason: '${id.name} leads the right column');
+      }
+      expect(colRight, greaterThan(colLeft));
+
+      // The per-tile calibrated heights are RESTORED (the round-24
+      // uniform 24 ref-px box is retired): spot-check the extremes +
+      // the frame's own values.
+      expect(tester.getSize(glyph(ProtocolId.wireguard)).height,
+          closeTo(19, 0.5));
+      expect(tester.getSize(glyph(ProtocolId.auto)).height,
+          closeTo(23, 0.5));
+      expect(tester.getSize(glyph(ProtocolId.mim)).height,
+          closeTo(28, 0.5));
+      expect(tester.getSize(glyph(ProtocolId.psiphonOnly)).height,
+          closeTo(34, 0.5));
+      expect(tester.getSize(glyph(ProtocolId.psiphonReverse)).height,
+          closeTo(31, 0.5));
     },
   );
 }

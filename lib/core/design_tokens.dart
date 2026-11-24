@@ -1056,18 +1056,20 @@ abstract final class AethGeometry {
   static const double protoSheetCardRingAlpha = 0.4;
 
   /// The tile label: IRANYekanX 400, 16/18 — the frame's own text style
-  /// (the app's localized protocol names since round 24).
+  /// (the frame's Latin labels, restored round 25).
   static const double protoSheetLabelSize = 16;
 
-  /// Round 24 — ONE icon size for ALL twelve tiles (the owner: «آیکون
-  /// پروتکل ها در صفحه انتخاب پروتکل ها باید در یک سطر باشن الان خیلی
-  /// به هم ریخته و شلخته هستن»): the per-tile calibrated heights (19–34)
-  /// are retired — every glyph renders in the SAME 24 ref-px box so the
-  /// icons read as one aligned row across the whole grid.
-  static const double protoSheetIconSize = 24;
+  /// Round 25 — the [icon ⇒ label] group packs to the tile's LEFT edge
+  /// (the owner: «لوگو ها به سمت چپ تراز بشن» — the round-24 uniform
+  /// 24 ref-px icon box is retired, the per-tile calibrated heights are
+  /// back): every logo in a column leads from the same x (the 4 px
+  /// selected ring only PAINTS over the tile's edge band — a BoxDecoration
+  /// border never layout-insets the child) and the grid reads as two
+  /// tidy aligned logo columns.
+  static const double protoSheetTilePadLeft = 16;
 
-  /// The icon⇒label gap inside a tile (the frame's centered icon+label
-  /// group; measured 18–20 on the wireguard card).
+  /// The icon⇒label gap inside a tile (the frame's icon+label group,
+  /// left-packed since round 25; measured 18–20 on the wireguard card).
   static const double protoSheetIconGap = 18;
 
   /// The flutterfx entrance: while the sheet slides up, the home behind

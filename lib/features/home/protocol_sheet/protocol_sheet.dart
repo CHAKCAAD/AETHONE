@@ -20,11 +20,12 @@
 /// The 12 tiles flatten the old family cards — each combined mode is its
 /// own tile (tor / psiphon / tow / pow / wot / wop), and AUTO carries the
 /// owner's new uploaded mark (آیکون پروتکل auto.png — see ProtocolGlyph).
-/// Round 24 — every tile's label is the app's OWN localized name (the
-/// four combined modes carry their full names — «تور اور وارپ»,
-/// «وارپ اور تور», «سایفون اور وارپ», «وارپ اور سایفون» — each wired to
-/// its own backend leg), and all twelve icons ride ONE uniform 24 ref-px
-/// box so the grid reads as aligned rows.
+/// Round 25 — the frame's OWN Latin labels and the per-tile calibrated
+/// icon heights are BACK (the owner: «منظورم این بود که لوگو ها به سمت چپ
+/// تراز بشن، اینکه سایزشون رو تغییر بدی»): what the round-24 re-cut
+/// retired is restored, and the [icon ⇒ label] group now packs to the
+/// tile's LEFT edge — so the twelve logos read as two tidy aligned
+/// columns down the grid, LEFT-locked like the frame's own reading.
 /// The SELECTED state is the standing green gradient under a 4px
 /// rgba(26,217,149,0.4) ring with white icon + white label (owner CSS
 /// «Rectangle 13»); selecting still AUTO-CLOSES the sheet after the green
@@ -48,7 +49,6 @@ import '../../../connection/connection_store.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
-import '../../../l10n/app_strings.dart';
 import '../../shared/protocol_glyph.dart';
 
 /// The handle the home screen uses to open/close the sheet — the flutterfx
@@ -437,34 +437,54 @@ class _SheetPanel extends StatelessWidget {
   }
 }
 
-/// One grid slot: the protocol id — the label resolves through the
-/// app's own localized names at build time (round 24: «نام بعضی پروتکل
-/// ها در صفحه انتخاب پروتکل اشتباه نوشته شده که با سایر بخش های اپ
-/// هماهنگش کن» — the retired frame-Latin labels «T O W»/«M I M»/… are
-/// gone; every tile reads the SAME name the rest of the app shows, and
-/// the four combined modes carry their full names — «تور اور وارپ» /
-/// «وارپ اور تور» / «سایفون اور وارپ» / «وارپ اور سایفون» — each
-/// riding its own backend leg, evidence-locked in transport_modes.dart
-/// + platform_engine_adapter.dart).
+/// One grid slot: the protocol id + the frame's own LATIN label
+/// (`text-transform: capitalize`) + the calibrated icon height (the CSS
+/// vector boxes of the committed frame). Round 25 — the frame's own
+/// labels and heights are RESTORED (the round-24 localized re-cut is
+/// retired: the owner's decree was the LEFT alignment, not a rename or
+/// a re-size; the app's localized names keep riding the home card and
+/// the settings, exactly as before).
 class _TileSpec {
-  const _TileSpec(this.id);
+  const _TileSpec(this.id, this.label, this.iconH);
 
   final ProtocolId id;
+  final String label;
+  final double iconH;
 }
 
 /// The frame's grid, row by row, visual LEFT → RIGHT:
-///   wireguard | auto      mim | masque      g classic | gool
+///   wireguard | auto      mim | masq      g classic | gool
 ///   tor | psiphon         tow | pow       wot | wop
 const List<List<_TileSpec>> _sheetRows = [
-  [_TileSpec(ProtocolId.wireguard), _TileSpec(ProtocolId.auto)],
-  [_TileSpec(ProtocolId.mim), _TileSpec(ProtocolId.masque)],
-  [_TileSpec(ProtocolId.goolClassic), _TileSpec(ProtocolId.gool)],
-  [_TileSpec(ProtocolId.torOnly), _TileSpec(ProtocolId.psiphonOnly)],
-  [_TileSpec(ProtocolId.torChain), _TileSpec(ProtocolId.psiphonChain)],
-  [_TileSpec(ProtocolId.torReverse), _TileSpec(ProtocolId.psiphonReverse)],
+  [
+    _TileSpec(ProtocolId.wireguard, 'Wireguard', 19),
+    _TileSpec(ProtocolId.auto, 'Auto', 23),
+  ],
+  [
+    _TileSpec(ProtocolId.mim, 'M I M', 28),
+    _TileSpec(ProtocolId.masque, 'Masq', 19),
+  ],
+  [
+    _TileSpec(ProtocolId.goolClassic, 'G Classic', 26),
+    _TileSpec(ProtocolId.gool, 'Gool', 26),
+  ],
+  [
+    _TileSpec(ProtocolId.torOnly, 'Tor', 28),
+    _TileSpec(ProtocolId.psiphonOnly, 'Psiphon', 34),
+  ],
+  [
+    _TileSpec(ProtocolId.torChain, 'T O W', 28),
+    _TileSpec(ProtocolId.psiphonChain, 'P O W', 30),
+  ],
+  [
+    _TileSpec(ProtocolId.torReverse, 'W O T', 31),
+    _TileSpec(ProtocolId.psiphonReverse, 'W O P', 31),
+  ],
 ];
 
-/// One protocol card: 159×67 r17, the centered [icon 18 label] group.
+/// One protocol card: 159×67 r17, the LEFT-packed [icon 18 label]
+/// group (round 25 — the logos lead from the tile's own left inset, so
+/// the grid reads as two aligned logo columns).
 /// Unselected: the chip fill + the theme-ink icon + [AethColors.textPrimary]
 /// label. Selected: the standing green gradient under the 4px green ring,
 /// all-white icon + label. The crossfade rides one 260 ms tween (the old
@@ -516,17 +536,10 @@ class _ProtoTileState extends State<_ProtoTile>
   Widget build(BuildContext context) {
     final spec = widget.spec;
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    // Round 24 — the tile's label is the APP'S OWN localized name (the
-    // same word the home protocol card and the settings pages show);
-    // AUTO keeps the sheet's own «اتوماتیک» wording.
-    final strings = AppStrings.of(context);
-    final label = spec.id == ProtocolId.auto
-        ? strings.protoAutoSheet
-        : strings.protocolName(spec.id);
 
     return Semantics(
       button: true,
-      label: label,
+      label: spec.label,
       child: ScaleTransition(
         scale: _pulse,
         child: GestureDetector(
@@ -570,44 +583,52 @@ class _ProtoTileState extends State<_ProtoTile>
                     ),
                   ),
                 ),
+                // Round 25 — the group packs to the tile's LEFT edge
+                // (the owner: «لوگو ها به سمت چپ تراز بشن»): every logo
+                // in a column leads from the same x, so the grid reads
+                // as two tidy aligned logo columns (the 4 px selected
+                // ring only paints over the edge band — it never
+                // layout-insets the child). The grid itself is
+                // LTR-locked (see _grid), so «start» is the VISUAL left
+                // under the fa locale too.
+                padding: EdgeInsets.only(
+                  left: AethGeometry.protoSheetTilePadLeft * s,
+                ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.start,
                   children: [
-                    // Round 24 — ONE icon size for every tile (the owner:
-                    // «آیکون پروتکل ها … باید در یک سطر باشن»): the
-                    // per-tile calibrated heights are retired — all
-                    // twelve glyphs ride the same 24 ref-px box, so the
-                    // icons read as one aligned row across the grid.
+                    // Round 25 — the per-tile calibrated heights are
+                    // RESTORED (the owner: «سایز لوگوها رو هم به حالت
+                    // قبل برگردون»); the round-24 uniform 24 ref-px box
+                    // is retired.
                     ProtocolGlyph(
                       id: spec.id,
-                      size: AethGeometry.protoSheetIconSize * s,
+                      size: spec.iconH * s,
                       // The standing all-ink white rule lands at the
                       // crossfade's midpoint (the theme's own swap beat).
                       white: t > 0.5,
                     ),
                     SizedBox(width: AethGeometry.protoSheetIconGap * s),
                     // v4.46 — the label is FLEXIBLE (the no-overflow
-                    // decree); round 24: the localized names (incl. the
-                    // combined modes' full names) SCALE DOWN to fit the
-                    // 151.5 px ink box — a name can never ellipsize
-                    // away its own tail.
+                    // decree): on the real IRANYekanX metrics every
+                    // frame label fits the 151.5 px ink box naturally,
+                    // and an unexpected metric can only ellipsize —
+                    // never push the row past the card.
                     Flexible(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          softWrap: false,
-                          style: TextStyle(
-                            fontFamily: 'IRANYekanX',
-                            fontWeight: FontWeight.w400,
-                            fontSize: AethGeometry.protoSheetLabelSize * s,
-                            height: 18 / 16,
-                            color: Color.lerp(
-                              AethColors.textPrimary,
-                              const Color(0xFFFFFFFF),
-                              t,
-                            ),
+                      child: Text(
+                        spec.label,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: 'IRANYekanX',
+                          fontWeight: FontWeight.w400,
+                          fontSize: AethGeometry.protoSheetLabelSize * s,
+                          height: 18 / 16,
+                          color: Color.lerp(
+                            AethColors.textPrimary,
+                            const Color(0xFFFFFFFF),
+                            t,
                           ),
                         ),
                       ),

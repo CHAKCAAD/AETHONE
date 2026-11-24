@@ -156,6 +156,14 @@ class BottomPanel extends StatelessWidget {
 /// icon set's own «Graph Down»/«Graph Up» OUTLINES (no filled box — the
 /// v4.10 stat-card boxes are a look-1-only treatment), green #00D589 /
 /// red #E63946 in BOTH connection states.
+///
+/// Round 25 (the owner: «قسمت نمایش دانلود و آپلود در حالت غیر متصل
+/// پنهان باشه و بعد از اتصال نمایش داده بشن») — the two stat groups
+/// ride the house show/hide pattern ([AnimatedScale] + [AnimatedOpacity]
+/// on the state edge, the look-1 SpeedTestButton's own recipe): HIDDEN
+/// while not connected, revealed when the tunnel lands. The fixed
+/// 132/110 slot widths STAY mounted, so the Speed Test entry keeps the
+/// exact screen centre in both states.
 class HomeStatsRow extends StatelessWidget {
   const HomeStatsRow({
     super.key,
@@ -177,6 +185,28 @@ class HomeStatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    // Round 25 — the state-edge tempo/curve, the SpeedTestButton's own
+    // show/hide recipe (OFF style ⇒ instant).
+    final duration = motionDuration(style, MotionDurations.state);
+
+    // Round 25 — the DOWN/UP groups hide while not connected: scale +
+    // opacity to 0 (the look-1 speed entry's own pattern), the fixed slot
+    // widths staying mounted so the speed group never drifts off centre.
+    // The gate carries a key (the house pattern) so the tests can read
+    // the hidden/shown state directly.
+    Widget stateHidden(Key key, Widget child) => AnimatedScale(
+          key: key,
+          scale: connected ? 1.0 : 0.0,
+          duration: duration,
+          curve: style.curve,
+          child: AnimatedOpacity(
+            opacity: connected ? 1.0 : 0.0,
+            duration: duration,
+            curve: style.curve,
+            child: child,
+          ),
+        );
+
     return Directionality(
       textDirection: TextDirection.ltr,
       child: SizedBox(
@@ -204,11 +234,14 @@ class HomeStatsRow extends StatelessWidget {
                 width: 132 * s,
                 child: _nudged(
                   s,
-                  _StatGroup(
-                    iconAsset: AppAssets.iconGraphDown,
-                    label: 'DOWN:',
-                    valueText: BottomPanel.formatBytesAdaptive(downBytes),
-                    style: style,
+                  stateHidden(
+                    const ValueKey('look2-stat-down'),
+                    _StatGroup(
+                      iconAsset: AppAssets.iconGraphDown,
+                      label: 'DOWN:',
+                      valueText: BottomPanel.formatBytesAdaptive(downBytes),
+                      style: style,
+                    ),
                   ),
                 ),
               ),
@@ -226,12 +259,15 @@ class HomeStatsRow extends StatelessWidget {
                 width: 110 * s,
                 child: _nudged(
                   s,
-                  _StatGroup(
-                    iconAsset: AppAssets.iconGraphUp,
-                    label: 'UP:',
-                    valueText: BottomPanel.formatBytesAdaptive(upBytes),
-                    packEnd: true,
-                    style: style,
+                  stateHidden(
+                    const ValueKey('look2-stat-up'),
+                    _StatGroup(
+                      iconAsset: AppAssets.iconGraphUp,
+                      label: 'UP:',
+                      valueText: BottomPanel.formatBytesAdaptive(upBytes),
+                      packEnd: true,
+                      style: style,
+                    ),
                   ),
                 ),
               ),

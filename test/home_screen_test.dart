@@ -569,13 +569,12 @@ void main() {
       final button = tester.getCenter(find.byType(ConnectButtonGlow));
       expect(pill.dy, lessThan(button.dy));
 
-      // The stats row flanks the Speed Test entry: DOWN left, UP right,
-      // the speed group dead-centre (LTR-locked, never mirrored).
-      final down = tester.getTopLeft(find.text('DOWN:'));
-      final up = tester.getTopLeft(find.text('UP:'));
-      expect(down.dy, greaterThan(button.dy),
-          reason: 'stats sit below the hero');
-      expect(down.dx, lessThan(up.dx));
+      // Round 25 — the DOWN/UP readouts are HIDDEN while not connected
+      // («قسمت نمایش دانلود و آپلود در حالت غیر متصل پنهان باشه»): the
+      // groups stay mounted (their fixed slots keep the row's geometry)
+      // but ride the house scale+opacity pair at ZERO — the hidden
+      // state is asserted in the disconnected test below; here only the
+      // row's own layout contract matters.
       final speed = tester.getCenter(find.byType(SpeedTestButton));
       expect((speed.dx - 201).abs(), lessThan(2.0),
           reason: 'the speed group is screen-centred');
@@ -585,7 +584,7 @@ void main() {
       // protocol card last; the look-1 FAB column is absent.
       final band =
           tester.getTopLeft(find.byKey(const ValueKey('location-band')));
-      expect(band.dy, greaterThan(down.dy));
+      expect(band.dy, greaterThan(speed.dy));
       // v1.0.1 (carried by the motion-line merge): the cold default is
       // MASQUE, so the look-2 card renders ماسک — same as look 1.
       expect(find.text('ماسک'), findsOneWidget);
@@ -615,6 +614,34 @@ void main() {
               .connected,
           isFalse);
       expect(find.text('قــطــع!'), findsOneWidget);
+
+      // Round 25 — the DOWN/UP readouts are HIDDEN while disconnected
+      // («قسمت نمایش دانلود و آپلود در حالت غیر متصل پنهان باشه و بعد
+      // از اتصال نمایش داده بشن»): the groups stay MOUNTED (their fixed
+      // 132/110 slots keep the speed entry dead-centre) but the house
+      // scale+opacity gate rests at ZERO on both flanks.
+      for (final gate in [
+        const ValueKey('look2-stat-down'),
+        const ValueKey('look2-stat-up'),
+      ]) {
+        expect(
+          tester.widget<AnimatedScale>(find.byKey(gate)).scale,
+          0.0,
+          reason: 'the ${gate.value} gate is scaled to zero',
+        );
+        expect(
+          tester
+              .widget<AnimatedOpacity>(
+                find.descendant(
+                  of: find.byKey(gate),
+                  matching: find.byType(AnimatedOpacity),
+                ),
+              )
+              .opacity,
+          0.0,
+          reason: 'the ${gate.value} gate is fully transparent',
+        );
+      }
 
       // The MASQUE band is greyscale + locked (round 19).
       expect(
@@ -669,6 +696,39 @@ void main() {
       // unit ladder: «145.0MB» / «45.0MB» — past 1000 KB it rolls into MB).
       expect(find.text('145.0MB'), findsOneWidget);
       expect(find.text('45.0MB'), findsOneWidget);
+      // Round 25 — the readouts are SHOWN again on the connect edge: the
+      // scale+opacity gate rests at ONE on both flanks, and the flanking
+      // geometry is back (DOWN left of UP, both below the hero, the
+      // location band below them).
+      for (final gate in [
+        const ValueKey('look2-stat-down'),
+        const ValueKey('look2-stat-up'),
+      ]) {
+        expect(
+          tester.widget<AnimatedScale>(find.byKey(gate)).scale,
+          1.0,
+          reason: 'the ${gate.value} gate is fully scaled in',
+        );
+        expect(
+          tester
+              .widget<AnimatedOpacity>(
+                find.descendant(
+                  of: find.byKey(gate),
+                  matching: find.byType(AnimatedOpacity),
+                ),
+              )
+              .opacity,
+          1.0,
+          reason: 'the ${gate.value} gate is fully opaque',
+        );
+      }
+      final down = tester.getTopLeft(find.text('DOWN:'));
+      final up = tester.getTopLeft(find.text('UP:'));
+      expect(down.dx, lessThan(up.dx), reason: 'DOWN left of UP');
+      final hero = tester.getCenter(find.byType(ConnectButtonGlow));
+      expect(down.dy, greaterThan(hero.dy), reason: 'stats sit below the hero');
+      final band = tester.getTopLeft(find.byKey(const ValueKey('location-band')));
+      expect(band.dy, greaterThan(down.dy));
       expect(
         tester
             .widget<FlagSaturation>(
