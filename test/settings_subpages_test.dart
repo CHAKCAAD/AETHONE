@@ -196,12 +196,14 @@ void main() {
       // The Iran profiles are all present.
       expect(find.text('خاموش'), findsOneWidget);
       expect(find.text('استاندارد'), findsOneWidget);
-      expect(find.text('متعادل'), findsOneWidget);
+      // v1.0.2 — «متعادل» is also a scan-speed pill now; the fragment
+      // one is found by its own key.
+      expect(find.byKey(const ValueKey('pill-fragment-متعادل')), findsOneWidget);
       expect(find.text('تهاجمی'), findsOneWidget);
       expect(find.text('سفارشی'), findsOneWidget);
 
       // Pick «متعادل» — the store holds it; the arg fold gets the values.
-      await tester.tap(find.text('متعادل'));
+      await tester.tap(find.byKey(const ValueKey('pill-fragment-متعادل')));
       await tester.pumpAndSettle();
       expect(store.coreSettings.fragmentPreset, FragmentPreset.balanced);
 
