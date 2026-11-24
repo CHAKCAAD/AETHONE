@@ -99,15 +99,16 @@ class _HeroBobState extends State<HeroBob>
         ..stop()
         ..value = 0;
     } else {
-      // The state left connected: settle back onto the rest baseline
-      // (the cycle's own 0 — the same beat the state crossfade rides).
-      if (_cycle.value != 0) {
-        _cycle.animateTo(
-          0,
-          duration: motionDuration(widget.style, 260),
-          curve: Curves.easeInOut,
-        );
-      }
+      // The state left connected: ALWAYS take the controller back from
+      // repeat() and settle onto the rest baseline — a repeating
+      // controller parked at value 0 is STILL repeating (a value guard
+      // here would leave the bob looping on a disconnected home — the
+      // round-24 CI lesson).
+      _cycle.animateTo(
+        0,
+        duration: motionDuration(widget.style, 260),
+        curve: Curves.easeInOut,
+      );
     }
   }
 

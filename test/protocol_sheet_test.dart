@@ -159,29 +159,36 @@ void main() {
 
       // Round 24 — the APP'S OWN localized fa names (the retired frame
       // Latin labels are gone; the four combined modes carry their full
-      // names, the owner's TOW/WOT/POW/WOP definitions).
+      // names, the owner's TOW/WOT/POW/WOP definitions). The finders are
+      // SCOPED to the sheet panel: the scaled home behind the barrier
+      // still carries its own protocol card (its «ماسک» would collide
+      // with the tile's).
+      Finder sheetText(String label) => find.descendant(
+            of: find.byKey(const ValueKey('proto-sheet-panel')),
+            matching: find.text(label),
+          );
       for (final label in [
         'وایرگارد', 'اتوماتیک', 'میم', 'ماسک', 'گول کلاسیک', 'گول',
         'تور', 'سایفون', 'تور اور وارپ', 'سایفون اور وارپ',
         'وارپ اور تور', 'وارپ اور سایفون',
       ]) {
-        expect(find.text(label), findsOneWidget, reason: label);
+        expect(sheetText(label), findsOneWidget, reason: label);
       }
 
       // LTR-locked reading (the grid never bidi-flips under the fa
       // locale): wireguard on the visual LEFT, auto on the RIGHT.
-      final wg = tester.getCenter(find.text('وایرگارد'));
-      final auto = tester.getCenter(find.text('اتوماتیک'));
+      final wg = tester.getCenter(sheetText('وایرگارد'));
+      final auto = tester.getCenter(sheetText('اتوماتیک'));
       expect(auto.dx, greaterThan(wg.dx));
 
       // Column order down the rows: mim below wireguard, masq below auto.
       expect(
-        tester.getCenter(find.text('میم')).dy,
+        tester.getCenter(sheetText('میم')).dy,
         greaterThan(wg.dy),
       );
       expect(
-        tester.getCenter(find.text('ماسک')).dx,
-        greaterThan(tester.getCenter(find.text('میم')).dx),
+        tester.getCenter(sheetText('ماسک')).dx,
+        greaterThan(tester.getCenter(sheetText('میم')).dx),
       );
 
       // The last row ends 25 above the panel's bottom (867 − 842).
@@ -383,7 +390,10 @@ void main() {
       await _openSheet(tester, store);
       expect(find.byType(SingleChildScrollView), findsNothing);
       expect(
-        find.text('وارپ اور سایفون'),
+        find.descendant(
+          of: find.byKey(const ValueKey('proto-sheet-panel')),
+          matching: find.text('وارپ اور سایفون'),
+        ),
         findsOneWidget,
       ); // the last row is laid out
     },

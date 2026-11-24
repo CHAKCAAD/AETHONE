@@ -755,16 +755,17 @@ class _ConnectButtonGlowState extends State<ConnectButtonGlow>
         ..stop()
         ..value = 0;
     } else {
-      // Leaving the walk (landed / failed / idle): glide the family back
-      // to its exact rest geometry — value 0 IS rest (the triangle wave
-      // rises from 0), so the settle never pops.
-      if (_walk.value != 0) {
-        _walk.animateTo(
-          0,
-          duration: motionDuration(widget.style, 260),
-          curve: Curves.easeInOut,
-        );
-      }
+      // Leaving the walk (landed / failed / idle): ALWAYS take the
+      // controller back from repeat() and glide to rest — a repeating
+      // controller parked at value 0 is STILL repeating (a value guard
+      // here would leave the breath looping on the connected home —
+      // the round-24 CI lesson), and value 0 IS rest (the triangle
+      // wave rises from 0), so the settle never pops.
+      _walk.animateTo(
+        0,
+        duration: motionDuration(widget.style, 260),
+        curve: Curves.easeInOut,
+      );
     }
   }
 

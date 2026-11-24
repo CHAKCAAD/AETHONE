@@ -35,6 +35,7 @@ import 'package:aethone/connection/engine.dart';
 import 'package:aethone/core/motion.dart';
 import 'package:aethone/features/home/home_screen.dart';
 import 'package:aethone/features/home/widgets/connect_core.dart';
+import 'package:aethone/features/home/widgets/hero_logo.dart';
 import 'package:aethone/features/home/widgets/pattern_sides.dart';
 import 'package:aethone/features/shared/circle_selector.dart';
 import 'package:aethone/features/shared/hyper_text.dart';
@@ -241,11 +242,14 @@ void main() {
   });
 
   // -------------------------------------------------------------------
-  // THE CONNECTED BUTTON IS STILL — v5.3 (the shimmer lap is retired).
+  // THE CONNECTED BUTTON — v5.3 stillness, RE-CUT round 24: look 1's
+  // connected hero now BOBS (the owner: «آیکون اتصال وسط صفحه در نمای1
+  // در حالت متصل یه انیمیشن حرکت به بالا و پایین سریع داشته باشه»),
+  // look 2's stays perfectly still.
   // -------------------------------------------------------------------
-  group('the connected connect-button is still (v5.3)', () {
-    testWidgets('look 1: nothing animated rides the connected hero — the '
-        'whole connected tree settles; the aura stays retired', (tester) async {
+  group('the connected connect-button (round 24 — the look-1 bob)', () {
+    testWidgets('look 1: the bob is ALIVE while connected (the round-24 '
+        'decree); the aura stays retired; nothing else animates', (tester) async {
       await _useReferenceSurface(tester);
       final engine = ScriptedEngine();
       final store = ConnectionStore(engine: engine);
@@ -253,17 +257,30 @@ void main() {
       await tester.pumpAndSettle();
 
       await _connect(tester, engine, store);
-      // v5.3 — the round-18 shimmer lap is RETIRED with the smoke field
-      // and the drift: the connected home carries NO repeating ticker at
-      // all, so the WHOLE tree settles (the landing tweens, the roulette
-      // and the Hyper-Text decodes all run out inside it).
-      await tester.pumpAndSettle();
+      // Round 24 — the connected logo BOBS forever (a repeating ticker
+      // by decree), so the landing window rides BOUNDED pumps: the
+      // landing tweens, the roulette and the Hyper-Text decodes all run
+      // out inside it.
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
 
       // v8a decree 1 (kept) — the connected AURORA behind the button is
       // RETIRED on BOTH looks: the halo director keeps the suppression.
       final halo = tester.widget<ConnectHalo>(find.byType(ConnectHalo));
       expect(halo.hideConnectedAura, isTrue,
           reason: 'the behind-the-button aurora is retired app-wide');
+
+      // Round 24 — the BOB owns the connected hero: the logo's dy moves
+      // between two windows a half-cycle apart (the quick up-down lift).
+      final logo = find.byType(HeroLogo);
+      final a = tester.getTopLeft(logo).dy;
+      await tester.pump(const Duration(milliseconds: 660));
+      final b = tester.getTopLeft(logo).dy;
+      await tester.pump(const Duration(milliseconds: 660));
+      final c = tester.getTopLeft(logo).dy;
+      expect(b != a || c != a, isTrue,
+          reason: 'the connected logo keeps bobbing (the round-24 decree)');
     });
 
     testWidgets('look 2: the same stillness — the whole tree settles',
