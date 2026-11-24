@@ -32,6 +32,7 @@ import 'package:aethone/features/settings/routing_page.dart';
 import 'package:aethone/features/settings/security_page.dart';
 import 'package:aethone/features/settings/settings_controls.dart';
 import 'package:aethone/features/settings/settings_screen.dart';
+import 'package:aethone/features/settings/telegram_proxy_row.dart';
 import 'package:aethone/features/settings/tor_page.dart';
 
 Widget _booth(Widget child) => MaterialApp(
@@ -160,6 +161,30 @@ void main() {
   });
 
   group('core page', () {
+    testWidgets('v1.0.2: the scan speed pills default to turbo and commit; '
+        'the Telegram row targets the Aether listener', (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      expect(store.scanSpeed, 5); // turbo, the owner's default
+      await tester.pumpWidget(_booth(CoreSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      final balanced = find.byKey(
+        const ValueKey('pill-scan-speed-متعادل'),
+      );
+      await tester.ensureVisible(balanced);
+      await tester.tap(balanced);
+      await tester.pumpAndSettle();
+      expect(store.scanSpeed, 4);
+
+      expect(find.byKey(const ValueKey('nav-aether-telegram')), findsOneWidget);
+      expect(
+        TelegramProxyRow.uriFor(TransportModes.byId(ProtocolId.masque))
+            .toString(),
+        'tg://socks?server=127.0.0.1&port=1819',
+      );
+    });
+
     testWidgets('fragment presets, expert panels, fingerprint rows', (
       tester,
     ) async {

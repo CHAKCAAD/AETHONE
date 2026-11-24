@@ -22,6 +22,7 @@ import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 import 'settings_controls.dart';
 import 'subpage_frame.dart';
+import 'telegram_proxy_row.dart';
 
 class TorSettingsPage extends StatelessWidget {
   const TorSettingsPage({super.key, required this.store});
@@ -208,6 +209,24 @@ class TorSettingsPage extends StatelessWidget {
               const SubSectionDivider(),
               SettingInfoText(strings.torTimingsDesc),
             ],
+          ),
+        ),
+        // ---- Section: Telegram (v1.0.2) — the listener of the tor mode
+        // the user runs (the selected tor tile, else tor-only) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSend,
+          title: strings.secTelegram,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: TelegramProxyRow(
+            keyId: 'tor-telegram',
+            mode: TransportModes.byId(
+              store.selectedProtocol.isTor
+                  ? store.selectedProtocol
+                  : ProtocolId.torOnly,
+            ),
           ),
         ),
         SizedBox(height: 16 * s),

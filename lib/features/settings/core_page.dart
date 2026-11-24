@@ -13,11 +13,13 @@ import 'package:flutter/material.dart';
 
 import '../../../connection/connection_store.dart';
 import '../../../connection/core_settings.dart';
+import '../../../connection/transport_modes.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 import 'settings_controls.dart';
 import 'subpage_frame.dart';
+import 'telegram_proxy_row.dart';
 
 class CoreSettingsPage extends StatelessWidget {
   const CoreSettingsPage({super.key, required this.store});
@@ -122,6 +124,57 @@ class CoreSettingsPage extends StatelessWidget {
                 onChanged: (v) => store.updateCore((c) => c.quicV2 = v),
               ),
             ],
+          ),
+        ),
+
+        // ---- Section: scan speed (v1.0.2, owner: «هسته ایتر یه قسمت برای
+        // سرعت اسکن داره اون رو به تنظیمات هسته ایتر اضافه کن و حالت
+        // دیفالتش رو بزار روی توربو») — the core's `--scan` profile ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconGraphUp,
+          title: strings.secScanSpeed,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingPills<int>(
+                keyId: 'scan-speed',
+                options: [
+                  (5, strings.scanTurbo),
+                  (4, strings.scanBalanced),
+                  (3, strings.scanThorough),
+                  (2, strings.scanVerified),
+                  (1, strings.scanIronclad),
+                ],
+                selected: store.scanSpeed,
+                onSelect: store.setScanSpeed,
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(switch (store.scanSpeed) {
+                5 => strings.scanTurboDesc,
+                4 => strings.scanBalancedDesc,
+                3 => strings.scanThoroughDesc,
+                2 => strings.scanVerifiedDesc,
+                _ => strings.scanIroncladDesc,
+              }),
+            ],
+          ),
+        ),
+
+        // ---- Section: Telegram (v1.0.2 — the Aether main listener) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSend,
+          title: strings.secTelegram,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: TelegramProxyRow(
+            keyId: 'aether-telegram',
+            mode: TransportModes.byId(ProtocolId.masque),
           ),
         ),
 

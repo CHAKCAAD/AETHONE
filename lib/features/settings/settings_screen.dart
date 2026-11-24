@@ -47,6 +47,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../connection/connection_store.dart';
 import '../../connection/core_log.dart';
 import '../../core/app_assets.dart';
+import '../../core/app_theme.dart';
 import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../../core/motion_widgets.dart';
@@ -596,7 +597,7 @@ class _ProtocolPills extends StatelessWidget {
       ),
       (
         key: 'settings-proto-lantern',
-        logo: AppAssets.protocolLanternLogo,
+        logo: AppAssets.protocolLanternLogo(light: AethThemeSync.light),
         title: strings.settingsLantern,
         onTap: onLantern,
       ),
@@ -647,7 +648,7 @@ class _ProtocolCard extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        height: AethGeometry.settingsPillH * s,
+        height: AethGeometry.settingsProtoCardH * s,
         decoration: BoxDecoration(
           color: AethColors.cardDark,
           borderRadius:

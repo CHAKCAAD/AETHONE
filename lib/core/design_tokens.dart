@@ -722,6 +722,11 @@ abstract final class AethGeometry {
   /// two wide pills they replace (nothing below moves); inside, the card
   /// stacks like the grid cards: the protocol's own logo (own colors,
   /// 28 ink box) over the title and the subtitle.
+  ///
+  /// v1.0.2 (owner): «ارتفاع 3 کارت لنترن تور و سایفون در صفحه تنظیمات رو
+  /// به اندازه ارتفاع سایر کارت ها بکن» — the three cards now stand at the
+  /// grid cards' own [settingsCardH] (106), not the old pill's 87.
+  static const double settingsProtoCardH = settingsCardH;
   static const double settingsProtoCardLogo = 28;
   static const double settingsProtoCardLogoGap = 7;
 

@@ -2377,6 +2377,9 @@ class PlatformEngineAdapter implements EngineAdapter {
         'dataDir': '$filesDir/lantern',
         'locale': PlatformDispatcher.instance.locale.toLanguageTag(),
         'connectTimeout': _config?.coreSettings.lanternConnectSecs ?? 180,
+        // v1.0.2 — country-first connect: the sidecar starts ON the pick
+        // (never AUTO first, then a switch). Empty = automatic.
+        'location': _lanternPickArg(),
       });
     } on PlatformException catch (e) {
       return '${e.code}: ${e.message}';
@@ -2463,27 +2466,52 @@ class PlatformEngineAdapter implements EngineAdapter {
     ];
   }
 
-  /// The best server for [country]: the lowest measured latency, else the
-  /// first one Lantern lists. null when Lantern offers none there.
-  static String? _bestLanternServer(
-    List<Map<String, Object?>> servers,
-    String country,
-  ) {
-    String? best;
-    var bestPing = 1 << 30;
-    for (final srv in servers) {
-      final cc = (srv['country_code'] as String?)?.toLowerCase();
-      final tag = srv['tag'] as String?;
-      if (cc != country || tag == null || tag.isEmpty) continue;
-      final probed = srv['probed'] == true;
-      final ping = (srv['ping_ms'] as num?)?.toInt() ?? 0;
-      final score = probed && ping > 0 ? ping : (1 << 29);
-      if (best == null || score < bestPing) {
-        best = tag;
-        bestPing = score;
+  /// The sidecar's `--location` value: the upper-case pick, or '' for AUTO.
+  String _lanternPickArg() {
+    final pick = _config?.lanternLocation ?? LocationWheelPolicy.autoCode;
+    return pick == LocationWheelPolicy.autoCode || pick.length != 2
+        ? ''
+        : pick.toUpperCase();
+  }
+
+  /// v1.0.2 — every country Lantern has announced to this device (the
+  /// sidecar's remembered catalog), plus the live servers' countries.
+  @visibleForTesting
+  static List<String> lanternCountriesOf(Map<String, Object?>? reply) {
+    final out = <String>{};
+    for (final srv in _lanternServers(reply)) {
+      final cc = srv['country_code'];
+      if (cc is String && cc.length == 2) out.add(cc.toLowerCase());
+    }
+    final data = reply?['data'];
+    final locs = data is Map ? data['locations'] : null;
+    if (locs is List) {
+      for (final l in locs) {
+        final cc = l is Map ? l['country_code'] : null;
+        if (cc is String && cc.length == 2) out.add(cc.toLowerCase());
       }
     }
-    return best;
+    return out.toList()..sort();
+  }
+
+  /// The country the live Lantern session actually exits through: the
+  /// pinned server's (or the auto-selected one's) country, from /servers.
+  static String? _lanternActiveCountry(Map<String, Object?>? reply) {
+    final data = reply?['data'];
+    if (data is! Map) return null;
+    final selected = data['selected'];
+    final current = data['current'];
+    final tag = selected is String && selected.isNotEmpty
+        ? selected
+        : (current is String ? current : '');
+    if (tag.isEmpty) return null;
+    for (final srv in _lanternServers(reply)) {
+      if (srv['tag'] == tag) {
+        final cc = srv['country_code'];
+        return cc is String && cc.length == 2 ? cc.toLowerCase() : null;
+      }
+    }
+    return null;
   }
 
   /// Post-connect: publish Lantern's live country set, then honor the
@@ -2491,52 +2519,45 @@ class PlatformEngineAdapter implements EngineAdapter {
   Future<void> _lanternAfterConnect(int gen) async {
     final reply = await _lanternControl('GET', '/servers');
     if (_stale(gen) || !_lanternActive) return;
-    final servers = _lanternServers(reply);
-    final countries = <String>{
-      for (final srv in servers)
-        if ((srv['country_code'] as String?)?.length == 2)
-          (srv['country_code'] as String).toLowerCase(),
-    }.toList()
-      ..sort();
+    final countries = lanternCountriesOf(reply);
     if (countries.isNotEmpty) _emit(EngineLanternServers(countries));
     final pick = _config?.lanternLocation ?? LocationWheelPolicy.autoCode;
-    if (pick != LocationWheelPolicy.autoCode) {
-      await _selectLanternLocation(pick, servers);
+    final active = _lanternActiveCountry(reply);
+    if (pick != LocationWheelPolicy.autoCode && active != pick) {
+      // The sidecar connected country-first; this only runs when Lantern
+      // had no server there in time (it then asks for one and switches).
+      await _selectLanternLocation(pick);
+    } else if (active != null) {
+      _emit(EngineExitCountryResolved(active));
     }
   }
 
-  Future<void> _selectLanternLocation(
-    String code,
-    List<Map<String, Object?>> servers,
-  ) async {
-    final tag = code == LocationWheelPolicy.autoCode
-        ? ''
-        : _bestLanternServer(servers, code);
-    if (tag == null) {
-      _emit(EngineLogLine(
-        'warn',
-        'Lantern offers no server in "$code" right now — keeping the '
-            'current server',
-      ));
-      return;
-    }
-    final r = await _lanternControl('POST', '/select', {'tag': tag});
+  Future<void> _selectLanternLocation(String code) async {
+    // v1.0.2 — a country-level pick: the sidecar sets Lantern's preferred
+    // location, asks for a server there when the current config has none,
+    // then switches (the sidecar ranks the servers there).
+    final r = await _lanternControl('POST', '/select-country', {
+      'country': code == LocationWheelPolicy.autoCode ? '' : code.toUpperCase(),
+    });
+    final countries = lanternCountriesOf(r);
+    if (countries.isNotEmpty) _emit(EngineLanternServers(countries));
     if (r?['ok'] != true) {
       _emit(EngineLogLine(
         'warn',
-        'Lantern server select failed: ${r?['error'] ?? 'no reply'}',
+        'Lantern offers no server in "$code" right now — keeping the '
+            'current server (${r?['error'] ?? 'no reply'})',
       ));
+      return;
     }
+    final active = _lanternActiveCountry(r);
+    if (active != null) _emit(EngineExitCountryResolved(active));
   }
 
   /// Lantern — re-applies the Lantern location pick to a LIVE Lantern
   /// session (the sidecar switches servers without a reconnect).
   Future<void> applyLanternLocation(String code) async {
     if (!_lanternActive) return;
-    final servers = code == LocationWheelPolicy.autoCode
-        ? const <Map<String, Object?>>[]
-        : _lanternServers(await _lanternControl('GET', '/servers'));
-    await _selectLanternLocation(code, servers);
+    await _selectLanternLocation(code);
   }
 
   Future<void> _stopLantern() async {

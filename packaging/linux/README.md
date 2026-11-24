@@ -4,11 +4,11 @@
 
 | قالب | فایل | مناسب برای |
 | --- | --- | --- |
-| پرتابل | `aethone-linux-x86_64-1.0.1.tar.gz` | هر توزیعی؛ بدون نصب |
-| دبیان | `aethone_1.0.1_amd64.deb` | Debian 13+، Ubuntu 24.04+، Mint 22+، Pop!_OS 24.04+ |
-| ردهت | `aethone-1.0.1-1.x86_64.rpm` | Fedora 40+، openSUSE Tumbleweed / Leap 16 |
-| اپ‌ایمیج | `AETHONE-1.0.1-x86_64.AppImage` | هر توزیع x86_64 — تک‌فایل، قابل اجرا |
-| فلت‌پک | `aethone-1.0.1-x86_64.flatpak` | هر توزیعی که فلت‌پک دارد (ران‌تایم GNOME 51) |
+| پرتابل | `aethone-linux-x86_64-1.0.2.tar.gz` | هر توزیعی؛ بدون نصب |
+| دبیان | `aethone_1.0.2_amd64.deb` | Debian 13+، Ubuntu 24.04+، Mint 22+، Pop!_OS 24.04+ |
+| ردهت | `aethone-1.0.2-1.x86_64.rpm` | Fedora 40+، openSUSE Tumbleweed / Leap 16 |
+| اپ‌ایمیج | `AETHONE-1.0.2-x86_64.AppImage` | هر توزیع x86_64 — تک‌فایل، قابل اجرا |
+| فلت‌پک | `aethone-1.0.2-x86_64.flatpak` | هر توزیعی که فلت‌پک دارد (ران‌تایم GNOME 51) |
 
 جدول SHA256 همه فایل‌ها در `SHA256SUMS-linux-*.txt` همان ریلیز است؛ قبل از نصب بررسی کنید:
 
@@ -23,7 +23,7 @@ sha256sum -c SHA256SUMS-linux-*.txt --ignore-missing
 ### دبیان / اوبونتو / مینت و مشتدها
 
 ```bash
-sudo apt install ./aethone_1.0.1_amd64.deb
+sudo apt install ./aethone_1.0.2_amd64.deb
 ```
 
 برنامه در منوی برنامه‌ها با نام AETHONE ظاهر می‌شود و دستور `aethone` هم در PATH است. وابستگی‌ها: GTK3 (نصب خودکار)؛ برای حالت تونل، `policykit-1` توصیه می‌شود (روی دسکتاپ‌ها به‌طور پیش‌فرض هست).
@@ -33,8 +33,8 @@ sudo apt install ./aethone_1.0.1_amd64.deb
 ### فدورا / اوپن‌سوزه و مشتدها
 
 ```bash
-sudo dnf install ./aethone-1.0.1-1.x86_64.rpm     # فدورا
-sudo zypper install ./aethone-1.0.1-1.x86_64.rpm  # اوپن‌سوزه
+sudo dnf install ./aethone-1.0.2-1.x86_64.rpm     # فدورا
+sudo zypper install ./aethone-1.0.2-1.x86_64.rpm  # اوپن‌سوزه
 ```
 
 ### Arch و مشتدها
@@ -44,7 +44,7 @@ sudo zypper install ./aethone-1.0.1-1.x86_64.rpm  # اوپن‌سوزه
 ### فلت‌پک (هر توزیع)
 
 ```bash
-flatpak install ./aethone-1.0.1-x86_64.flatpak
+flatpak install ./aethone-1.0.2-x86_64.flatpak
 flatpak run com.chakcaad.Aethone
 ```
 
@@ -53,14 +53,14 @@ flatpak run com.chakcaad.Aethone
 ### AppImage (هر توزیع)
 
 ```bash
-chmod +x AETHONE-1.0.1-x86_64.AppImage
-./AETHONE-1.0.1-x86_64.AppImage
+chmod +x AETHONE-1.0.2-x86_64.AppImage
+./AETHONE-1.0.2-x86_64.AppImage
 ```
 
 ### پرتابل (بدون نصب)
 
 ```bash
-tar xzf aethone-linux-x86_64-1.0.1.tar.gz
+tar xzf aethone-linux-x86_64-1.0.2.tar.gz
 ./aethone-linux-x86_64/aethone
 ```
 
@@ -71,12 +71,12 @@ tar xzf aethone-linux-x86_64-1.0.1.tar.gz
 حالت تونل کل دستگاه را از روی TUN عبور می‌دهد و به `CAP_NET_ADMIN` نیاز دارد. برای این کار یک helper کوچک (`aethone-tunnel-helper`) همراه با اکشن Polkit نصب می‌شود:
 
 - **deb / rpm / AppImage / پرتابل**: در اولین اتصال تونل، **یک بار** رمز مدیر پرسیده می‌شود تا helper در مسیر سیستم (`/usr/libexec`) نصب شود؛ اتصال‌های بعدی همان پرومپت معمولی اتصال را می‌گیرند. در قالب‌های deb و rpm این فایل‌ها از قبل نصب شده‌اند، پس حتی همان یک بار هم پرومپت نصب نمی‌بینید.
-- **فلت‌پک**: سندباکس نمی‌تواند helper را روی سیستم میزبان نصب کند؛ بسته همراه `aethone-tunnel-helper_1.0.1_amd64.deb` (یا rpm) **یک بار روی میزبان** نصب کنید:
+- **فلت‌پک**: سندباکس نمی‌تواند helper را روی سیستم میزبان نصب کند؛ بسته همراه `aethone-tunnel-helper_1.0.2_amd64.deb` (یا rpm) **یک بار روی میزبان** نصب کنید:
 
   ```bash
-  sudo apt install ./aethone-tunnel-helper_1.0.1_amd64.deb
+  sudo apt install ./aethone-tunnel-helper_1.0.2_amd64.deb
   # یا روی فدورا/اوپن‌سوزه:
-  sudo dnf install ./aethone-tunnel-helper-1.0.1-1.x86_64.rpm
+  sudo dnf install ./aethone-tunnel-helper-1.0.2-1.x86_64.rpm
   ```
 
   پس از آن، حالت تونل داخل فلت‌پک با پرومپت معمولی pkexec میزبان کار می‌کند (پل `flatpak-spawn --host`). حالت پروکسی به این بسته نیازی ندارد.

@@ -3,7 +3,7 @@ description: >-
   AETHONE — cross-platform VPN client. Flutter UI layer; network engines are
   Aether (Rust, WARP client) and zeptun (Zig, userspace TUN router).
 publish_to: none
-version: 2.7.0+1
+version: 1.0.2+3
 
 environment:
   sdk: ^3.13.0
@@ -92,7 +92,11 @@ flutter:
     # auto.png», committed under the set's single-face naming): a white
     # crown-like glyph on transparency; ProtocolGlyph owns the ink rule.
     - design/آیکون پروتکل ها/auto هر دو حالت.png
-    - design/آیکون پروتکل ها/لنترن هر دو حالت.svg
+    # v1.0.2 — the owner's Lantern set: light (yellow body, dark cap),
+    # night mode (all white) and the selected green tile (white + yellow).
+    - design/آیکون پروتکل ها/لنترن لایت.svg
+    - design/آیکون پروتکل ها/لنترن دارک.svg
+    - design/آیکون پروتکل ها/لنترن انتخاب.svg
     # --- v4.33 (owner round 9): the combined-mode icons — the owner's own
     #     SVGs (سایفون اور وارپ / وارپ اور سایفون / تور اور وارپ / وارپ اور
     #     تور) replace the composed aether+chevron stacks on the sub-tiles;

@@ -524,7 +524,7 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{
         'aethone.settings.protocol': 'psiphonChain',
         'aethone.settings.connectionMode': 'tunnel',
-        'aethone.settings.scanSpeed': 2,
+        'aethone.settings.scanSpeed.v102': 2,
         'aethone.settings.selectedCountry': 'de',
         'aethone.settings.protocolModeSmart': true,
         'aethone.settings.routingRegion': 'tm',
@@ -557,7 +557,7 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{
         'aethone.settings.protocol': 'bogus',
         'aethone.settings.connectionMode': 'ssh',
-        'aethone.settings.scanSpeed': 99,
+        'aethone.settings.scanSpeed.v102': 99,
         'aethone.settings.selectedCountry': 'IRAN',
         'aethone.settings.homeLook': 'three',
       });
@@ -567,9 +567,9 @@ void main() {
 
       expect(store.selectedProtocol, ProtocolId.masque); // v1.0.1 default
       expect(store.connectionMode, ConnectionMode.proxy);
-      // v4.44 — the out-of-range value falls back to the constructor
-      // default, now 4 (balanced, the pinned core's own default).
-      expect(store.scanSpeed, 4);
+      // v1.0.2 — the out-of-range value falls back to the constructor
+      // default, turbo (5) again (the owner's default).
+      expect(store.scanSpeed, 5);
       expect(store.selectedCountryCode, isNull);
       expect(store.homeLook, HomeLook.one);
     });

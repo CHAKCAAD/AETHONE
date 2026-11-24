@@ -61,6 +61,9 @@ func run() error {
 	// listener and runs its end-to-end probe exactly like every other core.
 	autoConnect := flag.Bool("autoconnect", false, "connect to Lantern's public servers immediately after init")
 	connectTimeout := flag.Int64("connect-timeout", 180, "autoconnect budget in seconds (30-300)")
+	// v1.0.2 — the app's Lantern location pick (ISO alpha-2, empty = auto):
+	// the autoconnect goes straight to a server in that country.
+	location := flag.String("location", "", "Lantern exit country (ISO alpha-2); empty = automatic")
 	flag.Parse()
 
 	if *dataDir == "" || *logDir == "" || *controlSocket == "" || *controlToken == "" {
@@ -140,7 +143,7 @@ func run() error {
 				time.Sleep(100 * time.Millisecond)
 			}
 			log.Printf("LANTERN_STATE=connecting")
-			if err := lanternbridge.Connect(*connectTimeout); err != nil {
+			if err := lanternbridge.Connect(*connectTimeout, *location); err != nil {
 				log.Printf("LANTERN_STATE=failed error=%q", err.Error())
 				connectErr <- err
 				return
@@ -226,7 +229,8 @@ func handleControl(conn net.Conn, token string) {
 	case request.Method == "POST" && request.Path == "/connect":
 		timeoutSeconds := int64(180)
 		var body struct {
-			TimeoutSeconds int64 `json:"timeout_seconds"`
+			TimeoutSeconds int64  `json:"timeout_seconds"`
+			Country        string `json:"country"`
 		}
 		if len(request.Body) > 0 {
 			_ = json.Unmarshal(request.Body, &body)
@@ -234,7 +238,7 @@ func handleControl(conn net.Conn, token string) {
 		if body.TimeoutSeconds > 0 {
 			timeoutSeconds = body.TimeoutSeconds
 		}
-		if err := lanternbridge.Connect(timeoutSeconds); err != nil {
+		if err := lanternbridge.Connect(timeoutSeconds, body.Country); err != nil {
 			_ = writeControl(conn, controlResponse{
 				OK: false, Status: lanternbridge.Status(), Error: err.Error(),
 			})
@@ -286,6 +290,29 @@ func handleControl(conn net.Conn, token string) {
 		if err := lanternbridge.SelectServer(body.Tag); err != nil {
 			_ = writeControl(conn, controlResponse{
 				OK: false, Status: lanternbridge.Status(), Error: err.Error(),
+			})
+			return
+		}
+		_ = writeControl(conn, controlResponse{
+			OK:     true,
+			Status: lanternbridge.Status(),
+			Data:   json.RawMessage(lanternbridge.ServersJSON()),
+		})
+
+	case request.Method == "POST" && request.Path == "/select-country":
+		// v1.0.2 — country-level pick: sets Lantern's preferred location,
+		// re-fetches the config when no assigned server sits there, then
+		// switches (up to ~30 s; the connection deadline above covers it).
+		var body struct {
+			Country string `json:"country"`
+		}
+		if len(request.Body) > 0 {
+			_ = json.Unmarshal(request.Body, &body)
+		}
+		if err := lanternbridge.SelectCountry(body.Country); err != nil {
+			_ = writeControl(conn, controlResponse{
+				OK: false, Status: lanternbridge.Status(), Error: err.Error(),
+				Data: json.RawMessage(lanternbridge.ServersJSON()),
 			})
 			return
 		}

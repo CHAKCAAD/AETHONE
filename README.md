@@ -1,377 +1,170 @@
-<div dir="ltr">
-  AETHONE
+<div align="center">
 
-A Modern Multi-Protocol Tunnel & Proxy Client for Android
+<img src="design/brand/app-icon.png" width="112" alt="AETHONE">
 
-AETHONE is an experimental network tunneling application designed to bring multiple censorship-resistant transport technologies together in a unified, easy-to-use interface.
+# AETHONE
 
-Built with Flutter and powered by native networking engines, AETHONE integrates Aether and Zeptun to provide flexible connection modes, advanced routing capabilities, and a customizable user experience.
+**چند هسته، یک دکمه. کلاینت تونل و پروکسی چندپروتکلی برای اندروید و لینوکس**
 
-The project aims to make sophisticated networking technologies more accessible through a clean and intuitive application.
+*Many cores, one button. A multi-protocol tunnel and proxy client for Android and Linux.*
 
----
+[![Release](https://img.shields.io/github/v/release/CHAKCAAD/AETHONE?label=release)](https://github.com/CHAKCAAD/AETHONE/releases/latest)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![Telegram](https://img.shields.io/badge/Telegram-@AETHONE-26A5E4?logo=telegram)](https://t.me/AETHONE)
 
-✨ Features
+[فارسی](#فارسی) · [English](#english)
 
-- Multiple Transport Profiles — MASQUE, WireGuard, GOOL, GOOL Classic, and MIM.
-- Tor Integration — Multiple connection arrangements powered by Aether.
-- Psiphon Integration — Additional transport options through the Psiphon ecosystem.
-- VPN & Proxy Modes — Android VPN tunneling and local SOCKS5 proxy functionality.
-- Per-App Tunneling — Route the whole device or only the apps you pick through the tunnel.
-- Home-Screen Widget & Control-Centre Tile — Connect and disconnect straight from the launcher and Android's Quick Settings (v1.0.1).
-- Advanced Routing — Configurable traffic routing and direct/block rules.
-- Connection Configuration — Scan profiles, obfuscation settings, and IP version selection.
-- Connection Monitoring — Connection status, latency and available traffic statistics.
-- Multilingual Interface — Persian, English, Russian, Chinese, and Turkmen.
-- Custom Interface — Dedicated visual assets, protocol icons, themes, and animated backgrounds.
-
-«Development status: AETHONE is currently under active development. Some advanced features and transport modes are experimental and have not yet completed full device-level validation. See the project documentation for implementation and testing status.»
-
-🧩 Core Technologies
-
-AETHONE relies on specialized open-source networking projects.
-
-Aether
-
-A Rust-based networking core that provides the foundation for several of AETHONE's transport modes, including MASQUE and WireGuard-based technologies.
-
-- GitHub: https://github.com/CluvexStudio/Aether
-- License: GNU AGPL-3.0
-
-Zeptun
-
-A high-performance userspace TUN networking engine written in Zig. Zeptun handles packet forwarding and bridges Android's VPN interface with the application's proxy networking layer.
-
-- GitHub: https://github.com/Noisemux/zeptun
-- License: MIT
-
-Additional Components
-
-AETHONE also incorporates other networking components, including Psiphon Tunnel Core and Lyrebird. Their original licenses and notices must be respected.
-
-🏗️ Architecture
-
-The Android implementation combines several technologies:
-
-Component| Technology| Responsibility
-Application UI| Flutter / Dart| Interface and application state
-Aether Core| Rust / FFI| Main networking and transport engine
-Zeptun| Zig / JNI| TUN packet forwarding
-Android VPN| Android VpnService| VPN interface and tunnel lifecycle
-Psiphon| Go| Additional circumvention transport
-Lyrebird| Go| Pluggable transports
-
-Aether runs inside the application process through its native interface, while Zeptun handles the TUN networking layer through JNI.
-
-📱 Platform Support
-
-Current release targets: **Android** and **Linux** (v1.0.1).
-
-Downloads — https://github.com/CHAKCAAD/AETHONE/releases
-
-Android (v1.0.1, r97):
-
-- `aethone-arm64-v8a-r97.apk` — 64-bit phones (most devices)
-- `aethone-armeabi-v7a-r97.apk` — 32-bit / older phones
-- `aethone-x86_64-r97.apk` — emulators and x86_64 devices
-
-Linux (v1.0.1, x86-64-v1 baseline, glibc 2.39+):
-
-- `aethone-linux-x86_64-1.0.1.tar.gz` — portable, any distro
-- `aethone_1.0.1_amd64.deb` — Debian 13+, Ubuntu 24.04+, Mint 22+
-- `aethone-1.0.1-1.x86_64.rpm` — Fedora 40+, openSUSE Tumbleweed / Leap 16
-- `AETHONE-1.0.1-x86_64.AppImage` — single-file, any x86_64 distro
-- `aethone-1.0.1-x86_64.flatpak` — Flatpak (GNOME 51 runtime); for tunnel mode also install `aethone-tunnel-helper` (.deb/.rpm) on the host once
-
-While the tunnel is up the system proxy points at the same local SOCKS5
-listener (GNOME gsettings + KDE Plasma kioslaverc) so browsers ride the
-tunnel too; the state is restored on disconnect. See
-`packaging/linux/README.md` for the full install guide (Persian).
-
-Windows builds exist as CI artifacts; Windows is not a release target yet.
-
-🔧 Building from Source
-
-Requirements
-
-- Flutter 3.47.9
-- Dart 3.13.7
-- Android SDK
-- Android NDK 26.3.11579264 (r26d)
-- JDK 17
-- Rust 1.99.1
-- cargo-ndk 4.1.2
-- Go 1.26.3
-- Zig 0.16.0
-
-Clone the Repository
-
-git clone https://github.com/CHAKCAAD/AETHONE.git
-cd AETHONE
-
-Install Flutter Dependencies
-
-flutter pub get
-
-Run Static Analysis and Tests
-
-flutter analyze
-flutter test
-
-Build Native Engines
-
-The native networking engines must be built before building the Android APK.
-
-Use the repository's native build script and follow the instructions for your target ABI:
-
-bash scripts/build_native.sh \
-  --abi arm64-v8a \
-  --rust-target aarch64-linux-android \
-  --goarch arm64 \
-  --api 29 \
-  --src-cache .native-cache \
-  --out .native-out/arm64-v8a
-
-For the complete build procedure, including native library staging and APK packaging, see:
-
-"Persian Local Build Guide" (docs/LOCAL_BUILD_FA.md)
-
-📚 Documentation
-
-Additional engineering documentation is available in the "docs/" directory.
-
-- "Feature Matrix" (docs/FEATURE_MATRIX.md)
-- "Aether CLI Reference" (docs/CLI_REFERENCE.md)
-- "Native Engine Integration" (docs/M2_ENGINE_WIRING.md)
-- "SMART AUTO Specification" (docs/SMART_AUTO_SPEC.md)
-- "Local Build Guide (Persian)" (docs/LOCAL_BUILD_FA.md)
-
-⚠️ Current Development Limitations
-
-AETHONE is an ongoing project, not a finished production-grade networking product.
-
-Some capabilities are still under development or require further device-level testing. In particular:
-
-- SMART AUTO behavior and automatic protocol selection should not be assumed to be fully implemented.
-- The Android OS-level kill switch is not yet fully integrated.
-- IPv6 handling in the current Android TUN configuration remains incomplete.
-- Tor and Psiphon modes require additional real-device validation.
-- Speed testing and some diagnostic capabilities remain under development.
-
-For the latest implementation status, refer to "docs/FEATURE_MATRIX.md".
-
-🙏 Credits & Acknowledgements
-
-AETHONE would not be possible without the work of the developers and open-source communities behind its core networking technologies.
-
-A special thank-you to:
-
-"CluvexStudio — Aether" (https://github.com/CluvexStudio/Aether)
-
-For developing and maintaining the powerful Rust-based Aether networking core and making its advanced networking capabilities available to the open-source community.
-
-"Noisemux — Zeptun" (https://github.com/Noisemux/zeptun)
-
-For creating Zeptun, an efficient and high-performance userspace TUN engine that plays an important role in AETHONE's networking architecture.
-
-We sincerely appreciate the time, engineering effort, and dedication invested in these projects. Their work provides an important foundation for AETHONE.
-
-We also acknowledge the contributors and maintainers of the other open-source components used throughout the project.
-
-Open-source software makes projects like AETHONE possible. Thank you! ❤️
-
-📜 Licensing
-
-AETHONE is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)** — see the [LICENSE](LICENSE) file at the repository root. The embedded Aether core is itself AGPL-3.0, so the combined work follows the same terms.
-
-Third-party components retain their respective licenses:
-
-- Aether: GNU Affero General Public License v3.0 (AGPL-3.0).
-- Zeptun: MIT License.
-- Other bundled components and design assets may have separate licensing requirements.
-
-Please consult the original license files before copying, modifying, or redistributing any component.
-
----
-
-فارسی
-
-اثـان (AETHONE)
-
-یک کلاینت مدرن چندپروتکلی تونل و پروکسی برای اندروید
-
-AETHONE یک برنامه آزمایشی در حوزه شبکه و عبور از محدودیت‌های اینترنت است که با هدف گردآوری فناوری‌های مختلف تونل‌سازی و انتقال ترافیک در یک محیط یکپارچه و ساده توسعه داده می‌شود.
-
-این پروژه با استفاده از Flutter و هسته‌های Native طراحی شده و با بهره‌گیری از دو پروژه قدرتمند Aether و Zeptun تلاش می‌کند امکانات پیشرفته شبکه را در قالب یک رابط کاربری قابل‌استفاده ارائه دهد.
-
-هدف AETHONE فراهم کردن تجربه‌ای منعطف، قابل‌تنظیم و توسعه‌پذیر برای دسترسی به فناوری‌های مختلف ارتباطی است.
-
-✨ امکانات
-
-- پروفایل‌های مختلف ارتباطی: ماسک، وایرگارد، گول، گول کلاسیک و میم.
-- یکپارچه‌سازی تور: حالت‌های مختلف اتصال مبتنی بر هسته Aether.
-- یکپارچه‌سازی سایفون: پشتیبانی از ترنسپورت‌های مبتنی بر اکوسیستم Psiphon.
-- حالت VPN و Proxy: تونل‌سازی ترافیک دستگاه اندرویدی و پروکسی محلی SOCKS5.
-- مسیریابی برنامه‌ها: تونل‌سازی کل دستگاه یا فقط برنامه‌های انتخابی شما.
-- ویجت صفحه اصلی و کاشک کنترل سنتر: اتصال و قطع اتصال مستقیم از لانچر و تنظیمات سریع اندروید (v1.0.1).
-- مسیریابی پیشرفته: قوانین مسدودسازی، اتصال مستقیم و تنظیم مسیر ترافیک.
-- تنظیمات اتصال: پروفایل‌های اسکن، تنظیمات مبهم‌سازی و نسخه IP.
-- نمایش اطلاعات اتصال: وضعیت ارتباط، تأخیر و آمار ترافیک در بخش‌های پشتیبانی‌شده.
-- رابط کاربری چندزبانه: فارسی، انگلیسی، روسی، چینی و ترکمنی.
-- طراحی اختصاصی: آیکون‌های اختصاصی پروتکل‌ها، تم‌های مختلف و پس‌زمینه‌های متحرک.
-
-«وضعیت توسعه: این پروژه همچنان در حال توسعه است. بعضی امکانات پیشرفته و حالت‌های ارتباطی آزمایشی هستند و هنوز اعتبارسنجی کامل روی دستگاه‌های واقعی را پشت سر نگذاشته‌اند.»
-
-🧩 هسته‌های اصلی
-
-AETHONE برای عملکرد شبکه خود از پروژه‌های متن‌باز تخصصی استفاده می‌کند.
-
-Aether
-
-هسته‌ای نوشته‌شده با زبان Rust که بخش مهمی از قابلیت‌های ارتباطی AETHONE، از جمله فناوری‌های مبتنی بر MASQUE و WireGuard، بر پایه آن شکل گرفته است.
-
-- مخزن اصلی: https://github.com/CluvexStudio/Aether
-- لایسنس: GNU AGPL-3.0
-
-Zeptun
-
-یک موتور قدرتمند و بهینه TUN که با زبان Zig نوشته شده است. این پروژه وظیفه پردازش و انتقال بسته‌های شبکه و ارتباط میان رابط VPN اندروید و لایه پروکسی را بر عهده دارد.
-
-- مخزن اصلی: https://github.com/Noisemux/zeptun
-- لایسنس: MIT
-
-سایر مؤلفه‌ها
-
-AETHONE از مؤلفه‌های دیگری مانند Psiphon Tunnel Core و Lyrebird نیز استفاده می‌کند. لایسنس و حقوق توسعه‌دهندگان اصلی این پروژه‌ها محفوظ است.
-
-🏗️ معماری فنی
-
-ساختار نسخه اندروید AETHONE ترکیبی از فناوری‌های زیر است:
-
-مؤلفه| فناوری| وظیفه
-رابط کاربری| Flutter / Dart| رابط و مدیریت وضعیت برنامه
-هسته Aether| Rust / FFI| موتور اصلی ارتباطی
-هسته Zeptun| Zig / JNI| پردازش و انتقال بسته‌های TUN
-سرویس VPN| Android VpnService| مدیریت رابط VPN
-Psiphon| Go| ترنسپورت ارتباطی مکمل
-Lyrebird| Go| ترنسپورت‌های قابل‌جایگزینی
-
-هسته Aether درون فرایند برنامه اجرا می‌شود و Zeptun از طریق JNI ارتباط میان رابط TUN و لایه شبکه را مدیریت می‌کند.
-
-📱 پلتفرم‌ها
-
-پلتفرم‌های هدف فعلی: **اندروید** و **لینوکس** (نسخه ۱.۰.۱)
-
-دانلود — https://github.com/CHAKCAAD/AETHONE/releases
-
-اندروید (v1.0.1، r97):
-
-- `aethone-arm64-v8a-r97.apk` — گوشی‌های ۶۴ بیتی (اکثر گوشی‌های امروزی)
-- `aethone-armeabi-v7a-r97.apk` — گوشی‌های ۳۲ بیتی و قدیمی‌تر
-- `aethone-x86_64-r97.apk` — شبیه‌سازها و دستگاه‌های x86_64
-
-لینوکس (v1.0.1، کف x86-64-v1، glibc 2.39 به بالا):
-
-- `aethone-linux-x86_64-1.0.1.tar.gz` — پرتابل، برای هر توزیع
-- `aethone_1.0.1_amd64.deb` — Debian 13+، Ubuntu 24.04+، Mint 22+
-- `aethone-1.0.1-1.x86_64.rpm` — Fedora 40+، openSUSE Tumbleweed / Leap 16
-- `AETHONE-1.0.1-x86_64.AppImage` — تک‌فایل، هر توزیع x86_64
-- `aethone-1.0.1-x86_64.flatpak` — فلت‌پک (ران‌تایم GNOME 51)؛ برای حالت تونل بستهٔ `aethone-tunnel-helper` هم یک بار روی سیستم نصب کنید
-
-وقتی حالت تونل فعال است، پروکسی سیستم هم روی سوکس۵ محلی همان تونل ست می‌شود
-(گنوم با gsettings و کِی‌دی‌ای پلاسما با kioslaverc) تا مرورگرها هم از اتصال
-استفاده کنند و با قطع اتصال، وضعیت قبلی بازگردانی می‌شود. راهنمای کامل نصب
-لینوکس: `packaging/linux/README.md`.
-
-نسخه ویندوز به‌صورت خروجی CI موجود است اما هنوز هدف انتشار نیست.
-
-🔧 ساخت از سورس
-
-برای راه‌اندازی محیط توسعه به ابزارهای زیر نیاز دارید:
-
-- Flutter 3.47.9
-- Dart 3.13.7
-- Android SDK
-- Android NDK 26.3.11579264
-- JDK 17
-- Rust 1.99.1
-- cargo-ndk 4.1.2
-- Go 1.26.3
-- Zig 0.16.0
-
-دریافت سورس:
-
-git clone https://github.com/CHAKCAAD/AETHONE.git
-cd AETHONE
-
-نصب وابستگی‌ها:
-
-flutter pub get
-
-بررسی کد و اجرای تست‌ها:
-
-flutter analyze
-flutter test
-
-برای ساخت APK باید ابتدا هسته‌های Native پروژه را طبق راهنمای ساخت کامپایل کنید.
-
-راهنمای کامل فارسی:
-
-"راهنمای ساخت محلی AETHONE" (docs/LOCAL_BUILD_FA.md)
-
-📚 مستندات
-
-مستندات فنی و مهندسی پروژه در پوشه "docs/" قرار دارند:
-
-- "ماتریس امکانات و وضعیت پیاده‌سازی" (docs/FEATURE_MATRIX.md)
-- "مرجع تنظیمات هسته Aether" (docs/CLI_REFERENCE.md)
-- "مستندات اتصال هسته‌ها به برنامه" (docs/M2_ENGINE_WIRING.md)
-- "مشخصات SMART AUTO" (docs/SMART_AUTO_SPEC.md)
-- "راهنمای ساخت محلی" (docs/LOCAL_BUILD_FA.md)
-
-⚠️ محدودیت‌های فعلی
-
-AETHONE یک پروژه در حال توسعه است و هنوز نباید آن را محصولی کاملاً نهایی و آماده استفاده حساس و حیاتی در نظر گرفت.
-
-برخی قابلیت‌ها همچنان به توسعه یا آزمایش بیشتر روی دستگاه واقعی نیاز دارند:
-
-- الگوریتم انتخاب هوشمند SMART AUTO نباید به‌عنوان قابلیت کامل و قطعی در نظر گرفته شود.
-- کیل‌سوئیچ در سطح قفل ترافیک سیستم‌عامل اندروید هنوز به‌طور کامل پیاده‌سازی نشده است.
-- پشتیبانی IPv6 در تنظیمات فعلی TUN اندروید کامل نیست.
-- حالت‌های Tor و Psiphon به اعتبارسنجی بیشتر روی دستگاه نیاز دارند.
-- تست سرعت و برخی امکانات تشخیصی همچنان در حال توسعه هستند.
-
-برای مشاهده جزئیات و وضعیت دقیق هر قابلیت، فایل "docs/FEATURE_MATRIX.md" را بررسی کنید.
-
-🙏 سپاسگزاری و قدردانی
-
-توسعه AETHONE بدون استفاده از تلاش‌ها و دستاوردهای جامعه متن‌باز امکان‌پذیر نبود.
-
-به همین دلیل، قدردانی ویژه‌ای داریم از:
-
-"CluvexStudio — پروژه Aether" (https://github.com/CluvexStudio/Aether)
-
-برای توسعه و نگهداری هسته قدرتمند Aether با زبان Rust و فراهم کردن زیرساختی پیشرفته برای ارتباطات شبکه‌ای و فناوری‌های عبور از محدودیت‌ها.
-
-"Noisemux — پروژه Zeptun" (https://github.com/Noisemux/zeptun)
-
-برای خلق و توسعه Zeptun؛ موتور سریع و بهینه TUN که نقش مهمی در معماری شبکه‌ای AETHONE ایفا می‌کند.
-
-از زمان، دانش، تلاش فنی و تعهد توسعه‌دهندگان این دو پروژه صمیمانه سپاسگزاریم. بخش مهمی از زیرساخت AETHONE بر پایه دستاوردهای ارزشمند آن‌ها شکل گرفته است.
-
-همچنین از تمام توسعه‌دهندگان و نگهدارندگان سایر پروژه‌های متن‌باز مورد استفاده در AETHONE قدردانی می‌کنیم.
-
-قدرت نرم‌افزار آزاد در همکاری و اشتراک دانش است. ❤️
-
-📜 مجوز و لایسنس
-
-AETHONE تحت **لایسنس GNU Affero General Public License نسخه ۳ (AGPL-3.0)** منتشر می‌شود — متن کامل در فایل [LICENSE](LICENSE) در ریشه مخزن موجود است. هسته Aether خودش تحت AGPL-3.0 است و اثر ترکیبی نیز با همان شرایط منتشر می‌شود.
-
-مؤلفه‌های شخص ثالث همچنان تحت لایسنس اصلی خودشان قرار دارند:
-
-- Aether: تحت GNU AGPL نسخه ۳.
-- Zeptun: تحت لایسنس MIT.
-- سایر هسته‌ها، وابستگی‌ها، فونت‌ها و فایل‌های طراحی ممکن است لایسنس‌های مستقل داشته باشند.
-
-پیش از کپی، تغییر یا بازنشر هر مؤلفه، فایل لایسنس اصلی آن را بررسی کنید.
 </div>
+
+---
+
+<div dir="rtl">
+
+## فارسی
+
+AETHONE چند فناوری عبور از فیلترینگ را کنار هم می‌گذارد و پشت یک رابط ساده و یکدست پنهانشان می‌کند. پروتکل را انتخاب کنید، لوکیشن را بچرخانید و وصل شوید؛ بقیه‌اش کار برنامه است.
+
+### تازه‌های نسخهٔ ۱.۰.۲
+
+- **هستهٔ لنترن** (اندروید): پروتکل تازه با انتخاب لوکیشن از سرورهای خود لنترن. اتصال مستقیم روی کشور انتخاب‌شده برقرار می‌شود و همهٔ کشورهایی که لنترن تا حالا اعلام کرده در فهرست می‌مانند.
+- **پروکسی تلگرام با یک لمس** در تنظیمات هر پروتکل (Aether، سایفون، تور و لنترن).
+- **سرعت اسکن** در تنظیمات هستهٔ Aether با پنج حالت؛ پیش‌فرض: توربو.
+- بازطراحی کامل حرکت و انیمیشن‌ها، صفحهٔ انتخاب پروتکل تازه و آیکون‌های اختصاصی در هر دو تم.
+
+### امکانات
+
+| | |
+| --- | --- |
+| **پروتکل‌ها** | ماسک (MASQUE)، وایرگارد، گول، گول کلاسیک، میم، لنترن |
+| **تور و سایفون** | تنها، زنجیره روی وارپ (TOW / POW) و معکوس (WOT / WOP) |
+| **حالت هوشمند** | انتخاب خودکار پروتکل بر اساس موفقیت و تأخیر اندازه‌گیری‌شده |
+| **تونل یا پروکسی** | VPN کامل دستگاه یا سوکس۵ محلی؛ تونل تک‌برنامه‌ای (فقط برنامه‌های انتخابی یا به‌جز آن‌ها) |
+| **مسیریابی کشوری** | ترافیک داخلی ایران، ترکمنستان، روسیه و چین مستقیم، بقیه از تونل |
+| **تنظیمات هسته** | فرگمنت TLS، HTTP/2، QUIC v2، اثرانگشت TLS، ECH، سرعت اسکن |
+| **دسترسی سریع** | ویجت صفحهٔ اصلی، کاشی تنظیمات سریع و نوتیفیکیشن با دکمهٔ قطع |
+| **زبان‌ها** | فارسی، انگلیسی، روسی، چینی و ترکمنی |
+
+### دانلود
+
+همهٔ فایل‌ها در [صفحهٔ ریلیزها](https://github.com/CHAKCAAD/AETHONE/releases/latest) هستند.
+
+- **اندروید** (۷.۰ به بالا): برای هر پردازنده یک APK جدا. `arm64-v8a` برای بیشتر گوشی‌های امروزی، `armeabi-v7a` برای گوشی‌های ۳۲ بیتی و قدیمی، `x86_64` برای شبیه‌سازها.
+- **لینوکس** (x86-64، glibc 2.39 به بالا): tar.gz پرتابل، deb، rpm، AppImage و فلت‌پک. راهنمای نصب: [`packaging/linux/README.md`](packaging/linux/README.md).
+
+صحت فایل‌ها را با `SHA256SUMS` همان ریلیز بررسی کنید.
+
+### هسته‌ها
+
+| مؤلفه | زبان | نقش | لایسنس |
+| --- | --- | --- | --- |
+| [Aether](https://github.com/CluvexStudio/Aether) | Rust | موتور اصلی: ماسک، وایرگارد، گول، میم، تور و سایفون | AGPL-3.0 |
+| [Zeptun](https://github.com/Noisemux/zeptun) | Zig | موتور TUN در فضای کاربر؛ پل میان VPN اندروید و سوکس محلی | MIT |
+| [Radiance](https://github.com/getlantern/radiance) | Go | هستهٔ لنترن، به‌صورت پردازهٔ جانبی روی `127.0.0.1:1822` | GPL-3.0 |
+| Psiphon Tunnel Core و Lyrebird | Go | سایفون و ترنسپورت‌های تور | لایسنس خودشان |
+
+رابط کاربری با Flutter نوشته شده است. Aether درون پردازهٔ برنامه اجرا می‌شود، Zeptun از راه JNI و لنترن به‌عنوان پردازهٔ جداگانه. پیوند لنترن از [MSN-GUARD](https://github.com/mbm110/MSN-GUARD) (AGPL-3.0) اقتباس شده است.
+
+### ساخت از سورس
+
+```bash
+git clone https://github.com/CHAKCAAD/AETHONE.git
+cd AETHONE
+flutter pub get
+flutter analyze && flutter test
+```
+
+هسته‌های Native را پیش از ساخت APK کامپایل کنید (`scripts/build_native.sh` و `scripts/build_lantern.sh`). راهنمای کامل: [`docs/LOCAL_BUILD_FA.md`](docs/LOCAL_BUILD_FA.md).
+
+ابزارها: Flutter 3.47.9، Android NDK r26d، JDK 17، Rust 1.99.1 با cargo-ndk 4.1.2، Go 1.26 و Zig 0.16.0.
+
+### وضعیت پروژه
+
+AETHONE در حال توسعه است. کیل‌سوئیچ در سطح سیستم‌عامل و IPv6 در تونل اندروید هنوز کامل نیستند و لنترن فقط روی اندروید در دسترس است. جزئیات هر قابلیت در [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md).
+
+اگر مشکلی دیدید، متن خطا و لاگ هسته (تنظیمات ← لاگ هسته) را در [کانال تلگرام](https://t.me/AETHONE) یا [Issues](https://github.com/CHAKCAAD/AETHONE/issues) بفرستید.
+
+### سپاس
+
+از CluvexStudio برای Aether، از Noisemux برای Zeptun، از تیم Lantern برای Radiance و از نگهدارندگان Psiphon، Lyrebird و MSN-GUARD. این برنامه روی دوش کار آن‌ها ایستاده است.
+
+</div>
+
+---
+
+## English
+
+AETHONE puts several censorship-resistant transports behind one clean interface. Pick a protocol, spin the location wheel, connect; the app handles the rest.
+
+### What's new in 1.0.2
+
+- **Lantern core** (Android): a new protocol with exit locations from Lantern's own servers. It connects straight to the picked country, and every country Lantern has announced stays in the list.
+- **One-tap Telegram proxy** in each protocol's settings (Aether, Psiphon, Tor and Lantern).
+- **Scan speed** in the Aether core settings with five profiles; turbo by default.
+- A full motion-design overhaul, a new protocol picker and custom icons for both themes.
+
+### Features
+
+| | |
+| --- | --- |
+| **Protocols** | MASQUE, WireGuard, Gool, Gool Classic, MIM, Lantern |
+| **Tor and Psiphon** | Standalone, chained over WARP (TOW / POW) and reverse (WOT / WOP) |
+| **Smart mode** | Picks the protocol from measured success and latency |
+| **Tunnel or proxy** | Full-device VPN or a local SOCKS5 proxy; per-app tunneling (only, or all except) |
+| **Country routing** | Domestic traffic for Iran, Turkmenistan, Russia and China goes direct |
+| **Core settings** | TLS fragmentation, HTTP/2, QUIC v2, TLS fingerprints, ECH, scan speed |
+| **Quick access** | Home-screen widget, Quick Settings tile, notification with a disconnect button |
+| **Languages** | Persian, English, Russian, Chinese, Turkmen |
+
+### Download
+
+Everything is on the [releases page](https://github.com/CHAKCAAD/AETHONE/releases/latest).
+
+- **Android** (7.0+): one APK per CPU. `arm64-v8a` for most current phones, `armeabi-v7a` for 32-bit and older phones, `x86_64` for emulators.
+- **Linux** (x86-64, glibc 2.39+): portable tar.gz, deb, rpm, AppImage and Flatpak. Install guide (Persian): [`packaging/linux/README.md`](packaging/linux/README.md).
+
+Verify downloads against the release's `SHA256SUMS`.
+
+### Cores
+
+| Component | Language | Role | License |
+| --- | --- | --- | --- |
+| [Aether](https://github.com/CluvexStudio/Aether) | Rust | Main engine: MASQUE, WireGuard, Gool, MIM, Tor and Psiphon | AGPL-3.0 |
+| [Zeptun](https://github.com/Noisemux/zeptun) | Zig | Userspace TUN engine bridging Android's VPN to the local SOCKS | MIT |
+| [Radiance](https://github.com/getlantern/radiance) | Go | The Lantern core, run as a sidecar on `127.0.0.1:1822` | GPL-3.0 |
+| Psiphon Tunnel Core, Lyrebird | Go | Psiphon and Tor pluggable transports | Their own |
+
+The UI is Flutter. Aether runs in-process, Zeptun through JNI, and Lantern as a separate process. The Lantern bridge is adapted from [MSN-GUARD](https://github.com/mbm110/MSN-GUARD) (AGPL-3.0).
+
+### Building from source
+
+```bash
+git clone https://github.com/CHAKCAAD/AETHONE.git
+cd AETHONE
+flutter pub get
+flutter analyze && flutter test
+```
+
+Build the native cores before the APK (`scripts/build_native.sh` and `scripts/build_lantern.sh`). Full guide (Persian): [`docs/LOCAL_BUILD_FA.md`](docs/LOCAL_BUILD_FA.md).
+
+Toolchain: Flutter 3.47.9, Android NDK r26d, JDK 17, Rust 1.99.1 with cargo-ndk 4.1.2, Go 1.26, Zig 0.16.0.
+
+### Documentation
+
+- [Feature matrix](docs/FEATURE_MATRIX.md)
+- [Aether CLI reference](docs/CLI_REFERENCE.md)
+- [Native engine wiring](docs/M2_ENGINE_WIRING.md)
+- [SMART AUTO spec](docs/SMART_AUTO_SPEC.md)
+
+### Status
+
+AETHONE is under active development. The OS-level kill switch and IPv6 in the Android tunnel are not complete, and Lantern is Android-only. Per-feature status lives in the feature matrix.
+
+Found a problem? Send the error text and the core log (Settings → Core log) to the [Telegram channel](https://t.me/AETHONE) or open an [issue](https://github.com/CHAKCAAD/AETHONE/issues).
+
+### Thanks
+
+To CluvexStudio for Aether, Noisemux for Zeptun, the Lantern team for Radiance, and the maintainers of Psiphon, Lyrebird and MSN-GUARD. This app stands on their work.
+
+### License
+
+AETHONE is licensed under the **GNU AGPL-3.0** ([LICENSE](LICENSE)). Third-party components keep their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [`licenses/`](licenses/).

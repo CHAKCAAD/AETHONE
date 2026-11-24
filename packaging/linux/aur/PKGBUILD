@@ -6,7 +6,7 @@
 # Maintainer: AETHONE Project <https://github.com/CHAKCAAD/AETHONE>
 
 pkgname=aethone
-pkgver=1.0.1
+pkgver=1.0.2
 pkgrel=1
 pkgdesc='Cross-platform VPN client (MASQUE, WireGuard, VLESS-WS, Tor, Psiphon) — system proxy set on tunnel'
 arch=('x86_64')

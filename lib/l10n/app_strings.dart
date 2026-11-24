@@ -108,6 +108,19 @@ class AppStrings {
   String get lanternTelegramLabel => _v['lanternTelegramLabel']!;
   String get lanternTelegramDesc => _v['lanternTelegramDesc']!;
   String get lanternTelegramFailed => _v['lanternTelegramFailed']!;
+  String get telegramProxyDesc => _v['telegramProxyDesc']!;
+  String get secTelegram => _v['secTelegram']!;
+  String get secScanSpeed => _v['secScanSpeed']!;
+  String get scanTurbo => _v['scanTurbo']!;
+  String get scanBalanced => _v['scanBalanced']!;
+  String get scanThorough => _v['scanThorough']!;
+  String get scanVerified => _v['scanVerified']!;
+  String get scanIronclad => _v['scanIronclad']!;
+  String get scanTurboDesc => _v['scanTurboDesc']!;
+  String get scanBalancedDesc => _v['scanBalancedDesc']!;
+  String get scanThoroughDesc => _v['scanThoroughDesc']!;
+  String get scanVerifiedDesc => _v['scanVerifiedDesc']!;
+  String get scanIroncladDesc => _v['scanIroncladDesc']!;
   String get lanternAndroidOnly => _v['lanternAndroidOnly']!;
   String get settingsPillSub => _v['settingsPillSub']!;
   String get settingsAdvancedStatus => _v['settingsAdvancedStatus']!;
@@ -625,6 +638,19 @@ class AppStrings {
       'lanternTelegramLabel': 'پروکسی تلگرام',
       'lanternTelegramDesc': 'یک لمس: پروکسی SOCKS لنترن (127.0.0.1:1822) در تلگرام تنظیم می‌شود',
       'lanternTelegramFailed': 'تلگرام روی این دستگاه پیدا نشد',
+      'telegramProxyDesc': 'یک لمس: پروکسی SOCKS همین پروتکل ({addr}) در تلگرام تنظیم می‌شود؛ تا وقتی متصل هستید کار می‌کند',
+      'secTelegram': 'تلگرام',
+      'secScanSpeed': 'سرعت اسکن',
+      'scanTurbo': 'توربو',
+      'scanBalanced': 'متعادل',
+      'scanThorough': 'کامل',
+      'scanVerified': 'تأییدشده',
+      'scanIronclad': 'سخت‌گیرانه',
+      'scanTurboDesc': 'سریع‌ترین اسکن: نمونهٔ کمتر و خروج با اولین آی‌پی سالم (پیش‌فرض)',
+      'scanBalancedDesc': 'نمونه‌برداری بیشتر در چند موج؛ کندتر از توربو ولی در شبکه‌های فیلترشده مطمئن‌تر',
+      'scanThoroughDesc': 'اسکن گسترده‌تر برای شبکه‌های سخت؛ زمان اتصال بیشتر می‌شود',
+      'scanVerifiedDesc': 'اسکن عمیق‌تر و کم‌ردتر (حالت stealth هسته)؛ کندتر از کامل',
+      'scanIroncladDesc': 'عمیق‌ترین و کندترین اسکن: هر آی‌پی با یک درخواست HTTP واقعی آزموده می‌شود',
       'lanternAndroidOnly': 'لنترن در این نسخه فقط روی اندروید در دسترس است',
       'settingsPillSub': 'انتخاب لوکیشن و ...',
       'settingsAdvancedStatus': 'وضعیت پیکربندی',
@@ -952,6 +978,19 @@ class AppStrings {
       'lanternTelegramLabel': 'Telegram proxy',
       'lanternTelegramDesc': 'One tap: sets Lantern’s SOCKS proxy (127.0.0.1:1822) in Telegram',
       'lanternTelegramFailed': 'Telegram isn’t installed on this device',
+      'telegramProxyDesc': 'One tap: sets this protocol’s SOCKS proxy ({addr}) in Telegram; works while you’re connected',
+      'secTelegram': 'Telegram',
+      'secScanSpeed': 'Scan speed',
+      'scanTurbo': 'Turbo',
+      'scanBalanced': 'Balanced',
+      'scanThorough': 'Thorough',
+      'scanVerified': 'Verified',
+      'scanIronclad': 'Ironclad',
+      'scanTurboDesc': 'Fastest scan: fewer samples, exits on the first healthy IP (default)',
+      'scanBalancedDesc': 'More samples over several waves; slower than turbo but steadier on filtered networks',
+      'scanThoroughDesc': 'A wider scan for hard networks; connecting takes longer',
+      'scanVerifiedDesc': 'A deeper, quieter scan (the core’s stealth mode); slower than thorough',
+      'scanIroncladDesc': 'The deepest, slowest scan: every IP is tested with a real HTTP request',
       'lanternAndroidOnly': 'Lantern is only available on Android in this version',
       'settingsPillSub': 'Location & more …',
       'settingsAdvancedStatus': 'Configuration status',
@@ -1277,6 +1316,19 @@ class AppStrings {
       'lanternTelegramLabel': 'Прокси Telegram',
       'lanternTelegramDesc': 'Одно касание: SOCKS-прокси Lantern (127.0.0.1:1822) в Telegram',
       'lanternTelegramFailed': 'Telegram не установлен на этом устройстве',
+      'telegramProxyDesc': 'Одно касание: SOCKS-прокси этого протокола ({addr}) в Telegram; работает, пока есть подключение',
+      'secTelegram': 'Telegram',
+      'secScanSpeed': 'Скорость сканирования',
+      'scanTurbo': 'Турбо',
+      'scanBalanced': 'Баланс',
+      'scanThorough': 'Полное',
+      'scanVerified': 'Проверенное',
+      'scanIronclad': 'Строгое',
+      'scanTurboDesc': 'Самое быстрое: меньше проб, выход на первом рабочем IP (по умолчанию)',
+      'scanBalancedDesc': 'Больше проб в несколько волн; медленнее турбо, но надёжнее в фильтруемых сетях',
+      'scanThoroughDesc': 'Широкое сканирование для сложных сетей; подключение дольше',
+      'scanVerifiedDesc': 'Более глубокое и незаметное сканирование (режим stealth ядра)',
+      'scanIroncladDesc': 'Самое глубокое и медленное: каждый IP проверяется реальным HTTP-запросом',
       'lanternAndroidOnly': 'В этой версии Lantern доступен только на Android',
       'settingsPillSub': 'Локация и другое …',
       'settingsAdvancedStatus': 'Статус конфигурации',
@@ -1600,6 +1652,19 @@ class AppStrings {
       'lanternTelegramLabel': 'Telegram 代理',
       'lanternTelegramDesc': '一键在 Telegram 中设置 Lantern 的 SOCKS 代理（127.0.0.1:1822）',
       'lanternTelegramFailed': '此设备未安装 Telegram',
+      'telegramProxyDesc': '一键：在 Telegram 中设置此协议的 SOCKS 代理（{addr}），连接期间有效',
+      'secTelegram': 'Telegram',
+      'secScanSpeed': '扫描速度',
+      'scanTurbo': '极速',
+      'scanBalanced': '均衡',
+      'scanThorough': '全面',
+      'scanVerified': '已验证',
+      'scanIronclad': '严格',
+      'scanTurboDesc': '最快的扫描：样本更少，找到第一个可用 IP 即退出（默认）',
+      'scanBalancedDesc': '分多轮采样更多；比极速慢，但在受过滤的网络中更稳定',
+      'scanThoroughDesc': '针对困难网络的更广扫描；连接时间更长',
+      'scanVerifiedDesc': '更深入、更隐蔽的扫描（内核的 stealth 模式）',
+      'scanIroncladDesc': '最深入也最慢：每个 IP 都用真实 HTTP 请求测试',
       'lanternAndroidOnly': '此版本中 Lantern 仅在 Android 上可用',
       'settingsPillSub': '位置等 …',
       'settingsAdvancedStatus': '配置状态',
@@ -1929,6 +1994,19 @@ class AppStrings {
       'lanternTelegramLabel': 'Telegram proksi',
       'lanternTelegramDesc': 'Bir basyş: Lantern-iň SOCKS proksisi (127.0.0.1:1822) Telegram-da sazlanýar',
       'lanternTelegramFailed': 'Bu enjamda Telegram ýok',
+      'telegramProxyDesc': 'Bir basyş: bu protokolyň SOCKS proksisi ({addr}) Telegramda sazlanýar; birikme wagtynda işleýär',
+      'secTelegram': 'Telegram',
+      'secScanSpeed': 'Gözleg tizligi',
+      'scanTurbo': 'Turbo',
+      'scanBalanced': 'Deňagramly',
+      'scanThorough': 'Doly',
+      'scanVerified': 'Barlanan',
+      'scanIronclad': 'Berk',
+      'scanTurboDesc': 'Iň çalt gözleg: az nusga, ilkinji sagdyn IP-de çykýar (adaty)',
+      'scanBalancedDesc': 'Birnäçe tolkunda köp nusga; turbodan haýal, emma süzgüçli torlarda ygtybarly',
+      'scanThoroughDesc': 'Kyn torlar üçin giň gözleg; birikmek uzaga çekýär',
+      'scanVerifiedDesc': 'Has çuň we ýaşyryn gözleg (ýadronyň stealth tertibi)',
+      'scanIroncladDesc': 'Iň çuň we haýal: her IP hakyky HTTP haýyşy bilen barlanýar',
       'lanternAndroidOnly': 'Bu wersiýada Lantern diňe Android-da elýeterli',
       'settingsPillSub': 'Ýerleşýän ýer we başgalar …',
       'settingsAdvancedStatus': 'Konfigurasiýa ýagdaýy',

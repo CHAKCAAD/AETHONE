@@ -71,6 +71,17 @@ class ProtocolGlyph extends StatelessWidget {
       );
     }
 
+    // v1.0.2 — Lantern ships its OWN selected face (white body, yellow
+    // light): the green tile shows it as delivered, no all-ink filter.
+    if (white && id == ProtocolId.lantern) {
+      return SvgPicture.asset(
+        AppAssets.protocolLanternSelected,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+      );
+    }
+
     // Every real protocol: the owner's own file, EXACTLY as delivered.
     // `white` (the selected green tile) keeps the standing all-ink rule.
     if (white) {

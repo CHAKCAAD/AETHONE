@@ -20,6 +20,7 @@ import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 import 'settings_controls.dart';
 import 'subpage_frame.dart';
+import 'telegram_proxy_row.dart';
 
 class PsiphonSettingsPage extends StatelessWidget {
   const PsiphonSettingsPage({super.key, required this.store});
@@ -223,6 +224,24 @@ class PsiphonSettingsPage extends StatelessWidget {
               const SubSectionDivider(),
               SettingInfoText(strings.serverEntriesDesc),
             ],
+          ),
+        ),
+        // ---- Section: Telegram (v1.0.2) — the listener of the psiphon mode
+        // the user runs (the selected psiphon tile, else psiphon-only) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconSend,
+          title: strings.secTelegram,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: TelegramProxyRow(
+            keyId: 'psiphon-telegram',
+            mode: TransportModes.byId(
+              store.selectedProtocol.isPsiphon
+                  ? store.selectedProtocol
+                  : ProtocolId.psiphonOnly,
+            ),
           ),
         ),
         SizedBox(height: 16 * s),

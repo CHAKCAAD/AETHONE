@@ -44,7 +44,9 @@ abstract final class SettingsKeys {
   /// here); written as 'none' to retire it.
   static const chain = 'aethone.settings.chain';
   static const connectionMode = 'aethone.settings.connectionMode';
-  static const scanSpeed = 'aethone.settings.scanSpeed';
+  // v1.0.2 — new key: the default moved to turbo and the old value (the
+  // v4.44 balanced default nobody could change in the UI) is retired.
+  static const scanSpeed = 'aethone.settings.scanSpeed.v102';
   static const selectedCountry = 'aethone.settings.selectedCountry';
 
   /// v4.21 — the per-family location picks (owner: «اپ باید انتخاب لوکیشن
@@ -309,9 +311,9 @@ class SettingsPersistence {
           store.protocolModeSmart = true;
         }
         if (!prefs.containsKey(SettingsKeys.scanSpeed)) {
-          // v4.44 — balanced, the pinned core's own default (the
-          // scan-deadline-aware ready budget follows it).
-          store.scanSpeed = 4;
+          // v1.0.2 — turbo, the owner's default (the scan-deadline-aware
+          // ready budget follows it).
+          store.scanSpeed = 5;
         }
         // v6 («صفحه ورود») — the look step's own frame (ورود4) ships the
         // GLOW button — look two — picked: the wizard OPENS with it

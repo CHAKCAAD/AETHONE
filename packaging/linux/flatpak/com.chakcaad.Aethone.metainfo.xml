@@ -20,7 +20,14 @@
   <developer_name>CHAKCAAD</developer_name>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="1.0.1" date="__RELEASE_DATE__">
+    <release version="1.0.2" date="__RELEASE_DATE__">
+      <description>
+        <p>The motion-design overhaul, a new protocol page and the Lantern
+        core on Android; Telegram one-tap proxy rows, a scan-speed control
+        for the Aether core (turbo by default) and settings polish.</p>
+      </description>
+    </release>
+    <release version="1.0.1" date="2026-11-17">
       <description>
         <p>The first Linux release of AETHONE: deb, rpm, AppImage, Flatpak
         and a portable tar.gz, all built from the same v1.0.1 source as

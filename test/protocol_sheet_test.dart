@@ -169,7 +169,7 @@ void main() {
             matching: find.text(label),
           );
       for (final label in [
-        'Wireguard', 'Auto', 'M I M', 'Masq', 'G Classic', 'Gool',
+        'Wireguard', 'Auto', 'M I M', 'Masque', 'G Classic', 'Gool',
         'Tor', 'Psiphon', 'T O W', 'P O W', 'W O T', 'W O P',
       ]) {
         expect(sheetText(label), findsOneWidget, reason: label);
@@ -187,7 +187,7 @@ void main() {
         greaterThan(wg.dy),
       );
       expect(
-        tester.getCenter(sheetText('Masq')).dx,
+        tester.getCenter(sheetText('Masque')).dx,
         greaterThan(tester.getCenter(sheetText('M I M')).dx),
       );
 

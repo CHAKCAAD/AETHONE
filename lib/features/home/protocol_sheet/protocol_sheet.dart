@@ -457,7 +457,7 @@ class _TileSpec {
 }
 
 /// The frame's grid, row by row, visual LEFT → RIGHT:
-///   wireguard | auto      mim | masq      g classic | gool
+///   wireguard | auto      mim | masque    g classic | gool
 ///   tor | psiphon         tow | pow       wot | wop
 ///   lantern (full width)
 const List<List<_TileSpec>> _sheetRows = [
@@ -467,7 +467,7 @@ const List<List<_TileSpec>> _sheetRows = [
   ],
   [
     _TileSpec(ProtocolId.mim, 'M I M', 28),
-    _TileSpec(ProtocolId.masque, 'Masq', 19),
+    _TileSpec(ProtocolId.masque, 'Masque', 19),
   ],
   [
     _TileSpec(ProtocolId.goolClassic, 'G Classic', 26),

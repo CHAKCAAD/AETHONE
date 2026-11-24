@@ -284,15 +284,20 @@ abstract final class AppAssets {
   static const String _protoTorOverWarp = '$_protocols/تور اور وارپ.svg';
   static const String _protoWarpOverTor = '$_protocols/وارپ اور تور.svg';
 
-  /// Lantern — the owner's own lantern mark (yellow body, dark cap), one
-  /// face for both themes (the «هر دو حالت» naming), own colors.
-  static const String _protoLanternBoth = '$_protocols/لنترن هر دو حالت.svg';
+  /// Lantern — v1.0.2: the owner's three faces («آیکون لنترن رو هم تو مود
+  /// های رنگی مختلف آپلود کردم»): light (yellow body, dark cap), night
+  /// mode (all white) and the selected green tile (white + yellow), each
+  /// rendered exactly as delivered.
+  static const String _protoLanternLight = '$_protocols/لنترن لایت.svg';
+  static const String _protoLanternDark = '$_protocols/لنترن دارک.svg';
+  static const String protocolLanternSelected = '$_protocols/لنترن انتخاب.svg';
 
   /// Public protocol-logo paths (the settings Psiphon/Tor pills render the
   /// REAL logos — v4.40: the owner's own «هر دو حالت» files, own colors).
   static const String protocolTorLogo = _protoTorBoth;
   static const String protocolPsiphonLogo = _protoPsiphonBoth;
-  static const String protocolLanternLogo = _protoLanternBoth;
+  static String protocolLanternLogo({required bool light}) =>
+      light ? _protoLanternLight : _protoLanternDark;
 
   /// v4.45 — the owner's own AUTO protocol mark (the uploaded
   /// «آیکون پروتکل auto.png», a white-on-transparent 96×92 crown-like
@@ -331,7 +336,7 @@ abstract final class AppAssets {
         ProtocolId.psiphonChain => _protoPsiphonOverWarp,
         ProtocolId.psiphonReverse => _protoWarpOverPsiphon,
         ProtocolId.psiphonOnly => _protoPsiphonBoth,
-        ProtocolId.lantern => _protoLanternBoth,
+        ProtocolId.lantern => protocolLanternLogo(light: light),
       };
 
   /// Country flag by ISO code (lowercase), e.g. `ir` → ir.png.
@@ -430,6 +435,7 @@ abstract final class AppAssets {
         _protoTorBoth,
         _protoPsiphonBoth,
         _protoGoolClassicBoth,
+        protocolLanternSelected,
         ...ProtocolId.values.expand(
           (id) => [protocolIcon(id, light: true), protocolIcon(id, light: false)],
         ),

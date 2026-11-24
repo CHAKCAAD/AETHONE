@@ -61,6 +61,7 @@ object LanternSidecar {
         dataDir: String,
         locale: String,
         connectTimeout: Int = 180,
+        location: String = "",
     ) {
         stop()
         val bin = File(context.applicationInfo.nativeLibraryDir, BINARY)
@@ -87,6 +88,10 @@ object LanternSidecar {
             "--locale", locale,
             "--autoconnect",
             "--connect-timeout", budget.toString(),
+        ) + (
+            // v1.0.2 — the Lantern location pick: connect straight to it.
+            if (location.matches(Regex("^[A-Za-z]{2}$"))) listOf("--location", location.uppercase())
+            else emptyList()
         )
         val pb = ProcessBuilder(cmd)
             .directory(data)

@@ -417,6 +417,7 @@ class MainActivity : FlutterActivity() {
                                 ?: File(filesDir, "lantern").absolutePath,
                             call.argument<String>("locale") ?: "",
                             call.argument<Int>("connectTimeout") ?: 180,
+                            call.argument<String>("location") ?: "",
                         )
                         result.success(null)
                     } catch (t: Throwable) {

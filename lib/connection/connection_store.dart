@@ -129,6 +129,10 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   int upBytes = 0;
   String? exitCountryCode; // null ⇒ unknown; no flag shown
 
+  /// v1.0.2 — set once the Lantern sidecar reported the country of the
+  /// server it holds; later GeoIP stats then no longer override it.
+  bool _lanternExitPinned = false;
+
   /// v4.32 — the protocol the SMART walk actually CONNECTED with (null =
   /// not a live SMART session). The bottom panel shows it in place of the
   /// generic AUTO while connected; cleared on every disconnect/failed
@@ -446,8 +450,13 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   /// and on a filtered network can find no endpoint where balanced
   /// (120 samples, 3 waves) does. A persisted pick is untouched — only
   /// fresh installs and resetToDefaults land here.
+  ///
+  /// v1.0.2 (owner: «حالت دیفالتش رو بزار روی توربو») — the default is
+  /// TURBO (5) again, now that the scan profile has its own control on
+  /// the Aether core page; the persisted key moved (SettingsKeys) so every
+  /// install starts this release on turbo once.
   @override
-  int scanSpeed = 4;
+  int scanSpeed = 5;
 
   void setScanSpeed(int level) {
     final clamped = level.clamp(1, 5);
@@ -607,7 +616,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     themePick = AethThemePick.light;
     themeMode = AethThemeMode.light;
     closeBehavior = CloseBehavior.ask;
-    scanSpeed = 4;
+    scanSpeed = 5;
     selectedProtocol = ProtocolId.auto;
 
     protocolModeSmart = false;
@@ -782,7 +791,12 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         // post-connect Onionoo resolution) instead of erasing it; every
         // new session clears the field on the connecting transition
         // anyway.
-        if (exitCountryCode != null) this.exitCountryCode = exitCountryCode;
+        // v1.0.2 — a Lantern session shows the country of the server the
+        // sidecar actually holds (resolved from its own /servers), never a
+        // GeoIP guess of the exit address that can lag a server switch.
+        if (exitCountryCode != null && !_lanternExitPinned) {
+          this.exitCountryCode = exitCountryCode;
+        }
       case EngineEgressRegions(:final regions):
         applyPsiphonEgressRegions(regions);
       case EngineLanternServers(:final countries):
@@ -794,6 +808,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         // park a stale flag on the disconnected home screen.
         if (_machine.current == VpnState.connected) {
           exitCountryCode = code;
+          if (effectiveProtocol.isLantern) _lanternExitPinned = true;
         }
       case EngineSmartAttempt(
           :final candidate,
@@ -840,6 +855,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
       // Leaving/never-reaching connected ⇒ no stale ping/exit data.
       pingMs = null;
       exitCountryCode = null;
+      _lanternExitPinned = false;
       downBytes = 0;
       upBytes = 0;
       // v4.32 — the SMART session residue clears with everything else.

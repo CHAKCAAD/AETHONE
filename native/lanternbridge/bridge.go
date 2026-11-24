@@ -99,10 +99,12 @@ func Init(dataDir, logDir, socksAddress, locale string) error {
 		state.mu.Unlock()
 		return err
 	}
+	// Before the backend exists, so the cached/first config event is heard.
+	initCatalog(dataDir)
 	b, err := backend.NewLocalBackend(ctx, backend.Options{
 		DataDir:                  dataDir,
 		LogDir:                   logDir,
-		Locale:                  locale,
+		Locale:                   locale,
 		DeviceID:                 device,
 		LogLevel:                 "info",
 		TelemetryConsent:         false,
@@ -151,7 +153,7 @@ func Ready() bool {
 	return state.backend != nil && state.initErr == nil
 }
 
-func Connect(timeoutSeconds int64) error {
+func Connect(timeoutSeconds int64, country string) error {
 	b := currentBackend()
 	if b == nil {
 		return errors.New("Radiance is not initialized")
@@ -181,7 +183,15 @@ func Connect(timeoutSeconds int64) error {
 	}()
 
 	resetTraffic()
-	err := b.ConnectVPN(ctx, vpn.AutoSelectTag)
+	// v1.0.2 — country-first: a picked country connects STRAIGHT to its best
+	// server (see locations.go); at most a third of the budget (capped at
+	// 45 s) waits for Lantern to assign one, the rest stays for the connect.
+	wait := time.Duration(timeoutSeconds) * time.Second / 3
+	if wait > 45*time.Second {
+		wait = 45 * time.Second
+	}
+	tag := initialTag(country, wait)
+	err := b.ConnectVPN(ctx, tag)
 	setLastError(err)
 	if err != nil {
 		return fmt.Errorf("connect to public Lantern servers: %w", err)
@@ -408,6 +418,10 @@ type serversSnapshot struct {
 	Auto     bool            `json:"auto"`
 	Selected string          `json:"selected"`
 	Current  string          `json:"current"`
+	// Locations is every country Lantern has announced to this device (the
+	// remembered catalog, see locations.go), each flagged when the current
+	// config holds a server there.
+	Locations []lanternLocation `json:"locations"`
 }
 
 // ServersJSON lists the current servers with their last probe latency, plus
@@ -424,7 +438,9 @@ func ServersJSON() string {
 		// probe-and-rank auto selection and a user-pinned server.
 		Auto: settings.GetBool(settings.AutoConnectKey),
 	}
-	for _, srv := range b.AllServers() {
+	all := b.AllServers()
+	snapshot.Locations = catalogSnapshot(all)
+	for _, srv := range all {
 		if srv == nil {
 			continue
 		}
@@ -486,4 +502,3 @@ func mustJSON(value any) string {
 	}
 	return string(encoded)
 }
-
