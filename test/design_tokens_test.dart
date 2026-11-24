@@ -202,8 +202,10 @@ void main() {
   group('v4.45 — the protocol BOTTOM SHEET geometry (owner CSS + frame)',
       () {
     test('panel, handle, cards, ring and the flutterfx entrance', () {
-      // Panel 402×565, top corners r38, shadow 0 -6 64 rgba(0,0,0,0.09).
-      expect(AethGeometry.protoSheetH, 565);
+      // Panel 402×565 + the Lantern round's full-width row (67 + 17):
+      // 649. Top corners r38, shadow 0 -6 64 rgba(0,0,0,0.09).
+      expect(AethGeometry.protoSheetLanternRow, 84);
+      expect(AethGeometry.protoSheetH, 649);
       expect(AethGeometry.protoSheetRadius, 38);
       expect(AethGeometry.protoSheetShadowDy, -6);
       expect(AethGeometry.protoSheetShadowBlur, 64);
@@ -303,7 +305,14 @@ void main() {
     test('the aether family kept its 11 modes; firefox makes 12', () {
       // v2.1.0 — the Firefox engine mode is RETIRED: exactly the 11
       // aether modes remain (regression guard).
-      expect(TransportModes.all.length, 11);
+      // Lantern round — the Lantern sidecar mode joins them: 12.
+      expect(TransportModes.all.length, 12);
+    });
+
+    test('LANTERN is a standalone core on its own 1822 listener', () {
+      expect(TransportModes.lantern.socksEndpoint.port, 1822);
+      expect(TransportModes.lantern.exitKind, ExitKind.lanternExit);
+      expect(TransportModes.lantern.tcpOnly, isFalse);
     });
   });
 }

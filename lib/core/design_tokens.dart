@@ -716,6 +716,15 @@ abstract final class AethGeometry {
   /// 155×84 card — applied flat in reference px).
   static const double settingsPillRadius = 24;
 
+  /// Lantern round — the protocol pills become THREE cards (Psiphon · Tor ·
+  /// Lantern) on the six-card grid's own columns (102 wide, 15 apart), so
+  /// the row lines up with the grid above. Same 87 height and r24 as the
+  /// two wide pills they replace (nothing below moves); inside, the card
+  /// stacks like the grid cards: the protocol's own logo (own colors,
+  /// 28 ink box) over the title and the subtitle.
+  static const double settingsProtoCardLogo = 28;
+  static const double settingsProtoCardLogoGap = 7;
+
   /// Section headings («وضعیت پیشرفته» / «آدرس سرور اصلی»): 15px w700
   /// white, icon 20 to the leading side, right-aligned to the page inset,
   /// first heading 36 below the pills.
@@ -1065,7 +1074,12 @@ abstract final class AethGeometry {
   /// light / `#0F1511` night), top corners r38 (pixel-measured on the
   /// committed frame), shadow `0 -6 64 rgba(0,0,0,0.09)` (owner CSS
   /// Rectangle 88).
-  static const double protoSheetH = 565;
+  /// Lantern round — the owner's frame adds ONE full-width Lantern card
+  /// under the 2×6 grid (one more 67 card + 17 gap = 84): 565 → 649, the
+  /// sheet's top rises from y309 to y225 on the 874 reference.
+  static const double protoSheetLanternRow =
+      protoSheetCardH + protoSheetCardGap;
+  static const double protoSheetH = 565 + protoSheetLanternRow;
   static const double protoSheetRadius = 38;
   static const double protoSheetShadowDy = -6;
   static const double protoSheetShadowBlur = 64;

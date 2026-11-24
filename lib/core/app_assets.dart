@@ -20,6 +20,11 @@ enum ProtocolId {
   psiphonChain,
   psiphonReverse,
   psiphonOnly,
+
+  /// Lantern (getlantern/radiance) — a standalone core run as a sidecar
+  /// process (native/lanternbridge), serving SOCKS on 127.0.0.1:1822.
+  /// Not an Aether mode: it never starts the in-process Aether core.
+  lantern,
 }
 
 extension ProtocolIdX on ProtocolId {
@@ -34,6 +39,9 @@ extension ProtocolIdX on ProtocolId {
       this == ProtocolId.psiphonChain ||
       this == ProtocolId.psiphonReverse ||
       this == ProtocolId.psiphonOnly;
+
+  /// The Lantern sidecar core (no Aether job, no WARP leg).
+  bool get isLantern => this == ProtocolId.lantern;
 }
 
 abstract final class AppAssets {
@@ -276,10 +284,15 @@ abstract final class AppAssets {
   static const String _protoTorOverWarp = '$_protocols/تور اور وارپ.svg';
   static const String _protoWarpOverTor = '$_protocols/وارپ اور تور.svg';
 
+  /// Lantern — the owner's own lantern mark (yellow body, dark cap), one
+  /// face for both themes (the «هر دو حالت» naming), own colors.
+  static const String _protoLanternBoth = '$_protocols/لنترن هر دو حالت.svg';
+
   /// Public protocol-logo paths (the settings Psiphon/Tor pills render the
   /// REAL logos — v4.40: the owner's own «هر دو حالت» files, own colors).
   static const String protocolTorLogo = _protoTorBoth;
   static const String protocolPsiphonLogo = _protoPsiphonBoth;
+  static const String protocolLanternLogo = _protoLanternBoth;
 
   /// v4.45 — the owner's own AUTO protocol mark (the uploaded
   /// «آیکون پروتکل auto.png», a white-on-transparent 96×92 crown-like
@@ -318,6 +331,7 @@ abstract final class AppAssets {
         ProtocolId.psiphonChain => _protoPsiphonOverWarp,
         ProtocolId.psiphonReverse => _protoWarpOverPsiphon,
         ProtocolId.psiphonOnly => _protoPsiphonBoth,
+        ProtocolId.lantern => _protoLanternBoth,
       };
 
   /// Country flag by ISO code (lowercase), e.g. `ir` → ir.png.

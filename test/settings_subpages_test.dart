@@ -26,6 +26,7 @@ import 'package:aethone/features/settings/core_page.dart';
 import 'package:aethone/features/settings/general_page.dart';
 import 'package:aethone/core/app_meta.dart';
 import 'package:aethone/features/settings/language_page.dart';
+import 'package:aethone/features/settings/lantern_page.dart';
 import 'package:aethone/features/settings/psiphon_page.dart';
 import 'package:aethone/features/settings/routing_page.dart';
 import 'package:aethone/features/settings/security_page.dart';
@@ -381,6 +382,27 @@ void main() {
       ]);
       // A seed-only region is honestly GONE until the network offers it.
       expect(strip.codes, isNot(contains('at')));
+    });
+  });
+
+  group('lantern page', () {
+    testWidgets('AUTO only until Lantern reports its countries; then the '
+        'live set commits the pick', (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(LanternSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('flag-pick-auto')), findsOneWidget);
+      expect(find.byKey(const ValueKey('flag-pick-de')), findsNothing);
+
+      // The sidecar's /servers report lands (EngineLanternServers).
+      store.applyLanternCountries(['de', 'nl']);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('flag-pick-de')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('flag-pick-de')));
+      await tester.pumpAndSettle();
+      expect(store.lanternLocation, 'de');
     });
   });
 

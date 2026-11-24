@@ -2128,6 +2128,7 @@ class _FixedConfig implements EngineConfigSource {
     this.selectedCountryCode,
     this.psiphonLocation = 'auto',
     this.torLocation = 'auto',
+    this.lanternLocation = 'auto',
     this.protocolModeSmart = false,
     CoreSettings? coreSettings,
   }) : selectedProtocol = selectedProtocol ?? ProtocolId.masque,
@@ -2149,6 +2150,8 @@ class _FixedConfig implements EngineConfigSource {
   final String psiphonLocation;
   @override
   final String torLocation;
+  @override
+  final String lanternLocation;
 
   @override
   int get scanSpeed => 5;

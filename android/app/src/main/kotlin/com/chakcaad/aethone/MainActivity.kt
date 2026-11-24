@@ -407,6 +407,44 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "coreHoldStatus" -> result.success(CoreHoldService.status())
+                // feature/lantern-core — the Lantern sidecar (LanternSidecar).
+                "lanternStart" -> {
+                    try {
+                        LanternSidecar.start(
+                            this,
+                            call.argument<Int>("port") ?: 1822,
+                            call.argument<String>("dataDir")
+                                ?: File(filesDir, "lantern").absolutePath,
+                            call.argument<String>("locale") ?: "",
+                            call.argument<Int>("connectTimeout") ?: 180,
+                        )
+                        result.success(null)
+                    } catch (t: Throwable) {
+                        result.error("lanternStartFailed", t.message, null)
+                    }
+                }
+                "lanternStop" -> {
+                    LanternSidecar.stop()
+                    result.success(null)
+                }
+                "lanternStatus" -> result.success(LanternSidecar.status())
+                "lanternControl" -> {
+                    val method = call.argument<String>("method") ?: "GET"
+                    val path = call.argument<String>("path") ?: "/status"
+                    val body = call.argument<String>("body")
+                    // Blocking socket I/O — off the main thread; the reply
+                    // hops back to it for the channel.
+                    Thread({
+                        try {
+                            val reply = LanternSidecar.control(method, path, body)
+                            runOnUiThread { result.success(reply) }
+                        } catch (t: Throwable) {
+                            runOnUiThread {
+                                result.error("lanternControlFailed", t.message, null)
+                            }
+                        }
+                    }, "aethone-lantern-control").start()
+                }
                 // v4.21 — the core diagnostics tail (settings log page).
                 "readCoreLog" -> {
                     val tail = call.argument<Int>("tail") ?: 64 * 1024

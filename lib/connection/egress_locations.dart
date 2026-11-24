@@ -56,6 +56,7 @@ abstract final class EgressLocations {
   static const psiphonEgressKey = 'aethone.locations.psiphonEgress';
   static const torExitsKey = 'aethone.locations.torExits';
   static const torExitsFetchedAtKey = 'aethone.locations.torExitsAt';
+  static const lanternCountriesKey = 'aethone.locations.lanternCountries';
 
   /// The pinned core's psiphon egress line: `[*] psiphon can leave from:
   /// AT BE BG …` (psiphon.rs note(), "AvailableEgressRegions"). Multiple
@@ -172,6 +173,13 @@ abstract final class EgressLocations {
 
   static Future<void> savePsiphonEgress(List<String> codes) =>
       _saveList(psiphonEgressKey, codes);
+
+  /// The last country set Lantern's own server list offered.
+  static Future<List<String>?> loadCachedLanternCountries() =>
+      _loadList(lanternCountriesKey);
+
+  static Future<void> saveLanternCountries(List<String> codes) =>
+      _saveList(lanternCountriesKey, codes);
 
   /// The last cached Tor exit-country set (null = never fetched).
   static Future<List<String>?> loadCachedTorExits() =>

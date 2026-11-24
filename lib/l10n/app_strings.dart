@@ -94,6 +94,13 @@ class AppStrings {
   String get settingsSecuritySub => _v['settingsSecuritySub']!;
   String get settingsPsiphon => _v['settingsPsiphon']!;
   String get settingsTor => _v['settingsTor']!;
+  String get settingsLantern => _v['settingsLantern']!;
+  String get lanternLocationDesc => _v['lanternLocationDesc']!;
+  String get lanternLocationEmpty => _v['lanternLocationEmpty']!;
+  String get secLanternTimings => _v['secLanternTimings']!;
+  String get lanternConnectSecsLabel => _v['lanternConnectSecsLabel']!;
+  String get lanternTimingsDesc => _v['lanternTimingsDesc']!;
+  String get lanternAndroidOnly => _v['lanternAndroidOnly']!;
   String get settingsPillSub => _v['settingsPillSub']!;
   String get settingsAdvancedStatus => _v['settingsAdvancedStatus']!;
   String get settingsRoutingArea => _v['settingsRoutingArea']!;
@@ -525,6 +532,7 @@ class AppStrings {
       ProtocolId.psiphonChain => 'protoPsiphonOverWarp',
       ProtocolId.psiphonReverse => 'protoWarpOverPsiphon',
       ProtocolId.psiphonOnly => 'protoPsiphon',
+      ProtocolId.lantern => 'protoLantern',
     };
     return _v[key] ?? _v['protoMasque']!;
   }
@@ -574,6 +582,7 @@ class AppStrings {
       'protoWarpOverTor': 'وارپ اور تور',
       'protoPsiphonOverWarp': 'سایفون اور وارپ',
       'protoWarpOverPsiphon': 'وارپ اور سایفون',
+      'protoLantern': 'لنترن',
       // ---- settings main page (fa verbatim from the design frame; the
       // v4.15 renames are the owner's own words — settings round #5/#8:
       // «متن تنظیمات تور و تنظیمات سایفون به تور و سایفون تغیر کند»,
@@ -594,6 +603,13 @@ class AppStrings {
       'settingsSecuritySub': 'امنیت و حریم خصوصی',
       'settingsPsiphon': 'سایفون',
       'settingsTor': 'تور',
+      'settingsLantern': 'لنترن',
+      'lanternLocationDesc': 'فقط کشورهایی که سرورهای خودِ لنترن ارائه می‌دهند؛ «خودکار» یعنی سریع‌ترین سرور به انتخاب خودِ هسته. در حالت متصل، تغییر بلافاصله اعمال می‌شود',
+      'lanternLocationEmpty': 'فهرست کشورها بعد از اولین اتصال لنترن از سرورهای خودش دریافت می‌شود',
+      'secLanternTimings': 'زمان اتصال لنترن',
+      'lanternConnectSecsLabel': 'مهلت اتصال (ثانیه)',
+      'lanternTimingsDesc': 'پیش‌فرض ۱۸۰ ثانیه: دریافت تنظیمات لنترن و رسیدن به سرور. در شبکه‌های کند بیشتر بگذارید',
+      'lanternAndroidOnly': 'لنترن در این نسخه فقط روی اندروید در دسترس است',
       'settingsPillSub': 'انتخاب لوکیشن و ...',
       'settingsAdvancedStatus': 'وضعیت پیکربندی',
       'settingsRoutingArea': 'منطقهٔ مسیریابی',
@@ -890,6 +906,7 @@ class AppStrings {
       'protoWarpOverTor': 'WARP OVER TOR',
       'protoPsiphonOverWarp': 'PSIPHON OVER WARP',
       'protoWarpOverPsiphon': 'WARP OVER PSIPHON',
+      'protoLantern': 'LANTERN',
       'settingsTitle': 'Settings',
       'settingsRouting': 'Routing',
       'settingsRoutingSub': 'Direct routes',
@@ -905,6 +922,13 @@ class AppStrings {
       'settingsSecuritySub': 'Security & privacy',
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
+      'settingsLantern': 'Lantern',
+      'lanternLocationDesc': 'Only the countries Lantern’s own servers offer; Auto means the core’s fastest server. While connected, a change applies at once',
+      'lanternLocationEmpty': 'The country list arrives from Lantern’s own servers after the first Lantern connection',
+      'secLanternTimings': 'Lantern connection budget',
+      'lanternConnectSecsLabel': 'Connect budget (seconds)',
+      'lanternTimingsDesc': 'Default 180 s: fetching Lantern’s config and reaching a server. Raise it on slow networks',
+      'lanternAndroidOnly': 'Lantern is only available on Android in this version',
       'settingsPillSub': 'Location & more …',
       'settingsAdvancedStatus': 'Configuration status',
       'settingsRoutingArea': 'Routing region',
@@ -1199,6 +1223,7 @@ class AppStrings {
       'protoWarpOverTor': 'WARP OVER TOR',
       'protoPsiphonOverWarp': 'PSIPHON OVER WARP',
       'protoWarpOverPsiphon': 'WARP OVER PSIPHON',
+      'protoLantern': 'LANTERN',
       'settingsTitle': 'Настройки',
       'settingsRouting': 'Маршрутизация',
       'settingsRoutingSub': 'Прямые маршруты',
@@ -1214,6 +1239,13 @@ class AppStrings {
       'settingsSecuritySub': 'Безопасность и приватность',
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
+      'settingsLantern': 'Lantern',
+      'lanternLocationDesc': 'Только страны, которые предлагают серверы самого Lantern; «Авто» — самый быстрый сервер по выбору ядра. При подключении изменение применяется сразу',
+      'lanternLocationEmpty': 'Список стран придёт с серверов Lantern после первого подключения',
+      'secLanternTimings': 'Лимит подключения Lantern',
+      'lanternConnectSecsLabel': 'Лимит подключения (секунды)',
+      'lanternTimingsDesc': 'По умолчанию 180 с: загрузка конфигурации Lantern и выход на сервер. Увеличьте в медленных сетях',
+      'lanternAndroidOnly': 'В этой версии Lantern доступен только на Android',
       'settingsPillSub': 'Локация и другое …',
       'settingsAdvancedStatus': 'Статус конфигурации',
       'settingsRoutingArea': 'Регион маршрутизации',
@@ -1506,6 +1538,7 @@ class AppStrings {
       'protoWarpOverTor': 'WARP OVER TOR',
       'protoPsiphonOverWarp': 'PSIPHON OVER WARP',
       'protoWarpOverPsiphon': 'WARP OVER PSIPHON',
+      'protoLantern': 'LANTERN',
       'settingsTitle': '设置',
       'settingsRouting': '路由规则',
       'settingsRoutingSub': '直连路由',
@@ -1521,6 +1554,13 @@ class AppStrings {
       'settingsSecuritySub': '安全与隐私',
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
+      'settingsLantern': 'Lantern',
+      'lanternLocationDesc': '仅显示 Lantern 自身服务器提供的国家；「自动」即内核选择最快的服务器。已连接时更改会立即生效',
+      'lanternLocationEmpty': '首次连接 Lantern 后，国家列表将从其服务器获取',
+      'secLanternTimings': 'Lantern 连接时限',
+      'lanternConnectSecsLabel': '连接时限（秒）',
+      'lanternTimingsDesc': '默认 180 秒：获取 Lantern 配置并连上服务器。慢速网络可调大',
+      'lanternAndroidOnly': '此版本中 Lantern 仅在 Android 上可用',
       'settingsPillSub': '位置等 …',
       'settingsAdvancedStatus': '配置状态',
       'settingsRoutingArea': '路由区域',
@@ -1819,6 +1859,7 @@ class AppStrings {
       'protoWarpOverTor': 'WARP OVER TOR',
       'protoPsiphonOverWarp': 'PSIPHON OVER WARP',
       'protoWarpOverPsiphon': 'WARP OVER PSIPHON',
+      'protoLantern': 'LANTERN',
       'settingsTitle': 'Sazlamalar',
       'settingsRouting': 'Marşrutizasiýa',
       'settingsRoutingSub': 'Göni marşrutlar',
@@ -1834,6 +1875,13 @@ class AppStrings {
       'settingsSecuritySub': 'Howpsuzlyk we gizlinlik',
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
+      'settingsLantern': 'Lantern',
+      'lanternLocationDesc': 'Diňe Lantern-iň öz serwerleriniň hödürleýän ýurtlary; Awtomatiki — çekirdegiň iň çalt serweri. Birikende üýtgeşme derrew ulanylýar',
+      'lanternLocationEmpty': 'Ýurtlaryň sanawy ilkinji Lantern birikmesinden soň öz serwerlerinden gelýär',
+      'secLanternTimings': 'Lantern birikme möhleti',
+      'lanternConnectSecsLabel': 'Birikme möhleti (sekunt)',
+      'lanternTimingsDesc': 'Default 180 s: Lantern sazlamalaryny almak we serwere ýetmek. Ýuwaş ulaglarda artdyryň',
+      'lanternAndroidOnly': 'Bu wersiýada Lantern diňe Android-da elýeterli',
       'settingsPillSub': 'Ýerleşýän ýer we başgalar …',
       'settingsAdvancedStatus': 'Konfigurasiýa ýagdaýy',
       'settingsRoutingArea': 'Marşrutizasiýa sebiti',

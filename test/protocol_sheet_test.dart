@@ -309,6 +309,44 @@ void main() {
   );
 
   testWidgets(
+    'Lantern round — the full-width Lantern card closes the grid and '
+    'commits ProtocolId.lantern', (tester) async {
+      tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+
+      final store = ConnectionStore(engine: ScriptedEngine());
+      await _openSheet(tester, store);
+
+      final lantern = tester.getRect(
+        find.byKey(const ValueKey('proto-tile-lantern')),
+      );
+      final wot = tester.getRect(
+        find.byKey(const ValueKey('proto-tile-torReverse')),
+      );
+      final wop = tester.getRect(
+        find.byKey(const ValueKey('proto-tile-psiphonReverse')),
+      );
+      // Spans both grid columns, one card + gap below the last row.
+      expect(lantern.left, closeTo(wot.left, 1));
+      expect(lantern.right, closeTo(wop.right, 1));
+      expect(
+        lantern.top,
+        closeTo(wot.bottom + AethGeometry.protoSheetCardGap, 1),
+      );
+      expect(lantern.height, closeTo(AethGeometry.protoSheetCardH, 1));
+      expect(find.text('Lantern'), findsOneWidget);
+
+      await _tapAndAutoClose(
+        tester,
+        find.byKey(const ValueKey('proto-tile-lantern')),
+      );
+      expect(store.selectedProtocol, ProtocolId.lantern);
+      expect(store.state, VpnState.disconnected);
+    },
+  );
+
+  testWidgets(
     'the BARRIER tap closes the sheet; the drag-to-dismiss follows the '
     'finger (flutterfx handlers)', (tester) async {
       tester.view.physicalSize = const Size(402 * 3, 874 * 3);

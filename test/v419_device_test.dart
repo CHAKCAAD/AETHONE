@@ -642,6 +642,8 @@ class _Cfg implements EngineConfigSource {
   @override
   String get torLocation => 'auto';
   @override
+  String get lanternLocation => 'auto';
+  @override
   int get scanSpeed => 5;
 
   /// v4.32 — SMART stays off in these walks (the plain single-protocol

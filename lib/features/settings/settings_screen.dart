@@ -56,6 +56,7 @@ import 'appearance_page.dart';
 import 'connection_page.dart';
 import 'general_page.dart';
 import 'language_page.dart';
+import 'lantern_page.dart';
 import 'psiphon_page.dart';
 import 'routing_page.dart';
 import 'security_page.dart';
@@ -183,6 +184,10 @@ class SettingsScreen extends StatelessWidget {
                             onTor: () => _openSubPage(
                               context,
                               TorSettingsPage(store: store),
+                            ),
+                            onLantern: () => _openSubPage(
+                              context,
+                              LanternSettingsPage(store: store),
                             ),
                           )),
                           SizedBox(
@@ -553,7 +558,7 @@ class _SettingsCard extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Psiphon / Tor wide pills
+// Psiphon / Tor / Lantern protocol cards
 // ---------------------------------------------------------------------------
 
 class _ProtocolPills extends StatelessWidget {
@@ -561,54 +566,68 @@ class _ProtocolPills extends StatelessWidget {
     required this.textDir,
     required this.onPsiphon,
     required this.onTor,
+    required this.onLantern,
   });
 
   final TextDirection textDir;
   final VoidCallback onPsiphon;
   final VoidCallback onTor;
+  final VoidCallback onLantern;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    // Lantern round — three cards on the six-card grid's columns, LTR-locked
+    // like the old pair: visual LEFT = Psiphon, middle = Tor, RIGHT =
+    // Lantern (the new card joins at the end of the row).
+    final cards = [
+      (
+        key: 'settings-proto-psiphon',
+        logo: AppAssets.protocolPsiphonLogo,
+        title: strings.settingsPsiphon,
+        onTap: onPsiphon,
+      ),
+      (
+        key: 'settings-proto-tor',
+        logo: AppAssets.protocolTorLogo,
+        title: strings.settingsTor,
+        onTap: onTor,
+      ),
+      (
+        key: 'settings-proto-lantern',
+        logo: AppAssets.protocolLanternLogo,
+        title: strings.settingsLantern,
+        onTap: onLantern,
+      ),
+    ];
     return Row(
       children: [
-        // LTR-locked: visual LEFT = Psiphon (x35), RIGHT = Tor (x214) —
-        // the frame's measured pill positions.
-        Expanded(
-          child: _WidePill(
-            logo: AppAssets.protocolPsiphonLogo,
-            logoBox: AethGeometry.settingsPillLogoPsiphon * s,
-            title: strings.settingsPsiphon,
-            subtitle: strings.settingsPillSub,
-            textDir: textDir,
-            onTap: onPsiphon,
+        for (final (i, c) in cards.indexed) ...[
+          if (i > 0) SizedBox(width: AethGeometry.settingsCardGap * s),
+          Expanded(
+            child: _ProtocolCard(
+              key: ValueKey(c.key),
+              logo: c.logo,
+              title: c.title,
+              subtitle: strings.settingsPillSub,
+              textDir: textDir,
+              onTap: c.onTap,
+            ),
           ),
-        ),
-        SizedBox(width: AethGeometry.settingsPillGap * s),
-        Expanded(
-          child: _WidePill(
-            logo: AppAssets.protocolTorLogo,
-            logoBox: AethGeometry.settingsPillLogoTor * s,
-            title: strings.settingsTor,
-            subtitle: strings.settingsPillSub,
-            textDir: textDir,
-            onTap: onTor,
-          ),
-        ),
+        ],
       ],
     );
   }
 }
 
-/// The wide pill (سایفون/تور): real protocol logo tinted accent
-/// green at the LEADING edge (visual right in RTL), texts stacked after it.
-/// v4.15 #3 — corners follow the owner CSS «Rectangle 79» (r24), replacing
-/// the v4.14 stadium (h/2 = 43.5).
-class _WidePill extends StatelessWidget {
-  const _WidePill({
+/// One protocol card (Psiphon / Tor / Lantern): the protocol's own logo
+/// (exact colors — the round-16 decree) stacked over the title and the
+/// grey subtitle, centered, on the pill's own surface + r24.
+class _ProtocolCard extends StatelessWidget {
+  const _ProtocolCard({
+    super.key,
     required this.logo,
-    required this.logoBox,
     required this.title,
     required this.subtitle,
     required this.textDir,
@@ -616,84 +635,63 @@ class _WidePill extends StatelessWidget {
   });
 
   final String logo;
-
-  /// The PNG canvas box — sized per logo so the artwork GLYPH matches the
-  /// frame (the canvases carry different artwork fills).
-  final double logoBox;
   final String title;
   final String subtitle;
   final TextDirection textDir;
-
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final h = AethGeometry.settingsPillH * s;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        height: h,
+        height: AethGeometry.settingsPillH * s,
         decoration: BoxDecoration(
           color: AethColors.cardDark,
-          // v4.15 #3 — owner CSS Rectangle 79: r24, never a stadium.
           borderRadius:
               BorderRadius.circular(AethGeometry.settingsPillRadius * s),
         ),
-        padding: EdgeInsets.symmetric(
-          horizontal: AethGeometry.settingsPillInset * s,
-        ),
-        child: Row(
+        padding: EdgeInsets.symmetric(horizontal: 6 * s),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // LTR-locked parent: texts render at the visual LEFT (measured
-            // x60–147), end-aligned toward the logo.
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textDirection: textDir,
-                    style: TextStyle(
-                      fontFamily: 'IRANYekanX',
-                      fontWeight: FontWeight.w600,
-                      fontSize: AethGeometry.settingsPillTitleSize * s,
-                      color: AethColors.textPrimary,
-                    ),
-                  ),
-                  SizedBox(height: 4 * s),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textDirection: textDir,
-                    style: TextStyle(
-                      fontFamily: 'IRANYekanX',
-                      fontWeight: FontWeight.w400,
-                      fontSize: AethGeometry.settingsPillSubSize * s,
-                      color: AethColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(width: 10 * s),
-            // The REAL protocol logo at the visual RIGHT edge (x148–173),
-            // accent-green like the frame.
-            // v4.40 — the owner's round-16 protocol logo files, EXACTLY as
-            // delivered (own colors; the v4.15 accent-green tint is retired
-            // by the decree «رنگ و شکل آیکون ها باید دقیقا همین فایل هایی
-            // باشه که برات ارسال شده»). The «هر دو حالت» files are pure
-            // vector SVGs — rendered through flutter_svg.
             SvgPicture.asset(
               logo,
-              width: logoBox,
-              height: logoBox,
+              width: AethGeometry.settingsProtoCardLogo * s,
+              height: AethGeometry.settingsProtoCardLogo * s,
               fit: BoxFit.contain,
+            ),
+            SizedBox(height: AethGeometry.settingsProtoCardLogoGap * s),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              textDirection: textDir,
+              style: TextStyle(
+                fontFamily: 'IRANYekanX',
+                fontWeight: FontWeight.w600,
+                fontSize: AethGeometry.settingsPillTitleSize * s,
+                height: 1.3,
+                color: AethColors.textPrimary,
+              ),
+            ),
+            SizedBox(height: 2 * s),
+            Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              textDirection: textDir,
+              style: TextStyle(
+                fontFamily: 'IRANYekanX',
+                fontWeight: FontWeight.w400,
+                fontSize: AethGeometry.settingsPillSubSize * s,
+                height: 1.3,
+                color: AethColors.textSecondary,
+              ),
             ),
           ],
         ),

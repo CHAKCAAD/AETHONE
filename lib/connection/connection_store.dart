@@ -232,6 +232,42 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
   @override
   String torLocation = LocationWheelPolicy.autoCode;
 
+  /// Lantern — 'auto' (Radiance's fastest server) or a country from
+  /// Lantern's live server list. Persisted like the other family picks.
+  @override
+  String lanternLocation = LocationWheelPolicy.autoCode;
+
+  /// Lantern — the countries Lantern's server list offered on the last
+  /// Lantern connect (disk-cached by [EgressLocations]); null until one.
+  List<String>? liveLanternCountries;
+
+  /// Swaps in a sanitized Lantern country set and caches it.
+  void applyLanternCountries(List<String> codes) {
+    final clean = EgressLocations.sanitizeCodes(codes);
+    if (clean == null) return;
+    if (listEquals(clean, liveLanternCountries)) return;
+    liveLanternCountries = clean;
+    unawaited(EgressLocations.saveLanternCountries(clean));
+    notifyListeners();
+  }
+
+  /// Lantern settings page / wheel setter. A LIVE Lantern session switches
+  /// servers at once (the sidecar's `/select`); otherwise it applies on
+  /// the next connect.
+  void setLanternLocation(String code) {
+    final pick = LocationWheelPolicy.autoCode == code ||
+            (code.length == 2 && code == code.toLowerCase())
+        ? code
+        : LocationWheelPolicy.autoCode;
+    if (lanternLocation == pick) return;
+    lanternLocation = pick;
+    notifyListeners();
+    if (_machine.current == VpnState.connected &&
+        effectiveProtocol.isLantern) {
+      unawaited(_engine.applyLanternLocation(pick));
+    }
+  }
+
   /// v4.28 — the LIVE psiphon egress set: the network's own
   /// `AvailableEgressRegions` report harvested from the core log after a
   /// psiphon-family connect (owner round 5: «لوکیشن های واقعی، نه فیک»).
@@ -303,6 +339,8 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
       if (torLocation == code) return;
       torLocation = code;
       notifyListeners();
+    } else if (effective.isLantern) {
+      setLanternLocation(code);
     } else {
       selectCountry(code);
     }
@@ -316,6 +354,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     final effective = effectiveProtocol;
     if (effective.isPsiphon) return psiphonLocation;
     if (effective.isTor) return torLocation;
+    if (effective.isLantern) return lanternLocation;
     return selectedCountryCode ?? 'ir';
   }
 
@@ -340,6 +379,7 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         effectiveProtocol,
         psiphonRegions: livePsiphonRegions,
         torExits: liveTorExitCountries,
+        lanternCountries: liveLanternCountries,
       );
 
   /// v4.21 — true when the wheel runs on the FULL manifest with the AUTO
@@ -743,6 +783,8 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
         if (exitCountryCode != null) this.exitCountryCode = exitCountryCode;
       case EngineEgressRegions(:final regions):
         applyPsiphonEgressRegions(regions);
+      case EngineLanternServers(:final countries):
+        applyLanternCountries(countries);
       case EngineExitCountryResolved(:final code):
         // v4.31 — the REAL country behind a Tor exit (the trace only says
         // T1): apply it while — and only while — a session is actually

@@ -97,6 +97,16 @@ class EngineEgressRegions extends EngineEvent {
 /// here; the store applies it only while connected, so a late resolution
 /// from a superseded walk can never park a stale flag. Unresolved ⇒ no
 /// event (the UI keeps its honest unknown).
+/// Lantern — the countries Lantern's own server list currently offers
+/// (ISO-3166 alpha-2, lowercase), read from the sidecar's `/servers`
+/// control call after a Lantern connect. Lantern publishes no static list:
+/// this is the only honest source, so the store caches it for the
+/// location pickers.
+class EngineLanternServers extends EngineEvent {
+  const EngineLanternServers(this.countries);
+  final List<String> countries;
+}
+
 class EngineExitCountryResolved extends EngineEvent {
   const EngineExitCountryResolved(this.code);
   final String code;
@@ -165,6 +175,11 @@ abstract class EngineConfigSource {
   String get psiphonLocation;
   String get torLocation;
 
+  /// Lantern — 'auto' (Radiance's own fastest-server pick) or a country
+  /// from Lantern's live server list; the adapter selects the best server
+  /// in that country through the sidecar's `/select` control call.
+  String get lanternLocation;
+
   /// «سرعت اسکن» 1..5 (protocol sheet; feeds the core scan profile).
   int get scanSpeed;
 
@@ -213,6 +228,11 @@ abstract class EngineAdapter {
   /// Called once by the store right after construction; default no-op
   /// (preview / not-wired adapters never read user config).
   void bind(EngineConfigSource config) {}
+
+  /// Lantern — re-applies the Lantern location pick to a LIVE Lantern
+  /// session (the sidecar switches servers without a reconnect). Default
+  /// no-op for adapters that run no Lantern core.
+  Future<void> applyLanternLocation(String code) async {}
 }
 
 /// Default adapter until the native service lands (M2): fails honestly.

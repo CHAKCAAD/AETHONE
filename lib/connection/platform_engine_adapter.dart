@@ -574,6 +574,14 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// mode (lib.rs L128) — this wait is a cheap sanity bound; the real
   /// end-to-end wait lives in the probe-retry loop below.
   static const Duration _listenerBudget = Duration(seconds: 120);
+
+  /// Lantern: the sidecar's autoconnect budget (CoreSettings
+  /// .lanternConnectSecs, default 180 s — Radiance fetches its config, then
+  /// dials); its listener appears only after that, so the wait gets 20 s
+  /// of slack on top.
+  Duration get _lanternListenerBudget => Duration(
+        seconds: (_config?.coreSettings.lanternConnectSecs ?? 180) + 20,
+      );
   static const Duration _tunnelUpBudget = Duration(seconds: 30);
 
   /// v4.37 — the Linux desktop tunnelUp budget: the helper path shows a
@@ -1218,6 +1226,7 @@ class PlatformEngineAdapter implements EngineAdapter {
     final modeId = AetherArguments.effectiveMode(leg, overlay);
     final mode = TransportModes.byId(modeId);
     final tunnel = config.connectionMode == ConnectionMode.tunnel;
+    final lantern = leg == ProtocolId.lantern;
     _activeMode = config.connectionMode;
     _activePort = mode.socksEndpoint.port + portOffset;
 
@@ -1238,6 +1247,16 @@ class PlatformEngineAdapter implements EngineAdapter {
         'platformLimit',
         'the whole-device tunnel for this family needs a direct internet '
         'leg the Windows routing cannot exempt yet — use proxy mode for it',
+      );
+      return false;
+    }
+
+    // Lantern ships as an Android sidecar only (liblantern.so in jniLibs);
+    // the desktop runners have no Lantern build yet — fail honestly.
+    if (lantern && !Platform.isAndroid) {
+      fail(
+        'platformLimit',
+        'Lantern is only built for Android in this version',
       );
       return false;
     }
@@ -1368,129 +1387,168 @@ class PlatformEngineAdapter implements EngineAdapter {
       if (_stale(gen)) return false;
     }
 
-    // --- 2. Aether in-process (embedded core, architecture B+).
-    if (_stale(gen)) return false; // a cancel must never hear `connecting`
-    _emitState(VpnState.connecting);
-
-    // v4.21 — PROCESS-ENVIRONMENT HYGIENE (the engineClosed fix). The
-    // in-process core's CLI parser only ever SETS `AETHER_*` variables
-    // (cli.rs), so without this cleanup session N+1 inherited session N's
-    // mode — e.g. the core's own reverse-mode leftovers AETHER_UPSTREAM +
-    // AETHER_MASQUE_HTTP2 pointing at a dead carrier — and died during
-    // startup (owner: «بعد از خروج از اپ … دیگه اپ وصل نمیشه … ارورش هم
-    // اینه: engineClosed»). Clear the whole inventory first; the fresh
-    // argument list re-sets exactly what this mode needs.
-    clearAetherEnvironment();
-
-    // v4.22 — the tor family's log verbosity is ENV-ONLY in the pinned
-    // core (AETHER_TOR_LOG, cli.rs L432): injected AFTER the inventory
-    // cleanup above, exactly like the fresh arg list re-sets its selects.
-    if (overlay != null &&
-        overlay.isTor &&
-        config.coreSettings.torLog != TorLogLevel.info) {
-      setAetherEnvVar('AETHER_TOR_LOG', config.coreSettings.torLog.name);
-    }
-    // v4.31 — the family TIMEOUTS are env-only too (cli.rs L423-428):
-    //  * tor: the plain-direct budget (AETHER_TOR_DIRECT_SECS, default
-    //    75) and the per-bridge budget (AETHER_TOR_BRIDGE_SECS, 360) —
-    //    owner round 7's «تنظیمات بیشتر»;
-    //  * psiphon: the ready budget (AETHER_PSIPHON_READY_SECS, 180) — the
-    //    walk's own budget widens with it (see readyBudget) so the app
-    //    never fails a psiphon the core itself is still given time to
-    //    bring up.
-    if (overlay != null && overlay.isTor) {
-      if (config.coreSettings.torDirectSecs != 75) {
-        setAetherEnvVar(
-          'AETHER_TOR_DIRECT_SECS',
-          '${config.coreSettings.torDirectSecs}',
-        );
-      }
-      if (config.coreSettings.torBridgeSecs != 360) {
-        setAetherEnvVar(
-          'AETHER_TOR_BRIDGE_SECS',
-          '${config.coreSettings.torBridgeSecs}',
-        );
-      }
-    }
-    if (overlay != null && overlay.isPsiphon) {
-      if (config.coreSettings.psiphonReadySecs != 180) {
-        setAetherEnvVar(
-          'AETHER_PSIPHON_READY_SECS',
-          '${config.coreSettings.psiphonReadySecs}',
-        );
-      }
-    }
-
-    final core = _core =
-        _coreFactory == null ? AetherCore.open() : _coreFactory();
-    final paths = await _paths();
-    // v4.41 (owner round 17, item 3) — the routing-area profile reaches the
-    // engine at last: the selected country's rules file is (re)written into
-    // the engine dir and planted as AETHER_ROUTES_FILE; the pinned core's
-    // RuleSet::from_env APPENDS its [direct]/[block] sections to the CLI
-    // rule lists (the user's own expert fields keep flowing through
-    // --route-block/--route-direct, untouched). A 'none' pick sets nothing
-    // — the pre-v4.41 behavior. Best-effort by design: a missing/unreadable
-    // profile must never kill a connect walk (the core only warns and runs
-    // with the user's own lists).
-    if (hasCountryRouteProfile(config.routingRegion)) {
-      try {
-        final routesPath = await materializeCountryRoutes(
-          filesDir: paths.filesDir,
-          region: config.routingRegion!,
-        );
-        setAetherEnvVar('AETHER_ROUTES_FILE', routesPath);
-      } catch (error) {
-        debugPrint('country routes profile skipped: $error');
-      }
-    }
-    // v4.34 — the SMART tour's variant settings (masque HTTP/2 vs HTTP/3)
-    // replace the user's own for THIS attempt only.
-    final effectiveCore = coreOverride ?? config.coreSettings;
-    // v4.26 — CRITICAL ordering: everything from here to coreStart below
-    // is SYNCHRONOUS (no await), so a cancel can never land between this
-    // staleness check and the job spawn — a walk that goes stale after the
-    // check but before coreStart would start a core that no cleanup ever
-    // cancels (the job id lands in the field only AFTER the spawn).
-    if (_stale(gen)) return false;
-    _jobId = core.coreStart(
-      AetherArguments.build(
-        protocol: leg,
-        chain: overlay,
-        countryCode: _resolveCountryPick(modeId, config),
-        scanSpeed: config.scanSpeed,
-        core: effectiveCore,
-        filesDir: paths.filesDir,
-        nativeLibraryDir: paths.nativeLibraryDir,
-        lyrebirdPath: paths.lyrebirdPath,
-        psiphonPath: paths.psiphonPath,
-      ),
-    );
-    // v4.26 — record the job id on the PROCESS side (Kotlin companion):
-    // the Rust registry is process-scoped, so a RECREATED isolate can adopt
-    // this id on resync and actually cancel the core on disconnect (the
-    // orphaned-core bug: «باید اپ رو کلا بندی تا اتصال تونل قطع بشه»).
-    await _recordCoreJob();
-    if (_stale(gen)) return false;
-
-    // --- 2b. v4.19 (#7): proxy mode has no VpnService to hold the process,
-    // so swiping the app away used to kill the in-process core. A tiny
-    // foreground service (CoreHoldService) pins the process for the session
-    // and is torn down on disconnect. The tunnel mode already has
-    // AethoneVpnService in the foreground.
-    if (!tunnel) {
-      try {
-        await _channel.invokeMethod<void>(
-          'startCoreHold',
-          {'port': _activePort},
-        );
-      } on PlatformException {
-        // Hold failed — proxy still works while the app is foregrounded;
-        // the honest resync on the next start reports the truth.
-      } on MissingPluginException {
-        // no platform (tests) — nothing to hold
-      }
+    // --- 2L. LANTERN (feature/lantern-core): a standalone core, NOT an
+    // Aether mode. The sidecar (jniLibs/liblantern.so, native/lanternbridge)
+    // is spawned by the platform side with --autoconnect; its loopback
+    // SOCKS listener on 1822 only comes up once Radiance has connected to
+    // Lantern's public servers, so the shared listener wait + end-to-end
+    // probe below gate Connected exactly like every Aether mode. The walk
+    // FOLLOWS the sidecar: a sidecar that exits fails the walk with its own
+    // exit status (see [_pollCoreOnce]).
+    if (lantern) {
       if (_stale(gen)) return false;
+      _emitState(VpnState.connecting);
+      final paths = await _paths();
+      if (_stale(gen)) return false;
+      final started = await _startLantern(paths.filesDir);
+      if (_stale(gen)) {
+        await _stopLantern();
+        return false;
+      }
+      if (started != null) {
+        await _hardCleanup();
+        fail('lanternStartFailed', started);
+        return false;
+      }
+      if (!tunnel) {
+        try {
+          await _channel.invokeMethod<void>(
+            'startCoreHold',
+            {'port': _activePort},
+          );
+        } on PlatformException {
+          // proxy still works while the app is foregrounded
+        } on MissingPluginException {
+          // no platform (tests)
+        }
+        if (_stale(gen)) return false;
+      }
+    } else {
+      // --- 2. Aether in-process (embedded core, architecture B+).
+      if (_stale(gen)) return false; // a cancel must never hear `connecting`
+      _emitState(VpnState.connecting);
+
+      // v4.21 — PROCESS-ENVIRONMENT HYGIENE (the engineClosed fix). The
+      // in-process core's CLI parser only ever SETS `AETHER_*` variables
+      // (cli.rs), so without this cleanup session N+1 inherited session N's
+      // mode — e.g. the core's own reverse-mode leftovers AETHER_UPSTREAM +
+      // AETHER_MASQUE_HTTP2 pointing at a dead carrier — and died during
+      // startup (owner: «بعد از خروج از اپ … دیگه اپ وصل نمیشه … ارورش هم
+      // اینه: engineClosed»). Clear the whole inventory first; the fresh
+      // argument list re-sets exactly what this mode needs.
+      clearAetherEnvironment();
+
+      // v4.22 — the tor family's log verbosity is ENV-ONLY in the pinned
+      // core (AETHER_TOR_LOG, cli.rs L432): injected AFTER the inventory
+      // cleanup above, exactly like the fresh arg list re-sets its selects.
+      if (overlay != null &&
+          overlay.isTor &&
+          config.coreSettings.torLog != TorLogLevel.info) {
+        setAetherEnvVar('AETHER_TOR_LOG', config.coreSettings.torLog.name);
+      }
+      // v4.31 — the family TIMEOUTS are env-only too (cli.rs L423-428):
+      //  * tor: the plain-direct budget (AETHER_TOR_DIRECT_SECS, default
+      //    75) and the per-bridge budget (AETHER_TOR_BRIDGE_SECS, 360) —
+      //    owner round 7's «تنظیمات بیشتر»;
+      //  * psiphon: the ready budget (AETHER_PSIPHON_READY_SECS, 180) — the
+      //    walk's own budget widens with it (see readyBudget) so the app
+      //    never fails a psiphon the core itself is still given time to
+      //    bring up.
+      if (overlay != null && overlay.isTor) {
+        if (config.coreSettings.torDirectSecs != 75) {
+          setAetherEnvVar(
+            'AETHER_TOR_DIRECT_SECS',
+            '${config.coreSettings.torDirectSecs}',
+          );
+        }
+        if (config.coreSettings.torBridgeSecs != 360) {
+          setAetherEnvVar(
+            'AETHER_TOR_BRIDGE_SECS',
+            '${config.coreSettings.torBridgeSecs}',
+          );
+        }
+      }
+      if (overlay != null && overlay.isPsiphon) {
+        if (config.coreSettings.psiphonReadySecs != 180) {
+          setAetherEnvVar(
+            'AETHER_PSIPHON_READY_SECS',
+            '${config.coreSettings.psiphonReadySecs}',
+          );
+        }
+      }
+
+      final core = _core =
+          _coreFactory == null ? AetherCore.open() : _coreFactory();
+      final paths = await _paths();
+      // v4.41 (owner round 17, item 3) — the routing-area profile reaches the
+      // engine at last: the selected country's rules file is (re)written into
+      // the engine dir and planted as AETHER_ROUTES_FILE; the pinned core's
+      // RuleSet::from_env APPENDS its [direct]/[block] sections to the CLI
+      // rule lists (the user's own expert fields keep flowing through
+      // --route-block/--route-direct, untouched). A 'none' pick sets nothing
+      // — the pre-v4.41 behavior. Best-effort by design: a missing/unreadable
+      // profile must never kill a connect walk (the core only warns and runs
+      // with the user's own lists).
+      if (hasCountryRouteProfile(config.routingRegion)) {
+        try {
+          final routesPath = await materializeCountryRoutes(
+            filesDir: paths.filesDir,
+            region: config.routingRegion!,
+          );
+          setAetherEnvVar('AETHER_ROUTES_FILE', routesPath);
+        } catch (error) {
+          debugPrint('country routes profile skipped: $error');
+        }
+      }
+      // v4.34 — the SMART tour's variant settings (masque HTTP/2 vs HTTP/3)
+      // replace the user's own for THIS attempt only.
+      final effectiveCore = coreOverride ?? config.coreSettings;
+      // v4.26 — CRITICAL ordering: everything from here to coreStart below
+      // is SYNCHRONOUS (no await), so a cancel can never land between this
+      // staleness check and the job spawn — a walk that goes stale after the
+      // check but before coreStart would start a core that no cleanup ever
+      // cancels (the job id lands in the field only AFTER the spawn).
+      if (_stale(gen)) return false;
+      _jobId = core.coreStart(
+        AetherArguments.build(
+          protocol: leg,
+          chain: overlay,
+          countryCode: _resolveCountryPick(modeId, config),
+          scanSpeed: config.scanSpeed,
+          core: effectiveCore,
+          filesDir: paths.filesDir,
+          nativeLibraryDir: paths.nativeLibraryDir,
+          lyrebirdPath: paths.lyrebirdPath,
+          psiphonPath: paths.psiphonPath,
+        ),
+      );
+      // v4.26 — record the job id on the PROCESS side (Kotlin companion):
+      // the Rust registry is process-scoped, so a RECREATED isolate can adopt
+      // this id on resync and actually cancel the core on disconnect (the
+      // orphaned-core bug: «باید اپ رو کلا بندی تا اتصال تونل قطع بشه»).
+      await _recordCoreJob();
+      if (_stale(gen)) return false;
+
+      // --- 2b. v4.19 (#7): proxy mode has no VpnService to hold the process,
+      // so swiping the app away used to kill the in-process core. A tiny
+      // foreground service (CoreHoldService) pins the process for the session
+      // and is torn down on disconnect. The tunnel mode already has
+      // AethoneVpnService in the foreground.
+      if (!tunnel) {
+        try {
+          await _channel.invokeMethod<void>(
+            'startCoreHold',
+            {'port': _activePort},
+          );
+        } on PlatformException {
+          // Hold failed — proxy still works while the app is foregrounded;
+          // the honest resync on the next start reports the truth.
+        } on MissingPluginException {
+          // no platform (tests) — nothing to hold
+        }
+        if (_stale(gen)) return false;
+      }
+
     }
 
     // --- 3. Wait for the SOCKS listener of the SELECTED mode (no fallback,
@@ -1503,7 +1561,9 @@ class PlatformEngineAdapter implements EngineAdapter {
     final ready = await _waitForListenerFollowingCore(
       gen,
       _activePort,
-      timeout: _remainingUntil(windowEnd) ?? _listenerBudget,
+      timeout:
+          _remainingUntil(windowEnd) ??
+          (lantern ? _lanternListenerBudget : _listenerBudget),
     );
     // v4.26 — a stale walk (cancelled or superseded by a newer connect)
     // stays SILENT from here on: the cancel owns the terminal state, and a
@@ -1650,6 +1710,10 @@ class PlatformEngineAdapter implements EngineAdapter {
     // the fresh set whenever the read completes, walk or no walk.
     unawaited(_harvestPsiphonEgressRegions());
 
+    // Lantern — read the live server list (the location pickers' only
+    // honest source) and apply the user's Lantern location pick.
+    if (_lanternActive) unawaited(_lanternAfterConnect(gen));
+
     // --- 5. Steady state: stats + health (§6 health probe ⇒ reconnecting).
     _startTicker(gen);
     return true;
@@ -1780,6 +1844,7 @@ class PlatformEngineAdapter implements EngineAdapter {
   /// job has ended (done/failed/poll-threw), null while it runs. Shared by
   /// the listener wait and the probe-retry loop.
   String? _pollCoreOnce() {
+    if (_lanternActive && _lanternFailure != null) return _lanternFailure;
     final jobId = _jobId;
     final core = _core;
     if (core == null || jobId == null) return null;
@@ -2089,6 +2154,15 @@ class PlatformEngineAdapter implements EngineAdapter {
       }
     }
 
+    // 1L. Lantern sidecar liveness (no Aether job in a Lantern session).
+    if (_lanternActive) {
+      final failure = _lanternFailure ?? await _lanternExitReason();
+      if (failure != null) {
+        await _onEngineDied('engineClosed', failure);
+        return;
+      }
+    }
+
     // 2. Real stats: zeptun counters (tunnel mode) + a fresh end-to-end
     //    probe for ping/exit-country.
     int? rxBytes;
@@ -2272,6 +2346,206 @@ class PlatformEngineAdapter implements EngineAdapter {
     // v4.26 — the durable job id dies with the session (a later isolate
     // must not adopt a cancelled core).
     await _clearCoreJob();
+    // Lantern: the sidecar is a separate process — stop it on every
+    // cleanup road (idempotent on the platform side).
+    await _stopLantern();
+  }
+
+  // ---- Lantern sidecar (feature/lantern-core) ------------------------------
+
+  /// True while THIS session runs the Lantern sidecar (set by
+  /// [_startLantern], or adopted on resync from `lanternStatus`).
+  bool _lanternActive = false;
+
+  /// The sidecar's exit status once it died on its own (null while alive).
+  String? _lanternFailure;
+  Timer? _lanternWatch;
+
+  /// Starts the sidecar through the platform channel. Returns null on
+  /// success, or the reason it could not be started.
+  Future<String?> _startLantern(String filesDir) async {
+    _lanternFailure = null;
+    try {
+      await _channel.invokeMethod<void>('lanternStart', {
+        'port': TransportModes.lantern.socksEndpoint.port,
+        'dataDir': '$filesDir/lantern',
+        'locale': PlatformDispatcher.instance.locale.toLanguageTag(),
+        'connectTimeout': _config?.coreSettings.lanternConnectSecs ?? 180,
+      });
+    } on PlatformException catch (e) {
+      return '${e.code}: ${e.message}';
+    } on MissingPluginException {
+      return 'the aethone/engine platform channel has no lanternStart '
+          'in this build';
+    }
+    _lanternActive = true;
+    _watchLantern();
+    return null;
+  }
+
+  /// Polls the sidecar's liveness once a second so the SYNCHRONOUS
+  /// [_pollCoreOnce] (listener wait + probe loop) can follow it.
+  void _watchLantern() {
+    _lanternWatch?.cancel();
+    _lanternWatch = Timer.periodic(const Duration(seconds: 1), (_) async {
+      if (!_lanternActive) return;
+      final failure = await _lanternExitReason();
+      if (failure != null) {
+        _lanternFailure = failure;
+        _lanternWatch?.cancel();
+        _lanternWatch = null;
+      }
+    });
+  }
+
+  /// null while the sidecar runs; its exit description once it died.
+  Future<String?> _lanternExitReason() async {
+    try {
+      final st =
+          await _channel.invokeMethod<Map<Object?, Object?>>(
+            'lanternStatus',
+          ) ??
+          const {};
+      if (st['running'] == true) return null;
+      final code = st['exitCode'];
+      final tail = (st['lastLine'] as String?)?.trim() ?? '';
+      return 'the Lantern core exited (code: $code)'
+          '${tail.isEmpty ? '' : ' — $tail'}';
+    } on PlatformException catch (e) {
+      return 'lanternStatus failed: ${e.message}';
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// One request on the sidecar's token-guarded loopback control socket
+  /// (the platform side owns the port + token). Returns the decoded
+  /// response (`ok`, `status`, `error`, `data`), or null when the sidecar
+  /// is not reachable.
+  Future<Map<String, Object?>?> _lanternControl(
+    String method,
+    String path, [
+    Map<String, Object?>? body,
+  ]) async {
+    try {
+      final raw = await _channel.invokeMethod<String>('lanternControl', {
+        'method': method,
+        'path': path,
+        if (body != null) 'body': jsonEncode(body),
+      });
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      return decoded is Map<String, Object?> ? decoded : null;
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// The `/servers` snapshot's server entries (tag, country_code, ping).
+  static List<Map<String, Object?>> _lanternServers(Map<String, Object?>? r) {
+    final data = r?['data'];
+    if (data is! Map) return const [];
+    final servers = data['servers'];
+    if (servers is! List) return const [];
+    return [
+      for (final e in servers)
+        if (e is Map<String, Object?>) e,
+    ];
+  }
+
+  /// The best server for [country]: the lowest measured latency, else the
+  /// first one Lantern lists. null when Lantern offers none there.
+  static String? _bestLanternServer(
+    List<Map<String, Object?>> servers,
+    String country,
+  ) {
+    String? best;
+    var bestPing = 1 << 30;
+    for (final srv in servers) {
+      final cc = (srv['country_code'] as String?)?.toLowerCase();
+      final tag = srv['tag'] as String?;
+      if (cc != country || tag == null || tag.isEmpty) continue;
+      final probed = srv['probed'] == true;
+      final ping = (srv['ping_ms'] as num?)?.toInt() ?? 0;
+      final score = probed && ping > 0 ? ping : (1 << 29);
+      if (best == null || score < bestPing) {
+        best = tag;
+        bestPing = score;
+      }
+    }
+    return best;
+  }
+
+  /// Post-connect: publish Lantern's live country set, then honor the
+  /// user's Lantern location pick (AUTO keeps Radiance's own ranking).
+  Future<void> _lanternAfterConnect(int gen) async {
+    final reply = await _lanternControl('GET', '/servers');
+    if (_stale(gen) || !_lanternActive) return;
+    final servers = _lanternServers(reply);
+    final countries = <String>{
+      for (final srv in servers)
+        if ((srv['country_code'] as String?)?.length == 2)
+          (srv['country_code'] as String).toLowerCase(),
+    }.toList()
+      ..sort();
+    if (countries.isNotEmpty) _emit(EngineLanternServers(countries));
+    final pick = _config?.lanternLocation ?? LocationWheelPolicy.autoCode;
+    if (pick != LocationWheelPolicy.autoCode) {
+      await _selectLanternLocation(pick, servers);
+    }
+  }
+
+  Future<void> _selectLanternLocation(
+    String code,
+    List<Map<String, Object?>> servers,
+  ) async {
+    final tag = code == LocationWheelPolicy.autoCode
+        ? ''
+        : _bestLanternServer(servers, code);
+    if (tag == null) {
+      _emit(EngineLogLine(
+        'warn',
+        'Lantern offers no server in "$code" right now — keeping the '
+            'current server',
+      ));
+      return;
+    }
+    final r = await _lanternControl('POST', '/select', {'tag': tag});
+    if (r?['ok'] != true) {
+      _emit(EngineLogLine(
+        'warn',
+        'Lantern server select failed: ${r?['error'] ?? 'no reply'}',
+      ));
+    }
+  }
+
+  @override
+  Future<void> applyLanternLocation(String code) async {
+    if (!_lanternActive) return;
+    final servers = code == LocationWheelPolicy.autoCode
+        ? const <Map<String, Object?>>[]
+        : _lanternServers(await _lanternControl('GET', '/servers'));
+    await _selectLanternLocation(code, servers);
+  }
+
+  Future<void> _stopLantern() async {
+    _lanternWatch?.cancel();
+    _lanternWatch = null;
+    final wasActive = _lanternActive;
+    _lanternActive = false;
+    _lanternFailure = null;
+    if (!wasActive && !Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod<void>('lanternStop');
+    } on PlatformException {
+      // already stopped
+    } on MissingPluginException {
+      // no platform (tests)
+    }
   }
 
   // ---- durable job id (v4.26 — isolate-restart hardening) ------------------
@@ -2512,6 +2786,13 @@ class PlatformEngineAdapter implements EngineAdapter {
   Future<void> _resumeSession(int gen, int port, ConnectionMode mode) async {
     _activePort = port;
     _activeMode = mode;
+    // Lantern: a recreated isolate adopts the still-running sidecar so the
+    // ticker follows it and disconnect stops it.
+    if (port == TransportModes.lantern.socksEndpoint.port &&
+        await _lanternExitReason() == null) {
+      _lanternActive = true;
+      _watchLantern();
+    }
     try {
       final result = await TunnelProbe().trace(
         port: port,

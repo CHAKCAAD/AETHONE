@@ -145,6 +145,7 @@ class CoreSettings {
     this.torDirectSecs = 75,
     this.torBridgeSecs = 360,
     this.torLog = TorLogLevel.info,
+    this.lanternConnectSecs = 180,
     // v1.0.1 — the combined Tor and Psiphon modes' AETHER leg defaults to
     // MASQUE (owner decree: «پروتکل دیفالت حالت های ترکیبی سایفون و تور
     // رو هم ماسک قرار بده») — the v4.31c WireGuard leg default retired.
@@ -236,6 +237,11 @@ class CoreSettings {
   int torBridgeSecs;
 
   TorLogLevel torLog; // ≠ info ⇒ env `AETHER_TOR_LOG` (env-only in the pin)
+
+  /// Lantern — the sidecar's `--connect-timeout` budget in seconds
+  /// (30–300, default 180): how long Radiance may take to fetch its config
+  /// and reach a Lantern server before the walk fails.
+  int lanternConnectSecs;
 
   // ---- v4.31: the family-mode WARP legs + the dial layer ----
 
@@ -339,6 +345,7 @@ class CoreSettings {
         'torDirectSecs': torDirectSecs,
         'torBridgeSecs': torBridgeSecs,
         'torLog': torLog.name,
+        'lanternConnectSecs': lanternConnectSecs,
         'torLegProtocol': torLegProtocol.name,
         'psiphonLegProtocol': psiphonLegProtocol.name,
         'ipVersion': ipVersion.name,
@@ -416,6 +423,9 @@ class CoreSettings {
       s.torBridgeSecs = m['torBridgeSecs'];
     }
     s.torLog = pickEnum(TorLogLevel.values, m['torLog']) ?? s.torLog;
+    if (m['lanternConnectSecs'] is int) {
+      s.lanternConnectSecs = (m['lanternConnectSecs'] as int).clamp(30, 300);
+    }
     // v4.31c — the per-family legs, with the v4.31 single-field migration:
     // an old blob's aetherLegProtocol seeds BOTH families (the value the
     // user picked once applies to each family's own page from now on).

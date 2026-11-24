@@ -254,7 +254,35 @@ flutter run --debug      # بیلد + نصب + هات‌ریلود
 | NDK | r26d (26.3.11579264) |
 | Rust | 1.99.1 |
 | cargo-ndk | 4.1.2 |
-| Go | 1.26.3 |
+| Go | 1.26.3 (هسته‌ها) / 1.26.10 (Lantern) |
 | Zig | 0.16.0 |
 | API level نیتیو | 29 |
 | minSdk / targetSdk اپ | 24 (کاندید) / 36 |
+
+---
+
+## ۸) هستهٔ Lantern (برنچ feature/lantern-core)
+
+Lantern به‌صورت یک **سایدکار** جدا اجرا می‌شود (`liblantern.so`، کد در
+`native/lanternbridge` — اقتباس از MSN-GUARD). هستهٔ Radiance با تگ
+`novpn` ساخته می‌شود و به‌جای TUN یک لیسنر SOCKS5/HTTP روی
+`127.0.0.1:1822` باز می‌کند؛ VpnService و TUN همچنان فقط مال AETHONE است و
+zeptun ترافیک را به 1822 می‌فرستد.
+
+ساخت محلی برای هر ABI (Go 1.26.10 + NDK r26d):
+
+```bash
+export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264
+bash scripts/build_lantern.sh --abi arm64-v8a --goarch arm64 --out out/lantern/arm64-v8a
+cp out/lantern/arm64-v8a/liblantern.so android/app/src/main/jniLibs/arm64-v8a/liblantern.so
+```
+
+(برای armeabi-v7a: `--goarch arm --goarm 7` و برای x86_64: `--goarch amd64`.)
+
+در CI جاب `lantern-build` همین اسکریپت را برای سه ABI اجرا می‌کند و
+`android-apk` فایل را در jniLibs می‌گذارد (اجرا فقط با workflow_dispatch).
+
+**چک‌لیست تست روی گوشی:** انتخاب کاشی «لنترن» در صفحهٔ پروتکل → اتصال در
+حالت تونل و پروکسی؛ لیسنر فقط روی loopback؛ قطع اتصال باید پروسهٔ
+`liblantern.so` را ببندد؛ TCP/UDP/DNS و IPv4/IPv6؛ رگرسیون بقیهٔ
+پروتکل‌ها؛ API 26 و نسخهٔ فعلی اندروید.

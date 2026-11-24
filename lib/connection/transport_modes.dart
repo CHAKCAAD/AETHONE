@@ -12,6 +12,9 @@ enum ExitKind {
   warp,
   torExit,
   psiphonExit,
+
+  /// Lantern's own public servers (the sidecar core, not Aether).
+  lanternExit,
 }
 
 class TransportMode {
@@ -164,6 +167,22 @@ abstract final class TransportModes {
     evidence: 'cli.rs L600 (no tunnel; --bind serves plain psiphon)',
   );
 
+  /// LANTERN — a standalone core (getlantern/radiance via the
+  /// native/lanternbridge sidecar, liblantern.so). The sidecar serves a
+  /// loopback mixed SOCKS5/HTTP inbound on 1822; Zeptun connects there.
+  /// Not an Aether mode: no WARP leg, no Aether job.
+  static final TransportMode lantern = TransportMode(
+    id: ProtocolId.lantern,
+    label: 'LANTERN',
+    cliValue: 'liblantern.so --socks-address 127.0.0.1:1822 --autoconnect',
+    socksEndpoint: Uri(scheme: 'socks5', host: _host, port: 1822),
+    exitKind: ExitKind.lanternExit,
+    // sing-box's mixed inbound carries UDP ASSOCIATE end-to-end.
+    tcpOnly: false,
+    evidence: 'native/lanternbridge (RADIANCE_USE_SOCKS_PROXY, '
+        'RADIANCE_SOCKS_ADDRESS=127.0.0.1:1822)',
+  );
+
   static final List<TransportMode> all = [
     masque,
     wireguard,
@@ -176,6 +195,7 @@ abstract final class TransportModes {
     psiphonChain,
     psiphonReverse,
     psiphonOnly,
+    lantern,
   ];
 
   static TransportMode byId(ProtocolId id) => all.firstWhere((m) => m.id == id);
@@ -250,7 +270,8 @@ abstract final class LocationWheelPolicy {
   /// round 3: «در حالت تور انتخاب لوکیشن باید فعال باشه، چرا پرچم ها
   /// نشون داده نمیشن؟»). Everything else keeps the plain display band
   /// (hidden until connected — the v4.15 #3 rule).
-  static bool selectable(ProtocolId id) => id.isTor || id.isPsiphon;
+  static bool selectable(ProtocolId id) =>
+      id.isTor || id.isPsiphon || id.isLantern;
 
   /// The allowed wheel entries for a family selector, AUTO FIRST; null =
   /// the whole flag manifest (plain modes / the post-connect display).
@@ -268,6 +289,7 @@ abstract final class LocationWheelPolicy {
     ProtocolId id, {
     List<String>? psiphonRegions,
     List<String>? torExits,
+    List<String>? lanternCountries,
   }) => switch (id) {
         ProtocolId.psiphonOnly || ProtocolId.psiphonChain =>
           [autoCode, ...(psiphonRegions ?? psiphonEgressRegions)],
@@ -275,6 +297,10 @@ abstract final class LocationWheelPolicy {
         ProtocolId.torOnly =>
           [autoCode, ...(torExits ?? torExitCountrySnapshot)],
         ProtocolId.psiphonReverse || ProtocolId.torReverse => null,
+        // Lantern — only the countries Lantern's own server list offered
+        // on the last connect (no static list exists); AUTO alone until
+        // the first Lantern session reports one.
+        ProtocolId.lantern => [autoCode, ...(lanternCountries ?? const [])],
         _ => null,
       };
 

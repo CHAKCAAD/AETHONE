@@ -51,6 +51,7 @@ abstract final class SettingsKeys {
   /// سایفون و تور رو یادش بمونه»): 'auto' or an ISO-3166 alpha-2 code.
   static const psiphonLocation = 'aethone.settings.psiphonLocation';
   static const torLocation = 'aethone.settings.torLocation';
+  static const lanternLocation = 'aethone.settings.lanternLocation';
   static const protocolModeSmart = 'aethone.settings.protocolModeSmart';
   static const routingRegion = 'aethone.settings.routingRegion';
 
@@ -160,6 +161,10 @@ class SettingsPersistence {
       final tor = prefs.getString(SettingsKeys.torLocation);
       if (_isLocationPick(tor)) {
         store.torLocation = tor!;
+      }
+      final lantern = prefs.getString(SettingsKeys.lanternLocation);
+      if (_isLocationPick(lantern)) {
+        store.lanternLocation = lantern!;
       }
       if (prefs.containsKey(SettingsKeys.protocolModeSmart)) {
         store.protocolModeSmart = prefs.getBool(SettingsKeys.protocolModeSmart)!;
@@ -283,6 +288,10 @@ class SettingsPersistence {
       if (torLive != null) {
         store.applyTorExitCountries(torLive);
       }
+      final lanternLive = await EgressLocations.loadCachedLanternCountries();
+      if (lanternLive != null) {
+        store.applyLanternCountries(lanternLive);
+      }
       // v4.23 — the wizard's RECOMMENDED defaults for a fresh install
       // (the step-4 frame ships تونل selected, اتوماتیک selected and the
       // widest scan pill — and step 1 ships فارسی pre-picked): applied
@@ -375,6 +384,10 @@ class SettingsPersistence {
         store.psiphonLocation,
       );
       await prefs.setString(SettingsKeys.torLocation, store.torLocation);
+      await prefs.setString(
+        SettingsKeys.lanternLocation,
+        store.lanternLocation,
+      );
       await prefs.setBool(
         SettingsKeys.protocolModeSmart,
         store.protocolModeSmart,

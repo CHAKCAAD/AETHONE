@@ -445,16 +445,21 @@ class _SheetPanel extends StatelessWidget {
 /// a re-size; the app's localized names keep riding the home card and
 /// the settings, exactly as before).
 class _TileSpec {
-  const _TileSpec(this.id, this.label, this.iconH);
+  const _TileSpec(this.id, this.label, this.iconH, {this.wide = false});
 
   final ProtocolId id;
   final String label;
   final double iconH;
+
+  /// Lantern round — the full-width card (the owner's frame: the logo at
+  /// the tile's own left inset, the label CENTERED on the whole card).
+  final bool wide;
 }
 
 /// The frame's grid, row by row, visual LEFT → RIGHT:
 ///   wireguard | auto      mim | masq      g classic | gool
 ///   tor | psiphon         tow | pow       wot | wop
+///   lantern (full width)
 const List<List<_TileSpec>> _sheetRows = [
   [
     _TileSpec(ProtocolId.wireguard, 'Wireguard', 19),
@@ -479,6 +484,11 @@ const List<List<_TileSpec>> _sheetRows = [
   [
     _TileSpec(ProtocolId.torReverse, 'W O T', 31),
     _TileSpec(ProtocolId.psiphonReverse, 'W O P', 31),
+  ],
+  // Lantern round — the owner's frame: one full-width Lantern card under
+  // the grid (the sidecar core, Android only).
+  [
+    _TileSpec(ProtocolId.lantern, 'Lantern', 40, wide: true),
   ],
 ];
 
@@ -530,6 +540,47 @@ class _ProtoTileState extends State<_ProtoTile>
   void dispose() {
     _pulse.dispose();
     super.dispose();
+  }
+
+  /// Lantern round — the full-width card's content (the owner's frame):
+  /// the logo keeps the grid's left inset, the label centers on the card.
+  Widget _wideContent(_TileSpec spec, double s, double t) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ProtocolGlyph(
+            id: spec.id,
+            size: spec.iconH * s,
+            white: t > 0.5,
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: (spec.iconH + AethGeometry.protoSheetIconGap) * s,
+          ),
+          child: Text(
+            spec.label,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'IRANYekanX',
+              fontWeight: FontWeight.w400,
+              fontSize: AethGeometry.protoSheetLabelSize * s,
+              height: 18 / 16,
+              color: Color.lerp(
+                AethColors.textPrimary,
+                const Color(0xFFFFFFFF),
+                t,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -593,8 +644,13 @@ class _ProtoTileState extends State<_ProtoTile>
                 // VISUAL left under the fa locale too.
                 padding: EdgeInsets.only(
                   left: AethGeometry.protoSheetTilePadLeft * s,
+                  // The wide Lantern card mirrors the pad so its label
+                  // centers on the whole card.
+                  right: spec.wide ? AethGeometry.protoSheetTilePadLeft * s : 0,
                 ),
-                child: Row(
+                child: spec.wide
+                    ? _wideContent(spec, s, t)
+                    : Row(
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
                     // Round 25 — the per-tile calibrated heights are
