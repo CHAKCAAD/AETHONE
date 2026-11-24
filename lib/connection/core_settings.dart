@@ -146,6 +146,8 @@ class CoreSettings {
     this.torBridgeSecs = 360,
     this.torLog = TorLogLevel.info,
     this.lanternConnectSecs = 180,
+    this.lanternUdp = true,
+    this.lanternStrictSocks = true,
     // v1.0.1 — the combined Tor and Psiphon modes' AETHER leg defaults to
     // MASQUE (owner decree: «پروتکل دیفالت حالت های ترکیبی سایفون و تور
     // رو هم ماسک قرار بده») — the v4.31c WireGuard leg default retired.
@@ -242,6 +244,19 @@ class CoreSettings {
   /// (30–300, default 180): how long Radiance may take to fetch its config
   /// and reach a Lantern server before the walk fails.
   int lanternConnectSecs;
+
+  /// Lantern tunnel — relay the device's UDP through Lantern's SOCKS
+  /// (default on). Off ⇒ zeptun's `udp = false`: every UDP flow is
+  /// refused at open with ICMP port-unreachable, so apps fall back to TCP
+  /// at once instead of waiting on a UDP path.
+  bool lanternUdp;
+
+  /// Lantern tunnel — zeptun speaks strictly sequential SOCKS5 to the
+  /// sidecar (`pipeline = false` + `optimistic_data = false`), the same
+  /// shape Telegram's own SOCKS client uses on 1822 (owner round: the
+  /// TUN stalled Telegram while the direct 1822 proxy connected at once).
+  /// Default on; one loopback round trip per flow is the whole cost.
+  bool lanternStrictSocks;
 
   // ---- v4.31: the family-mode WARP legs + the dial layer ----
 
@@ -346,6 +361,8 @@ class CoreSettings {
         'torBridgeSecs': torBridgeSecs,
         'torLog': torLog.name,
         'lanternConnectSecs': lanternConnectSecs,
+        'lanternUdp': lanternUdp,
+        'lanternStrictSocks': lanternStrictSocks,
         'torLegProtocol': torLegProtocol.name,
         'psiphonLegProtocol': psiphonLegProtocol.name,
         'ipVersion': ipVersion.name,
@@ -425,6 +442,10 @@ class CoreSettings {
     s.torLog = pickEnum(TorLogLevel.values, m['torLog']) ?? s.torLog;
     if (m['lanternConnectSecs'] is int) {
       s.lanternConnectSecs = (m['lanternConnectSecs'] as int).clamp(30, 300);
+    }
+    if (m['lanternUdp'] is bool) s.lanternUdp = m['lanternUdp'];
+    if (m['lanternStrictSocks'] is bool) {
+      s.lanternStrictSocks = m['lanternStrictSocks'];
     }
     // v4.31c — the per-family legs, with the v4.31 single-field migration:
     // an old blob's aetherLegProtocol seeds BOTH families (the value the

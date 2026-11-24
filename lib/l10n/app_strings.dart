@@ -100,6 +100,14 @@ class AppStrings {
   String get secLanternTimings => _v['secLanternTimings']!;
   String get lanternConnectSecsLabel => _v['lanternConnectSecsLabel']!;
   String get lanternTimingsDesc => _v['lanternTimingsDesc']!;
+  String get secLanternTunnel => _v['secLanternTunnel']!;
+  String get lanternUdpLabel => _v['lanternUdpLabel']!;
+  String get lanternUdpDesc => _v['lanternUdpDesc']!;
+  String get lanternStrictLabel => _v['lanternStrictLabel']!;
+  String get lanternStrictDesc => _v['lanternStrictDesc']!;
+  String get lanternTelegramLabel => _v['lanternTelegramLabel']!;
+  String get lanternTelegramDesc => _v['lanternTelegramDesc']!;
+  String get lanternTelegramFailed => _v['lanternTelegramFailed']!;
   String get lanternAndroidOnly => _v['lanternAndroidOnly']!;
   String get settingsPillSub => _v['settingsPillSub']!;
   String get settingsAdvancedStatus => _v['settingsAdvancedStatus']!;
@@ -609,6 +617,14 @@ class AppStrings {
       'secLanternTimings': 'زمان اتصال لنترن',
       'lanternConnectSecsLabel': 'مهلت اتصال (ثانیه)',
       'lanternTimingsDesc': 'پیش‌فرض ۱۸۰ ثانیه: دریافت تنظیمات لنترن و رسیدن به سرور. در شبکه‌های کند بیشتر بگذارید',
+      'secLanternTunnel': 'تونل',
+      'lanternUdpLabel': 'عبور UDP',
+      'lanternUdpDesc': 'خاموش: برنامه‌ها فوراً به TCP برمی‌گردند (برای برنامه‌هایی که روی «در حال اتصال» می‌مانند)',
+      'lanternStrictLabel': 'دست‌دهی سازگار',
+      'lanternStrictDesc': 'اتصال ساکس به لنترن مرحله‌به‌مرحله انجام می‌شود؛ پایدارتر برای تلگرام و اتصال‌های طولانی',
+      'lanternTelegramLabel': 'پروکسی تلگرام',
+      'lanternTelegramDesc': 'یک لمس: پروکسی SOCKS لنترن (127.0.0.1:1822) در تلگرام تنظیم می‌شود',
+      'lanternTelegramFailed': 'تلگرام روی این دستگاه پیدا نشد',
       'lanternAndroidOnly': 'لنترن در این نسخه فقط روی اندروید در دسترس است',
       'settingsPillSub': 'انتخاب لوکیشن و ...',
       'settingsAdvancedStatus': 'وضعیت پیکربندی',
@@ -928,6 +944,14 @@ class AppStrings {
       'secLanternTimings': 'Lantern connection budget',
       'lanternConnectSecsLabel': 'Connect budget (seconds)',
       'lanternTimingsDesc': 'Default 180 s: fetching Lantern’s config and reaching a server. Raise it on slow networks',
+      'secLanternTunnel': 'Tunnel',
+      'lanternUdpLabel': 'UDP pass-through',
+      'lanternUdpDesc': 'Off: apps fall back to TCP at once (for apps stuck on “connecting”)',
+      'lanternStrictLabel': 'Compatible handshake',
+      'lanternStrictDesc': 'The SOCKS hand-off to Lantern runs step by step; steadier for Telegram and long-lived connections',
+      'lanternTelegramLabel': 'Telegram proxy',
+      'lanternTelegramDesc': 'One tap: sets Lantern’s SOCKS proxy (127.0.0.1:1822) in Telegram',
+      'lanternTelegramFailed': 'Telegram isn’t installed on this device',
       'lanternAndroidOnly': 'Lantern is only available on Android in this version',
       'settingsPillSub': 'Location & more …',
       'settingsAdvancedStatus': 'Configuration status',
@@ -1245,6 +1269,14 @@ class AppStrings {
       'secLanternTimings': 'Лимит подключения Lantern',
       'lanternConnectSecsLabel': 'Лимит подключения (секунды)',
       'lanternTimingsDesc': 'По умолчанию 180 с: загрузка конфигурации Lantern и выход на сервер. Увеличьте в медленных сетях',
+      'secLanternTunnel': 'Туннель',
+      'lanternUdpLabel': 'Пропуск UDP',
+      'lanternUdpDesc': 'Выкл.: приложения сразу переходят на TCP (для зависших на «подключении»)',
+      'lanternStrictLabel': 'Совместимое рукопожатие',
+      'lanternStrictDesc': 'SOCKS-подключение к Lantern идёт пошагово; стабильнее для Telegram и долгих соединений',
+      'lanternTelegramLabel': 'Прокси Telegram',
+      'lanternTelegramDesc': 'Одно касание: SOCKS-прокси Lantern (127.0.0.1:1822) в Telegram',
+      'lanternTelegramFailed': 'Telegram не установлен на этом устройстве',
       'lanternAndroidOnly': 'В этой версии Lantern доступен только на Android',
       'settingsPillSub': 'Локация и другое …',
       'settingsAdvancedStatus': 'Статус конфигурации',
@@ -1560,6 +1592,14 @@ class AppStrings {
       'secLanternTimings': 'Lantern 连接时限',
       'lanternConnectSecsLabel': '连接时限（秒）',
       'lanternTimingsDesc': '默认 180 秒：获取 Lantern 配置并连上服务器。慢速网络可调大',
+      'secLanternTunnel': '隧道',
+      'lanternUdpLabel': 'UDP 透传',
+      'lanternUdpDesc': '关闭：应用立即回退到 TCP（适用于卡在“连接中”的应用）',
+      'lanternStrictLabel': '兼容握手',
+      'lanternStrictDesc': '逐步完成到 Lantern 的 SOCKS 握手；对 Telegram 和长连接更稳定',
+      'lanternTelegramLabel': 'Telegram 代理',
+      'lanternTelegramDesc': '一键在 Telegram 中设置 Lantern 的 SOCKS 代理（127.0.0.1:1822）',
+      'lanternTelegramFailed': '此设备未安装 Telegram',
       'lanternAndroidOnly': '此版本中 Lantern 仅在 Android 上可用',
       'settingsPillSub': '位置等 …',
       'settingsAdvancedStatus': '配置状态',
@@ -1881,6 +1921,14 @@ class AppStrings {
       'secLanternTimings': 'Lantern birikme möhleti',
       'lanternConnectSecsLabel': 'Birikme möhleti (sekunt)',
       'lanternTimingsDesc': 'Default 180 s: Lantern sazlamalaryny almak we serwere ýetmek. Ýuwaş ulaglarda artdyryň',
+      'secLanternTunnel': 'Tunel',
+      'lanternUdpLabel': 'UDP geçirmek',
+      'lanternUdpDesc': 'Öçük: programmalar derrew TCP-a geçýär («birikýär» ýagdaýynda galýanlar üçin)',
+      'lanternStrictLabel': 'Laýyk el gysyşmak',
+      'lanternStrictDesc': 'Lantern-e SOCKS birikmesi ädimme-ädim edilýär; Telegram we uzak birikmeler üçin durnuklyrak',
+      'lanternTelegramLabel': 'Telegram proksi',
+      'lanternTelegramDesc': 'Bir basyş: Lantern-iň SOCKS proksisi (127.0.0.1:1822) Telegram-da sazlanýar',
+      'lanternTelegramFailed': 'Bu enjamda Telegram ýok',
       'lanternAndroidOnly': 'Bu wersiýada Lantern diňe Android-da elýeterli',
       'settingsPillSub': 'Ýerleşýän ýer we başgalar …',
       'settingsAdvancedStatus': 'Konfigurasiýa ýagdaýy',

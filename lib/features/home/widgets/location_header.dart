@@ -140,8 +140,19 @@ class _LocationHeaderState extends State<LocationHeader> {
   String _selected = defaultCode;
   PageController? _pageController;
 
-  /// The unbounded strip's rest position for the current cycle.
-  int get _lapBase => _cycle * _startLap;
+  /// The wheel shows the centre flag and two neighbours on each side.
+  /// A set SHORTER than that would repeat itself on screen (owner round:
+  /// Lantern offers only AUTO · DE · NL, and the strip showed «DE NL AUTO
+  /// DE NL» — the same flags twice), so a short set becomes a BOUNDED
+  /// strip: each flag once, the ends left empty.
+  static const int _wheelSpan = 5;
+
+  /// True when the set is too short to cycle without visible repeats.
+  bool get _bounded => _cycle < _wheelSpan;
+
+  /// The unbounded strip's rest position for the current cycle (0 for a
+  /// bounded strip — page index IS the code index there).
+  int get _lapBase => _bounded ? 0 : _cycle * _startLap;
 
   /// True while a PROGRAMMATIC animation drives the wheel (roulette /
   /// engine-follow / manifest jump): page changes update the header visually
@@ -402,6 +413,7 @@ class _LocationHeaderState extends State<LocationHeader> {
 
   /// Shortest signed step from code index [from] to [to] around the cycle.
   int _circularDelta(int to, int from, int n) {
+    if (_bounded) return to - from; // no wrap on a bounded strip
     var d = (to - from) % n;
     if (d > n ~/ 2) d -= n;
     if (d < -(n ~/ 2)) d += n;
@@ -476,6 +488,22 @@ class _LocationHeaderState extends State<LocationHeader> {
     if (c == null || _cycle < 2) return;
     final from = c.page!.round();
     final n = _cycle;
+    if (_bounded) {
+      // A short set has no lap to spin through: glide straight to the
+      // target (a same-page landing is a still wheel, never a fake spin).
+      final target = _indexOf(code);
+      if (target != from) {
+        final landed = await _spinToPage(
+          target,
+          duration: const Duration(milliseconds: 900),
+          roulette: true,
+        );
+        if (landed && mounted) _syncSelectedToPage();
+      } else {
+        _syncSelectedToPage();
+      }
+      return;
+    }
     var forward = (_indexOf(code) - from % n) % n;
     if (forward < n ~/ 3) forward += n; // always a visible spin
     final landed = await _spinToPage(
@@ -501,7 +529,7 @@ class _LocationHeaderState extends State<LocationHeader> {
   /// cycles is pixel-identical. Keeps the page index forever near [_baseOffset].
   void _recenterIfFar() {
     final c = _safeController();
-    if (c == null || _cycle < 2) return;
+    if (c == null || _cycle < 2 || _bounded) return;
     final p = c.page;
     if (p == null) return;
     final round = p.round();
@@ -712,6 +740,7 @@ class _LocationHeaderState extends State<LocationHeader> {
 
     final wheel = _FlagsWheel(
       codes: _codes,
+      bounded: _bounded,
       controller: _pageController!,
       locked: locked,
       style: widget.style,
@@ -903,6 +932,7 @@ class FlagSaturation extends StatelessWidget {
 class _FlagsWheel extends StatefulWidget {
   const _FlagsWheel({
     required this.codes,
+    required this.bounded,
     required this.controller,
     required this.locked,
     required this.style,
@@ -912,6 +942,9 @@ class _FlagsWheel extends StatefulWidget {
   });
 
   final List<String> codes;
+
+  /// A short set: one instance of each flag, no wrap (see [_LocationHeaderState._wheelSpan]).
+  final bool bounded;
   final PageController controller;
   final bool locked;
   final MotionStyle style;
@@ -1161,7 +1194,9 @@ class _FlagsWheelState extends State<_FlagsWheel>
             controller: controller,
             physics: widget.locked ? const NeverScrollableScrollPhysics() : null,
             onPageChanged: widget.onPageChanged,
-            itemCount: null, // unbounded both directions
+            // Unbounded both directions — except a short set, which shows
+            // each flag ONCE instead of repeating it across the strip.
+            itemCount: widget.bounded ? n : null,
             itemBuilder: (context, page) {
               final code = codes[page % n];
               // The flutterfx reading: a neighbour's displacement is driven

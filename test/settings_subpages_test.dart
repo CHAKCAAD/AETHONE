@@ -404,6 +404,28 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.lanternLocation, 'de');
     });
+
+    testWidgets('the tunnel switches commit; Telegram link targets 1822', (
+      tester,
+    ) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(LanternSettingsPage(store: store)));
+      await tester.pumpAndSettle();
+
+      expect(store.coreSettings.lanternUdp, isTrue);
+      expect(store.coreSettings.lanternStrictSocks, isTrue);
+      final udp = find.byKey(const ValueKey('toggle-lantern-udp'));
+      await tester.ensureVisible(udp);
+      await tester.tap(udp);
+      await tester.pumpAndSettle();
+      expect(store.coreSettings.lanternUdp, isFalse);
+
+      expect(
+        LanternSettingsPage.telegramProxyUri.toString(),
+        'tg://socks?server=127.0.0.1&port=1822',
+      );
+    });
   });
 
   group('tor page', () {

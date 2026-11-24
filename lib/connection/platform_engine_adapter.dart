@@ -1322,7 +1322,9 @@ class PlatformEngineAdapter implements EngineAdapter {
           // them (owner round 7: the psiphon tunnel «به مقدار دیتا رد و
           // بدل میشه و بعد دویاره دیتایی رد نمیشه» while the same port's
           // proxy worked).
-          'tcpOnly': mode.tcpOnly,
+          // Lantern — the user's UDP switch (settings › Lantern › Tunnel).
+          'tcpOnly': mode.tcpOnly ||
+              (lantern && !config.coreSettings.lanternUdp),
           // v4.41 (round 17, item 4) — the per-app tunneling pick:
           // 'all' | 'allow' | 'disallow' + the selected packages. The
           // service applies them to the VpnService Builder (allow-list /
@@ -1349,9 +1351,13 @@ class PlatformEngineAdapter implements EngineAdapter {
           // sequential socks.rs) and every plain WARP leg are untouched —
           // evidence: scripts/psiphon_socks_pipeline_check.py (byte-level
           // replay of both sides) + LINUX_RUNTIME_AND_TUNNEL_FIX_REPORT.md.
+          // Lantern joins them when its compatible-handshake switch is on
+          // (default): Telegram stalled on the TUN while its own
+          // sequential SOCKS client on 1822 connected at once.
           'socksStrict':
               overlay == ProtocolId.psiphonChain ||
-              overlay == ProtocolId.psiphonOnly,
+              overlay == ProtocolId.psiphonOnly ||
+              (lantern && config.coreSettings.lanternStrictSocks),
         });
       } on PlatformException catch (e) {
         if (!_stale(gen)) {
