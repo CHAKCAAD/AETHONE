@@ -1,9 +1,11 @@
-/// v4.16 — regression tests for the REAL protocol-selection surface,
-/// pixel-faithful to «صفحه شناور انتخاب پروتکل صفحه اصلی.jpg».
-/// v4.17 — the surface is a FULL PAGE (owner: «در یک صفحه جدا مثل صفحه
-/// اصلی تنظیمات قرار بدیم»): the tests track the page chrome, the yellow-
-/// underline Material fix, the live mode/pill binding, the family-card
-/// breathing and the enlarged ⓘ / × hit targets.
+/// v4.45/v4.46 — regression tests for the protocol-selection BOTTOM SHEET
+/// (the owner's redesign, pixel-faithful to «انتخاب پروتکل.jpg» + the
+/// owner's own Figma CSS): the home protocol card slides a flutterfx-style
+/// sheet up over the scaling home, the 2×6 grid of 159×67 tiles carries the
+/// standing green gradient + 4px ring on the selected protocol, a tap
+/// commits IMMEDIATELY and auto-closes, and a drag (or the barrier) closes
+/// it too. The retired v4.17 full PAGE (segments, family cards, Firefox
+/// card) is gone with its tokens.
 library;
 
 import 'dart:async';
@@ -12,14 +14,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:aethone/app.dart';
+import 'package:aethone/core/app_assets.dart' show ProtocolId;
 import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
-import 'package:aethone/core/app_assets.dart';
 import 'package:aethone/core/design_tokens.dart';
 import 'package:aethone/features/home/home_screen.dart';
 import 'package:aethone/features/home/protocol_sheet/protocol_sheet.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:aethone/l10n/app_strings.dart';
 
 class ScriptedEngine extends EngineAdapter {
   final StreamController<EngineEvent> _controller =
@@ -30,8 +32,6 @@ class ScriptedEngine extends EngineAdapter {
   Future<void> connect() async {}
   @override
   Future<void> disconnect() async {}
-  @override
-  @override
   @override
   void bind(EngineConfigSource config) {} // scripted — config never read
 }
@@ -47,337 +47,337 @@ Widget _booth(Widget child) => MaterialApp(
       home: child,
     );
 
-/// Opens the home, taps the protocol card, rides out the entry cascade.
-Future<void> _openPage(WidgetTester tester, ConnectionStore store) async {
+Future<void> _openSheet(WidgetTester tester, ConnectionStore store) async {
   await tester.pumpWidget(_booth(HomeScreen(store: store)));
   await tester.pumpAndSettle();
-  // The home protocol card shows the selected protocol's own name — the
-  // v1.0.1 cold default is MASQUE (owner decree: «پروتکل دیفالت اپ رو
-  // ماسک قرار بده»).
-  await tester.tap(find.text('ماسک').first);
+  // The home protocol card names the SELECTED protocol — the v4.19 cold
+  // default is WIREGUARD, and a previous pick in the same store renames
+  // the card, so the tap rides the live label.
+  final label = AppStrings.forLocale('fa').protocolName(
+    store.smartDisplayProtocol,
+  );
+  await tester.tap(find.text(label).first);
   await tester.pump();
-  await tester.pumpAndSettle();
+  await tester.pumpAndSettle(); // the flutterfx entrance (scale + slide)
 }
 
-Future<void> _tapAndAutoPop(WidgetTester tester, Finder f) async {
+Future<void> _tapAndAutoClose(WidgetTester tester, Finder f) async {
   await tester.tap(f);
-  await tester.pump(); // selection frame
-  await tester.pump(const Duration(milliseconds: 320)); // auto-pop delay
-  await tester.pumpAndSettle(); // reverse transition
+  await tester.pump(); // the selection frame (commit is immediate)
+  await tester.pump(const Duration(milliseconds: 320)); // the green hold
+  await tester.pumpAndSettle(); // the reverse slide
 }
 
 void main() {
   testWidgets(
-      'the protocol PAGE opens from the home protocol card and shows all 12 '
-      'protocols + the three sections + the page chrome (v4.17)', (tester) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
+    'the BOTTOM SHEET opens over the scaling home (panel + handle + '
+    'barrier; the retired PAGE is gone)', (tester) async {
+      tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
 
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
+      final store = ConnectionStore(engine: ScriptedEngine());
+      await _openSheet(tester, store);
 
-    // The page chrome: title + back/info tiles (settings-page style).
-    expect(find.text('انتخاب پروتکل'), findsOneWidget);
-    expect(find.byKey(const ValueKey('proto-page-back')), findsOneWidget);
-    expect(find.byKey(const ValueKey('proto-page-info')), findsOneWidget);
-    // v4.19 (#10): the owner swapped the sides — the tiles exchanged their
-    // visual slots. The chrome row lays out under the app's RTL
-    // directionality (first Row child = visual RIGHT): the BACK tile now
-    // takes the visual RIGHT slot and the INFO (Telegram) tile the LEFT.
-    final backX = tester.getCenter(find.byKey(const ValueKey('proto-page-back'))).dx;
-    final infoX = tester.getCenter(find.byKey(const ValueKey('proto-page-info'))).dx;
-    expect(backX, greaterThan(infoX));
+      // The chrome: the panel, the drag handle, the dimming barrier.
+      expect(find.byKey(const ValueKey('proto-sheet-panel')), findsOneWidget);
+      expect(find.byKey(const ValueKey('proto-sheet-handle')), findsOneWidget);
 
-    // Section headings (verbatim frame text). v2.1.0 (the owner's
-    // decree): «سرعت اسکن» is BACK on this page (the Firefox card that
-    // replaced it is retired with the whole Firefox protocol).
-    expect(find.text('حالت اتصال'), findsOneWidget);
-    expect(find.text('پروتکل'), findsWidgets);
-    expect(find.text('سرعت اسکن'), findsOneWidget);
+      // v4.45-fixed — the panel rides its OWN palette slot (protoSheetBg),
+      // never the home-card family: the improper merge once left the
+      // panel the SAME color as its chips (cardDark #F4F4F4 in light),
+      // and the whole grid read as one flat blob. The bare booth starts
+      // on the sync's own NIGHT default, so the panel must be the night
+      // sheet #0F1511 — and must DIFFER from the chip color either way.
+      final panelWidget = tester.widget<Container>(
+        find.byKey(const ValueKey('proto-sheet-panel')),
+      );
+      final panelColor =
+          (panelWidget.decoration! as BoxDecoration).color as Color;
+      expect(panelColor, AethColors.protoSheetBg);
+      expect(panelColor, const Color(0xFF0F1511));
+      expect(panelColor, isNot(AethColors.protoSheetChip));
 
-    // The mode segments (frame: تونل right / پروکسی left, proxy selected).
-    expect(find.text('تونل'), findsOneWidget);
-    expect(find.text('پروکسی'), findsOneWidget);
+      // Geometry (the view is 402×874 logical — 1:1 with the frame):
+      // panel 402×565 anchored to the bottom (top = 874 − 565 = 309).
+      final panel = tester.getRect(
+        find.byKey(const ValueKey('proto-sheet-panel')),
+      );
+      expect(panel.left, closeTo(0, 0.5));
+      expect(panel.width, closeTo(402, 1));
+      expect(panel.top, closeTo(874 - AethGeometry.protoSheetH, 1));
+      expect(panel.height, closeTo(AethGeometry.protoSheetH, 1));
 
-    // All 12 protocols: 6 tiles («اتوماتیک» is the frame's own wording) +
-    // the 2 family labels. The pills are unlabeled per the frame.
-    expect(find.text('اتوماتیک'), findsOneWidget);
-    expect(find.text('وایرگارد'), findsOneWidget);
-    expect(find.text('گول'), findsOneWidget);
-    expect(find.text('گول کلاسیک'), findsOneWidget);
-    expect(find.text('میم'), findsOneWidget);
-    expect(find.text('سایفون'), findsOneWidget);
-    expect(find.text('تور'), findsOneWidget);
-    // v2.1.0 — the 5 unlabeled scan pills are BACK on this page
-    // (the pre-PHASE-2 posture restored).
-    expect(find.byKey(const ValueKey('proto-pill-1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('proto-pill-5')), findsOneWidget);
+      // The handle: 97×8, 17 below the panel's top edge, centred.
+      final handle = tester.getRect(
+        find.byKey(const ValueKey('proto-sheet-handle')),
+      );
+      expect(handle.width, closeTo(AethGeometry.protoSheetHandleW, 1));
+      expect(handle.height, closeTo(AethGeometry.protoSheetHandleH, 0.5));
+      expect(
+        handle.top,
+        closeTo(panel.top + AethGeometry.protoSheetHandleTop, 1),
+      );
+      expect(
+        handle.center.dx,
+        closeTo(201, 1),
+        reason: 'horizontally centred on the 402 frame',
+      );
 
-    // RTL grid order (frame row 1): اتوماتیک rightmost, وایرگارد leftmost.
-    final auto = tester.getCenter(find.text('اتوماتیک'));
-    final masqueTile = tester.getCenter(find.byKey(
-      const ValueKey('proto-tile-masque'),
-    ));
-    final wg = tester.getCenter(find.text('وایرگارد'));
-    expect(auto.dx, greaterThan(masqueTile.dx));
-    expect(masqueTile.dx, greaterThan(wg.dx));
+      // The first row's top sits 53 below the panel's top edge (y355).
+      final wg = tester.getRect(
+        find.byKey(const ValueKey('proto-tile-wireguard')),
+      );
+      expect(
+        wg.top,
+        closeTo(panel.top + AethGeometry.protoSheetGridTop, 1),
+      );
+      expect(wg.height, closeTo(AethGeometry.protoSheetCardH, 1));
+      expect(wg.width, closeTo(AethGeometry.protoSheetCardW, 1.5));
 
-    // Geometry spot checks (the view is 402 logical px — 1:1 with the
-    // reference frame): headings, segments, cards, pills.
-    final seg = tester.getCenter(find.text('تونل'));
-    expect(
-      seg.dy,
-      closeTo(AethGeometry.protoSegmentTop + AethGeometry.protoSegmentH / 2, 3),
-    );
-    expect(
-      tester.getCenter(find.text('پروکسی')).dx,
-      lessThan(seg.dx), // پروکسی on the visual LEFT (frame order)
-    );
-
-    final psy = tester.getRect(
-      find.byKey(const ValueKey('proto-card-psiphon')),
-    );
-    expect(psy.top, closeTo(AethGeometry.protoCardTopPsiphon, 2));
-    expect(psy.height, closeTo(AethGeometry.protoCardH, 2));
-    // v4.17: the family cards breathe (h 116) and the tor card follows.
-    final tor = tester.getRect(
-      find.byKey(const ValueKey('proto-card-tor')),
-    );
-    expect(
-      tor.top,
-      closeTo(
-        AethGeometry.protoCardTopPsiphon + AethGeometry.protoCardH + 15,
-        2,
-      ),
-    );
-
-    // v2.1.0 — the content column ends with the scan pills again
-    // (the pre-PHASE-2 posture restored); the section stays inside the
-    // 874-logical frame without scrolling.
-    final pills = tester.getRect(
-      find.byKey(const ValueKey('proto-pill-3')),
-    );
-    expect(pills.top, closeTo(AethGeometry.protoPillTop, 2));
-    expect(
-      pills.bottom,
-      lessThanOrEqualTo(AethGeometry.refHeight),
-      reason: 'the scan pills are the LAST element; nothing renders below '
-          'the frame line',
-    );
-
-    // v1.0.1: the app's cold DEFAULT is MASQUE (owner decree:
-    // «پروتکل دیفالت اپ رو ماسک قرار بده»), so ITS tile renders selected
-    // (green) — the same highlight the WireGuard default carried since
-    // v4.19.
-    final masqueContainer = tester.widget<AnimatedContainer>(
-      find.descendant(
-        of: find.byKey(const ValueKey('proto-tile-masque')),
-        matching: find.byType(AnimatedContainer),
-      ).first,
-    );
-    expect(
-      (masqueContainer.decoration as BoxDecoration).color,
-      AethColors.accentConnected,
-    );
-  });
+      // The barrier dims (flutterfx recipe, alpha 0.38 at full open).
+      final barrier = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('proto-sheet-barrier')),
+      );
+      final barrierColor =
+          (barrier.decoration as BoxDecoration).color as Color;
+      expect(barrierColor.a, closeTo(0.38, 0.04));
+    },
+  );
 
   testWidgets(
-      'tapping a tile commits the protocol and AUTO-POPS back to the home '
-      '(owner: «بعد از انتخاب پروتکل به صورت خودکار کاربر باید به صفحه اول '
-      'بازگردد»)', (tester) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
+    'all 12 protocols render in the frame\'s LTR grid order '
+    '(wireguard LEFT · auto RIGHT)', (tester) async {
+      tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
 
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
+      final store = ConnectionStore(engine: ScriptedEngine());
+      await _openSheet(tester, store);
 
-    await _tapAndAutoPop(tester, find.byKey(const ValueKey('proto-tile-wireguard')));
+      // The frame's own LATIN labels, capitalize (owner CSS).
+      for (final label in [
+        'Wireguard', 'Auto', 'M I M', 'Masq', 'G Classic', 'Gool',
+        'Tor', 'Psiphon', 'T O W', 'P O W', 'W O T', 'W O P',
+      ]) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
 
-    expect(store.selectedProtocol, ProtocolId.wireguard);
-    // Back on the home page: the protocol card now shows the new name and
-    // the page is gone.
-    expect(find.byType(ProtocolPage), findsNothing);
-    expect(find.text('وایرگارد'), findsWidgets);
-  });
+      // LTR-locked reading (the grid never bidi-flips under the fa
+      // locale): wireguard on the visual LEFT, auto on the RIGHT.
+      final wg = tester.getCenter(find.text('Wireguard'));
+      final auto = tester.getCenter(find.text('Auto'));
+      expect(auto.dx, greaterThan(wg.dx));
 
-  testWidgets('a subtile selection (psiphon chain) works the same', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
+      // Column order down the rows: mim below wireguard, masq below auto.
+      expect(
+        tester.getCenter(find.text('M I M')).dy,
+        greaterThan(wg.dy),
+      );
+      expect(
+        tester.getCenter(find.text('Masq')).dx,
+        greaterThan(tester.getCenter(find.text('M I M')).dx),
+      );
 
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
-
-    await _tapAndAutoPop(
-      tester,
-      find.byKey(const ValueKey('proto-subtile-psiphonChain')),
-    );
-
-    // v4.21 — the SINGLE-KNOB commit (owner: the v4.20 leg/overlay split
-    // was reverted, «لطفا به حالت قبل برشگردون»): the subtile IS the
-    // protocol; there is no separate overlay state.
-    expect(store.selectedProtocol, ProtocolId.psiphonChain);
-    expect(store.effectiveProtocol, ProtocolId.psiphonChain);
-    expect(find.byType(ProtocolPage), findsNothing);
-  });
-
-  testWidgets(
-      'v4.21 — the single knob REPLACES the previous selection: a plain '
-      'tile after a family member clears the family mode', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
-
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
-
-    await _tapAndAutoPop(
-      tester,
-      find.byKey(const ValueKey('proto-subtile-psiphonChain')),
-    );
-    expect(store.selectedProtocol, ProtocolId.psiphonChain);
-    expect(store.effectiveProtocol, ProtocolId.psiphonChain);
-
-    // The home card now names the family mode — re-open through it, then
-    // pick a plain tile: the plain protocol REPLACES the family mode (the
-    // v4.20 "overlay survives a leg change" behavior is gone).
-    await tester.tap(find.text('سایفون').first);
-    await tester.pump();
-    await tester.pumpAndSettle();
-    await _tapAndAutoPop(tester, find.byKey(const ValueKey('proto-tile-masque')));
-    expect(store.selectedProtocol, ProtocolId.masque);
-    expect(store.effectiveProtocol, ProtocolId.masque);
-  });
+      // The last row ends 25 above the panel's bottom (867 − 842).
+      final panel = tester.getRect(
+        find.byKey(const ValueKey('proto-sheet-panel')),
+      );
+      final lastRow = tester.getRect(
+        find.byKey(const ValueKey('proto-tile-psiphonReverse')),
+      );
+      expect(
+        panel.bottom - lastRow.bottom,
+        closeTo(25, 2),
+      );
+    },
+  );
 
   testWidgets(
-      'the mode segments apply INSTANTLY (v4.17: the page listens to the '
-      'store — no protocol pick needed first) and stay open',
-      (tester) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
+    'the SELECTED tile carries the standing green gradient + the 4px '
+    'rgba(26,217,149,0.4) ring; the others stay chip-grey', (tester) async {
+      tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
 
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
-    expect(store.connectionMode, ConnectionMode.proxy); // frame default
-    // PHASE-2 REBUILD: the scan pills' default lives on — the VALUE is
-    // untouched by the move (Connection Settings renders it now).
-    // v4.44 — the default is 4 (balanced, the pinned core's own default).
-    expect(store.scanSpeed, 4);
+      final store = ConnectionStore(engine: ScriptedEngine());
+      await _openSheet(tester, store);
+      await tester.pump(const Duration(milliseconds: 300)); // crossfade lands
 
-    await tester.tap(find.text('تونل'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(store.connectionMode, ConnectionMode.tunnel);
-    // v4.17 LIVE binding: the tunnel segment is the SELECTED (green) one
-    // without any protocol pick.
-    final tunnelContainer = tester.widget<AnimatedContainer>(
-      find.ancestor(
-        of: find.text('تونل'),
-        matching: find.byType(AnimatedContainer),
-      ).first,
-    );
-    expect(
-      (tunnelContainer.decoration as BoxDecoration).color,
-      AethColors.accentConnected,
-    );
-    // Still open — the page did not pop.
-    expect(find.byType(ProtocolPage), findsOneWidget);
-  });
+      BoxDecoration tileDecoration(ProtocolId id) {
+        final container = tester.widget<Container>(
+          find.descendant(
+            of: find.byKey(ValueKey('proto-tile-${id.name}')),
+            matching: find.byType(Container),
+          ).first,
+        );
+        return container.decoration! as BoxDecoration;
+      }
 
-  testWidgets(
-      'the v4.17 heading badges: Swap 1 on «پروتکل», Password 1 on '
-      '«حالت اتصال» (PHASE-2 REBUILD: the Scan 1 badge moved with its '
-      'section to Connection Settings)', (tester) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
+      // SELECTED (the line's cold default — MASQUE on the motion line,
+      // v1.0.1): the green gradient core under the 4px translucent green
+      // ring (owner CSS «Rectangle 13»).
+      final selectedDec = tileDecoration(store.smartDisplayProtocol);
+      expect(
+        (selectedDec.gradient as LinearGradient).colors.first,
+        AethColors.accentConnectedGradient.colors.first,
+      );
+      expect(
+        (selectedDec.gradient as LinearGradient).colors.last,
+        AethColors.accentConnectedGradient.colors.last,
+      );
+      final selectedRing = selectedDec.border as Border;
+      expect(
+        selectedRing.top.width,
+        closeTo(AethGeometry.protoSheetCardBorder, 0.1),
+      );
+      expect(
+        selectedRing.top.color.a * 255,
+        closeTo(AethGeometry.protoSheetCardRingAlpha * 255, 6),
+      );
 
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
-
-    bool badgeLoaded(String asset) => find
-        .byWidgetPredicate(
-          (w) =>
-              w is SvgPicture &&
-              w.bytesLoader is SvgAssetLoader &&
-              (w.bytesLoader as SvgAssetLoader).assetName == asset,
-        )
-        .evaluate()
-        .isNotEmpty;
-
-    expect(badgeLoaded(AppAssets.iconSwap1), isTrue,
-        reason: '«پروتکل» badge = Swap 1.svg (v4.17 #8)');
-    expect(badgeLoaded(AppAssets.iconPassword1), isTrue,
-        reason: '«حالت اتصال» badge = Password 1.svg');
-    expect(badgeLoaded(AppAssets.iconScan1), isTrue,
-        reason: 'the «سرعت اسکن» badge is back with its section (v2.1.0)');
-  });
+      // UNSELECTED (auto — never the cold default on this line): the flat
+      // chip fill, no visible ring.
+      final autoDec = tileDecoration(ProtocolId.auto);
+      expect(autoDec.gradient!.colors.first, AethColors.protoSheetChip);
+      expect((autoDec.border as Border).top.color.a, 0);
+    },
+  );
 
   testWidgets(
-      'v4.17: the page renders under a Material — no unmaterialed-text '
-      'yellow underline (the double yellow lines under every text on the '
-      'v4.16 sheet are gone)', (tester) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
+    'a tile tap commits the protocol IMMEDIATELY and AUTO-CLOSES the '
+    'sheet (the v4.16 decree, carried over)', (tester) async {
+      tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
 
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
+      final store = ConnectionStore(engine: ScriptedEngine());
+      await _openSheet(tester, store);
 
-    // The page content must sit under a Material ancestor (the Scaffold).
-    final titleFinder = find.text('انتخاب پروتکل');
-    expect(titleFinder, findsOneWidget);
-    final context = tester.element(titleFinder);
-    expect(Material.maybeOf(context), isNotNull);
-  });
+      await tester.tap(find.byKey(const ValueKey('proto-tile-auto')));
+      await tester.pump(); // the commit is synchronous with the frame
+      expect(store.selectedProtocol, ProtocolId.auto);
+      // The sheet content listens to the store — the green crossfade is
+      // already running (independent of the close ride).
+      expect(find.byKey(const ValueKey('proto-sheet-panel')), findsOneWidget);
 
-  // ------------------------------------------------------------------
-  // PHASE B (Part 1) — the Firefox account card joins the page through
-  // the STANDARD protocol path: one more full-width card after the Tor
-  // card, the same single-knob selection, the same auto-pop. No parallel
-  // channel: the card only commits the protocol; the account chip is a
-  // read-only display of the existing Firefox service state.
-  // ------------------------------------------------------------------
+      await tester.pump(const Duration(milliseconds: 320)); // the hold
+      await tester.pumpAndSettle(); // the reverse slide
+      expect(find.byKey(const ValueKey('proto-sheet-panel')), findsNothing);
+    },
+  );
 
-  // ------------------------------------------------------------------
-  // v2.1.0 (the owner's decree) — the «سرعت اسکن» section is BACK on
-  // the protocol page (the Firefox card that replaced it is retired
-  // with the whole Firefox protocol). The pre-PHASE-2 behavior.
-  // ------------------------------------------------------------------
   testWidgets(
-      'v2.1.0: the scan-speed pills are back on the protocol page '
-      '(tap commits a level; the store persists it)', (tester) async {
-    tester.view.physicalSize = const Size(402 * 3, 874 * 3);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
+    'every one of the 12 tiles commits its own protocol (the flattened '
+    'family modes are first-class)', (tester) async {
+      tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
 
-    final store = ConnectionStore(engine: ScriptedEngine());
-    await _openPage(tester, store);
+      final store = ConnectionStore(engine: ScriptedEngine());
+      await _openSheet(tester, store);
 
-    // All 5 pills render; the widest (level 5) sits at the visual RIGHT.
-    for (var level = 1; level <= 5; level++) {
-      expect(find.byKey(ValueKey('proto-pill-$level')), findsOneWidget);
+      final expectations = <ProtocolId, ProtocolId>{
+        // spot-check the combined modes (the old family subtiles).
+        ProtocolId.psiphonChain: ProtocolId.psiphonChain,
+        ProtocolId.torReverse: ProtocolId.torReverse,
+        ProtocolId.goolClassic: ProtocolId.goolClassic,
+      };
+      for (final entry in expectations.entries) {
+        await _tapAndAutoClose(
+          tester,
+          find.byKey(ValueKey('proto-tile-${entry.key.name}')),
+        );
+        expect(store.selectedProtocol, entry.value);
+        // Selection alone NEVER claims a connection.
+        expect(store.state, VpnState.disconnected);
+        await _openSheet(tester, store); // re-open for the next pick
+      }
+    },
+  );
+
+  testWidgets(
+    'the BARRIER tap closes the sheet; the drag-to-dismiss follows the '
+    'finger (flutterfx handlers)', (tester) async {
+      tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+
+      final store = ConnectionStore(engine: ScriptedEngine());
+      final before = store.selectedProtocol;
+      await _openSheet(tester, store);
+
+      // Barrier tap (a point well above the panel, over the scaled home).
+      await tester.tapAt(const Offset(201, 100));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('proto-sheet-panel')), findsNothing);
+
+      // Re-open (the card names the SELECTED protocol — the line's cold
+      // default, MASQUE), then drag the panel down past halfway → it
+      // dismisses.
+      await tester.tap(
+        find.text(
+          AppStrings.forLocale('fa').protocolName(store.smartDisplayProtocol),
+        ).first,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('proto-sheet-panel')), findsOneWidget);
+      await tester.drag(
+        find.byKey(const ValueKey('proto-sheet-panel')),
+        const Offset(0, 565 * 0.75),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('proto-sheet-panel')), findsNothing);
+      // A dismissal never commits anything on its own.
+      expect(store.selectedProtocol, before);
+    },
+  );
+
+  testWidgets(
+    'v4.46 — the squat-viewport guard: a clamped sheet SCROLLS its grid '
+    '(never overflowS)', (tester) async {
+      // A squat viewport (402×500): the panel clamps to 0.92×500 = 460
+      // and the grid rides a scroll view — nothing overflows, the last
+      // row is reachable, and the sheet still opens and closes. The host
+      // is pumped DIRECTLY with a placeholder mainContent: the motion
+      // line's look-1 home legitimately needs more than 500px (its fixed
+      // session stack under the hero) and that overflow is this test's
+      // noise, not the sheet's guard.
+      tester.view.physicalSize = const Size(402 * 3, 500 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      final store = ConnectionStore(engine: ScriptedEngine());
+      final controller = ProtocolSheetController();
+      await tester.pumpWidget(_booth(ProtocolSheetHost(
+        controller: controller,
+        store: store,
+        mainContent: const SizedBox.expand(),
+      )));
+      await tester.pumpAndSettle();
+      controller.open();
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(find.byType(SingleChildScrollView), findsOneWidget);
+      expect(tester.takeException(), isNull,
+          reason: 'a clamped sheet must never overflow');
+      await tester.tap(find.byKey(const ValueKey('proto-tile-gool')));
+      await tester.pump(const Duration(milliseconds: 320));
+      await tester.pumpAndSettle();
+      expect(store.selectedProtocol, ProtocolId.gool);
+      expect(find.byKey(const ValueKey('proto-sheet-panel')), findsNothing);
     }
-    final l5 = tester.getCenter(find.byKey(const ValueKey('proto-pill-5')));
-    final l1 = tester.getCenter(find.byKey(const ValueKey('proto-pill-1')));
-    expect(l5.dx, greaterThan(l1.dx),
-        reason: 'RTL row: the widest pill renders at the visual RIGHT');
+  );
 
-    // The store's cold default (4) renders selected; a tap commits 2.
-    expect(store.scanSpeed, 4);
-    await tester.tap(find.byKey(const ValueKey('proto-pill-2')));
-    await tester.pumpAndSettle();
-    expect(store.scanSpeed, 2);
-
-    // A scan tap NEVER claims a connection: no engine event arrived, so
-    // the state machine stays at rest (the Firefox card's own rule).
-    expect(store.state, VpnState.disconnected);
-  });
+  testWidgets(
+    'v4.46 — the reference viewport keeps the FIXED grid (no scroll '
+    'view — the whole panel stays drag-to-dismiss)', (tester) async {
+      tester.view.physicalSize = const Size(402 * 3, 874 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      final store = ConnectionStore(engine: ScriptedEngine());
+      await _openSheet(tester, store);
+      expect(find.byType(SingleChildScrollView), findsNothing);
+      expect(find.text('W O P'), findsOneWidget); // the last row is laid out
+    },
+  );
 }

@@ -23,6 +23,15 @@ abstract final class AethColors {
   /// Connected / active accent — owner + pattern XML `#1AD995`.
   static const Color accentConnected = Color(0xFF1AD995);
 
+  /// v4.45 — the owner's standing GREEN gradient (the new protocol-sheet
+  /// selected card): 180° `#2FF8B1 0% → #1AD995 100%` (the owner's own
+  /// Figma CSS).
+  static const LinearGradient accentConnectedGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF2FF8B1), Color(0xFF1AD995)],
+  );
+
   /// Disconnected / error accent — owner + pattern XML `#EA2323`.
   static const Color statusDisconnected = Color(0xFFEA2323);
 
@@ -95,6 +104,18 @@ abstract final class AethColors {
   /// recolor in lockstep with every other surface (never a binary snap,
   /// never a second, offset tween).
   static Color get patternInk => AethThemeSync.palette.patternInk;
+
+  /// Protocol-sheet tile chip bg — light `#F4F4F4` (owner CSS «انتخاب
+  /// پروتکل»); night derives the same raised-chip relation against the
+  /// `#0F1511` sheet (`#1A261C`, the sheetSubtile relation). Theme-dependent.
+  static Color get protoSheetChip => AethThemeSync.palette.protoSheetChip;
+
+  /// Protocol-sheet PANEL surface — light `#FFFFFF` (owner CSS Rectangle
+  /// 88); night `#0F1511` (the raised sheet against the black bg). A
+  /// DEDICATED slot, deliberately NOT [cardDark]: the round-22 re-cut
+  /// made `cardDark` the home-card family (`#F4F4F4` light), which would
+  /// render the panel the SAME color as its own chips. Theme-dependent.
+  static Color get protoSheetBg => AethThemeSync.palette.protoSheetBg;
 
   /// v5.3 — the HOME speed-test button's DISCONNECTED family (the owner's
   /// new CSS «Group 13»): the α layers — light rgba(17,0,0,α) → night
@@ -986,4 +1007,66 @@ abstract final class AethGeometry {
   static const double speedButtonIcon = 28; // the Activity 4 waveform
   static const double speedButtonLabelSize = 16; // «شروع» ink y787–801
   static const double speedGapButtonToLabel = -6; // glow bottom y785 → ink y787
+
+  // -------------------------------------------------------------------
+  // v4.45 — THE PROTOCOL BOTTOM SHEET (owner CSS «انتخاب پروتکل», the
+  // flutterfx bottom-sheet choreography): the 402×565 panel over the
+  // scaling home, the 2×6 grid of 159×67 r17 protocol cards. All values
+  // from the owner's own frame (Rectangle 88/89/13).
+  // -------------------------------------------------------------------
+
+  /// The sheet panel: 402×565 anchored to the screen bottom (top edge
+  /// y302 on the 874 reference), [AethColors.protoSheetBg] (`#FFFFFF`
+  /// light / `#0F1511` night), top corners r38 (pixel-measured on the
+  /// committed frame), shadow `0 -6 64 rgba(0,0,0,0.09)` (owner CSS
+  /// Rectangle 88).
+  static const double protoSheetH = 565;
+  static const double protoSheetRadius = 38;
+  static const double protoSheetShadowDy = -6;
+  static const double protoSheetShadowBlur = 64;
+  static const double protoSheetShadowAlpha = 0.09;
+
+  /// The drag handle: 97×8 fully-rounded pill, horizontally centred,
+  /// 17 below the sheet's top edge (owner CSS Rectangle 89: top 319 −
+  /// sheet top 302), `#F4F4F4` light / [AethColors.protoSheetChip] night.
+  static const double protoSheetHandleW = 97;
+  static const double protoSheetHandleH = 8;
+  static const double protoSheetHandleTop = 17;
+
+  /// The 2×6 protocol grid: cards 159×67 r17, 17 gaps on BOTH axes, page
+  /// inset 33 (33+159+17+159+17 = 385 ≈ 402 − 33 ✓); the first row's top
+  /// sits 53 below the sheet's top edge (frame y355 − 302), the last row
+  /// ends 25 above the sheet's bottom (867 − 842).
+  static const double protoSheetCardW = 159;
+  static const double protoSheetCardH = 67;
+  static const double protoSheetCardRadius = 17;
+  static const double protoSheetCardGap = 17;
+  static const double protoSheetInset = 33;
+  static const double protoSheetGridTop = 53;
+
+  /// The SELECTED card: the standing green gradient under a 4px
+  /// rgba(26,217,149,0.4) ring, white icon + white label (owner CSS
+  /// «Rectangle 13»).
+  static const double protoSheetCardBorder = 4;
+  static const double protoSheetCardRingAlpha = 0.4;
+
+  /// The tile label: IRANYekanX 400, 16/18 — the frame's own text style
+  /// (Latin protocol names, `text-transform: capitalize`).
+  static const double protoSheetLabelSize = 16;
+
+  /// The icon⇒label gap inside a tile (the frame's centered icon+label
+  /// group; measured 18–20 on the wireguard card).
+  static const double protoSheetIconGap = 18;
+
+  /// The flutterfx entrance: while the sheet slides up, the home behind
+  /// it scales to 0.85, rises 24 ref px and rounds its top corners to
+  /// r16 — the repo's own bottom-sheet recipe
+  /// (flutterfx_widgets/lib/bottom-sheet).
+  static const double protoSheetMainScale = 0.85;
+  static const double protoSheetMainRise = 24;
+  static const double protoSheetMainRadius = 16;
+
+  /// The dimming barrier's peak alpha (the flutterfx recipe: black54
+  /// × 0.7).
+  static const double protoSheetBarrierAlpha = 0.38;
 }

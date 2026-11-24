@@ -10,6 +10,7 @@ import 'connection/platform_engine_adapter.dart';
 import 'core/app_theme.dart';
 import 'core/design_tokens.dart';
 import 'core/fx/theme_reveal.dart';
+import 'core/motion.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/onboarding_flow.dart';
 
@@ -158,6 +159,13 @@ class _AethoneAppState extends State<AethoneApp>
       setState(() {});
       return;
     }
+    // v4.46 — the cross-fade rides the SELECTED STYLE'S OWN tempo (owner
+    // report: the theme switch played differently across the motion modes —
+    // the fixed 420 ms clock while the reveal wipe and every other
+    // animated surface scaled). The master kill-switch gate above already
+    // collapsed the OFF case to the instant jump.
+    final style = widget.store.effectiveMotionStyle(context);
+    _themeClock.duration = motionDuration(style, 420);
     _themeClock.animateTo(
       target == AethThemeMode.light ? 1 : 0,
       curve: Curves.linear,

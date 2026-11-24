@@ -34,7 +34,6 @@ import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
 import 'package:aethone/core/motion.dart';
 import 'package:aethone/features/home/home_screen.dart';
-import 'package:aethone/features/home/protocol_sheet/protocol_sheet.dart';
 import 'package:aethone/features/home/widgets/connect_core.dart';
 import 'package:aethone/features/home/widgets/pattern_sides.dart';
 import 'package:aethone/features/shared/circle_selector.dart';
@@ -285,40 +284,13 @@ void main() {
   });
 
   // -------------------------------------------------------------------
-  // CIRCLE SELECTOR — the protocol page rows.
+  // CIRCLE SELECTOR — the bare rows (the retired protocol page's rows).
   // -------------------------------------------------------------------
-  group('circle selector (the protocol page)', () {
-    testWidgets('the protocol page: selecting a tile PUSHES its row '
-        'siblings apart mid-impulse', (tester) async {
-      await _useReferenceSurface(tester);
-      final store = ConnectionStore(engine: ScriptedEngine());
-      await tester.pumpWidget(_booth(HomeScreen(store: store)));
-      await tester.pumpAndSettle();
-
-      // Open the REAL protocol page (the home card names the MASQUE
-      // cold default; the tap opens the page).
-      await tester.tap(find.text('ماسک').first);
-      await tester.pump();
-      await tester.pumpAndSettle();
-      expect(find.byType(ProtocolPage), findsOneWidget);
-
-      // Row 2 (visual right→left): گول · گول کلاسیک · میم. Selecting میم
-      // (the visual LEFT tile) must push گول AWAY from it — to the RIGHT.
-      final gool = find.byKey(const ValueKey('proto-tile-gool'));
-      final restGool = tester.getTopLeft(gool).dx;
-
-      await tester.tap(find.text('میم'));
-      await tester.pump(); // the selection frame
-      await tester.pump(const Duration(milliseconds: 150)); // mid-impulse
-      expect(
-        tester.getTopLeft(gool).dx,
-        greaterThan(restGool),
-        reason: 'the sibling is pushed AWAY from the selected tile',
-      );
-      // Ride out the auto-pop (300 ms) + the reverse transition.
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.pumpAndSettle();
-    });
+  group('circle selector (the bare rows)', () {
+    // v4.45 — the page-integration variant is RETIRED with the protocol
+    // PAGE itself (the home card now opens the BOTTOM SHEET — a static
+    // 2×6 grid, no push-apart rows; the bare-row unit tests below carry
+    // the circle-selector coverage).
 
     testWidgets('a bare row: the push grows, then settles back to the '
         'committed geometry', (tester) async {
@@ -445,35 +417,9 @@ void main() {
   // THE PATTERNS' HOME — v5.3: home + speed page only, still while up.
   // -------------------------------------------------------------------
   group("the patterns' home (v5.3)", () {
-    testWidgets('the protocol page carries NO patterns, connected or not '
-        '(the smoke + the drift are retired there)', (tester) async {
-      await _useReferenceSurface(tester);
-      final engine = ScriptedEngine();
-      final store = ConnectionStore(engine: engine);
-      await tester.pumpWidget(_booth(HomeScreen(store: store)));
-      await tester.pumpAndSettle();
-
-      // Disconnected: the protocol page shows NO pattern canvases at all.
-      await tester.tap(find.text('ماسک').first);
-      await tester.pump();
-      await tester.pumpAndSettle();
-      expect(find.byType(ProtocolPage), findsOneWidget);
-      expect(find.byType(PatternSides), findsNothing,
-          reason: 'the patterns live on the home + speed pages only');
-
-      // Leave, connect, come back: STILL no patterns, no smoke, no drift.
-      await tester.tap(find.byKey(const ValueKey('proto-page-back')));
-      await tester.pump();
-      await tester.pumpAndSettle();
-      await _connect(tester, engine, store);
-      await tester.pump(const Duration(milliseconds: 600));
-      await tester.tap(find.text('ماسک').first);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 600));
-      expect(find.byType(ProtocolPage), findsOneWidget);
-      expect(find.byType(PatternSides), findsNothing,
-          reason: 'the connected ambience is retired on every other page');
-    });
+    // v4.45 — the protocol-page variant is RETIRED with the page (the
+    // sheet overlays the home, so the home's patterns stay mounted behind
+    // it — the stillness coverage lives in the home tests below).
 
     testWidgets('the home patterns DRIFT on the walk, then go STILL the '
         'moment the tunnel is up', (tester) async {

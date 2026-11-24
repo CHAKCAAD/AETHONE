@@ -74,6 +74,8 @@ class AethPal {
     required this.cardIconBg,
     required this.sheetSubtile,
     required this.sheetDescCard,
+    required this.protoSheetChip,
+    required this.protoSheetBg,
     required this.speedTrack,
     required this.speedTrackLive,
     required this.speedCoreRest,
@@ -180,6 +182,23 @@ class AethPal {
   /// (the old descriptions-card fill) / light `#E4E7E5` (derived).
   final Color sheetDescCard;
 
+  /// v4.45 — the protocol BOTTOM SHEET's chip family: the unselected
+  /// protocol cards + the drag handle. Light is the owner's own CSS
+  /// `#F4F4F4` (Rectangle 89 / Rectangle 13 on the `#FFFFFF` sheet);
+  /// night derives the same raised-chip relation against the `#0F1511`
+  /// sheet (`#1A261C` — the sheetSubtile relation).
+  final Color protoSheetChip;
+
+  /// v4.45-fixed — the protocol BOTTOM SHEET's own PANEL surface. This is
+  /// a DEDICATED slot, deliberately NOT the home-card family: on the
+  /// round-22 line `cardDark` became the home cards (`#F4F4F4` light /
+  /// `#1C1C1C` night), which would leave the sheet panel the SAME color
+  /// as its own chips. The owner's CSS is explicit: the sheet is
+  /// `#FFFFFF` in light (Rectangle 88), and night keeps the flutterfx
+  /// line's own raised-panel `#0F1511` against the black bg (the
+  /// sheetSubtile/chip relation documented on [protoSheetChip]).
+  final Color protoSheetBg;
+
   /// Speed gauge track at rest — night `#0A0F0B` (a shade darker than the
   /// bg) / light `#E0E0E0` (derived by the same relation against #EDEDED).
   final Color speedTrack;
@@ -274,6 +293,8 @@ class AethPal {
     cardIconBg: Color(0xFF2D323D),
     sheetSubtile: Color(0xFF1A261C),
     sheetDescCard: Color(0xFF0C120F),
+    protoSheetChip: Color(0xFF1A261C),
+    protoSheetBg: Color(0xFF0F1511),
     speedTrack: Color(0xFF0A0F0B),
     speedTrackLive: Color(0xFF16543B),
     speedCoreRest: Color(0xFF080C09),
@@ -319,6 +340,8 @@ class AethPal {
     cardIconBg: Color(0xFFE8ECEA),
     sheetSubtile: Color(0xFFEFEFEF),
     sheetDescCard: Color(0xFFE4E7E5),
+    protoSheetChip: Color(0xFFF4F4F4), // owner CSS «انتخاب پروتکل»
+    protoSheetBg: Color(0xFFFFFFFF), // owner CSS Rectangle 88 — the sheet
     speedTrack: Color(0xFFE0E0E0),
     speedTrackLive: Color(0xFFC8E9DA),
     // v4.35 (owner round 11, item 9): the light-mode start button follows
@@ -364,6 +387,8 @@ class AethPal {
         cardIconBg: Color.lerp(a.cardIconBg, b.cardIconBg, t)!,
         sheetSubtile: Color.lerp(a.sheetSubtile, b.sheetSubtile, t)!,
         sheetDescCard: Color.lerp(a.sheetDescCard, b.sheetDescCard, t)!,
+        protoSheetChip: Color.lerp(a.protoSheetChip, b.protoSheetChip, t)!,
+        protoSheetBg: Color.lerp(a.protoSheetBg, b.protoSheetBg, t)!,
         speedTrack: Color.lerp(a.speedTrack, b.speedTrack, t)!,
         speedTrackLive: Color.lerp(a.speedTrackLive, b.speedTrackLive, t)!,
         speedCoreRest: Color.lerp(a.speedCoreRest, b.speedCoreRest, t)!,

@@ -83,6 +83,10 @@ flutter:
     - design/آیکون پروتکل ها/گول کلاسیک هردو حالت.svg
     - design/آیکون پروتکل ها/تور هر دو حالت.svg
     - design/آیکون پروتکل ها/سایفون هر دو حالت.svg
+    # v4.45 — the owner's own AUTO mark (the uploaded «آیکون پروتکل
+    # auto.png», committed under the set's single-face naming): a white
+    # crown-like glyph on transparency; ProtocolGlyph owns the ink rule.
+    - design/آیکون پروتکل ها/auto هر دو حالت.png
     # --- v4.33 (owner round 9): the combined-mode icons — the owner's own
     #     SVGs (سایفون اور وارپ / وارپ اور سایفون / تور اور وارپ / وارپ اور
     #     تور) replace the composed aether+chevron stacks on the sub-tiles;

@@ -256,6 +256,15 @@ abstract final class AppAssets {
   static const String protocolTorLogo = _protoTorBoth;
   static const String protocolPsiphonLogo = _protoPsiphonBoth;
 
+  /// v4.45 — the owner's own AUTO protocol mark (the uploaded
+  /// «آیکون پروتکل auto.png», a white-on-transparent 96×92 crown-like
+  /// glyph), committed under the set's single-face naming. The artwork
+  /// is WHITE; ProtocolGlyph tints it with the surface ink (white on the
+  /// selected green card — the file's native face) so it reads on every
+  /// surface in both themes.
+  static const String protocolAutoLogo =
+      '$_protocols/auto هر دو حالت.png';
+
   /// Logo for a transport mode. AUTO/SMART has NO dedicated file in the
   /// owner's round-16 set — pending design decision D-pending (report §6.9
   /// suggests Shield Tick with gold accent); until decided it maps to Shield

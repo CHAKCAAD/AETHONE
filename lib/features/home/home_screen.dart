@@ -49,6 +49,13 @@
 /// a real speed-button/pill gap, and the look-2 connect button rides
 /// the re-cut three-layer «Group 45».
 ///
+/// v4.45 (merged onto the round-23 line, 2026-11-24) — the protocol
+/// selection BOTTOM SHEET: the home protocol card no longer pushes the
+/// v4.19 protocol PAGE; it slides the redesigned flutterfx-style sheet up
+/// over the scaling home (the 2×6 grid of 159×67 r17 protocol cards, the
+/// green-gradient + 4px-ring selected state — the owner's «انتخاب
+/// پروتکل» CSS, see protocol_sheet/protocol_sheet.dart).
+///
 /// State honesty: every visual (colors, ping, speed button, stats) derives
 /// from the REAL [ConnectionStore] state — nothing shows "connected" before
 /// the engine reports it.
@@ -77,10 +84,30 @@ import 'widgets/location_header.dart';
 import 'widgets/pattern_sides.dart';
 import 'widgets/top_bar.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.store});
 
   final ConnectionStore store;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  /// The widget's store, re-exposed under the old name so every method
+  /// reads exactly like the stateless-era code.
+  ConnectionStore get store => widget.store;
+
+  /// v4.45 — the protocol bottom sheet's handle (the flutterfx
+  /// controller pattern): the home protocol card opens the sheet over
+  /// the scaling home instead of pushing the retired protocol page.
+  final ProtocolSheetController _protocolSheet = ProtocolSheetController();
+
+  @override
+  void dispose() {
+    _protocolSheet.detach();
+    super.dispose();
+  }
 
   /// v4.24 — the REAL speed test page (promoted from the v4.14
   /// placeholder sheet; pixel-faithful to the three committed frames).
@@ -109,14 +136,14 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// v4.19 — the REAL protocol-selection PAGE (promoted from the v4.16
-  /// floating sheet per the owner: «در یک صفحه جدا مثل صفحه اصلی تنظیمات
-  /// قرار بدیم»). Selecting a protocol auto-returns here (owner: «بعد از
-  /// انتخاب پروتکل به صورت خودکار کاربر باید به صفحه اول بازگردد»).
-  void _openProtocolPage(BuildContext context) {
-    Navigator.of(context).push(
-      protocolPageRoute(store: store, style: store.effectiveMotionStyle(context)),
-    );
+  /// v4.45 — the protocol selection BOTTOM SHEET (the owner's redesign):
+  /// the home protocol card slides the sheet up over the scaling home
+  /// (the flutterfx bottom-sheet choreography — the 2×6 grid of 159×67
+  /// protocol cards), replacing the retired v4.19 protocol page.
+  /// Selecting a protocol still auto-returns (the sheet closes itself
+  /// after the green crossfade lands).
+  void _openProtocolSheet() {
+    _protocolSheet.open();
   }
 
   /// v4.19 (#3) — tap-to-cancel, owner device test: «حین اتصال کاربر باید
@@ -204,7 +231,14 @@ class HomeScreen extends StatelessWidget {
             // v4.25 — `StackFit.expand` for uniformity with every other page
             // (the pattern-placement fix; home already fills via the Column
             // `Expanded`, but the body now pins itself explicitly).
-            body: Stack(
+            // v4.45 — the protocol BOTTOM SHEET host: the whole home is
+            // the sheet's [mainContent] (it scales/slides/rounds while
+            // the sheet opens — the flutterfx recipe); closed, it renders
+            // untouched.
+            body: ProtocolSheetHost(
+              controller: _protocolSheet,
+              store: store,
+              mainContent: Stack(
               fit: StackFit.expand,
               children: [
                 // v5.3 (the owner's decree: «انیمیشن حاله سبز در حالت اتصال
@@ -307,7 +341,7 @@ class HomeScreen extends StatelessWidget {
                             upBytes: store.upBytes,
                             showConnectButton: true,
                             onProtocolCardTap: () =>
-                                _openProtocolPage(context),
+                                _openProtocolSheet(),
                             onConnect: _toggleConnection,
                             onDisconnect: _toggleConnection,
                           ),
@@ -341,7 +375,7 @@ class HomeScreen extends StatelessWidget {
                           locationHeader: locationHeader,
                           protocolLabel: protocolLabel(strings, showScan),
                           onProtocolCardTap: () =>
-                              _openProtocolPage(context),
+                              _openProtocolSheet(),
                           onSpeedTap: () => _openSpeedTest(context),
                         ),
                       ],
@@ -349,6 +383,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ],
+              ),
             ),
           ),
         );

@@ -133,6 +133,31 @@ void main() {
           0.5,
         ),
       );
+      // v4.45-fixed — the protocol sheet's OWN surface family: the panel
+      // is a DEDICATED slot (light #FFFFFF / night #0F1511) and can never
+      // collapse onto the chip color (light #F4F4F4 / night #1A261C) —
+      // the improper-merge lesson, locked: the unselected cards must
+      // always read AGAINST the panel in both modes.
+      expect(AethPal.light.protoSheetBg, const Color(0xFFFFFFFF));
+      expect(AethPal.night.protoSheetBg, const Color(0xFF0F1511));
+      expect(AethPal.light.protoSheetChip, const Color(0xFFF4F4F4));
+      expect(AethPal.night.protoSheetChip, const Color(0xFF1A261C));
+      expect(
+        AethPal.light.protoSheetBg,
+        isNot(AethPal.light.protoSheetChip),
+      );
+      expect(
+        AethPal.night.protoSheetBg,
+        isNot(AethPal.night.protoSheetChip),
+      );
+      expect(
+        AethPal.lerp(AethPal.light, AethPal.night, 0.5).protoSheetBg,
+        Color.lerp(
+          AethPal.light.protoSheetBg,
+          AethPal.night.protoSheetBg,
+          0.5,
+        ),
+      );
     });
 
     test('v5 «نمای 2» — the look-2 vertical rhythm and the panel crown', () {
@@ -169,6 +194,45 @@ void main() {
       expect(AethGeometry.flagRadiusFactor, 0.47);
       expect(AethGeometry.flagRingSize, 58);
       expect(AethGeometry.flagRingBorder, 4);
+    });
+  });
+
+  group('v4.45 — the protocol BOTTOM SHEET geometry (owner CSS + frame)',
+      () {
+    test('panel, handle, cards, ring and the flutterfx entrance', () {
+      // Panel 402×565, top corners r38, shadow 0 -6 64 rgba(0,0,0,0.09).
+      expect(AethGeometry.protoSheetH, 565);
+      expect(AethGeometry.protoSheetRadius, 38);
+      expect(AethGeometry.protoSheetShadowDy, -6);
+      expect(AethGeometry.protoSheetShadowBlur, 64);
+      expect(AethGeometry.protoSheetShadowAlpha, 0.09);
+      // Handle 97×8, 17 below the top edge.
+      expect(AethGeometry.protoSheetHandleW, 97);
+      expect(AethGeometry.protoSheetHandleH, 8);
+      expect(AethGeometry.protoSheetHandleTop, 17);
+      // Cards 159×67 r17, 17 gaps, 33 inset, first row 53 below the top.
+      expect(AethGeometry.protoSheetCardW, 159);
+      expect(AethGeometry.protoSheetCardH, 67);
+      expect(AethGeometry.protoSheetCardRadius, 17);
+      expect(AethGeometry.protoSheetCardGap, 17);
+      expect(AethGeometry.protoSheetInset, 33);
+      expect(AethGeometry.protoSheetGridTop, 53);
+      // The 2×6 grid arithmetic closes on the 402 frame.
+      expect(
+        AethGeometry.protoSheetInset * 2 +
+            AethGeometry.protoSheetCardW * 2 +
+            AethGeometry.protoSheetCardGap,
+        lessThanOrEqualTo(AethGeometry.refWidth),
+      );
+      // The selected card: the 4px rgba(26,217,149,0.4) ring.
+      expect(AethGeometry.protoSheetCardBorder, 4);
+      expect(AethGeometry.protoSheetCardRingAlpha, 0.4);
+      // The flutterfx entrance recipe: home scale 0.85, rise 24, r16.
+      expect(AethGeometry.protoSheetMainScale, 0.85);
+      expect(AethGeometry.protoSheetMainRise, 24);
+      expect(AethGeometry.protoSheetMainRadius, 16);
+      // The dimming barrier (the flutterfx recipe: black54 × 0.7).
+      expect(AethGeometry.protoSheetBarrierAlpha, 0.38);
     });
   });
 
