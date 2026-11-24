@@ -228,11 +228,6 @@ abstract class EngineAdapter {
   /// Called once by the store right after construction; default no-op
   /// (preview / not-wired adapters never read user config).
   void bind(EngineConfigSource config) {}
-
-  /// Lantern — re-applies the Lantern location pick to a LIVE Lantern
-  /// session (the sidecar switches servers without a reconnect). Default
-  /// no-op for adapters that run no Lantern core.
-  Future<void> applyLanternLocation(String code) async {}
 }
 
 /// Default adapter until the native service lands (M2): fails honestly.

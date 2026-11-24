@@ -262,9 +262,11 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     if (lanternLocation == pick) return;
     lanternLocation = pick;
     notifyListeners();
-    if (_machine.current == VpnState.connected &&
+    final engine = _engine;
+    if (engine is PlatformEngineAdapter &&
+        _machine.current == VpnState.connected &&
         effectiveProtocol.isLantern) {
-      unawaited(_engine.applyLanternLocation(pick));
+      unawaited(engine.applyLanternLocation(pick));
     }
   }
 

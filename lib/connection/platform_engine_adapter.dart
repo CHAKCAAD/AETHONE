@@ -2523,7 +2523,8 @@ class PlatformEngineAdapter implements EngineAdapter {
     }
   }
 
-  @override
+  /// Lantern — re-applies the Lantern location pick to a LIVE Lantern
+  /// session (the sidecar switches servers without a reconnect).
   Future<void> applyLanternLocation(String code) async {
     if (!_lanternActive) return;
     final servers = code == LocationWheelPolicy.autoCode
