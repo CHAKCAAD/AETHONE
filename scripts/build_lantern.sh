@@ -61,6 +61,7 @@ TAGS="novpn,with_gvisor,with_quic,with_wireguard,with_utls,with_grpc"
 LDFLAGS="-s -w -checklinkname=0 -extldflags '-Wl,-z,max-page-size=16384 -Wl,-z,relro -Wl,-z,now -static-libstdc++'"
 
 mkdir -p "$OUT"
+OUT="$(cd "$OUT" && pwd)"   # absolute: the build below runs inside $BRIDGE
 cd "$BRIDGE"
 go mod download
 go mod verify
