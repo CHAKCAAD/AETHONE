@@ -1,8 +1,8 @@
-/// v4.33 — onboarding visual-capture harness (the owner's round-9 reports
-/// were all about these four pages): renders each wizard step to PNG so the
-/// heading sizes, the CTA restyle and the look previews can be verified
-/// against the committed frames. Local-only tooling (zz_ prefix: excluded
-/// from the CI's --exclude-tags? no — it runs, but it only writes /tmp).
+/// v6 — the login visual-capture harness («صفحه ورود»): renders each of
+/// the five login steps to PNG so the sheet/notch/indicator geometry, the
+/// flag circles, the look previews and the nav pills can be verified
+/// against the committed frames (ورود1..ورود5). Local-only tooling (zz_
+/// prefix; it only writes /tmp).
 library;
 
 import 'dart:io';
@@ -17,7 +17,7 @@ import 'package:aethone/app.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
 import 'package:aethone/core/motion.dart';
-import 'package:aethone/features/onboarding/onboarding_flow.dart';
+import 'package:aethone/features/onboarding/login_flow.dart';
 
 // ignore_for_file: avoid_print
 
@@ -75,7 +75,7 @@ Future<void> _save(WidgetTester tester, String name) async {
 void main() {
   Directory('/tmp/ui_shots').createSync(recursive: true);
 
-  testWidgets('render the four wizard steps to PNG (v4.33)', (tester) async {
+  testWidgets('render the five login steps to PNG (v6)', (tester) async {
     tester.view.physicalSize = const Size(402, 874);
     tester.view.devicePixelRatio = 1.0;
     tester.view.padding = const FakeViewPadding(top: 24);
@@ -83,21 +83,19 @@ void main() {
 
     final store = ConnectionStore(engine: EngineNotWiredAdapter());
     store.animationStyle = MotionStyle.off;
-    await tester.pumpWidget(_booth(OnboardingFlow(store: store)));
+    // ورود4's own state: the look step ships the GLOW button picked (the
+    // fresh-install default the restore applies — the bare test store
+    // starts at look one).
+    store.homeLook = HomeLook.two;
+    await tester.pumpWidget(_booth(LoginFlow(store: store)));
     await tester.runAsync(_loadRealFonts);
     await tester.pumpAndSettle();
 
-    await _save(tester, 'ob_step1');
-    for (var i = 0; i < 2; i++) {
-      await tester.tap(find.byKey(const ValueKey('ob-cta')));
+    await _save(tester, 'login_step1');
+    for (var step = 2; step <= 5; step++) {
+      await tester.tap(find.byKey(const ValueKey('login-next')));
       await tester.pumpAndSettle();
+      await _save(tester, 'login_step$step');
     }
-    await _save(tester, 'ob_step3');
-    await tester.tap(find.byKey(const ValueKey('ob-cta')));
-    await tester.pumpAndSettle();
-    // v4.40 — the AUTO/SMART option cards are gone (owner round 15); the
-    // step-4 frame is the mode segments + the scan pills.
-    await tester.ensureVisible(find.byKey(const ValueKey('ob-scan-2')));
-    await _save(tester, 'ob_step4_top');
   });
 }

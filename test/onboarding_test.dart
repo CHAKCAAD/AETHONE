@@ -1,8 +1,9 @@
-/// v4.23 — the first-run wizard («صفحه شروع») test: every step renders its
-/// frame's real chrome (headings verbatim, tiles, segments, cards, pills),
+/// v6 — the first-run login («صفحه ورود») test: the five steps render
+/// their frames' real chrome (the notch indicator, the glyph tile, the
+/// verbatim titles, the flag circles, the look previews, the nav pills),
 /// every pick commits to the store the moment it is tapped, system BACK
-/// walks the wizard to the previous step, and «برو بریم!» runs the branded
-/// scanning wait, then flips the persisted onboarding flag.
+/// walks the login backwards, and «بریم!» flips the persisted onboarding
+/// flag and hands the navigator to the home screen.
 library;
 
 import 'package:flutter/material.dart';
@@ -10,14 +11,11 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:aethone/app.dart';
-import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
-import 'package:aethone/core/design_tokens.dart';
 import 'package:aethone/core/motion.dart';
-import 'package:aethone/features/home/widgets/bottom_panel.dart';
-import 'package:aethone/features/home/widgets/glow_pill.dart';
-import 'package:aethone/features/onboarding/onboarding_flow.dart';
+import 'package:aethone/features/home/home_screen.dart';
+import 'package:aethone/features/onboarding/login_flow.dart';
 
 Widget _booth(Widget child) => MaterialApp(
       locale: const Locale('fa'),
@@ -31,14 +29,15 @@ Widget _booth(Widget child) => MaterialApp(
     );
 
 Future<void> _useReferenceSurface(WidgetTester tester) async {
-  // The wizard's own reference frame: 402×874 (AethGeometry.refWidth).
+  // The login's own reference frame: 402×874 (AethGeometry.refWidth).
   tester.view.physicalSize = const Size(402 * 3, 874 * 3);
   tester.view.devicePixelRatio = 3.0;
   addTearDown(tester.view.reset);
 }
 
-/// Motion OFF everywhere: the AnimatedSwitcher steps land instantly and the
-/// scanning layer never starts its pulse ticker, so pumpAndSettle is honest.
+/// Motion OFF everywhere: the switchers, cascades and pill morphs land
+/// instantly, so pumpAndSettle is honest (the video player never
+/// initializes under the test host — the poster fallback renders instead).
 ConnectionStore makeStore() {
   final store = ConnectionStore(engine: EngineNotWiredAdapter());
   store.animationStyle = MotionStyle.off;
@@ -47,180 +46,160 @@ ConnectionStore makeStore() {
 
 Future<void> _advance(WidgetTester tester, int times) async {
   for (var i = 0; i < times; i++) {
-    await tester.tap(find.byKey(const ValueKey('ob-cta')));
+    await tester.tap(find.byKey(const ValueKey('login-next')));
     await tester.pumpAndSettle();
   }
 }
 
 void main() {
-  group('onboarding wizard (v4.23)', () {
-    testWidgets('step 1 — the language grid renders and commits live', (
+  group('login flow (v6 «صفحه ورود»)', () {
+    testWidgets('step 1 — the welcome frame: title, description, بعدی', (
       tester,
     ) async {
       await _useReferenceSurface(tester);
       final store = makeStore();
-      await tester.pumpWidget(_booth(OnboardingFlow(store: store)));
+      await tester.pumpWidget(_booth(LoginFlow(store: store)));
       await tester.pumpAndSettle();
 
-      // The frame's chrome: heading verbatim, lockup, stepper, CTA.
-      expect(find.text('زبان برنامه چی باشه؟'), findsOneWidget);
-      expect(find.text('AETHONE'), findsOneWidget);
-      expect(find.text('ادامه بده'), findsOneWidget);
+      // The frame's chrome: the notch indicator, the glyph tile, the
+      // verbatim title + description, the single «بعدی» pill.
+      expect(find.byType(LoginStepIndicator), findsOneWidget);
+      expect(find.byKey(const ValueKey('login-icon-box')), findsOneWidget);
+      expect(find.text('برای ماجراجویی آماده‌ای؟'), findsOneWidget);
+      expect(
+        find.textContaining('در چند قدم ساده، با امکانات AETHONE آشنا شو'),
+        findsOneWidget,
+      );
+      expect(find.text('بعدی'), findsOneWidget);
+      expect(find.byKey(const ValueKey('login-next')), findsOneWidget);
+      expect(find.byKey(const ValueKey('login-prev')), findsNothing);
+      expect(find.byKey(const ValueKey('login-go')), findsNothing);
 
-      // All six tiles (5 flags + the gray system tile).
-      for (final id in ['fa', 'tk', 'en', 'zh', 'ru', 'system']) {
+      // The CTA advances to the language step.
+      await _advance(tester, 1);
+      expect(find.text('زبان برنامه'), findsOneWidget);
+    });
+
+    testWidgets('step 2 — the five language circles commit live', (
+      tester,
+    ) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(LoginFlow(store: store)));
+      await tester.pumpAndSettle();
+      await _advance(tester, 1);
+
+      // The frame's five circles: us/tm/ir on the top row, ru/cn below.
+      for (final id in ['en', 'tk', 'fa', 'ru', 'zh']) {
         expect(
-          find.byKey(ValueKey('ob-lang-$id')),
+          find.byKey(ValueKey('login-lang-$id')),
           findsOneWidget,
-          reason: 'language tile $id missing',
+          reason: 'language circle $id missing',
         );
       }
+      expect(find.text('زبان برنامه'), findsOneWidget);
+      // The middle steps carry the pill PAIR.
+      expect(find.byKey(const ValueKey('login-prev')), findsOneWidget);
+      expect(find.byKey(const ValueKey('login-next')), findsOneWidget);
 
-      // A fresh in-memory store follows the system (null) — tapping a flag
-      // commits the override, tapping the gray tile returns to null.
+      // A fresh in-memory store follows the system (null) — the frame's
+      // own display default is 'fa' (the restore's fresh-install pick);
+      // tapping a flag commits the override the moment it lands.
       expect(store.appLocale, isNull);
-      await tester.tap(find.byKey(const ValueKey('ob-lang-fa')));
+      await tester.tap(find.byKey(const ValueKey('login-lang-tk')));
+      await tester.pumpAndSettle();
+      expect(store.appLocale, 'tk');
+      await tester.tap(find.byKey(const ValueKey('login-lang-fa')));
       await tester.pumpAndSettle();
       expect(store.appLocale, 'fa');
-      await tester.tap(find.byKey(const ValueKey('ob-lang-system')));
-      await tester.pumpAndSettle();
-      expect(store.appLocale, isNull);
 
-      // The CTA advances to step 2.
-      await _advance(tester, 1);
-      expect(find.text('ترافیک کدوم کشور مستقیم باشه؟'), findsOneWidget);
+      // System BACK on step 2 walks to the welcome step (the PopScope
+      // contract).
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('برای ماجراجویی آماده‌ای؟'), findsOneWidget);
     });
 
-    testWidgets('step 2 — the staggered routing grid commits; BACK walks', (
+    testWidgets('step 3 — the four routing circles commit live', (
       tester,
     ) async {
       await _useReferenceSurface(tester);
       final store = makeStore();
-      await tester.pumpWidget(_booth(OnboardingFlow(store: store)));
+      await tester.pumpWidget(_booth(LoginFlow(store: store)));
       await tester.pumpAndSettle();
-      await _advance(tester, 1);
+      await _advance(tester, 2);
 
-      // The frame's five tiles: ir/tm top, none mid-left, ru/cn below.
-      for (final id in ['ir', 'tm', 'none', 'ru', 'cn']) {
+      expect(find.text('منطقه مسیریابی'), findsOneWidget);
+      for (final id in ['tm', 'ir', 'ru', 'cn']) {
         expect(
-          find.byKey(ValueKey('ob-route-$id')),
+          find.byKey(ValueKey('login-route-$id')),
           findsOneWidget,
-          reason: 'routing tile $id missing',
+          reason: 'routing circle $id missing',
         );
       }
 
-      // Region picks commit live; «none» stores the null.
-      expect(store.routingRegion, 'ir'); // the store's own default
-      await tester.tap(find.byKey(const ValueKey('ob-route-tm')));
+      // Region picks commit live; the store's own default is 'ir'.
+      expect(store.routingRegion, 'ir');
+      await tester.tap(find.byKey(const ValueKey('login-route-tm')));
       await tester.pumpAndSettle();
       expect(store.routingRegion, 'tm');
-      await tester.tap(find.byKey(const ValueKey('ob-route-none')));
+      await tester.tap(find.byKey(const ValueKey('login-route-ir')));
       await tester.pumpAndSettle();
-      expect(store.routingRegion, isNull);
-
-      // System BACK on step 2 walks to step 1 (the PopScope contract).
-      await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
-      expect(find.text('زبان برنامه چی باشه؟'), findsOneWidget);
+      expect(store.routingRegion, 'ir');
     });
 
-    testWidgets('steps 3–4 — look, mode, protocol cards, scan pills', (
-      tester,
-    ) async {
+    testWidgets('step 4 — the two look previews commit live', (tester) async {
       await _useReferenceSurface(tester);
       final store = makeStore();
-      await tester.pumpWidget(_booth(OnboardingFlow(store: store)));
+      await tester.pumpWidget(_booth(LoginFlow(store: store)));
       await tester.pumpAndSettle();
+      await _advance(tester, 3);
 
-      // Step 3 — the two look previews; the check badge rides the pick.
-      await _advance(tester, 2);
-      expect(find.text('ضاهر دکمه اتصال چجوری باشه؟'), findsOneWidget);
-      // v4.33 — the question heading renders at the FIXED 20px on every
-      // step (owner: «سایز متن سرتیترها توی هر ۴ صفحه باید یکسان باشه»).
-      final q3 = tester.widget<Text>(find.text('ضاهر دکمه اتصال چجوری باشه؟'));
-      expect(q3.style?.fontSize, AethGeometry.obHeadingSize);
+      expect(find.text('ضاهر برنامه'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('login-look-two')),
+        findsOneWidget,
+        reason: 'the look-2 glow preview is missing',
+      );
+      expect(
+        find.byKey(const ValueKey('login-look-one')),
+        findsOneWidget,
+        reason: 'the look-1 hero logo preview is missing',
+      );
+
+      // The pick commits the moment it lands (the store's own default is
+      // look one).
       expect(store.homeLook, HomeLook.one);
-      // v4.33 — the LEFT slot is the home screen's OWN FabColumn (an exact
-      // copy), the RIGHT slot the real ConnectButtonGlow composition.
-      expect(find.byType(FabColumn), findsOneWidget);
-      expect(find.byType(ConnectButtonGlow), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('ob-look-two')));
+      await tester.tap(find.byKey(const ValueKey('login-look-two')));
       await tester.pumpAndSettle();
       expect(store.homeLook, HomeLook.two);
-
-      // Step 4 — «حالت اتصال» segments, «سرعت اسکن». v4.40 (owner round 15:
-      // «حالت پروتکل در تنظیمات اتصال برنامه رو کلا حذف کن»): the AUTO/
-      // SMART option cards are GONE — the step is the mode segments and
-      // the scan pills only.
-      await _advance(tester, 1);
-      expect(find.text('برو بریم!'), findsOneWidget);
-      expect(find.text('اتوماتیک'), findsNothing);
-      expect(find.text('دستی'), findsNothing);
-      // v4.33 — the section headings share the SAME 20px as the question
-      // headings, and sit flush right next to their badges (the flex-split
-      // float is gone).
-      final hMode = tester.widget<Text>(find.text('حالت اتصال').first);
-      expect(hMode.style?.fontSize, AethGeometry.obHeadingSize);
-
-      await tester.tap(find.byKey(const ValueKey('ob-segment-tunnel')));
+      await tester.tap(find.byKey(const ValueKey('login-look-one')));
       await tester.pumpAndSettle();
-      expect(store.connectionMode, ConnectionMode.tunnel);
-
-      await tester.ensureVisible(find.byKey(const ValueKey('ob-scan-2')));
-      await tester.tap(find.byKey(const ValueKey('ob-scan-2')));
-      await tester.pumpAndSettle();
-      expect(store.scanSpeed, 2);
+      expect(store.homeLook, HomeLook.one);
     });
 
-    // v4.33 — the CTA restyle (owner CSS Rectangle 13): the app's own card
-    // corner language (r17) on the dark card ink — never a green pill.
-    // v5.3 — the night card family is the owner's new #1C1C1C.
-    testWidgets('the CTA is the owner-CSS dark box (r17, the card ink)', (
+    testWidgets('«بریم!» — the commit and the handover to home', (
       tester,
     ) async {
       await _useReferenceSurface(tester);
       final store = makeStore();
-      await tester.pumpWidget(_booth(OnboardingFlow(store: store)));
+      await tester.pumpWidget(_booth(LoginFlow(store: store)));
       await tester.pumpAndSettle();
+      await _advance(tester, 4);
 
-      final cta = tester.widget<Container>(
-        find.descendant(
-          of: find.byKey(const ValueKey('ob-cta')),
-          matching: find.byType(Container),
-        ).first,
-      );
-      final deco = cta.decoration! as BoxDecoration;
-      expect(deco.color, AethColors.obCtaBg);
-      expect(
-        (deco.borderRadius as BorderRadius).topLeft,
-        const Radius.circular(AethGeometry.obCtaRadius),
-      );
-      expect(AethGeometry.obCtaRadius, 17);
-      expect(AethGeometry.obCtaH, 62);
-    });
-
-    testWidgets('«برو بریم!» — the scanning wait, then the commit', (
-      tester,
-    ) async {
-      await _useReferenceSurface(tester);
-      final store = makeStore();
-      await tester.pumpWidget(_booth(OnboardingFlow(store: store)));
-      await tester.pumpAndSettle();
-      await _advance(tester, 3); // → step 4
+      // The done frame: the verbatim title, the single «بریم!» pill.
+      expect(find.text('اتمام راه اندازی!'), findsOneWidget);
+      expect(find.byKey(const ValueKey('login-go')), findsOneWidget);
+      expect(find.byKey(const ValueKey('login-prev')), findsNothing);
 
       expect(store.onboardingComplete, isFalse);
-      await tester.tap(find.byKey(const ValueKey('ob-cta'))); // «برو بریم!»
-      await tester.pump(); // the scanning layer mounts
+      await tester.tap(find.byKey(const ValueKey('login-go')));
+      await tester.pump();
 
-      // The branded modal over the blurred step-4 page.
-      expect(find.byKey(const ValueKey('ob-scanning-modal')), findsOneWidget);
-      expect(find.text('در حال پیدا کردن بهترین راه'), findsOneWidget);
-      expect(store.onboardingComplete, isFalse); // still waiting
-
-      // The ~3 s wait fires the commit + the handover to the home route.
-      await tester.pump(const Duration(milliseconds: 3300));
+      // The commit fires immediately; the home route lands (motion off).
       expect(store.onboardingComplete, isTrue);
-      await tester.pumpAndSettle(); // the home route lands (motion off)
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsOneWidget);
     });
   });
 }

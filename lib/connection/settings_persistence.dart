@@ -304,6 +304,14 @@ class SettingsPersistence {
           // scan-deadline-aware ready budget follows it).
           store.scanSpeed = 4;
         }
+        // v6 («صفحه ورود») — the look step's own frame (ورود4) ships the
+        // GLOW button — look two — picked: the wizard OPENS with it
+        // selected, exactly like the language/routing frames ship their
+        // own defaults (فارسی / ایران). Existing installs keep their
+        // standing pick untouched (this block never runs for them).
+        if (!prefs.containsKey(SettingsKeys.homeLook)) {
+          store.homeLook = HomeLook.two;
+        }
       }
       _restored = true;
     } catch (e) {

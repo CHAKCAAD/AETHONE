@@ -439,40 +439,38 @@ class AppStrings {
     AetherLegProtocol.mim => _v['protoMim']!,
   };
 
-  // ---- v4.23 onboarding («صفحه شروع» — fa VERBATIM from the four wizard
-  // frames + «لودینگ اسکن», transcribed off 3–5× crops) ----
-  /// «زبان برنامه چی باشه؟»
-  String get obLanguageTitle => _v['obLanguageTitle']!;
+  // ---- v6 login («صفحه ورود» — fa VERBATIM from the owner's five frames
+  // (ورود1..ورود5), transcribed off 3× crops) ----
+  /// «برای ماجراجویی آماده‌ای؟» — the welcome step's title.
+  String get loginWelcomeTitle => _v['loginWelcomeTitle']!;
 
-  /// «ترافیک کدوم کشور مستقیم باشه؟»
-  String get obRoutingTitle => _v['obRoutingTitle']!;
+  /// «زبان برنامه» — the language step's title.
+  String get loginLanguageTitle => _v['loginLanguageTitle']!;
 
-  /// «ضاهر دکمه اتصال چجوری باشه؟» — the frame's own spelling of ظاهر
-  /// (kept verbatim per the pixel-faithful rule; one-line change if the
-  /// owner prefers the dictionary spelling).
-  String get obLookTitle => _v['obLookTitle']!;
+  /// «منطقه مسیریابی» — the routing step's title.
+  String get loginRoutingTitle => _v['loginRoutingTitle']!;
 
-  /// «ادامه بده» — the CTA of steps 1–3.
-  String get obContinue => _v['obContinue']!;
+  /// «ضاهر برنامه» — the look step's title (the frame's own spelling of
+  /// ظاهر, kept verbatim per the pixel-faithful rule).
+  String get loginLookTitle => _v['loginLookTitle']!;
 
-  /// «برو بریم!» — the CTA of step 4.
-  String get obFinish => _v['obFinish']!;
+  /// «اتمام راه اندازی!» — the done step's title.
+  String get loginDoneTitle => _v['loginDoneTitle']!;
 
-  /// «پروتکل اتوماتیک میخوای؟» — the step-4 section heading.
-  String get obProtocolHeading => _v['obProtocolHeading']!;
+  /// The welcome step's description (the ورود1 block).
+  String get loginWelcomeDesc => _v['loginWelcomeDesc']!;
 
-  /// «دستی» — the manual option card's label («اتوماتیک» reuses
-  /// [protoAutoSheet]).
-  String get obManualLabel => _v['obManualLabel']!;
+  /// The done step's description (the ورود5 block).
+  String get loginDoneDesc => _v['loginDoneDesc']!;
 
-  /// The «اتوماتیک» card body (3 lines on the frame).
-  String get obAutoDesc => _v['obAutoDesc']!;
+  /// «بعدی» — the forward pill.
+  String get loginNext => _v['loginNext']!;
 
-  /// The «دستی» card body (3 lines on the frame).
-  String get obManualDesc => _v['obManualDesc']!;
+  /// «قبلی» — the back pill.
+  String get loginPrev => _v['loginPrev']!;
 
-  /// «در حال پیدا کردن بهترین راه» — the scanning modal's title.
-  String get obLoading => _v['obLoading']!;
+  /// «بریم!» — the last step's pill.
+  String get loginGo => _v['loginGo']!;
 
   /// The language pages' own-name option for Turkmen (Turkmençe).
   String get langTurkmen => _v['langTurkmen']!;
@@ -834,19 +832,19 @@ class AppStrings {
       'echDnsHint': 'مثلاً https://1.1.1.1/dns-query',
       'echDomainLabel': 'دامنهٔ کلید (اختیاری)',
       'echDomainHint': 'پیش‌فرض: cloudflare-ech.com',
-      // v4.23 onboarding — verbatim from the «صفحه شروع» frames.
-      'obLanguageTitle': 'زبان برنامه چی باشه؟',
-      'obRoutingTitle': 'ترافیک کدوم کشور مستقیم باشه؟',
-      'obLookTitle': 'ضاهر دکمه اتصال چجوری باشه؟',
-      'obContinue': 'ادامه بده',
-      'obFinish': 'برو بریم!',
-      'obProtocolHeading': 'پروتکل اتوماتیک میخوای؟',
-      'obManualLabel': 'دستی',
-      'obAutoDesc':
-          'برنامه به‌صورت خودکار روش‌های اتصال پشتیبانی‌شده را بررسی می‌کند و بر اساس موفقیت اتصال، سرعت و پایداری شبکه، مناسب‌ترین گزینه را انتخاب می‌کند.',
-      'obManualDesc':
-          'بعد از ورود به صفحه اصلی برنامه میتونی از لیست پروتکل ها به صورت دستی پروتکل مورد نظرت رو انتخاب کنی. برنامه 5 پروتکل اصلی و 6 پروتکل غیراصلی داره.',
-      'obLoading': 'در حال پیدا کردن بهترین راه',
+      // v6 login — verbatim from the «صفحه ورود» frames (ورود1..ورود5).
+      'loginWelcomeTitle': 'برای ماجراجویی آماده‌ای؟',
+      'loginLanguageTitle': 'زبان برنامه',
+      'loginRoutingTitle': 'منطقه مسیریابی',
+      'loginLookTitle': 'ضاهر برنامه',
+      'loginDoneTitle': 'اتمام راه اندازی!',
+      'loginWelcomeDesc':
+          'در چند قدم ساده، با امکانات AETHONE آشنا شو، حالت اتصال و پروتکل موردنظرت رو انتخاب کن و تنظیمات رو مطابق نیازت شخصی‌سازی کن. ماجراجویی تو برای تجربه‌ای منعطف‌تر از اتصال و کشف مسیرهای مختلف ارتباطی، از همین‌جا شروع می‌شه!',
+      'loginDoneDesc':
+          'همه‌چیز برای شروع آماده‌ست! تنظیمات اولیه رو پشت سر گذاشتی و حالا می‌تونی وارد دنیای AETHONE بشی. به صفحه اصلی برو، اتصال دلخواهت رو برقرار کن و ماجراجویی خودت رو با تجربه‌ای تازه از ارتباط آزادتر آغاز کن!',
+      'loginNext': 'بعدی',
+      'loginPrev': 'قبلی',
+      'loginGo': 'بریم!',
       'langTurkmen': 'Türkmençe',
       'speedTestTitle': 'تست سرعت',
       'speedPhasePing': 'پینگ',
@@ -1145,19 +1143,19 @@ class AppStrings {
       'echDnsHint': 'e.g. https://1.1.1.1/dns-query',
       'echDomainLabel': 'Key domain (optional)',
       'echDomainHint': 'default: cloudflare-ech.com',
-      // v4.23 onboarding.
-      'obLanguageTitle': 'What should the app language be?',
-      'obRoutingTitle': "Which country's traffic should go direct?",
-      'obLookTitle': 'How should the connect button look?',
-      'obContinue': 'Continue',
-      'obFinish': "Let's go!",
-      'obProtocolHeading': 'Want the automatic protocol?',
-      'obManualLabel': 'Manual',
-      'obAutoDesc':
-          'The app automatically checks the supported connection methods and picks the most suitable one based on connection success, speed and network stability.',
-      'obManualDesc':
-          'Once you reach the home screen you can pick your protocol by hand from the list. The app ships 5 main and 6 secondary protocols.',
-      'obLoading': 'Finding the best route',
+      // v6 login.
+      'loginWelcomeTitle': 'Ready for an adventure?',
+      'loginLanguageTitle': 'App language',
+      'loginRoutingTitle': 'Routing region',
+      'loginLookTitle': 'App appearance',
+      'loginDoneTitle': 'Setup complete!',
+      'loginWelcomeDesc':
+          "In a few simple steps, get to know AETHONE's features — pick your connection mode and protocol, and personalize the settings to your needs. Your journey toward a more flexible connection and new routes starts right here!",
+      'loginDoneDesc':
+          "Everything's ready to start! You've finished the initial setup and can now step into the world of AETHONE. Head to the home screen, establish the connection you want, and begin your adventure with a fresher experience of freer communication!",
+      'loginNext': 'Next',
+      'loginPrev': 'Back',
+      'loginGo': "Let's go!",
       'langTurkmen': 'Türkmençe',
       'speedTestTitle': 'Speed Test',
       'speedPhasePing': 'Ping',
@@ -1452,19 +1450,19 @@ class AppStrings {
       'echDnsHint': 'напр. https://1.1.1.1/dns-query',
       'echDomainLabel': 'Домен ключа (необязательно)',
       'echDomainHint': 'по умолчанию: cloudflare-ech.com',
-      // v4.23 onboarding.
-      'obLanguageTitle': 'Какой язык приложения?',
-      'obRoutingTitle': 'Трафик какой страны идёт напрямую?',
-      'obLookTitle': 'Каким должен быть вид кнопки подключения?',
-      'obContinue': 'Продолжить',
-      'obFinish': 'Поехали!',
-      'obProtocolHeading': 'Автоматический протокол?',
-      'obManualLabel': 'Вручную',
-      'obAutoDesc':
-          'Программа автоматически проверяет поддерживаемые способы подключения и выбирает самый подходящий — по успешности подключения, скорости и стабильности сети.',
-      'obManualDesc':
-          'Попав на главный экран, вы сможете выбрать протокол вручную из списка. В программе 5 основных и 6 дополнительных протоколов.',
-      'obLoading': 'Ищем лучший маршрут',
+      // v6 login.
+      'loginWelcomeTitle': 'Готовы к приключению?',
+      'loginLanguageTitle': 'Язык приложения',
+      'loginRoutingTitle': 'Регион маршрутизации',
+      'loginLookTitle': 'Внешний вид приложения',
+      'loginDoneTitle': 'Настройка завершена!',
+      'loginWelcomeDesc':
+          'За несколько простых шагов познакомьтесь с возможностями AETHONE: выберите режим подключения и протокол и настройте всё под себя. Ваше приключение — более гибкое подключение и поиск новых маршрутов — начинается прямо здесь!',
+      'loginDoneDesc':
+          'Всё готово к старту! Первоначальная настройка позади — добро пожаловать в мир AETHONE. Откройте главный экран, установите нужное подключение и начните своё приключение с новым ощущением свободной связи!',
+      'loginNext': 'Далее',
+      'loginPrev': 'Назад',
+      'loginGo': 'Поехали!',
       'langTurkmen': 'Türkmençe',
       'speedTestTitle': 'Тест скорости',
       'speedPhasePing': 'Пинг',
@@ -1759,19 +1757,19 @@ class AppStrings {
       'echDnsHint': '例如 https://1.1.1.1/dns-query',
       'echDomainLabel': '密钥域名（可选）',
       'echDomainHint': '默认：cloudflare-ech.com',
-      // v4.23 onboarding.
-      'obLanguageTitle': '程序用什么语言？',
-      'obRoutingTitle': '哪个国家的流量直连？',
-      'obLookTitle': '连接按钮长什么样？',
-      'obContinue': '继续',
-      'obFinish': '出发！',
-      'obProtocolHeading': '要自动选择协议吗？',
-      'obManualLabel': '手动',
-      'obAutoDesc':
-          '程序会自动检测支持的连接方式，并根据连接成功率、速度与网络稳定性选择最合适的一个。',
-      'obManualDesc':
-          '进入主界面后，你可以从列表中手动选择协议。程序内置 5 个主要协议和 6 个次要协议。',
-      'obLoading': '正在寻找最佳路线',
+      // v6 login.
+      'loginWelcomeTitle': '准备好开始冒险了吗？',
+      'loginLanguageTitle': '应用语言',
+      'loginRoutingTitle': '路由区域',
+      'loginLookTitle': '应用外观',
+      'loginDoneTitle': '初始设置完成！',
+      'loginWelcomeDesc':
+          '只需几个简单步骤，即可熟悉 AETHONE 的各项功能：选择连接模式与协议，并按需个性化设置。你通往更灵活的连接、探索不同通路的冒险，就从这里开始！',
+      'loginDoneDesc':
+          '一切已准备就绪！初始设置已经完成，现在即可进入 AETHONE 的世界。前往主界面，建立你想要的连接，以更自由的通信体验开启你的冒险吧！',
+      'loginNext': '下一步',
+      'loginPrev': '上一步',
+      'loginGo': '出发！',
       'langTurkmen': 'Türkmençe',
       'speedTestTitle': '速度测试',
       'speedPhasePing': 'Ping',
@@ -2076,19 +2074,19 @@ class AppStrings {
       'echDnsHint': 'm. https://1.1.1.1/dns-query',
       'echDomainLabel': 'Açar domeni (hökmany däl)',
       'echDomainHint': 'default: cloudflare-ech.com',
-      // v4.23 onboarding.
-      'obLanguageTitle': 'Programma dili näme bolsun?',
-      'obRoutingTitle': 'Haýsy ýurduň trafigi göni (tunelsiz) gitsin?',
-      'obLookTitle': 'Birikme düwmesi nähili görünsün?',
-      'obContinue': 'Dowam et',
-      'obFinish': 'Başlaýaly!',
-      'obProtocolHeading': 'Awtomatiki protokol isleýärsiňizmi?',
-      'obManualLabel': 'Ellik',
-      'obAutoDesc':
-          'Programma goldanýan birikme usullaryny awtomatiki barlaýar we birikmegiň üstünligine, tizlige we ulagyň durnuklylygyna görä iň laýykyny saýlaýar.',
-      'obManualDesc':
-          'Esasy ekrana baranyňyzda protokoly sanawdan öz eliňiz bilen saýlap bilersiňiz. Programmada 5 esasy we 6 kömekçi protokol bar.',
-      'obLoading': 'Iň gowy ýol gözlenilýär',
+      // v6 login.
+      'loginWelcomeTitle': 'Serüäne taýynmy?',
+      'loginLanguageTitle': 'Programma dili',
+      'loginRoutingTitle': 'Marşrutlaşdyryş sebiti',
+      'loginLookTitle': 'Programma görnüşi',
+      'loginDoneTitle': 'Sazlama tamamlandy!',
+      'loginWelcomeDesc':
+          'Birnäçe ýönekeý ädimde AETHONE-yň mümkinçilikleri bilen tanyş: birikdiriş režimiňizi we islegen protokolyňyzy saýlaň, sazlamalary öz islegleriňize görä sazyň. Has çeýel birikdirişe we dürli aragatnaşyk ýollaryna ýol açýan serüwiňiz şu ýerde başlanýar!',
+      'loginDoneDesc':
+          'Başlamak üçin hemme zat taýyn! Ilkinji sazlamalary üstünlikli tamamlaň we indi AETHONE-yň dünýäsine girebilirsiňiz. Esasy ekrana gaýdyň, islegen birikdirişiňizi goşaň we erkin aragatnaşygyň täze tejribesi bilen öz serüwiňizi başlaň!',
+      'loginNext': 'Indiki',
+      'loginPrev': 'Yza',
+      'loginGo': 'Gidel!',
       'langTurkmen': 'Türkmençe',
       'speedTestTitle': 'Tizlik testi',
       'speedPhasePing': 'Ping',

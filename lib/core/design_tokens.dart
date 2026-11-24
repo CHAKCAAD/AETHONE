@@ -251,6 +251,33 @@ abstract final class AethColors {
   /// art peaks ≈24% over the background — measured on all five frames).
   static const double obPatternOpacity = 0.24;
 
+  // ---- v6 login («صفحه ورود») — the five frames' OWN light palette,
+  // pinned const by construction: the login only ever runs BEFORE a theme
+  // pick exists (the wizard itself owns no theme step — that pick lives in
+  // settings), so following the app palette would render the committed
+  // white design in the night default instead. Every value measured on
+  // the frames. ----
+
+  /// The white bottom sheet (`#FFFFFF`, Rectangle 90).
+  static const Color loginSheet = Color(0xFFFFFFFF);
+
+  /// Titles, labels and chevrons (`#141C16`).
+  static const Color loginInk = Color(0xFF141C16);
+
+  /// The glyph tile + the nav pills' fill (`#F4F4F4`).
+  static const Color loginBox = Color(0xFFF4F4F4);
+
+  /// The welcome/done descriptions (`#000000`, w300).
+  static const Color loginDescInk = Color(0xFF000000);
+
+  /// The INACTIVE indicator dots — white at 60% over the dark notch
+  /// video (rgba(255,255,255,0.6), Rectangle 92–95).
+  static const Color loginDot = Color(0x99FFFFFF);
+
+  /// The unselected look-1 logo tint — the frames' flat gray
+  /// (`#787878`, Group 144's two vectors).
+  static const Color loginLookGray = Color(0xFF787878);
+
   // ---- v4.24 speed test («صفحه تست سرعت») — measured programmatically on
   // the three committed frames (قبل از شروع / در حال تست سرعت / اتمام
   // تست سرعت): tile-box corner grids + polar midline sampling. ----
@@ -1083,4 +1110,94 @@ abstract final class AethGeometry {
   /// The dimming barrier's peak alpha (the flutterfx recipe: black54
   /// × 0.7).
   static const double protoSheetBarrierAlpha = 0.38;
+
+  // -------------------------------------------------------------------
+  // v6 — THE LOGIN FLOW («صفحه ورود», the owner's five committed frames
+  // ورود1..ورود5, 402×874 @3×): every value below measured
+  // programmatically on the frames (sheet-edge scan per column, blob
+  // detection on the flags/buttons, run-length on the indicator row).
+  // Reference pixels, scaled by screenWidth/402.
+  // -------------------------------------------------------------------
+
+  /// The video band: the owner's 1080×1350 mockup renders ASPECT-TRUE
+  /// (no crop — 402 × 1350/1080), pinned to the screen's top edge; the
+  /// sheet's notch (below) reaches 24 px into it at the centre.
+  static const double loginVideoH = 502.5;
+
+  /// The white sheet's flat top edge (the notch cut spans 109→293,
+  /// sinking to [loginNotchBottom]); the sheet's top corners round at
+  /// [loginSheetCorner] (edge scan: y(0)=495 → r 27).
+  static const double loginSheetTop = 468;
+  static const double loginSheetCorner = 27;
+  static const double loginNotchBottom = 492;
+  static const double loginNotchLeft = 109;
+  static const double loginNotchFlatLeft = 148;
+  static const double loginNotchFlatRight = 254;
+  static const double loginNotchRight = 293;
+
+  /// The step indicator — the row inside the notch (y 474, 9 tall): the
+  /// ACTIVE step renders a 55-wide fully-rounded pill, the rest 9-wide
+  /// dots, 7 px gaps; the whole row is 119 wide, centred (x 142–260).
+  static const double loginIndicatorTop = 474;
+  static const double loginIndicatorH = 9;
+  static const double loginIndicatorActiveW = 55;
+  static const double loginIndicatorDotW = 9;
+  static const double loginIndicatorGap = 7;
+
+  /// The glyph tile: 44×44 #F4F4F4 r16 at y 519, centred; the title
+  /// 19/w500 sits at y 574.
+  static const double loginIconBoxSize = 44;
+  static const double loginIconBoxRadius = 16;
+  static const double loginIconBoxTop = 519;
+  static const double loginTitleTop = 574;
+  static const double loginTitleSize = 19;
+
+  /// The per-step glyph boxes (calibrated ink-for-ink against the
+  /// frames' blobs): Filter 1 ink 23×20 → box 32 · Website globe 26×26
+  /// → box 29 · Redo 20×19 → box 30 · Palette 21×21 → box 24.
+  static const double loginGlyphFilter1 = 32;
+  static const double loginGlyphWebsite = 29;
+  static const double loginGlyphRedo = 30;
+  static const double loginGlyphPalette = 24;
+
+  /// The welcome/done description: 256 wide, 15/w300, 20 line-height,
+  /// justified, centred (the frames' own block, top 635/636).
+  static const double loginDescTop = 635;
+  static const double loginDescW = 256;
+  static const double loginDescSize = 15;
+  static const double loginDescLineH = 20 / 15;
+
+  /// The flag circles: 48 px, two rows (top y 626, bottom y 706). The
+  /// LANGUAGE step's five circles — row 1 centres 120/201/282 (pitch 81),
+  /// row 2 centres 159/244 (pitch 85); the ROUTING step's four — row 1
+  /// centres 161/242, row 2 centres 157/242.
+  static const double loginFlagSize = 48;
+  static const double loginLangRow1Top = 626;
+  static const double loginLangRow2Top = 706;
+  static const double loginLangRow1Pitch = 81;
+  static const double loginLangRow2Pitch = 85;
+
+  /// The look step's two previews: the look-2 GLOW button composition at
+  /// the 0.75 scale (the 160 group → 120, centred at x 120 — the frame's
+  /// «Group 45» at (60,624)), and the look-1 HERO logo artwork (3.svg,
+  /// ink 91×101 → box 102) centred at x 272, both centred on y 684.
+  static const double loginLookGroupSize = 120;
+  static const double loginLookGlyphBox = 102;
+  static const double loginLook2CenterX = 120;
+  static const double loginLook1CenterX = 272;
+  static const double loginLookCenterY = 684;
+
+  /// The nav pills: 156×44 r16 at y 795 — steps 2–4 ship the PAIR
+  /// («قبلی» at x 33, «بعدی» at x 213), the first/last steps centre a
+  /// single pill. Labels 16/w400; the chevron rides the pill's OUTER end
+  /// (measured: «بعدی»'s Right-2 at x≈226 single / x≈347 pair, «قبلی»'s
+  /// Left-2 at x≈52.5).
+  static const double loginBtnTop = 795;
+  static const double loginBtnH = 44;
+  static const double loginBtnW = 156;
+  static const double loginBtnRadius = 16;
+  static const double loginBtnPrevLeft = 33;
+  static const double loginBtnNextLeft = 213;
+  static const double loginBtnTextSize = 16;
+  static const double loginBtnChevron = 26;
 }

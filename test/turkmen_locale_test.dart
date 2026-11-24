@@ -30,11 +30,12 @@ void main() {
       await tester.pumpWidget(AethoneApp(store: store));
       await tester.pumpAndSettle(const Duration(milliseconds: 300));
 
-      // The wizard's own continue button — TURKMEN, never the English
+      // The login's own «بعدی» pill — TURKMEN, never the English
       // fallback the v4.41 mapping produced.
       final tk = AppStrings.forLocale('tk');
-      expect(find.text(tk.obContinue), findsWidgets);
-      expect(find.text(AppStrings.forLocale('en').obContinue), findsNothing);
+      expect(find.text(tk.loginNext), findsWidgets);
+      expect(
+          find.text(AppStrings.forLocale('en').loginNext), findsNothing);
     },
   );
 
@@ -57,7 +58,7 @@ void main() {
       // probe element must sit BELOW the MaterialApp's own Localizations
       // tree (the MaterialApp element itself is above it).
       final element = tester.element(
-        find.text(AppStrings.forLocale('tk').obContinue).first,
+        find.text(AppStrings.forLocale('tk').loginNext).first,
       );
       expect(MaterialLocalizations.of(element), isNotNull);
       expect(Localizations.of<WidgetsLocalizations>(
@@ -71,8 +72,8 @@ void main() {
     // The table itself (the v4.41 work, kept): forLocale('tk') is the
     // Turkmen map, and a tk-AMBIENT resolution picks it.
     final tk = AppStrings.forLocale('tk');
-    expect(tk.obLanguageTitle, 'Programma dili näme bolsun?');
-    expect(AppStrings.forLocale('en').obLanguageTitle,
-        isNot(tk.obLanguageTitle));
+    expect(tk.loginLanguageTitle, 'Programma dili');
+    expect(AppStrings.forLocale('en').loginLanguageTitle,
+        isNot(tk.loginLanguageTitle));
   });
 }

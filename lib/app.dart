@@ -12,11 +12,12 @@ import 'core/design_tokens.dart';
 import 'core/fx/theme_reveal.dart';
 import 'core/motion.dart';
 import 'features/home/home_screen.dart';
-import 'features/onboarding/onboarding_flow.dart';
+import 'features/onboarding/login_flow.dart';
 
 /// The AETHONE app shell. Locale: device locale when supported, else Persian
-/// (the design language). The first-run wizard (v4.23, «صفحه شروع»)
-/// takes over until [ConnectionStore.onboardingComplete].
+/// (the design language). The first-run login (v6, «صفحه ورود» — the five
+/// frame login that replaced the v4.23 four-page wizard) takes over until
+/// [ConnectionStore.onboardingComplete].
 ///
 /// v4.34 — LIGHT MODE (owner round 10): the shell owns a 420 ms tween that
 /// lerps [AethPal.night] ↔ [AethPal.light] into the process-wide
@@ -221,7 +222,7 @@ class _AethoneAppState extends State<AethoneApp>
           ],
           home: widget.store.onboardingComplete
               ? HomeScreen(store: widget.store)
-              : OnboardingFlow(store: widget.store),
+              : LoginFlow(store: widget.store),
         );
       },
     );

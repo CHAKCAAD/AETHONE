@@ -191,28 +191,40 @@ abstract final class AppAssets {
   static const String iconLeft2 = '$_icons/Left 2.svg';
   static const String iconHome1 = '$_icons/Home 1.svg';
 
-  // --- v4.23 onboarding («صفحه شروع»): every glyph pixel-matched against
-  // the four wizard frames + the scanning frame (owner-swappable table —
-  // names the owner has not blessed yet are one-line edits here):
-  //   language step (globe)     -> Website (iconWebsite, the set's globe
-  //                                 glyph — VLM-matched against Map.svg)
-  //   routing step (curved arr) -> Redo (iconRedo, the routing family)
-  //   look step (palette)       -> Palette (iconPalette)
-  //   type step (sliders)       -> Setting (iconSetting)
-  //   system-language tile      -> Setting (the gear glyph, dark-indigo
-  //                                 [AethColors.tileGrayInk] tint)
-  //   routing «none» tile       -> Close Circle (dark-indigo tint)
-  //   check badge under the
-  //     selected look preview   -> Tick Circle (dark on green)
-  //   «اتوماتیک» card           -> Shield Star ([autoShieldAmber] on the
-  //                                 green card, white on dark)
-  //   «دستی» card               -> Shield 1 (the set's plain shield)
-  //   CTA chevron               -> Left 2 (iconLeft2 above, white)
-  static const String iconTickCircle = '$_icons/Tick Circle.svg';
+  // --- v4.23 onboarding («صفحه شروع»), RETIRED by the v6 «صفحه ورود»
+  // redesign below: the four-page wizard and its glyph table are gone;
+  // [iconCloseCircle] stays (the settings animations kill-switch row's own
+  // glyph). ---
   static const String iconCloseCircle = '$_icons/Close Circle.svg';
-  static const String iconShield1 = '$_icons/Shield 1.svg';
-  // (iconShieldStar already declared in the settings section above — the
-  // v4.23 re-declaration was a duplicate_definition analyze error.)
+
+  // --- v6 (the «صفحه ورود» redesign — the owner's five committed frames
+  // ورود1..ورود5, every glyph pixel-matched against them):
+  //   welcome/done step (dot-dash)  -> Filter 1 (the ●—/—● glyph, matched
+  //                                     blob-for-blob against ورود1/ورود5)
+  //   language step (globe)          -> Website (iconWebsite above)
+  //   routing step (curved arrow)    -> Redo (iconRedo above)
+  //   look step (palette)            -> Palette (iconPalette above)
+  //   «بعدی» chevron                 -> Right 2 (iconRight2 above, points
+  //                                     RIGHT — measured on the frames)
+  //   «قبلی» chevron                 -> Left 2 (iconLeft2 above)
+  // (owner-swappable table — a one-line edit here.) ---
+  static const String iconFilter1 = '$_icons/Filter 1.svg';
+
+  // --- v6 login assets: the owner's own 6-second loop video (its committed
+  // filename, never renamed), its first-frame poster (shown instantly while
+  // the player warms up — and forever wherever the codec is unavailable,
+  // the widget tests included), and the five pre-rendered GRAYSCALE flag
+  // faces — the frames' unselected state is a SOFT gray no linear ColorFilter
+  // matrix can express (a gamma ≈ 0.75 lift), so the gray faces are baked
+  // once the flags_png way and shipped as assets. ---
+  static const String _loginAssets = 'design/صفحه ورود';
+  static const String loginVideo =
+      '$_loginAssets/app-icon-mockup-1080x1350-6s.mp4';
+  static const String loginPoster = '$_loginAssets/poster.png';
+
+  /// The grayscale face of a login flag by ISO code (lowercase) —
+  /// `us` → gray-us.png. Only the five faces the frames ship are baked.
+  static String loginFlagGray(String code) => '$_loginAssets/gray-$code.png';
 
   // --- v4.24 speed test («صفحه تست سرعت»): the stat-card glyphs. The ping
   // arcs and the DOWN/UP trend squares come from the app's own pack
@@ -370,13 +382,21 @@ abstract final class AppAssets {
         iconLeft2,
         iconHome1,
         // v4.23 — the onboarding set (owner-swappable table above).
-        iconTickCircle,
         iconCloseCircle,
-        iconShield1,
         iconShieldStar,
         // v4.34 — the theme-toggle pair.
         iconSun1,
         iconMoon,
+        // v6 — the «صفحه ورود» set: the wizard glyph + the video, its poster
+        // and every baked grayscale flag face.
+        iconFilter1,
+        loginVideo,
+        loginPoster,
+        loginFlagGray('us'),
+        loginFlagGray('tm'),
+        loginFlagGray('ir'),
+        loginFlagGray('ru'),
+        loginFlagGray('cn'),
         // v4.40 — the owner's round-16 protocol icons: every referenced
         // face of every protocol (both dark and light variants where the
         // owner sent a pair).

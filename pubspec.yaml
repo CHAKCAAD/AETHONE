@@ -28,6 +28,11 @@ dependencies:
   # انتخاب های تنظیمات رو یادش نمیمونه»). Storage: Android
   # SharedPreferences via the first-party plugin.
   shared_preferences: 2.5.3
+  # ---- v6 (the «صفحه ورود» redesign) ----
+  # The new first-run login's top section is the owner's own 6-second
+  # app-icon mockup video, looping INFINITELY («به صورت بی نهایت نمایش
+  # داده میشه») — the first-party video plugin plays the committed asset.
+  video_player: ^2.9.2
 
 dev_dependencies:
   flutter_test:
@@ -191,15 +196,27 @@ flutter:
     - design/آیکون های اپ/Minus.svg
     - design/آیکون های اپ/Left 2.svg
     - design/آیکون های اپ/Home 1.svg
-    # v4.23 (onboarding «صفحه شروع»): the wizard's own glyphs — the check
-    # badge, the two gray-tile glyphs and the two option-card shields (the
-    # full owner-swappable table lives in lib/core/app_assets.dart).
-    - design/آیکون های اپ/Tick Circle.svg
+    # v4.23 (onboarding «صفحه شروع», retired by the v6 «صفحه ورود» redesign):
+    # only Close Circle.svg survives here (the settings kill-switch row's
+    # glyph); Shield Star.svg stays declared above (the settings general
+    # page's own row).
     - design/آیکون های اپ/Close Circle.svg
-    - design/آیکون های اپ/Shield 1.svg
-    - design/آیکون های اپ/Shield Star.svg
     # --- v4.34 light mode (owner round 10): the theme-toggle pair
     # («آیکون با نام Sun 1 برای حالت لایت و آیکون با نام Moon برای حالت
     # نایت مود که هردو در پوشه آیکون های اپ موجود هستند»). ---
     - design/آیکون های اپ/Sun 1.svg
     - design/آیکون های اپ/Moon.svg
+    # --- v6 (the «صفحه ورود» redesign): the wizard's own glyphs — Filter 1
+    # (the welcome/done dot-dash glyph, pixel-matched against the ورود1/ورود5
+    # frames; the globe/curved-arrow/palette glyphs are already declared
+    # above) + the owner's own loop video, its poster frame and the five
+    # pre-rendered GRAYSCALE flag faces (the unselected state's own soft
+    # grays, gamma-matched to the frames — the flags_png precedent). ---
+    - design/آیکون های اپ/Filter 1.svg
+    - design/صفحه ورود/app-icon-mockup-1080x1350-6s.mp4
+    - design/صفحه ورود/poster.png
+    - design/صفحه ورود/gray-us.png
+    - design/صفحه ورود/gray-tm.png
+    - design/صفحه ورود/gray-ir.png
+    - design/صفحه ورود/gray-ru.png
+    - design/صفحه ورود/gray-cn.png

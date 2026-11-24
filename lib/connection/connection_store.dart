@@ -572,11 +572,11 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     notifyListeners();
   }
 
-  // ---- v4.23 onboarding («صفحه شروع») ----
+  // ---- v4.23 onboarding («صفحه شروع», re-cut v6 as «صفحه ورود») ----
 
-  /// True once the first-run wizard has been completed — the shell shows
-  /// [OnboardingFlow] until then, and the flag persists so the wizard
-  /// runs exactly once per install.
+  /// True once the first-run login has been completed — the shell shows
+  /// [LoginFlow] until then, and the flag persists so the login runs
+  /// exactly once per install.
   bool onboardingComplete = false;
 
   /// Commits the wizard: flips [onboardingComplete] (the debounced save
