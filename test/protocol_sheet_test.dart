@@ -273,6 +273,9 @@ void main() {
     // Still open — the page did not pop.
     expect(find.byType(ProtocolPage), findsOneWidget);
 
+    // v-lantern: the Lantern row pushes the pills below the fold — scroll first.
+    await tester.ensureVisible(find.byKey(const ValueKey('proto-pill-2')));
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.byKey(const ValueKey('proto-pill-2')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
