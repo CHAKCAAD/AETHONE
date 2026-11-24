@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="38" viewBox="0 0 28 38" fill="none">
+  <!-- PLACEHOLDER Lantern glyph (feature/lantern-core) - replace with the owner's artwork, same file name. -->
+  <path d="M9 4h10" stroke="#F2B84B" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M14 1v3" stroke="#F2B84B" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M7 8h14l3 5v15l-3 5H7l-3-5V13z" stroke="#F2B84B" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M14 14c2.8 3 3.4 5.4 3.4 7.4a3.4 3.4 0 0 1-6.8 0c0-2 .6-4.4 3.4-7.4z" fill="#F2B84B"/>
+  <path d="M8 37h12" stroke="#F2B84B" stroke-width="2.4" stroke-linecap="round"/>
+</svg>

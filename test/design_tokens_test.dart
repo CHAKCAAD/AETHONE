@@ -135,8 +135,14 @@ void main() {
       expect(TransportModes.psiphonOnly.tcpOnly, isTrue);
     });
 
-    test('all 11 modes are in the table', () {
-      expect(TransportModes.all.length, 11);
+    test('LANTERN is a standalone core on its own 1822 listener', () {
+      expect(TransportModes.lantern.socksEndpoint.port, 1822);
+      expect(TransportModes.lantern.exitKind, ExitKind.lanternExit);
+      expect(TransportModes.lantern.tcpOnly, isFalse);
+    });
+
+    test('all 12 modes are in the table', () {
+      expect(TransportModes.all.length, 12);
     });
   });
 }

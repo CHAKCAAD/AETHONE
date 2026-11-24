@@ -413,6 +413,26 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "coreHoldStatus" -> result.success(CoreHoldService.status())
+                // feature/lantern-core — the Lantern sidecar (LanternSidecar).
+                "lanternStart" -> {
+                    try {
+                        LanternSidecar.start(
+                            this,
+                            call.argument<Int>("port") ?: 1822,
+                            call.argument<String>("dataDir")
+                                ?: File(filesDir, "lantern").absolutePath,
+                            call.argument<String>("locale") ?: "",
+                        )
+                        result.success(null)
+                    } catch (t: Throwable) {
+                        result.error("lanternStartFailed", t.message, null)
+                    }
+                }
+                "lanternStop" -> {
+                    LanternSidecar.stop()
+                    result.success(null)
+                }
+                "lanternStatus" -> result.success(LanternSidecar.status())
                 // v4.21 — the core diagnostics tail (settings log page).
                 "readCoreLog" -> {
                     val tail = call.argument<Int>("tail") ?: 64 * 1024

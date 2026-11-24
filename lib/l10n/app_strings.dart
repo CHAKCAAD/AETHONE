@@ -481,6 +481,7 @@ class AppStrings {
       ProtocolId.psiphonReverse ||
       ProtocolId.psiphonOnly =>
         'protoPsiphon',
+      ProtocolId.lantern => 'protoLantern',
     };
     return _v[key] ?? _v['protoMasque']!;
   }
@@ -520,6 +521,7 @@ class AppStrings {
       'protoMim': 'میم',
       'protoTor': 'تور',
       'protoPsiphon': 'سایفون',
+      'protoLantern': 'لنترن',
       // ---- settings main page (fa verbatim from the design frame; the
       // v4.15 renames are the owner's own words — settings round #5/#8:
       // «متن تنظیمات تور و تنظیمات سایفون به تور و سایفون تغیر کند»,
@@ -827,6 +829,7 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'protoLantern': 'LANTERN',
       'settingsTitle': 'Settings',
       'settingsRouting': 'Routing',
       'settingsRoutingSub': 'Direct routes',
@@ -1127,6 +1130,7 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'protoLantern': 'LANTERN',
       'settingsTitle': 'Настройки',
       'settingsRouting': 'Маршрутизация',
       'settingsRoutingSub': 'Прямые маршруты',
@@ -1425,6 +1429,7 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'protoLantern': 'LANTERN',
       'settingsTitle': '设置',
       'settingsRouting': '路由规则',
       'settingsRoutingSub': '直连路由',
@@ -1729,6 +1734,7 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'protoLantern': 'LANTERN',
       'settingsTitle': 'Sazlamalar',
       'settingsRouting': 'Marşrutizasiýa',
       'settingsRoutingSub': 'Göni marşrutlar',

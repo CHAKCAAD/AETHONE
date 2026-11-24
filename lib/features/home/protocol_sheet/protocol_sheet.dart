@@ -156,7 +156,9 @@ class _ProtocolPageState extends State<ProtocolPage> {
                 SafeArea(
                   child: SingleChildScrollView(
                     child: SizedBox(
-                      height: AethGeometry.refHeight * s,
+                      height: (AethGeometry.refHeight +
+                              AethGeometry.protoLanternShift) *
+                          s,
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
@@ -308,6 +310,27 @@ class _ProtocolPageState extends State<ProtocolPage> {
                                 logoAsset: AppAssets.protocolTorLogo,
                                 // v4.21 — the single-knob selection.
                                 selected: widget.store.selectedProtocol,
+                                pulse: _pulseId,
+                                onSelect: _select,
+                              ),
+                            ),
+                            flavor: EntranceFlavor.action,
+                          ),
+                          // ---- Lantern (feature/lantern-core): a standalone
+                          // core — one plain tile on its own row under the
+                          // tor card (single-knob selection like every tile).
+                          _enter(
+                            6,
+                            Positioned(
+                              top: AethGeometry.protoLanternRowTop * s,
+                              left: AethGeometry.protoRightInset * s,
+                              right: AethGeometry.protoRightInset * s,
+                              child: _TileRow(
+                                ids: const [ProtocolId.lantern],
+                                labels: [
+                                  strings.protocolName(ProtocolId.lantern),
+                                ],
+                                selected: _plainHighlight,
                                 pulse: _pulseId,
                                 onSelect: _select,
                               ),

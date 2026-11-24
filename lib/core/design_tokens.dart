@@ -551,7 +551,12 @@ abstract final class AethGeometry {
   /// Heading row tops on the page: حالت اتصال 96, پروتکل 194, سرعت اسکن 736.
   static const double protoPageHeadingModeTop = 96;
   static const double protoPageHeadingProtocolTop = 194;
-  static const double protoPageHeadingScanTop = 736;
+  /// Lantern row (feature/lantern-core): one plain tile under the tor
+  /// card (710 + 16 = 726, row2 height 94); the scan block moves down by
+  /// [protoLanternShift] = 94 + 16 and the page grows by the same amount.
+  static const double protoLanternRowTop = 726;
+  static const double protoLanternShift = 110;
+  static const double protoPageHeadingScanTop = 736 + protoLanternShift;
 
   /// Segments (تونل | پروکسی): h35 r14, x28..374, gap 21 — RTL order: تونل
   /// (right, first) then پروکسی; the frame ships پروکسی SELECTED (green
@@ -614,7 +619,7 @@ abstract final class AethGeometry {
   /// Scan pills: h36 r8 gap8, CENTERED (row spans x33..367). Widths increase
   /// toward the right; the frame ships the widest (rightmost, 87) SELECTED.
   /// Page top: 40 below its heading top (the sheet's 765→805 rhythm).
-  static const double protoPillTop = 776;
+  static const double protoPillTop = 776 + protoLanternShift;
   static const double protoPillH = 36;
   static const double protoPillRadius = 8;
   static const double protoPillGap = 8;

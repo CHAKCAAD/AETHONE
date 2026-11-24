@@ -351,6 +351,7 @@ env:
   # ---------- exact tool pins (directive 3 of report v3) ----------
   RUST_VERSION:      "1.99.1"     # stable channel 2026-10-15; Aether ships no rust-toolchain, CI pins it
   GO_VERSION:        "1.26.3"     # fork go.mod: `toolchain go1.26.3`; GOTOOLCHAIN=local forbids silent switches
+  LANTERN_GO_VERSION: "1.26.10"   # native/lanternbridge go.mod `go 1.26.10` (Radiance pin needs it)
   ZIG_VERSION:       "0.16.0"     # zeptun 1.1.3 requirement (README: "Zig 0.16.0 is the only requirement")
   ZIG_SHA256_X86_64: 70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
   # v4.36 desktop round — the same Zig pin for the WINDOWS runner (zip form);
@@ -1565,9 +1566,71 @@ jobs:
   # extractNativeLibs=true (app Gradle) so the exec'd Go binaries are real
   # +x files in nativeLibraryDir.
   # =========================================================================
+  # feature/lantern-core — the Lantern sidecar (native/lanternbridge →
+  # liblantern.so, getlantern/radiance with the novpn SOCKS inbound on
+  # 127.0.0.1:1822). Built per ABI, kept per ABI, staged by android-apk.
+  lantern-build:
+    name: Lantern sidecar (${{ matrix.abi }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            goarch: arm64
+            goarm: ""
+          - abi: armeabi-v7a
+            goarch: arm
+            goarm: "7"
+          - abi: x86_64
+            goarch: amd64
+            goarm: ""
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install Go toolchain (Lantern pin)
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ env.LANTERN_GO_VERSION }}
+          cache-dependency-path: native/lanternbridge/go.sum
+      - run: go env -w GOTOOLCHAIN=local
+
+      - name: Install Android NDK (exact pin r26d)
+        id: ndk
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+
+      - name: Verify installed NDK full revision (fail-closed)
+        env:
+          NDK_INSTALLED_FULL: ${{ steps.ndk.outputs.ndk-full-version }}
+        run: |
+          [ "${NDK_INSTALLED_FULL}" = "${NDK_PKG_REVISION}" ] || { echo "::error::NDK ${NDK_INSTALLED_FULL} != ${NDK_PKG_REVISION}"; exit 1; }
+
+      - name: Build liblantern.so for ${{ matrix.abi }}
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          bash scripts/build_lantern.sh \
+            --abi "${{ matrix.abi }}" \
+            --goarch "${{ matrix.goarch }}" --goarm "${{ matrix.goarm }}" \
+            --api-level "$API_LEVEL" \
+            --out "out/lantern/${{ matrix.abi }}"
+
+      - name: Upload Lantern artifact (${{ matrix.abi }})
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lantern-${{ matrix.abi }}
+          path: out/lantern/${{ matrix.abi }}
+          if-no-files-found: error
+
   android-apk:
     name: "Android APK (release + preview-debug — M2: engines embedded)"
-    needs: [flutter-ui, native-build]
+    needs: [flutter-ui, native-build, lantern-build]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -1631,6 +1694,12 @@ jobs:
           path: native-out
           pattern: native-*
 
+      - name: Download Lantern sidecar artifacts (per ABI)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: lantern-out
+          pattern: lantern-*
+
       - name: Stage native cores into jniLibs (all 3 ABIs for the universal release)
         run: |
           set -euo pipefail
@@ -1652,6 +1721,10 @@ jobs:
             cp "$d/aether/pt/lyrebird"             "$JL/$abi/liblyrebird.so"
             cp "$d/aether/pt/psiphon-tunnel-core"  "$JL/$abi/libpsiphon.so"
             cp "$d/zeptun/libzeptun-jni.so"        "$JL/$abi/libzeptun-jni.so"
+            # feature/lantern-core — the Lantern sidecar (fail-closed too).
+            lt="lantern-out/lantern-$abi/liblantern.so"
+            [ -f "$lt" ] || { echo "::error::$abi/liblantern.so missing from the lantern artifact"; exit 1; }
+            cp "$lt"                               "$JL/$abi/liblantern.so"
           done
           echo "staged jniLibs:"; find "$JL" -type f -printf '%p  %s bytes\n' | sort
 
