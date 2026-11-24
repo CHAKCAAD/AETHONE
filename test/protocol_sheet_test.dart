@@ -86,16 +86,18 @@ void main() {
       // v4.45-fixed — the panel rides its OWN palette slot (protoSheetBg),
       // never the home-card family: the improper merge once left the
       // panel the SAME color as its chips (cardDark #F4F4F4 in light),
-      // and the whole grid read as one flat blob. The bare booth starts
-      // on the sync's own NIGHT default, so the panel must be the night
-      // sheet #0F1511 — and must DIFFER from the chip color either way.
+      // and the whole grid read as one flat blob. Round 24 — the night
+      // family is the HOME screen's own dark pair (#000000 panel / chips
+      // #1C1C1C). The bare booth starts on the sync's own NIGHT default,
+      // so the panel must be the night sheet #000000 — and must DIFFER
+      // from the chip color either way.
       final panelWidget = tester.widget<Container>(
         find.byKey(const ValueKey('proto-sheet-panel')),
       );
       final panelColor =
           (panelWidget.decoration! as BoxDecoration).color as Color;
       expect(panelColor, AethColors.protoSheetBg);
-      expect(panelColor, const Color(0xFF0F1511));
+      expect(panelColor, const Color(0xFF000000));
       expect(panelColor, isNot(AethColors.protoSheetChip));
 
       // Geometry (the view is 402×874 logical — 1:1 with the frame):
@@ -155,28 +157,31 @@ void main() {
       final store = ConnectionStore(engine: ScriptedEngine());
       await _openSheet(tester, store);
 
-      // The frame's own LATIN labels, capitalize (owner CSS).
+      // Round 24 — the APP'S OWN localized fa names (the retired frame
+      // Latin labels are gone; the four combined modes carry their full
+      // names, the owner's TOW/WOT/POW/WOP definitions).
       for (final label in [
-        'Wireguard', 'Auto', 'M I M', 'Masq', 'G Classic', 'Gool',
-        'Tor', 'Psiphon', 'T O W', 'P O W', 'W O T', 'W O P',
+        'وایرگارد', 'اتوماتیک', 'میم', 'ماسک', 'گول کلاسیک', 'گول',
+        'تور', 'سایفون', 'تور اور وارپ', 'سایفون اور وارپ',
+        'وارپ اور تور', 'وارپ اور سایفون',
       ]) {
         expect(find.text(label), findsOneWidget, reason: label);
       }
 
       // LTR-locked reading (the grid never bidi-flips under the fa
       // locale): wireguard on the visual LEFT, auto on the RIGHT.
-      final wg = tester.getCenter(find.text('Wireguard'));
-      final auto = tester.getCenter(find.text('Auto'));
+      final wg = tester.getCenter(find.text('وایرگارد'));
+      final auto = tester.getCenter(find.text('اتوماتیک'));
       expect(auto.dx, greaterThan(wg.dx));
 
       // Column order down the rows: mim below wireguard, masq below auto.
       expect(
-        tester.getCenter(find.text('M I M')).dy,
+        tester.getCenter(find.text('میم')).dy,
         greaterThan(wg.dy),
       );
       expect(
-        tester.getCenter(find.text('Masq')).dx,
-        greaterThan(tester.getCenter(find.text('M I M')).dx),
+        tester.getCenter(find.text('ماسک')).dx,
+        greaterThan(tester.getCenter(find.text('میم')).dx),
       );
 
       // The last row ends 25 above the panel's bottom (867 − 842).
@@ -377,7 +382,10 @@ void main() {
       final store = ConnectionStore(engine: ScriptedEngine());
       await _openSheet(tester, store);
       expect(find.byType(SingleChildScrollView), findsNothing);
-      expect(find.text('W O P'), findsOneWidget); // the last row is laid out
+      expect(
+        find.text('وارپ اور سایفون'),
+        findsOneWidget,
+      ); // the last row is laid out
     },
   );
 }

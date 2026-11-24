@@ -312,18 +312,18 @@ void main() {
       // The stats tick lands a NEW value: the look-1 DOWN card decodes it
       // character by character ([HyperText], the ping readout's own walk —
       // v5.2), so MID-decode nothing has landed; after the style's own
-      // window exactly one '148480KB' reads (145 MB in the KB grammar,
-      // «میزان دانلود و آپلود باید از کیلوبایت ثبت بشه نه از مگابایت»).
+      // window exactly one '145.0MB' reads (145 MB in the round-24 unit
+      // ladder — past 1000 KB the counter rolls into MB).
       engine.emit(const EngineStatsUpdated(downBytes: 145 * 1024 * 1024));
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('148480KB'), findsNothing,
+      expect(find.text('145.0MB'), findsNothing,
           reason: 'mid-decode — the walk has not resolved yet');
       // The decode rides a raw 16 ms Timer.periodic — pumpAndSettle
       // cannot advance it (a timer is not a frame) — so the style's own
       // window is pumped explicitly: 480 ms of decode + a tick for the
       // resolved-target commit.
       await tester.pump(const Duration(milliseconds: 600));
-      expect(find.text('148480KB'), findsOneWidget);
+      expect(find.text('145.0MB'), findsOneWidget);
       expect(find.text('--'), findsOneWidget); // the UP card
       await tester.pumpAndSettle();
     });

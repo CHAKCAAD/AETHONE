@@ -130,10 +130,10 @@ void main() {
     expect(find.text('مــتـصـل'), findsOneWidget);
     expect(find.text('غیرفعال'), findsNothing);
     expect(find.text('146 ms'), findsOneWidget);
-    // v5.3 — the KB grammar: 145 MB reads as 148480KB on the DOWN card
-    // («میزان دانلود و آپلود باید از کیلوبایت ثبت بشه نه از مگابایت»).
-    expect(find.text('148480KB'), findsOneWidget);
-    expect(find.text('46080KB'), findsOneWidget);
+    // Round 24 — the unit ladder: 145 MB reads as «145.0MB» on the DOWN
+    // card (past 1000 KB the counter rolls into MB — one decimal).
+    expect(find.text('145.0MB'), findsOneWidget);
+    expect(find.text('45.0MB'), findsOneWidget);
   });
 
   testWidgets('unwired engine fails honestly instead of faking connected', (
@@ -665,11 +665,10 @@ void main() {
 
       expect(find.text('مــتـصـل'), findsOneWidget);
       expect(find.text('146 ms'), findsOneWidget);
-      // The stats row renders the live counters on the sheet (the v5.3 KB
-      // grammar: «148480KB» / «46080KB» — the MB branch is retired by the
-      // owner's decree).
-      expect(find.text('148480KB'), findsOneWidget);
-      expect(find.text('46080KB'), findsOneWidget);
+      // The stats row renders the live counters on the sheet (the round-24
+      // unit ladder: «145.0MB» / «45.0MB» — past 1000 KB it rolls into MB).
+      expect(find.text('145.0MB'), findsOneWidget);
+      expect(find.text('45.0MB'), findsOneWidget);
       expect(
         tester
             .widget<FlagSaturation>(

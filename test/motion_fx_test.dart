@@ -449,6 +449,8 @@ void main() {
 
       // Connected: the drift stops dead — the green state is the STATIC
       // artwork (nothing else animates: no smoke, no lap, no breath).
+      // (Round 24 — look 1's connected logo now BOBS forever, so this
+      // test rides BOUNDED pumps instead of pumpAndSettle.)
       engine.emit(const EngineStateChanged(VpnState.connected));
       engine.emit(const EngineStatsUpdated(
         pingMs: 146,
@@ -456,7 +458,9 @@ void main() {
         upBytes: 0,
         exitCountryCode: 'ir',
       ));
-      await tester.pumpAndSettle();
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       final stillA = tester
           .getTopLeft(find.byKey(const ValueKey('pattern-left-on')))
           .dy;

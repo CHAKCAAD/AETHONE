@@ -106,15 +106,18 @@ abstract final class AethColors {
   static Color get patternInk => AethThemeSync.palette.patternInk;
 
   /// Protocol-sheet tile chip bg — light `#F4F4F4` (owner CSS «انتخاب
-  /// پروتکل»); night derives the same raised-chip relation against the
-  /// `#0F1511` sheet (`#1A261C`, the sheetSubtile relation). Theme-dependent.
+  /// پروتکل»); night rides the HOME dark-mode card family `#1C1C1C`
+  /// (round 24: «رنگ بندی بخش انتخاب پروتکل در حالت دارک مود … باید از
+  /// رنگ های دارک مود صفحه اصلی استفاده کنی»). Theme-dependent.
   static Color get protoSheetChip => AethThemeSync.palette.protoSheetChip;
 
   /// Protocol-sheet PANEL surface — light `#FFFFFF` (owner CSS Rectangle
-  /// 88); night `#0F1511` (the raised sheet against the black bg). A
-  /// DEDICATED slot, deliberately NOT [cardDark]: the round-22 re-cut
-  /// made `cardDark` the home-card family (`#F4F4F4` light), which would
-  /// render the panel the SAME color as its own chips. Theme-dependent.
+  /// 88); night rides the HOME dark-mode page bg `#000000` (round 24:
+  /// the sheet follows the home screen's own dark family — bg panel,
+  /// card chips — instead of the old standalone `#0F1511`). A DEDICATED
+  /// slot, deliberately NOT [cardDark]: the round-22 re-cut made that
+  /// the home-card family (`#F4F4F4` light), which would render the
+  /// panel the SAME color as its own chips. Theme-dependent.
   static Color get protoSheetBg => AethThemeSync.palette.protoSheetBg;
 
   /// v5.3 — the HOME speed-test button's DISCONNECTED family (the owner's
@@ -410,14 +413,16 @@ abstract final class AethGeometry {
   static const double patternLeftAnchor = 0.27;
   static const double patternRightAnchor = 0.485;
 
-  /// v6 (owner round 23: «در نمای 1 صفحه اصلی جایگاه پترن های چپ و راست
-  /// باید متفاوت از نمای 2 باشه … پترن سمت چپ یک سوم پایین تر از وسط
-  /// صفحه و پترن سمت راست باید یک سوم بالاتر از وسط صفحه») — LOOK 1's
-  /// own placement, both connection states: each art's INK CENTRE rides a
-  /// THIRD of the screen away from the middle — the LEFT art a third BELOW
-  /// (5/6 of the height), the RIGHT art a third ABOVE (1/6).
-  static const double patternLeftAnchorLookOne = 1 / 2 + 1 / 3;
-  static const double patternRightAnchorLookOne = 1 / 2 - 1 / 3;
+  /// v6 (owner round 23, RE-CUT round 24: «در نمای 1 صفحه اصلی پترن سمت
+  /// راست رو کمی پایین تر بیار و پترن سمت چپ رو کمی بالاتر ببر در حدی
+  /// که هر دو از وسط صفحه فاصله کمی داشته باشن») — LOOK 1's own
+  /// placement, both connection states: the round-23 third-of-the-screen
+  /// throw is retired — each art's INK CENTRE now rides only a LITTLE off
+  /// the middle: the LEFT art slightly BELOW it (58 % of the live
+  /// height), the RIGHT art slightly ABOVE it (42 %), so the pair frames
+  /// the central connect element instead of leaving the middle empty.
+  static const double patternLeftAnchorLookOne = 0.58;
+  static const double patternRightAnchorLookOne = 0.42;
 
   /// v4.12 — owner «کمی از بالا کل اپ رو فاصله بده تا اپ وارد فرورفتگی
   /// نمایش درصد شارژ و ... گوشی نشه»: extra top gap UNDER the SafeArea so
@@ -1051,8 +1056,15 @@ abstract final class AethGeometry {
   static const double protoSheetCardRingAlpha = 0.4;
 
   /// The tile label: IRANYekanX 400, 16/18 — the frame's own text style
-  /// (Latin protocol names, `text-transform: capitalize`).
+  /// (the app's localized protocol names since round 24).
   static const double protoSheetLabelSize = 16;
+
+  /// Round 24 — ONE icon size for ALL twelve tiles (the owner: «آیکون
+  /// پروتکل ها در صفحه انتخاب پروتکل ها باید در یک سطر باشن الان خیلی
+  /// به هم ریخته و شلخته هستن»): the per-tile calibrated heights (19–34)
+  /// are retired — every glyph renders in the SAME 24 ref-px box so the
+  /// icons read as one aligned row across the whole grid.
+  static const double protoSheetIconSize = 24;
 
   /// The icon⇒label gap inside a tile (the frame's centered icon+label
   /// group; measured 18–20 on the wireguard card).

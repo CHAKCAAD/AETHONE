@@ -123,19 +123,25 @@ class BottomPanel extends StatelessWidget {
     );
   }
 
-  /// v5.3 (the owner's decree: «کارت های نمایش دانلود و آپلود باید مثل
-  /// کارت های نمای 2 حتی تغیرات مصرف کیلوبایتی رو هم باید ثبت کنن و
-  /// میزان دانلود و آپلود باید از کیلوبایت ثبت بشه نه از مگابایت») —
-  /// KB display for BOTH looks: the counters tick at KILOBYTE granularity
-  /// («314KB», never a whole-megabyte jump); zero renders the honest
-  /// «--». Look 1's cards ride the SAME formatter as look 2's row.
+  /// Round 24 (the owner: «کارت های نمایش آپلود و دانلود صفحه اصلی باید
+  /// بعد از رد شدن از 1000 کیلوبایت به واحد بعدی شمارش یعنی مگابایت برن
+  /// در صورتی که در حال حاضر واحد شمارش در کل کیلوبایت هست») — the KB
+  /// granularity stands UP TO 1000 KB; past it the counter rolls into MB
+  /// (one decimal), then GB, then TB. Zero still renders the honest «--».
+  /// Look 1's cards ride the SAME formatter as look 2's row.
   static String formatBytes(int bytes) => formatBytesAdaptive(bytes);
 
-  /// v5 — the look-2 stat row's own format; v5.3: KILOBYTES, always (the
-  /// MB branch is retired by the decree above).
+  /// The unit ladder: integer KB below 1000, then one-decimal MB / GB /
+  /// TB (round 24 — the always-KB grammar is retired).
   static String formatBytesAdaptive(int bytes) {
     if (bytes <= 0) return '--';
-    return '${bytes ~/ 1024}KB';
+    final kb = bytes / 1024.0;
+    if (kb < 1000) return '${kb.floor()}KB';
+    final mb = kb / 1024.0;
+    if (mb < 1000) return '${mb.toStringAsFixed(1)}MB';
+    final gb = mb / 1024.0;
+    if (gb < 1000) return '${gb.toStringAsFixed(1)}GB';
+    return '${(gb / 1024.0).toStringAsFixed(1)}TB';
   }
 }
 

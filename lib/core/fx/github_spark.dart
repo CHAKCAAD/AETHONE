@@ -16,10 +16,17 @@
 /// double rotation, the eased shrink-and-fade, the three shapes and the
 /// 4-second family feel — and re-aims the geometry at the decree: the
 /// sparks are born BEHIND the connect button's centre and POUR OUTWARD
-/// in every direction ("به جهات مختلف"), a quick ONE-SHOT (≈1 s) on the
+/// in every direction ("به جهات مختلف"), a quick ONE-SHOT on the
 /// moment the tunnel really forms, never a steady-state ambience. The
 /// palette is the connected green family (the burst celebrates a REAL
 /// connection — the accent pair plus white), not the demo's violet set.
+///
+/// Round 24 (the owner: «انیمیشن اسپارک بعد از موفقیت اتصال گسترده تر
+/// باشه و سرعتش کمی کمتر باشه تا کاربر بتونه ببینه») — the burst is
+/// WIDER and SLOWER: every spark flies ~2× further out (up to 2.0× the
+/// halo band's radius, vs the old 1.3×), the family is fatter (34 vs
+/// 26) with bigger sparks, and the whole one-shot rides the recipe's
+/// [MotionRecipe.celebrationMs] ×1.5 — the eye can actually follow it.
 ///
 /// House rules (prompt §11.7 / report §10):
 ///  * ONE-SHOT on the state EDGE — a stats re-notify that re-builds the
@@ -47,7 +54,7 @@ class GitHubSparkBurst extends StatefulWidget {
     required this.state,
     required this.style,
     required this.size,
-    this.quantity = 26,
+    this.quantity = 34,
   });
 
   final VpnState state;
@@ -56,8 +63,8 @@ class GitHubSparkBurst extends StatefulWidget {
   /// The outer box (logical px — the caller passes the scaled halo size).
   final double size;
 
-  /// Sparks per burst (the demo ships 50 for a full screen; a button
-  /// burst needs fewer, fatter sparks).
+  /// Sparks per burst (round 24 — 34: the WIDER family the owner asked
+  /// for; the demo ships 50 for a full screen).
   final int quantity;
 
   @override
@@ -96,7 +103,11 @@ class _GitHubSparkBurstState extends State<GitHubSparkBurst>
             old.state == VpnState.starting ||
             old.state == VpnState.waitingForPermissions);
     if (!landed) return;
-    final ms = widget.style.recipe.celebrationMs;
+    // Round 24 — the ×1.5 tempo stretch (the owner: «سرعتش کمی کمتر
+    // باشه تا کاربر بتونه ببینه»): the recipe's celebration slot stays
+    // the style's own base (SILK 950 → 1425 ms, TIDE 1200 → 1800,
+    // SPRING 800 → 1200, BLINK 600 → 900).
+    final ms = (widget.style.recipe.celebrationMs * 1.5).round();
     if (widget.style == MotionStyle.off || ms <= 0) return;
     _spawn();
     _shot
@@ -111,9 +122,12 @@ class _GitHubSparkBurstState extends State<GitHubSparkBurst>
     super.dispose();
   }
 
-  /// The burst's geometry: every spark is born at the centre and flies to
-  /// a random point on the disc of radius [size]/2 — the demo's randomized
-  /// S-curve control points become perpendicular offsets along the way.
+  /// The burst's geometry: every spark is born at the centre and flies
+  /// to a random point on a WIDE disc — round 24: the reach runs
+  /// 0.95–2.0× the halo band's radius (the old 0.55–1.3× family hugged
+  /// the button; the painter spills past its own box freely — the hero
+  /// stack's Clip.none hosts it). The demo's randomized S-curve control
+  /// points become perpendicular offsets along the way.
   void _spawn() {
     final r = widget.size / 2;
     _sparks = [
@@ -122,18 +136,18 @@ class _GitHubSparkBurstState extends State<GitHubSparkBurst>
           start: Offset.zero,
           end: Offset.fromDirection(
             _random.nextDouble() * 2 * math.pi,
-            r * (0.55 + 0.75 * _random.nextDouble()),
+            r * (0.95 + 1.05 * _random.nextDouble()),
           ),
           bend1: Offset.fromDirection(
                 _random.nextDouble() * 2 * math.pi,
-                r * (0.10 + 0.35 * _random.nextDouble()),
+                r * (0.15 + 0.45 * _random.nextDouble()),
               ),
           bend2: Offset.fromDirection(
                 _random.nextDouble() * 2 * math.pi,
-                r * (0.10 + 0.35 * _random.nextDouble()),
+                r * (0.15 + 0.45 * _random.nextDouble()),
               ) +
-              Offset(0, -r * 0.18), // the rising bias of the demo's walk
-          size: 3 + _random.nextDouble() * 5,
+              Offset(0, -r * 0.22), // the rising bias of the demo's walk
+          size: 3.5 + _random.nextDouble() * 5.5,
           color: _palette[_random.nextInt(_palette.length)],
           shape: _SparkShape.values[_random.nextInt(
             _SparkShape.values.length,

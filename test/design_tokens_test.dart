@@ -134,14 +134,15 @@ void main() {
         ),
       );
       // v4.45-fixed — the protocol sheet's OWN surface family: the panel
-      // is a DEDICATED slot (light #FFFFFF / night #0F1511) and can never
-      // collapse onto the chip color (light #F4F4F4 / night #1A261C) —
-      // the improper-merge lesson, locked: the unselected cards must
-      // always read AGAINST the panel in both modes.
+      // is a DEDICATED slot (light #FFFFFF / night #000000 — round 24:
+      // the home screen's own page-bg pair) and can never collapse onto
+      // the chip color (light #F4F4F4 / night #1C1C1C — the home card
+      // family) — the improper-merge lesson, locked: the unselected
+      // cards must always read AGAINST the panel in both modes.
       expect(AethPal.light.protoSheetBg, const Color(0xFFFFFFFF));
-      expect(AethPal.night.protoSheetBg, const Color(0xFF0F1511));
+      expect(AethPal.night.protoSheetBg, const Color(0xFF000000));
       expect(AethPal.light.protoSheetChip, const Color(0xFFF4F4F4));
-      expect(AethPal.night.protoSheetChip, const Color(0xFF1A261C));
+      expect(AethPal.night.protoSheetChip, const Color(0xFF1C1C1C));
       expect(
         AethPal.light.protoSheetBg,
         isNot(AethPal.light.protoSheetChip),
@@ -186,10 +187,11 @@ void main() {
       expect(AethGeometry.patternRightAspect, 1848 / 594);
       expect(AethGeometry.patternLeftAnchor, 0.27);
       expect(AethGeometry.patternRightAnchor, 0.485);
-      // v6 — LOOK 1's own placement: each art's ink centre a third of the
-      // screen away from the middle (left BELOW, right ABOVE).
-      expect(AethGeometry.patternLeftAnchorLookOne, closeTo(1 / 2 + 1 / 3, 1e-9));
-      expect(AethGeometry.patternRightAnchorLookOne, closeTo(1 / 2 - 1 / 3, 1e-9));
+      // Round 24 — the look-1 anchors: each art's ink centre only a
+      // LITTLE off the middle (the round-23 third-of-screen throw is
+      // retired): left slightly BELOW (58 %), right slightly ABOVE (42 %).
+      expect(AethGeometry.patternLeftAnchorLookOne, 0.58);
+      expect(AethGeometry.patternRightAnchorLookOne, 0.42);
       // The circular flag clips + the «Ellipse 74» ring.
       expect(AethGeometry.flagRadiusFactor, 0.47);
       expect(AethGeometry.flagRingSize, 58);

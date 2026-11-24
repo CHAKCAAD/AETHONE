@@ -68,8 +68,8 @@ import '../../connection/connection_state.dart';
 import '../../connection/connection_store.dart';
 import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
-import '../../core/fx/connect_ripple.dart';
 import '../../core/fx/github_spark.dart';
+import '../../core/fx/hero_bob.dart';
 import '../../core/motion.dart';
 import '../../core/motion_widgets.dart';
 import '../../l10n/app_strings.dart';
@@ -190,8 +190,9 @@ class _HomeScreenState extends State<HomeScreen> {
         // تلاش برای اتصال رو چرا حذف کردی؟ برشگردون به حالت قبل») — the
         // SPARK LOADER's walk flag is BACK: every state in which the
         // engine walks toward a session marches look 1's logo in quarter
-        // turns ([SparkLoaderSpin]); look 2's connecting story is the
-        // flutterfx RIPPLE family instead ([ConnectRipple]).
+        // turns ([SparkLoaderSpin]); round 24 — look 2's connecting story
+        // rides the button's OWN layers ([ConnectButtonGlow]'s walk
+        // breath), and the round-23 ripple family behind it is RETIRED.
         final walking = !connected &&
             (store.state == VpnState.starting ||
                 store.state == VpnState.waitingForPermissions ||
@@ -402,14 +403,25 @@ class _HomeScreenState extends State<HomeScreen> {
   /// v6 (owner round 23) — the WALK and the LANDING are re-cut, one look
   /// each: the halo's own walk vocabulary sleeps on BOTH looks now —
   /// LOOK 1's walk is the RESTORED spark-loader march on the logo itself
-  /// («برشگردون به حالت قبل»), LOOK 2's is the flutterfx RIPPLE family
-  /// breathing behind the button ([ConnectRipple]), and the walk's
-  /// landing flourish — the connecting→connected edge — is the GITHUB
-  /// SPARK burst ([GitHubSparkBurst]): sparks pour from BEHIND the
-  /// button in every direction, once («وقتی اتصال شکل گرفت باید از
-  /// انیمیشن GitHub Spark استفاده بشه و از پشت دکمه اتصال وسط صفحه به
-  /// سرعت اسپارک به جهات مختلف بریزه»). The CONNECTED steady state
-  /// stays perfectly still (the round-22 decree stands).
+  /// («برشگردون به حالت قبل»), and the walk's landing flourish — the
+  /// connecting→connected edge — is the GITHUB SPARK burst
+  /// ([GitHubSparkBurst]): sparks pour from BEHIND the button in every
+  /// direction, once («وقتی اتصال شکل گرفت باید از انیمیشن GitHub Spark
+  /// استفاده بشه و از پشت دکمه اتصال وسط صفحه به سرعت اسپارک به جهات
+  /// مختلف بریزه»).
+  ///
+  /// Round 24 — TWO re-cuts land here:
+  ///  * LOOK 2's walk story moves ONTO the button's own layers
+  ///    ([ConnectButtonGlow]'s walk breath — the owner: «انیمیشن روی دکمه
+  ///    اتصال نمای 2 باید روی لایه های خود دکمه اعمال بشه …») and the
+  ///    round-23 [ConnectRipple] family that painted circles BEHIND the
+  ///    button is RETIRED — nothing is created behind the button anymore;
+  ///  * LOOK 1's CONNECTED state owns a quick vertical bob ([HeroBob] —
+  ///    the owner: «آیکون اتصال وسط صفحه در نمای1 در حالت متصل یه
+  ///    انیمیشن حرکت به بالا و پایین سریع داشته باشه که صفحه در حالت
+  ///    متصل زیادی خشک نباشه … برای میزان سریع بودنش هم میتونی از
+  ///    انیمیشن چرخش هنگام تلاش برای اتصال همین دکمه الهام بگیری») —
+  ///    the spark-march cadence re-aimed at a vertical lift.
   ///
   /// v5.1 (owner round 20) — THE HALOS ARE LAYOUT-NEUTRAL: every layer
   /// bigger than the central element rides an [OverflowBox] pinned to the
@@ -461,14 +473,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     hideConnectedAura: true,
                     size: haloSize,
                   ),
-                  // LOOK 2's connecting animation — the flutterfx ripple
-                  // family behind the button (owner round 23).
-                  if (!isLookOne)
-                    ConnectRipple(
-                      state: store.state,
-                      style: style,
-                      size: haloSize,
-                    ),
                   // The landing flourish, both looks — the GitHub-spark
                   // one-shot on the connecting→connected edge.
                   GitHubSparkBurst(
@@ -476,6 +480,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: style,
                     size: haloSize,
                   ),
+                  // (Round 24 — LOOK 2's walk story moved ONTO the button's
+                  // own layers (ConnectButtonGlow's walk breath): the
+                  // round-23 ConnectRipple family that painted circles
+                  // BEHIND the button is RETIRED — nothing mounts here.)
                 ],
               ),
             ),
@@ -485,16 +493,22 @@ class _HomeScreenState extends State<HomeScreen> {
           state: store.state,
           style: style,
           child: isLookOne
-              ? PressSpring(
+              ? HeroBob(
+                  // Round 24 — the connected-state vertical lift (the
+                  // spark-march cadence re-aimed at a quick up-down).
+                  active: store.state == VpnState.connected,
                   style: style,
-                  onTap: _toggleConnection,
-                  // v6 — the spark march is BACK for the walk (owner
-                  // round 23); the 58° pose + the gradient tint stay the
-                  // state APPEARANCE, never looping motion.
-                  child: HeroLogo(
-                    connected: connected,
+                  child: PressSpring(
                     style: style,
-                    sparking: walking,
+                    onTap: _toggleConnection,
+                    // v6 — the spark march is BACK for the walk (owner
+                    // round 23); the 58° pose + the gradient tint stay the
+                    // state APPEARANCE, never looping motion.
+                    child: HeroLogo(
+                      connected: connected,
+                      style: style,
+                      sparking: walking,
+                    ),
                   ),
                 )
               : _CenterConnectButton(

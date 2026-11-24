@@ -185,18 +185,21 @@ class AethPal {
   /// v4.45 — the protocol BOTTOM SHEET's chip family: the unselected
   /// protocol cards + the drag handle. Light is the owner's own CSS
   /// `#F4F4F4` (Rectangle 89 / Rectangle 13 on the `#FFFFFF` sheet);
-  /// night derives the same raised-chip relation against the `#0F1511`
-  /// sheet (`#1A261C` — the sheetSubtile relation).
+  /// night (round 24: «رنگ بندی بخش انتخاب پروتکل در حالت دارک مود …
+  /// باید از رنگ های دارک مود صفحه اصلی استفاده کنی») rides the HOME
+  /// dark-mode card family `#1C1C1C` (the same bg-panel→card-chip
+  /// relation the light mode carries).
   final Color protoSheetChip;
 
   /// v4.45-fixed — the protocol BOTTOM SHEET's own PANEL surface. This is
   /// a DEDICATED slot, deliberately NOT the home-card family: on the
   /// round-22 line `cardDark` became the home cards (`#F4F4F4` light /
   /// `#1C1C1C` night), which would leave the sheet panel the SAME color
-  /// as its own chips. The owner's CSS is explicit: the sheet is
-  /// `#FFFFFF` in light (Rectangle 88), and night keeps the flutterfx
-  /// line's own raised-panel `#0F1511` against the black bg (the
-  /// sheetSubtile/chip relation documented on [protoSheetChip]).
+  /// as its own chips. Light is the owner's own CSS `#FFFFFF` (Rectangle
+  /// 88); night (round 24) rides the HOME dark-mode PAGE BG `#000000`
+  /// (the owner: the sheet uses the home screen's own dark colors —
+  /// black panel, `#1C1C1C` chips — mirroring the light mode's
+  /// bg-panel/card-chip pair).
   final Color protoSheetBg;
 
   /// Speed gauge track at rest — night `#0A0F0B` (a shade darker than the
@@ -293,8 +296,8 @@ class AethPal {
     cardIconBg: Color(0xFF2D323D),
     sheetSubtile: Color(0xFF1A261C),
     sheetDescCard: Color(0xFF0C120F),
-    protoSheetChip: Color(0xFF1A261C),
-    protoSheetBg: Color(0xFF0F1511),
+    protoSheetChip: Color(0xFF1C1C1C), // round 24 — the home dark cards
+    protoSheetBg: Color(0xFF000000), // round 24 — the home dark page bg
     speedTrack: Color(0xFF0A0F0B),
     speedTrackLive: Color(0xFF16543B),
     speedCoreRest: Color(0xFF080C09),

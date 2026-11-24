@@ -324,12 +324,13 @@ void main() {
       await tester.pumpWidget(_booth(HomeScreen(store: homeStore)));
       await settleImages(tester);
       final homeRects = patternRects(tester);
-      // --- HOME: look 1's OWN placement (v6, owner round 23: «در نمای 1
-      // پترن سمت چپ یک سوم پایین تر از وسط صفحه و پترن سمت راست یک سوم
-      // بالاتر از وسط صفحه») — each art's INK CENTRE rides a third of the
-      // screen away from the middle: the LEFT art BELOW (5/6), the RIGHT
-      // art ABOVE (1/6). The look-2 mockup band (27% / 48.5%) stays the
-      // SPEED-TEST page's placement below. ---
+      // --- HOME: look 1's OWN placement (round 23's thirds RE-CUT,
+      // round 24: «پترن سمت راست رو کمی پایین تر بیار و پترن سمت چپ رو
+      // کمی بالاتر ببر در حدی که هر دو از وسط صفحه فاصله کمی داشته
+      // باشن») — each art's INK CENTRE rides only a LITTLE off the
+      // middle: the LEFT art slightly BELOW (58 %), the RIGHT art
+      // slightly ABOVE (42 %). The look-2 mockup band (27% / 48.5%)
+      // stays the SPEED-TEST page's placement below. ---
       const h = AethGeometry.refHeight * 1.0;
       final left = homeRects.first;
       final leftArtMidPx = (AethGeometry.patternLeftArtTopRow +

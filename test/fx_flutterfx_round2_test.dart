@@ -10,11 +10,13 @@ import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/connection_store.dart';
 import 'package:aethone/connection/engine.dart';
 import 'package:aethone/core/app_assets.dart' show ProtocolId;
+import 'package:aethone/core/design_tokens.dart';
 import 'package:aethone/core/fx/connect_ripple.dart';
 import 'package:aethone/core/fx/github_spark.dart';
 import 'package:aethone/core/fx/spark_loader.dart';
 import 'package:aethone/core/motion.dart';
 import 'package:aethone/features/home/home_screen.dart';
+import 'package:aethone/features/home/widgets/glow_pill.dart';
 
 /// The flutterfx round 2 — the owner's three decrees, as round 23 re-pins
 /// them:
@@ -28,10 +30,13 @@ import 'package:aethone/features/home/home_screen.dart';
 ///  3. the look-2 connect button's tap ripple is REALLY visible (covered
 ///     by test/fx_ripple_visibility_test.dart — pixel-counted there).
 ///
-/// Round 23 additions at the bottom: look 2's CONNECTING state is the
-/// flutterfx background-ripples family ([ConnectRipple]) and the
-/// connecting→connected edge fires the GITHUB-SPARK burst on both looks
-/// ([GitHubSparkBurst]).
+/// Round 23 additions at the bottom: look 2's CONNECTING state and the
+/// landing burst — RE-CUT round 24: the walk animation rides the
+/// button's OWN layers now (the round-23 [ConnectRipple] family behind
+/// the button is RETIRED from the hero stack; its file stays for its
+/// own unit history), and the connecting→connected edge still fires the
+/// GITHUB-SPARK burst on both looks ([GitHubSparkBurst]) — wider and
+/// slower than the round-23 cut.
 class ScriptedEngine implements EngineAdapter {
   final StreamController<EngineEvent> _controller =
       StreamController<EngineEvent>.broadcast();
@@ -343,12 +348,25 @@ void main() {
     });
   });
   // ------------------------------------------------------------------
-  // 4. Round 23 — look 2's connecting RIPPLE (the background-ripples
-  //    port) and the GITHUB-SPARK landing burst, both behind the button.
+  // 4. Round 24 — look 2's connecting animation rides the button's OWN
+  //    layers (the retired ripple family is GONE), and the GITHUB-SPARK
+  //    landing burst (wider + slower) fires behind the button.
   // ------------------------------------------------------------------
-  group('Round 23 — the ripple walk and the spark landing', () {
-    testWidgets('look 2 connecting: the ripple family paints behind the '
-        'button, then dies when the walk resolves', (tester) async {
+  group('Round 24 — the button-layer walk breath and the spark landing', () {
+    /// The look-2 hero button's outer layer width (design px), read off
+    /// the LIVE [LayerStack] — the breath multiplies this per frame.
+    double outerLayerWidth(WidgetTester tester) {
+      final stack = tester.widget<LayerStack>(
+        find.descendant(
+          of: find.byType(ConnectButtonGlow),
+          matching: find.byType(LayerStack),
+        ),
+      );
+      return stack.layers.first.width;
+    }
+
+    testWidgets('look 2 connecting: the button\'s OWN layers breathe '
+        '(nothing is created behind the button)', (tester) async {
       tester.view.physicalSize = const Size(402 * 3, 874 * 3);
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
@@ -358,43 +376,35 @@ void main() {
         ..setHomeLook(HomeLook.two);
       await tester.pumpWidget(_booth(HomeScreen(store: store)));
       await tester.pumpAndSettle();
-      expect(find.byType(ConnectRipple), findsOneWidget);
-      // Disconnected: the field renders its idle box — nothing paints.
-      expect(
-        find.descendant(
-          of: find.byType(ConnectRipple),
-          matching: find.byType(CustomPaint),
-        ),
-        findsNothing,
-        reason: 'the ripple clock is dead while disconnected',
-      );
+
+      // Round 24 — the round-23 ripple family is RETIRED: no circle
+      // paints behind the button anymore, on any state.
+      expect(find.byType(ConnectRipple), findsNothing);
+
+      // Disconnected: the composition rests at its exact frame geometry.
+      expect(outerLayerWidth(tester), AethGeometry.connectGroupSize);
 
       await store.connect(); // starting
       engine.emit(const EngineStateChanged(VpnState.connecting));
-      await tester.pump();
+      await tester.pump(); // the retune frame — the breath clock starts
+      // Mid-walk: the button's own outer layer is OFF its rest width
+      // (the in-phase breath, SILK's 1200 ms triangle wave).
       await tester.pump(const Duration(milliseconds: 300));
-      // Mid-walk: the family paints (the clock is alive, repaint per tick).
+      final midWalk = outerLayerWidth(tester);
       expect(
-        find.descendant(
-          of: find.byType(ConnectRipple),
-          matching: find.byType(CustomPaint),
-        ),
-        findsOneWidget,
-        reason: 'the ripple family breathes behind the button',
+        midWalk,
+        isNot(AethGeometry.connectGroupSize),
+        reason: 'the walk breath pulses the button\'s own layers',
       );
+      expect(midWalk, greaterThan(AethGeometry.connectGroupSize));
 
       engine.emit(const EngineStateChanged(VpnState.connected));
-      await tester.pumpAndSettle();
-      // Connected: the walk's clock stops dead — the field is empty again
-      // and the whole tree settles (no repeating ticker anywhere).
-      expect(
-        find.descendant(
-          of: find.byType(ConnectRipple),
-          matching: find.byType(CustomPaint),
-        ),
-        findsNothing,
-        reason: 'the ripple clock parks once the tunnel is up',
-      );
+      await tester.pumpAndSettle(); // look 2 — nothing loops while connected
+      // The walk resolved: the layers glide back onto the EXACT rest
+      // geometry and stay there.
+      expect(outerLayerWidth(tester), AethGeometry.connectGroupSize);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(outerLayerWidth(tester), AethGeometry.connectGroupSize);
     });
 
     testWidgets('the connecting→connected edge fires the GITHUB-SPARK burst '
@@ -413,8 +423,9 @@ void main() {
       await tester.pump();
       engine.emit(const EngineStateChanged(VpnState.connected));
       await tester.pump();
-      // The burst is IN FLIGHT right after the edge (SILK: 950 ms) — the
-      // spark field paints behind the button.
+      // The burst is IN FLIGHT right after the edge (SILK: 950 × 1.5 =
+      // 1425 ms — the round-24 tempo stretch) — the spark field paints
+      // behind the button.
       expect(
         find.descendant(
           of: find.byType(GitHubSparkBurst),
@@ -423,8 +434,11 @@ void main() {
         findsOneWidget,
         reason: 'the github-spark burst fires on the landing edge',
       );
-      // ... and it runs out: the whole tree settles, the field clears.
-      await tester.pumpAndSettle();
+      // ... and it runs out. (Round 24 — look 1's connected logo BOBS
+      // forever now, so the clear-ride uses BOUNDED pumps, not
+      // pumpAndSettle: the one-shot's 1425 ms + a settle frame.)
+      await tester.pump(const Duration(milliseconds: 1600));
+      await tester.pump(const Duration(milliseconds: 50));
       expect(
         find.descendant(
           of: find.byType(GitHubSparkBurst),
@@ -436,7 +450,7 @@ void main() {
       // A stats re-notify on the SAME connected state never re-fires it.
       store.notifyListeners();
       await tester.pump(const Duration(milliseconds: 1200));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 50));
       expect(
         find.descendant(
           of: find.byType(GitHubSparkBurst),

@@ -58,6 +58,26 @@ class AppStrings {
   /// «اتو / اسمارت»; this is the design frame's own wording).
   String get protoAutoSheet => _v['protoAutoSheet']!;
 
+  /// «تور اور وارپ» — Tor over Warp (TOW): the AETHER leg carries the
+  /// tunnel, Tor rides on top; the exit IP is a Tor node (round 24:
+  /// «t o w تور اور وارپ هست»).
+  String get protoTorOverWarp => _v['protoTorOverWarp']!;
+
+  /// «وارپ اور تور» — Warp over Tor (WOT): Tor carries the tunnel, the
+  /// AETHER/WARP leg rides on top; the exit IP is a WARP colo (round
+  /// 24: «w o t وارپ اور تور هست»).
+  String get protoWarpOverTor => _v['protoWarpOverTor']!;
+
+  /// «سایفون اور وارپ» — Psiphon over Warp (POW): the AETHER leg carries
+  /// the tunnel, Psiphon rides on top; the exit IP is a Psiphon node
+  /// (round 24: «p o w سایفون اور وارپ هست»).
+  String get protoPsiphonOverWarp => _v['protoPsiphonOverWarp']!;
+
+  /// «وارپ اور سایفون» — Warp over Psiphon (WOP): Psiphon carries the
+  /// tunnel, the AETHER/WARP leg rides on top; the exit IP is a WARP
+  /// colo (round 24: «w o p وارپ اور سایفون هست»).
+  String get protoWarpOverPsiphon => _v['protoWarpOverPsiphon']!;
+
   // ---- Settings main page (step 2; fa values verbatim from the design) ----
   String get settingsTitle => _v['settingsTitle']!;
   String get settingsRouting => _v['settingsRouting']!;
@@ -487,6 +507,12 @@ class AppStrings {
   /// reference frames show the protocol's own name (e.g. «وارپ»), not the
   /// generic word «پروتکل» (owner prompt §«دکمه انتخاب پروتکل»: هر پروتکلی
   /// که انتخاب شد لوگو آن در دکمه انتخاب پروتکل نمایش داده میشود).
+  ///
+  /// Round 24 — the four combined modes carry their FULL names (the
+  /// owner's decree: «نام بعضی پروتکل ها … با سایر بخش های اپ هماهنگش
+  /// کن» + the TOW/WOT/POW/WOP definitions): the card can now tell
+  /// «تور اور وارپ» from «وارپ اور تور» — the plain «تور»/«سایفون» stay
+  /// for the ONLY modes.
   String protocolName(ProtocolId id) {
     final key = switch (id) {
       ProtocolId.auto => 'protoAuto',
@@ -495,14 +521,12 @@ class AppStrings {
       ProtocolId.gool => 'protoGool',
       ProtocolId.goolClassic => 'protoGoolClassic',
       ProtocolId.mim => 'protoMim',
-      ProtocolId.torChain ||
-      ProtocolId.torReverse ||
-      ProtocolId.torOnly =>
-        'protoTor',
-      ProtocolId.psiphonChain ||
-      ProtocolId.psiphonReverse ||
-      ProtocolId.psiphonOnly =>
-        'protoPsiphon',
+      ProtocolId.torChain => 'protoTorOverWarp',
+      ProtocolId.torReverse => 'protoWarpOverTor',
+      ProtocolId.torOnly => 'protoTor',
+      ProtocolId.psiphonChain => 'protoPsiphonOverWarp',
+      ProtocolId.psiphonReverse => 'protoWarpOverPsiphon',
+      ProtocolId.psiphonOnly => 'protoPsiphon',
     };
     return _v[key] ?? _v['protoMasque']!;
   }
@@ -545,6 +569,13 @@ class AppStrings {
       'protoMim': 'میم',
       'protoTor': 'تور',
       'protoPsiphon': 'سایفون',
+      // Round 24 — the combined modes' full names (the owner's decree:
+      // «t o w تور اور وارپ هست …»), evidence-locked to the backend
+      // wiring (torChain = AETHER_TOR=chain = Tor over Warp, etc.).
+      'protoTorOverWarp': 'تور اور وارپ',
+      'protoWarpOverTor': 'وارپ اور تور',
+      'protoPsiphonOverWarp': 'سایفون اور وارپ',
+      'protoWarpOverPsiphon': 'وارپ اور سایفون',
       // ---- settings main page (fa verbatim from the design frame; the
       // v4.15 renames are the owner's own words — settings round #5/#8:
       // «متن تنظیمات تور و تنظیمات سایفون به تور و سایفون تغیر کند»,
@@ -857,6 +888,10 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'protoTorOverWarp': 'TOR OVER WARP',
+      'protoWarpOverTor': 'WARP OVER TOR',
+      'protoPsiphonOverWarp': 'PSIPHON OVER WARP',
+      'protoWarpOverPsiphon': 'WARP OVER PSIPHON',
       'settingsTitle': 'Settings',
       'settingsRouting': 'Routing',
       'settingsRoutingSub': 'Direct routes',
@@ -1162,6 +1197,10 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'protoTorOverWarp': 'TOR OVER WARP',
+      'protoWarpOverTor': 'WARP OVER TOR',
+      'protoPsiphonOverWarp': 'PSIPHON OVER WARP',
+      'protoWarpOverPsiphon': 'WARP OVER PSIPHON',
       'settingsTitle': 'Настройки',
       'settingsRouting': 'Маршрутизация',
       'settingsRoutingSub': 'Прямые маршруты',
@@ -1465,6 +1504,10 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'protoTorOverWarp': 'TOR OVER WARP',
+      'protoWarpOverTor': 'WARP OVER TOR',
+      'protoPsiphonOverWarp': 'PSIPHON OVER WARP',
+      'protoWarpOverPsiphon': 'WARP OVER PSIPHON',
       'settingsTitle': '设置',
       'settingsRouting': '路由规则',
       'settingsRoutingSub': '直连路由',
@@ -1774,6 +1817,10 @@ class AppStrings {
       'protoMim': 'MIM',
       'protoTor': 'TOR',
       'protoPsiphon': 'PSIPHON',
+      'protoTorOverWarp': 'TOR OVER WARP',
+      'protoWarpOverTor': 'WARP OVER TOR',
+      'protoPsiphonOverWarp': 'PSIPHON OVER WARP',
+      'protoWarpOverPsiphon': 'WARP OVER PSIPHON',
       'settingsTitle': 'Sazlamalar',
       'settingsRouting': 'Marşrutizasiýa',
       'settingsRoutingSub': 'Göni marşrutlar',

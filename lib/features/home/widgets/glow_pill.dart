@@ -179,10 +179,11 @@ class _LayerStackPainter extends CustomPainter {
 ///  * LOOK 1 (`layered: true`, owner round 23) — the three-layer 140×38
 ///    chip («Group 119»): halo 140×38 r13 α.19 · mid 132.88×32 r11 α.45 ·
 ///    core 125.76×26 r9 (FLAT #1AD995 connected / the 180° red gradient
-///    disconnected), the content ink on the palette's own pill members
-///    (theme-aware: #141C16-ish on green, #75160F on red) and the Shield
-///    stroke #800000 on the red family. The label is the state's own word
-///    («مــتـصـل» / «غیرفعال» / «در حال اتصال» …).
+///    disconnected), the label is the state's own word
+///    («مــتـصـل» / «غیرفعال» / «در حال اتصال» …). Round 24 — the content
+///    ink is WHITE on BOTH families (the owner: «متن و آیکون دکمه نمایش
+///    وضعیت اتصال باید رنگ سفید داشته باشه» — the retired palette-ink
+///    pair #141C16/#75160F and the #800000 shield stroke are gone).
 ///
 /// Content row keeps the INHERITED (RTL) directionality — under the fa
 /// locale it lays out like the reference frames: text visual-left, shield
@@ -327,10 +328,10 @@ class StatusPill extends StatelessWidget {
 /// 119»): 140×38 r13 α.19 · 132.88×32 r11 α.45 · 125.76×26 r9 core, the
 /// accent family rgba(26,217,149,α) when connected and rgba(234,35,35,α)
 /// when not (the core FLAT #1AD995 on green, the 180° gradient on red).
-/// ONE crossfade tween drives every layer; the content ink rides the
-/// palette's own pill members (lerped through the 420 ms mode tween with
-/// every other surface) and the Shield stroke is the CSS's own #800000 on
-/// the red family.
+/// ONE crossfade tween drives every layer; round 24 — the content ink is
+/// WHITE on both families and both modes (the owner: «متن و آیکون دکمه
+/// نمایش وضعیت اتصال باید رنگ سفید داشته باشه»), the retired palette
+/// pill members and the #800000 shield stroke are gone.
 class _LayeredStatusPill extends StatelessWidget {
   const _LayeredStatusPill({
     required this.connected,
@@ -355,9 +356,9 @@ class _LayeredStatusPill extends StatelessWidget {
   static const Color _redHalo = Color(0x30EA2323);
   static const Color _redMid = Color(0x73EA2323);
 
-  /// The Shield stroke on the red family (the CSS's own value, both
-  /// modes — readable on the bright red core everywhere).
-  static const Color _redIconInk = Color(0xFF800000);
+  // (Round 24 — the retired #800000 shield stroke is GONE: the content
+  // ink is WHITE on both families, the owner's decree «متن و آیکون دکمه
+  // نمایش وضعیت اتصال باید رنگ سفید داشته باشه».)
 
   @override
   Widget build(BuildContext context) {
@@ -378,9 +379,9 @@ class _LayeredStatusPill extends StatelessWidget {
               size: Size(AethGeometry.pillL1Width * s, AethGeometry.pillL1Height * s),
               painter: _PillLayersPainter(t: t, s: s),
             ),
-            // The content — the palette's own pill ink on the core (the
-            // CSS pair «مــتـصـل #141C16» / «غیرفعال #75160F»), the Shield
-            // stroke #800000 on the red family.
+            // The content — round 24: WHITE icon + WHITE label on BOTH
+            // families (the owner: «متن و آیکون دکمه نمایش وضعیت اتصال
+            // باید رنگ سفید داشته باشه»).
             FittedBox(
               fit: BoxFit.scaleDown,
               child: AnimatedSwitcher(
@@ -393,10 +394,8 @@ class _LayeredStatusPill extends StatelessWidget {
                       iconAsset,
                       width: AethGeometry.pillL1IconSize * s,
                       height: AethGeometry.pillL1IconSize * s,
-                      colorFilter: ColorFilter.mode(
-                        connected
-                            ? AethColors.onPillConnected
-                            : _redIconInk,
+                      colorFilter: const ColorFilter.mode(
+                        Color(0xFFFFFFFF),
                         BlendMode.srcIn,
                       ),
                     ),
@@ -408,9 +407,7 @@ class _LayeredStatusPill extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         fontSize: 16 * s,
                         height: 18 / 16,
-                        color: connected
-                            ? AethColors.onPillConnected
-                            : AethColors.onPillDisconnected,
+                        color: const Color(0xFFFFFFFF),
                       ),
                     ),
                   ],
@@ -651,6 +648,16 @@ class SpeedTestButton extends StatelessWidget {
 /// the tap is a deliberate no-op — one transition is already in flight,
 /// the collapse tells the story. The glyph stays the CSS's own
 /// Off (power) glyph in WHITE for both states.
+///
+/// Round 24 (the owner: «انیمیشن روی دکمه اتصال نمای 2 باید روی لایه های
+/// خود دکمه اعمال بشه در صورتی که الان چند لایه پشت دکمه ایجاد شده و
+/// روشون انیمیشن اعمال شده») — the WALK animation now rides the button's
+/// OWN three layers: while the engine walks toward a session, the «3»/
+/// «4»/«1» squircles themselves breathe (a staggered-free, in-phase
+/// pulse — the outer layer the widest swing, the core the smallest), and
+/// the round-23 [ConnectRipple] family that painted circles BEHIND the
+/// button is RETIRED from the hero stack. Nothing is created behind the
+/// button anymore — the button itself tells the walk story.
 class ConnectButtonGlow extends StatefulWidget {
   const ConnectButtonGlow({
     super.key,
@@ -685,8 +692,11 @@ class ConnectButtonGlow extends StatefulWidget {
 }
 
 /// v4.43 — owns the [TapRippleController] so the flutterfx tap-ripple
-/// burst (owner-approved new dependency round) survives the rebuilds.
-class _ConnectButtonGlowState extends State<ConnectButtonGlow> {
+/// burst (owner-approved new dependency round) survives the rebuilds,
+/// and round 24 — owns the WALK breath clock that pulses the button's
+/// own layers while the engine walks.
+class _ConnectButtonGlowState extends State<ConnectButtonGlow>
+    with SingleTickerProviderStateMixin {
   /// The round-23 CSS's own state tints for the outer/mid layers:
   /// rgba(47,248,177,α) connected / rgba(234,35,35,α) disconnected (the
   /// α rides in [LayerSpec.opacity]).
@@ -695,10 +705,77 @@ class _ConnectButtonGlowState extends State<ConnectButtonGlow> {
 
   final TapRippleController _ripple = TapRippleController();
 
+  /// Round 24 — the walk breath: repeats while the engine walks, glides
+  /// back to exact rest geometry when the walk resolves.
+  late final AnimationController _walk = AnimationController(vsync: this);
+
+  @override
+  void initState() {
+    super.initState();
+    _retuneWalk();
+  }
+
+  @override
+  void didUpdateWidget(covariant ConnectButtonGlow old) {
+    super.didUpdateWidget(old);
+    if (old.state != widget.state ||
+        old.connected != widget.connected ||
+        old.style != widget.style) {
+      _retuneWalk();
+    }
+  }
+
   @override
   void dispose() {
+    _walk.dispose();
     _ripple.detach();
     super.dispose();
+  }
+
+  /// The walk states (the same four the spark march / ripple family rode).
+  static bool _isWalk(VpnState s) =>
+      s == VpnState.starting ||
+      s == VpnState.waitingForPermissions ||
+      s == VpnState.connecting ||
+      s == VpnState.reconnecting;
+
+  void _retuneWalk() {
+    final effective = widget.state ??
+        (widget.connected ? VpnState.connected : VpnState.disconnected);
+    final periodMs = widget.style.recipe.connectMarchMs;
+    final run = _isWalk(effective) &&
+        widget.style != MotionStyle.off &&
+        periodMs > 0;
+    if (run) {
+      _walk.duration = Duration(milliseconds: periodMs);
+      if (!_walk.isAnimating) _walk.repeat();
+    } else if (widget.style == MotionStyle.off) {
+      // The kill-switch: instant rest, no glide.
+      _walk
+        ..stop()
+        ..value = 0;
+    } else {
+      // Leaving the walk (landed / failed / idle): glide the family back
+      // to its exact rest geometry — value 0 IS rest (the triangle wave
+      // rises from 0), so the settle never pops.
+      if (_walk.value != 0) {
+        _walk.animateTo(
+          0,
+          duration: motionDuration(widget.style, 260),
+          curve: Curves.easeInOut,
+        );
+      }
+    }
+  }
+
+  /// The breath at the controller's own phase — a triangle wave eased
+  /// both ways (0 → 1 → 0 across one period); value 0 = the exact rest
+  /// geometry.
+  double _breath() {
+    if (!_walk.isAnimating) return 0;
+    final phase = _walk.value;
+    final up = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
+    return Curves.easeInOut.transform(up.clamp(0.0, 1.0));
   }
 
   @override
@@ -751,58 +828,72 @@ class _ConnectButtonGlowState extends State<ConnectButtonGlow> {
               // carries the 180° gradient pair. [LayerStack] paints the
               // family centre-out (its layout size is the core; the outer
               // SizedBox owns the group's own 160 box).
-              TweenAnimationBuilder<double>(
-                tween: Tween(end: connected ? 1.0 : 0.0),
-                duration: duration,
-                curve: curve,
-                builder: (context, t, _) => LayerStack(
-                  scale: k,
-                  color: accent,
-                  layers: [
-                    LayerSpec(
-                      width: AethGeometry.connectGroupSize,
-                      height: AethGeometry.connectGroupSize,
-                      radius: AethRadius.connectBase,
-                      opacity: 0.16,
-                      color: Color.lerp(
-                        _redOuter,
-                        _greenOuter,
-                        t,
-                      )!,
-                    ),
-                    LayerSpec(
-                      width: AethGeometry.connectMidSize,
-                      height: AethGeometry.connectMidSize,
-                      radius: AethRadius.connectMid,
-                      opacity: 0.45,
-                      color: Color.lerp(
-                        _redOuter,
-                        _greenOuter,
-                        t,
-                      )!,
-                    ),
-                    LayerSpec(
-                      width: AethGeometry.connectCoreSize,
-                      height: AethGeometry.connectCoreSize,
-                      radius: AethRadius.connectCore,
-                      opacity: 1,
-                      // The 180° gradient core («1»): green connected /
-                      // red disconnected, crossfaded stop by stop.
-                      gradient: [
-                        Color.lerp(
-                          AethColors.redStops[0],
-                          AethColors.greenStops[0],
-                          t,
-                        )!,
-                        Color.lerp(
-                          AethColors.redStops[1],
-                          AethColors.greenStops[1],
-                          t,
-                        )!,
+              //
+              // ROUND 24 — while the engine walks, the button's OWN layers
+              // breathe (in-phase, amplitude falling inward: the outer
+              // ±8 %, the mid ±5 %, the core ±2 %, with a small opacity
+              // lift on the halo pair). No layers are created behind the
+              // button anymore — the retired [ConnectRipple] family is
+              // gone from the hero stack.
+              AnimatedBuilder(
+                animation: _walk,
+                builder: (context, _) {
+                  final b = _breath();
+                  return TweenAnimationBuilder<double>(
+                    tween: Tween(end: connected ? 1.0 : 0.0),
+                    duration: duration,
+                    curve: curve,
+                    builder: (context, t, _) => LayerStack(
+                      scale: k,
+                      color: accent,
+                      layers: [
+                        LayerSpec(
+                          width: AethGeometry.connectGroupSize * (1 + 0.08 * b),
+                          height:
+                              AethGeometry.connectGroupSize * (1 + 0.08 * b),
+                          radius: AethRadius.connectBase,
+                          opacity: 0.16 + 0.08 * b,
+                          color: Color.lerp(
+                            _redOuter,
+                            _greenOuter,
+                            t,
+                          )!,
+                        ),
+                        LayerSpec(
+                          width: AethGeometry.connectMidSize * (1 + 0.05 * b),
+                          height: AethGeometry.connectMidSize * (1 + 0.05 * b),
+                          radius: AethRadius.connectMid,
+                          opacity: 0.45 + 0.10 * b,
+                          color: Color.lerp(
+                            _redOuter,
+                            _greenOuter,
+                            t,
+                          )!,
+                        ),
+                        LayerSpec(
+                          width: AethGeometry.connectCoreSize * (1 + 0.02 * b),
+                          height: AethGeometry.connectCoreSize * (1 + 0.02 * b),
+                          radius: AethRadius.connectCore,
+                          opacity: 1,
+                          // The 180° gradient core («1»): green connected /
+                          // red disconnected, crossfaded stop by stop.
+                          gradient: [
+                            Color.lerp(
+                              AethColors.redStops[0],
+                              AethColors.greenStops[0],
+                              t,
+                            )!,
+                            Color.lerp(
+                              AethColors.redStops[1],
+                              AethColors.greenStops[1],
+                              t,
+                            )!,
+                          ],
+                        ),
                       ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
             // The Off glyph — 48×48, WHITE in both states (owner CSS
             // «border: 3.5px solid #FFFFFF»).
