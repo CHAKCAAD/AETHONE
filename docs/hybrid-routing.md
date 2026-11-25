@@ -112,12 +112,13 @@ Persistence key: `aethone.settings.hybridRules.v110` (profile → rule list).
 | zeptun patch (Zig) | `flow/verdict.zig`: route answer decoding (default, servers, never-direct, out-of-range), callback receives the fake-IP name; upstream suite incl. `tcp_sim` runs on the patched tree in the CI zig-test gate | see CI run for this commit |
 | Policy engine (Kotlin, JVM) | `HybridPolicyTest`: package match, exact domain + boundary, wildcard apex rule, most-specific wildcard, IDN, IPv4, IPv6, CIDR longest prefix, priority app→exact→wildcard→IP, duplicate conflict, default route, disabled rules, unavailable tunnel fail-closed, input validation | see CI run (step «Hybrid routing — Kotlin policy unit tests») |
 | Dart | `test/hybrid_routing_test.dart`: profiles only for hybrid protocols, ports, validation, overlaps, policy document, persistence per profile, single-tunnel never stores, UI visibility, add/switch/disable/delete, invalid-route display | see CI run (Flutter UI job) |
-| Integration / acceptance on a device (Scenarios 1–7) | **not run** — needs a phone with a working hybrid connection: route Telegram→WARP / Instagram→WARP→Psiphon and compare exit IPs (e.g. each app's own "ip" check, or `hybridRoutingStatus.routed` counters + core log) | **pending** |
+| Integration / acceptance on a device (Scenarios 1–7) | run by the owner on 2026-11-25 with the r126 arm64-v8a APK (commit b06160d); exit path checked with `cloudflare.com/cdn-cgi/trace` (`warp=on` / `warp=off`) | **passed (owner-reported, all 7)** |
 | Emulator runtime smoke | existing job; currently failing on the emulator 37.2.13 pin drift (infra, unrelated) | not usable as evidence |
 
 ## 11. Known limitations
 
-* Device-level traffic acceptance (Scenarios 1–7) has not been performed yet.
+* Device-level traffic acceptance (Scenarios 1–7) passed on the owner's phone on 2026-11-25 (r126, b06160d). The first device build (r125) failed every hybrid connect with `zeptun-start-failed:rc=-1`: R8 had removed `Zeptun.route`, the JNI callback libzeptun-jni resolves by name. Fixed by `android/app/proguard-rules.pro` plus a CI dexdump gate on the release APK.
+* Not covered by CI on this branch: the emulator runtime smoke and APK cold-start smoke fail on the emulator version pin (37.2.13), an infrastructure issue.
 * App rules need Android 10+; unattributable flows fall back to destination rules.
 * Domain rules cannot see DoH/DoT/hard-coded-IP traffic (§7).
 * One JNI call per new flow (plus one binder call when app rules exist) on the engine thread; fine for normal use, untested under very high connection rates.
