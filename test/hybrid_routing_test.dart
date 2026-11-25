@@ -254,14 +254,19 @@ void main() {
       final id = rules.single.id;
 
       await tester.ensureVisible(find.byKey(ValueKey('hybrid-tunnel-$id-psiphon')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(ValueKey('hybrid-tunnel-$id-psiphon')));
       await tester.pumpAndSettle();
       expect(store.hybridRulesFor(ProtocolId.psiphonChain).single.tunnel, 'psiphon');
 
+      await tester.ensureVisible(find.byKey(ValueKey('hybrid-enable-$id')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(ValueKey('hybrid-enable-$id')));
       await tester.pumpAndSettle();
       expect(store.hybridRulesFor(ProtocolId.psiphonChain).single.enabled, isFalse);
 
+      await tester.ensureVisible(find.byKey(ValueKey('hybrid-delete-$id')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(ValueKey('hybrid-delete-$id')));
       await tester.pumpAndSettle();
       expect(store.hybridRulesFor(ProtocolId.psiphonChain), isEmpty);
