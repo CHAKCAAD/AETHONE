@@ -37,10 +37,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('تنظیمات'), findsOneWidget);
-    expect(find.byKey(const ValueKey('settings-hero')), findsOneWidget);
-    for (final k in ['quick-kill-switch', 'quick-mode', 'quick-theme']) {
-      expect(find.byKey(ValueKey(k)), findsOneWidget, reason: k);
-    }
+    // v1.1.0 round 2 — the hero/quick-controls block is removed.
+    expect(find.byKey(const ValueKey('settings-hero')), findsNothing);
+    expect(find.byKey(const ValueKey('quick-kill-switch')), findsNothing);
     expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
     // Four merged categories (security folded into connection, language
     // into look).
@@ -55,13 +54,11 @@ void main() {
       'settings-proto-tor',
       'settings-proto-lantern',
       'settings-proto-core',
-      'settings-core-log-card',
-      'settings-repo-zeptun',
-      'settings-repo-aether',
-      'settings-version',
     ]) {
       expect(find.byKey(ValueKey(k)), findsOneWidget, reason: k);
     }
+    // Support & diagnostics moved to the general page.
+    expect(find.byKey(const ValueKey('settings-core-log-card')), findsNothing);
     expect(AppAssets.iconSearch, contains('Search 1.svg'));
   });
 
@@ -73,7 +70,6 @@ void main() {
 
     store.setKillSwitch(true);
     await tester.pumpAndSettle();
-    expect(find.text('روشن'), findsWidgets);
     expect(find.textContaining('Kill Switch روشن'), findsOneWidget);
 
     store.setKillSwitch(false);
@@ -91,11 +87,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await tester.dragUntilVisible(
-      find.byKey(const ValueKey('settings-version')),
+      find.byKey(const ValueKey('settings-proto-core')),
       find.byType(SingleChildScrollView),
       const Offset(0, -200),
     );
-    expect(find.byKey(const ValueKey('settings-version')), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-proto-core')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

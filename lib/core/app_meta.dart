@@ -19,3 +19,7 @@ const String repositoryUrl = 'https://github.com/CHAKCAAD/AETHONE';
 /// اضافه کن» — kept verbatim, srtk attribution token included).
 const String instagramUrl =
     'https://www.instagram.com/aethoneiran?srtk=MWhwbzFnbjFkb3pkdQ==';
+
+/// The two engines' own repositories (settings › general › support).
+const String zeptunRepoUrl = 'https://github.com/Noisemux/zeptun';
+const String aetherRepoUrl = 'https://github.com/CluvexStudio/Aether';

@@ -14,7 +14,7 @@ void main() {
       // v5.3 — the night slot is the owner's dark-mode round
       // («بکگراند کل صفحه 000000»); the slot starts at night in every
       // test (no shell tween ran).
-      expect(AethColors.bgScreen, const Color(0xFF000000));
+      expect(AethColors.bgScreen, const Color(0xFF111916));
       expect(AethColors.accentConnected, const Color(0xFF1AD995));
       expect(AethColors.statusDisconnected, const Color(0xFFEA2323));
       expect(AethColors.onPillDisconnected, const Color(0xFF75160F));
@@ -23,8 +23,8 @@ void main() {
       expect(AethColors.statDownBg, const Color(0xFF0A4F33));
       expect(AethColors.statUpBg, const Color(0xFF3A1C1C));
       expect(AethColors.statUpBorder, const Color(0xFF652325));
-      expect(AethColors.textPrimary, const Color(0xFFFFFFFF));
-      expect(AethColors.textSecondary, const Color(0xFF8E8E93));
+      expect(AethColors.textPrimary, const Color(0xFFF1F6F4));
+      expect(AethColors.textSecondary, const Color(0xFF92A49C));
     });
 
     test('pill opacities are the Figma CSS values', () {
@@ -140,9 +140,9 @@ void main() {
       // family) — the improper-merge lesson, locked: the unselected
       // cards must always read AGAINST the panel in both modes.
       expect(AethPal.light.protoSheetBg, const Color(0xFFFFFFFF));
-      expect(AethPal.night.protoSheetBg, const Color(0xFF000000));
+      expect(AethPal.night.protoSheetBg, const Color(0xFF111916));
       expect(AethPal.light.protoSheetChip, const Color(0xFFF4F4F4));
-      expect(AethPal.night.protoSheetChip, const Color(0xFF1C1C1C));
+      expect(AethPal.night.protoSheetChip, const Color(0xFF1A2420));
       expect(
         AethPal.light.protoSheetBg,
         isNot(AethPal.light.protoSheetChip),

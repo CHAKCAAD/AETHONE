@@ -21,6 +21,7 @@ import '../../../core/app_meta.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 import 'settings_controls.dart';
+import 'settings_screen.dart' show CoreLogPage;
 import 'subpage_frame.dart';
 import '../../core/motion.dart';
 
@@ -68,7 +69,9 @@ class _GeneralSettingsPageState extends State<GeneralSettingsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${AppStrings.of(context).autoStartFailed}: $e')),
+          SnackBar(
+            content: Text('${AppStrings.of(context).autoStartFailed}: $e'),
+          ),
         );
       }
     }
@@ -247,12 +250,57 @@ class _GeneralSettingsPageState extends State<GeneralSettingsPage> {
           ),
         ],
 
-        // ---- Section: reset to defaults ----
+        // ---- Section: support & diagnostics (v1.1.0 — moved here from
+        // the settings main page: the core log + the two core repos) ----
         SizedBox(height: 24 * s),
         SubSectionHeading(
-          icon: AppAssets.iconRedo,
-          title: strings.secReset,
+          icon: AppAssets.iconActivity4,
+          title: strings.settingsSupportSection,
         ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingNavRow(
+                keyId: 'core-log',
+                icon: AppAssets.iconInformationCircle,
+                title: strings.coreLogTitle,
+                description: strings.coreLogOpen,
+                onTap: () => Navigator.of(context).push(
+                  aethPageRoute<void>(
+                    style: widget.store.effectiveMotionStyle(context),
+                    builder: (_) => CoreLogPage(
+                      style: widget.store.effectiveMotionStyle(context),
+                    ),
+                  ),
+                ),
+              ),
+              const SubSectionDivider(),
+              SettingNavRow(
+                keyId: 'repo-zeptun',
+                icon: AppAssets.logoGithub,
+                title: 'Zeptun Tunnel',
+                trailingValue: 'Noisemux/zeptun',
+                chevron: false,
+                onTap: () => _openLink(zeptunRepoUrl),
+              ),
+              const SubSectionDivider(),
+              SettingNavRow(
+                keyId: 'repo-aether',
+                icon: AppAssets.logoGithub,
+                title: 'Aether Core',
+                trailingValue: 'CluvexStudio/Aether',
+                chevron: false,
+                onTap: () => _openLink(aetherRepoUrl),
+              ),
+            ],
+          ),
+        ),
+
+        // ---- Section: reset to defaults ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(icon: AppAssets.iconRedo, title: strings.secReset),
         const SubSectionGap.headingToCard(),
         SubSectionCard(
           child: SettingNavRow(
@@ -277,7 +325,9 @@ class MethodChannelProxy {
       await DesktopWindowChannel.invokeBool('autoStartStatus', 'enabled');
 
   Future<void> setAutoStart(bool enabled) async =>
-      await DesktopWindowChannel.invokeVoid('setAutoStart', {'enabled': enabled});
+      await DesktopWindowChannel.invokeVoid('setAutoStart', {
+        'enabled': enabled,
+      });
 }
 
 /// The reset confirm — the app's own dialog language (matches the close

@@ -123,13 +123,13 @@ void main() {
       expect(find.text('اسمارت'), findsNothing);
       expect(find.text('حالت پروتکل'), findsNothing);
 
-      // The core entry row opens the core page. v4.31 added the leg /
-      // IP-version / upstream sections above it — scroll it into view.
-      await tester.ensureVisible(find.byKey(const ValueKey('nav-core-entry')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('nav-core-entry')));
-      await tester.pumpAndSettle();
-      expect(find.text('فرگمنت TLS'), findsOneWidget);
+      // v1.1.0 — the Aether core entry, IP version and upstream proxy
+      // left this page (they live on the Aether Core page now); Kill
+      // Switch joined it.
+      expect(find.byKey(const ValueKey('nav-core-entry')), findsNothing);
+      expect(find.byKey(const ValueKey('pill-ip-version-IPv6')), findsNothing);
+      expect(find.byKey(const ValueKey('field-upstream')), findsNothing);
+      expect(find.byKey(const ValueKey('toggle-kill-switch')), findsOneWidget);
     });
 
     // -----------------------------------------------------------------
@@ -193,6 +193,11 @@ void main() {
       await tester.pumpWidget(_booth(CoreSettingsPage(store: store)));
       await tester.pumpAndSettle();
 
+      // v1.1.0 — IP version / upstream sit above the fragment card now.
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('pill-fragment-متعادل')),
+      );
+      await tester.pumpAndSettle();
       // The Iran profiles are all present.
       expect(find.text('خاموش'), findsOneWidget);
       expect(find.text('استاندارد'), findsOneWidget);
@@ -598,32 +603,18 @@ void main() {
       expect(find.byKey(const ValueKey('flag-pick-auto')), findsOneWidget);
       await back(tester);
 
-      await open(tester, const ValueKey('settings-hero'));
-      expect(find.byKey(const ValueKey('toggle-kill-switch')), findsOneWidget);
-    });
+      // The Aether Core tile → the core page (IP version merged in).
+      await open(tester, const ValueKey('settings-proto-core'));
+      expect(find.byKey(const ValueKey('pill-ip-version-IPv4')),
+          findsOneWidget);
+      await back(tester);
 
-    testWidgets('quick controls change the setting in place', (tester) async {
-      await _useReferenceSurface(tester);
-      final store = makeStore();
-      await tester.pumpWidget(_booth(SettingsScreen(store: store)));
+      // Support moved to the general page.
+      await open(tester, const ValueKey('settings-cat-general'));
+      await tester.ensureVisible(find.byKey(const ValueKey('nav-core-log')));
       await tester.pumpAndSettle();
-
-      final ks = store.killSwitch;
-      await tester.tap(find.byKey(const ValueKey('quick-kill-switch')));
-      await tester.pumpAndSettle();
-      expect(store.killSwitch, !ks);
-
-      final mode = store.connectionMode;
-      await tester.tap(find.byKey(const ValueKey('quick-mode')));
-      await tester.pumpAndSettle();
-      expect(store.connectionMode, isNot(mode));
-
-      final pick = store.themePick;
-      await tester.tap(find.byKey(const ValueKey('quick-theme')));
-      await tester.pumpAndSettle();
-      expect(store.themePick, isNot(pick));
-      // Still on the main page — nothing was pushed.
-      expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
+      expect(find.byKey(const ValueKey('nav-repo-zeptun')), findsOneWidget);
+      expect(find.byKey(const ValueKey('nav-repo-aether')), findsOneWidget);
     });
 
     testWidgets('search finds a setting and opens its page', (tester) async {
@@ -932,11 +923,11 @@ void main() {
       expect(store.coreSettings.psiphonReadySecs, 181);
     });
 
-    testWidgets('connection page: the IP version commits (the family-leg '
-        'section moved to the tor/psiphon pages — v4.31c)', (tester) async {
+    testWidgets('core page: the IP version commits (v1.1.0 — moved here '
+        'from the connection page)', (tester) async {
       await _useReferenceSurface(tester);
       final store = makeStore();
-      await tester.pumpWidget(_booth(ConnectionSettingsPage(store: store)));
+      await tester.pumpWidget(_booth(CoreSettingsPage(store: store)));
       await tester.pumpAndSettle();
 
       // v4.31c — the leg section is GONE from this page (owner round 8:

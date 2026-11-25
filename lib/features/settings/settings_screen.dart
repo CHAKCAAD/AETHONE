@@ -26,15 +26,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../connection/connection_state.dart';
 import '../../connection/connection_store.dart';
 import '../../connection/core_log.dart';
-import '../../connection/core_settings.dart';
 import '../../connection/transport_modes.dart';
 import '../../core/app_assets.dart';
-import '../../core/app_meta.dart';
 import '../../core/app_theme.dart';
 import '../../core/country_names.dart';
 import '../../core/design_tokens.dart';
@@ -84,9 +81,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _openCoreLog() =>
-      _open(CoreLogPage(style: store.effectiveMotionStyle(context)));
-
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
@@ -102,11 +96,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onBack: () => Navigator.of(context).maybePop(),
           ),
           SizedBox(height: 20 * s),
-          _HeroCard(
-            store: store,
-            onOpen: () => _open(ConnectionSettingsPage(store: store)),
-          ),
-          SizedBox(height: 16 * s),
           _SearchField(controller: _query, focusNode: _searchFocus),
           SizedBox(height: 22 * s),
           if (searching)
@@ -123,10 +112,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _SectionTitle(strings.settingsProtocolsSection),
             SizedBox(height: 10 * s),
             _ProtocolGrid(store: store, onOpen: _open),
-            SizedBox(height: 24 * s),
-            _SectionTitle(strings.settingsSupportSection),
-            SizedBox(height: 10 * s),
-            _SupportBlock(onCoreLog: _openCoreLog),
           ],
           SizedBox(height: 30 * s),
         ];
@@ -175,12 +160,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final rt = t.settingsRouting;
     final lk = t.settingsLookLangTitle;
     final gn = t.settingsGeneral;
-    final cr = t.subCoreTitle;
+    const cr = 'Aether Core';
     return [
       _SearchEntry(t.secKillSwitch, cs, AppAssets.iconOff, conn),
       _SearchEntry(t.sheetHeadingMode, cs, AppAssets.iconPassword1, conn),
-      _SearchEntry(t.secIpVersion, cs, AppAssets.iconWebsite, conn),
-      _SearchEntry(t.secUpstream, cs, AppAssets.iconArrowSwapHorizontal, conn),
+      _SearchEntry(t.secIpVersion, cr, AppAssets.iconWebsite, core),
+      _SearchEntry(t.secUpstream, cr, AppAssets.iconArrowSwapHorizontal, core),
       _SearchEntry(t.settingsRoutingArea, rt, AppAssets.iconRedo, routing),
       _SearchEntry(
         t.hybridRouting,
@@ -237,7 +222,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       _SearchEntry(
         t.coreLogTitle,
-        t.settingsSupportSection,
+        gn,
         AppAssets.iconInformationCircle,
         () => CoreLogPage(style: store.effectiveMotionStyle(context)),
       ),
@@ -367,394 +352,6 @@ class _SettingsTopBar extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// HERO — the login sheet with its notch, the phase indicator in the notch,
-// the step composition and the three quick controls.
-// ---------------------------------------------------------------------------
-
-enum _Phase { off, busy, on }
-
-_Phase _phaseOf(VpnState st) => switch (st) {
-  VpnState.connected => _Phase.on,
-  VpnState.disconnected || VpnState.failed => _Phase.off,
-  _ => _Phase.busy,
-};
-
-Color _phaseColor(_Phase p) => switch (p) {
-  _Phase.on => AethColors.accentConnected,
-  _Phase.off => AethColors.statusDisconnected,
-  _Phase.busy => AethColors.autoShieldAmber,
-};
-
-String _stateLabel(AppStrings t, VpnState st) => switch (st) {
-  VpnState.connected => t.statusConnected,
-  VpnState.connecting => t.statusConnecting,
-  VpnState.reconnecting => t.statusReconnecting,
-  VpnState.starting => t.statusStarting,
-  VpnState.waitingForPermissions => t.statusWaitingPermissions,
-  VpnState.disconnecting => t.statusDisconnecting,
-  VpnState.failed => t.statusFailed,
-  VpnState.disconnected => t.statusDisconnected,
-};
-
-class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.store, required this.onOpen});
-
-  final ConnectionStore store;
-  final VoidCallback onOpen;
-
-  static const double _notchDepth = 22;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppStrings.of(context);
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final phase = _phaseOf(store.state);
-    final color = _phaseColor(phase);
-    final proto = store.selectedProtocol;
-    return CustomPaint(
-      painter: _NotchedCardPainter(
-        color: AethColors.cardDark,
-        radius: 27 * s,
-        depth: _notchDepth * s,
-        s: s,
-      ),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(14 * s, 7 * s, 14 * s, 14 * s),
-        child: Column(
-          children: [
-            _PhaseIndicator(phase: phase, color: color),
-            SizedBox(height: 20 * s),
-            Semantics(
-              button: true,
-              label: t.protocolName(proto),
-              child: GestureDetector(
-                key: const ValueKey('settings-hero'),
-                behavior: HitTestBehavior.opaque,
-                onTap: onOpen,
-                child: Column(
-                  children: [
-                    SettingsIconBox(
-                      asset: AppAssets.protocolIcon(
-                        proto,
-                        light: AethThemeSync.light,
-                      ),
-                      size: 56 * s,
-                      glyph: 34 * s,
-                      tinted: false,
-                    ),
-                    SizedBox(height: 12 * s),
-                    Text(
-                      t.protocolName(proto),
-                      textAlign: TextAlign.center,
-                      style: _yekan(
-                        AethGeometry.loginTitleSize * s,
-                        FontWeight.w600,
-                        AethColors.textPrimary,
-                      ),
-                    ),
-                    SizedBox(height: 4 * s),
-                    Directionality(
-                      textDirection: appContentDirection(context),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            width: 7 * s,
-                            height: 7 * s,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          SizedBox(width: 6 * s),
-                          AnimatedValueText(
-                            _stateLabel(t, store.state),
-                            textStyle: _yekan(
-                              13 * s,
-                              FontWeight.w400,
-                              AethColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(height: 18 * s),
-            Directionality(
-              textDirection: appContentDirection(context),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _QuickTile(
-                      keyId: 'quick-kill-switch',
-                      icon: AppAssets.iconSecuritySafe,
-                      label: t.secKillSwitch,
-                      value: store.killSwitch ? t.settingsOn : t.settingsOff,
-                      active: store.killSwitch,
-                      onTap: () => store.setKillSwitch(!store.killSwitch),
-                    ),
-                  ),
-                  SizedBox(width: 8 * s),
-                  Expanded(
-                    child: _QuickTile(
-                      keyId: 'quick-mode',
-                      icon: AppAssets.iconPassword1,
-                      label: t.settingsModeShort,
-                      value: store.connectionMode == ConnectionMode.tunnel
-                          ? t.modeTunnel
-                          : t.modeProxy,
-                      active: true,
-                      highlight: false,
-                      onTap: () => store.setConnectionMode(
-                        store.connectionMode == ConnectionMode.tunnel
-                            ? ConnectionMode.proxy
-                            : ConnectionMode.tunnel,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 8 * s),
-                  Expanded(
-                    child: _QuickTile(
-                      keyId: 'quick-theme',
-                      icon: store.themePick == AethThemePick.light
-                          ? AppAssets.iconSun1
-                          : AppAssets.iconMoon,
-                      label: t.settingsThemeShort,
-                      value: switch (store.themePick) {
-                        AethThemePick.night => t.themePickNight,
-                        AethThemePick.light => t.themePickLight,
-                        AethThemePick.auto => t.themePickAuto,
-                      },
-                      active: true,
-                      highlight: false,
-                      onTap: () => store.setThemePick(switch (store.themePick) {
-                        AethThemePick.night => AethThemePick.light,
-                        AethThemePick.light => AethThemePick.auto,
-                        AethThemePick.auto => AethThemePick.night,
-                      }),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The login step indicator re-read as the connection's three phases.
-class _PhaseIndicator extends StatelessWidget {
-  const _PhaseIndicator({required this.phase, required this.color});
-
-  final _Phase phase;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = MotionScope.of(context);
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final d = motionDuration(style, MotionDurations.quick);
-    return Directionality(
-      textDirection: appContentDirection(context),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final p in _Phase.values) ...[
-            if (p != _Phase.off)
-              SizedBox(width: AethGeometry.loginIndicatorGap * s),
-            AnimatedContainer(
-              duration: d,
-              curve: Curves.easeOutCubic,
-              width:
-                  (p == phase
-                      ? AethGeometry.loginIndicatorActiveW
-                      : AethGeometry.loginIndicatorDotW) *
-                  s,
-              height: AethGeometry.loginIndicatorH * s,
-              decoration: BoxDecoration(
-                color: p == phase
-                    ? color
-                    : AethColors.textSecondary.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(
-                  AethGeometry.loginIndicatorH * s / 2,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// The login sheet's top edge — r27 corners and the centre notch (the
-/// login's 184-wide cut, 106 flat, eased with the same cubic shoulders).
-class _NotchedCardPainter extends CustomPainter {
-  const _NotchedCardPainter({
-    required this.color,
-    required this.radius,
-    required this.depth,
-    required this.s,
-  });
-
-  final Color color;
-  final double radius;
-  final double depth;
-  final double s;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final r = radius;
-    final c = w / 2;
-    final outer = 92 * s; // half of the login's 184 cut
-    final flat = 53 * s; // half of its 106 flat
-    final path = Path()
-      ..moveTo(0, h - r)
-      ..lineTo(0, r)
-      ..quadraticBezierTo(0, 0, r, 0)
-      ..lineTo(c - outer, 0)
-      ..cubicTo(
-        c - outer + 26 * s,
-        0,
-        c - flat - 26 * s,
-        depth,
-        c - flat,
-        depth,
-      )
-      ..lineTo(c + flat, depth)
-      ..cubicTo(c + flat + 26 * s, depth, c + outer - 26 * s, 0, c + outer, 0)
-      ..lineTo(w - r, 0)
-      ..quadraticBezierTo(w, 0, w, r)
-      ..lineTo(w, h - r)
-      ..quadraticBezierTo(w, h, w - r, h)
-      ..lineTo(r, h)
-      ..quadraticBezierTo(0, h, 0, h - r)
-      ..close();
-    canvas.drawPath(path, Paint()..color = color);
-  }
-
-  @override
-  bool shouldRepaint(_NotchedCardPainter old) =>
-      old.color != color || old.radius != radius || old.depth != depth;
-}
-
-class _QuickTile extends StatefulWidget {
-  const _QuickTile({
-    required this.keyId,
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.active,
-    required this.onTap,
-    this.highlight = true,
-  });
-
-  final String keyId;
-  final String icon;
-  final String label;
-  final String value;
-  final bool active;
-
-  /// An ON/OFF switch rings itself green while on; a multi-value pick
-  /// (mode, theme) keeps a quiet tile.
-  final bool highlight;
-  final VoidCallback onTap;
-
-  @override
-  State<_QuickTile> createState() => _QuickTileState();
-}
-
-class _QuickTileState extends State<_QuickTile> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = MotionScope.of(context);
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final accent = widget.active
-        ? AethColors.accentConnected
-        : AethColors.textSecondary;
-    return Semantics(
-      button: true,
-      label: '${widget.label}: ${widget.value}',
-      child: GestureDetector(
-        key: ValueKey(widget.keyId),
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          AethHaptics.tap();
-          widget.onTap();
-        },
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        child: AnimatedScale(
-          scale: _pressed ? 0.96 : 1,
-          duration: motionDuration(style, MotionDurations.touch),
-          child: AnimatedContainer(
-            duration: motionDuration(style, MotionDurations.quick),
-            padding: EdgeInsets.symmetric(vertical: 12 * s, horizontal: 6 * s),
-            decoration: BoxDecoration(
-              color: AethColors.bgScreen,
-              borderRadius: BorderRadius.circular(18 * s),
-              border: Border.all(
-                color: widget.active && widget.highlight
-                    ? AethColors.accentConnected.withValues(alpha: 0.45)
-                    : Colors.transparent,
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SvgPicture.asset(
-                  widget.icon,
-                  width: 22 * s,
-                  height: 22 * s,
-                  colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
-                ),
-                SizedBox(height: 6 * s),
-                Text(
-                  widget.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _yekan(
-                    10.5 * s,
-                    FontWeight.w400,
-                    AethColors.textSecondary,
-                  ),
-                ),
-                SizedBox(height: 2 * s),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: AnimatedValueText(
-                    widget.value,
-                    maxLines: 1,
-                    textStyle: _yekan(
-                      13 * s,
-                      FontWeight.w700,
-                      widget.active
-                          ? AethColors.textPrimary
-                          : AethColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
@@ -1079,11 +676,6 @@ class _CategoryList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppStrings.of(context);
-    final ip = switch (store.coreSettings.ipVersion) {
-      IpVersion.v4 => t.ipV4,
-      IpVersion.v6 => t.ipV6,
-      IpVersion.dual => t.ipDual,
-    };
     final mode = store.connectionMode == ConnectionMode.tunnel
         ? t.modeTunnel
         : t.modeProxy;
@@ -1103,7 +695,7 @@ class _CategoryList extends StatelessWidget {
           icon: AppAssets.iconLock1,
           title: t.settingsConnSecTitle,
           summary:
-              '$mode • Kill Switch ${store.killSwitch ? t.settingsOn : t.settingsOff} • $ip',
+              '$mode • Kill Switch ${store.killSwitch ? t.settingsOn : t.settingsOff}',
           onTap: () => onOpen(ConnectionSettingsPage(store: store)),
         ),
         _ListRow(
@@ -1221,8 +813,9 @@ class _ProtocolGrid extends StatelessWidget {
               SizedBox(width: 10 * s),
               tile(
                 'settings-proto-core',
-                AppAssets.iconShieldTick,
-                true,
+                // v1.1.0 — the app's own green mark (owner round).
+                AppAssets.brandMark,
+                false,
                 'Aether Core',
                 t.settingsCoreSub,
                 () => CoreSettingsPage(store: store),
@@ -1314,115 +907,6 @@ class _ProtocolTile extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Support — core log, the two core repositories, the version.
-// ---------------------------------------------------------------------------
-
-class _SupportBlock extends StatelessWidget {
-  const _SupportBlock({required this.onCoreLog});
-
-  final VoidCallback onCoreLog;
-
-  static const String _zeptunRepo = 'https://github.com/Noisemux/zeptun';
-  static const String _aetherRepo = 'https://github.com/CluvexStudio/Aether';
-
-  Future<void> _launch(String url) async {
-    try {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } catch (_) {
-      // No handler on this host — nothing to open.
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppStrings.of(context);
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    Widget repo(String keyId, String name, String url) => Expanded(
-      child: Semantics(
-        button: true,
-        label: name,
-        child: GestureDetector(
-          key: ValueKey(keyId),
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _launch(url),
-          child: Container(
-            height: 52 * s,
-            padding: EdgeInsets.symmetric(horizontal: 14 * s),
-            decoration: BoxDecoration(
-              color: AethColors.cardDark,
-              borderRadius: BorderRadius.circular(18 * s),
-            ),
-            child: Row(
-              children: [
-                SvgPicture.asset(
-                  AppAssets.logoGithub,
-                  width: 22 * s,
-                  height: 22 * s,
-                  colorFilter: ColorFilter.mode(
-                    AethColors.textPrimary,
-                    BlendMode.srcIn,
-                  ),
-                ),
-                SizedBox(width: 10 * s),
-                Expanded(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: AlignmentDirectional.centerStart,
-                    child: Text(
-                      name,
-                      maxLines: 1,
-                      style: _yekan(
-                        13 * s,
-                        FontWeight.w600,
-                        AethColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _GroupCard(
-          children: [
-            _ListRow(
-              keyId: 'settings-core-log-card',
-              icon: AppAssets.iconInformationCircle,
-              title: t.coreLogTitle,
-              summary: t.coreLogOpen,
-              onTap: onCoreLog,
-            ),
-          ],
-        ),
-        SizedBox(height: 10 * s),
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: Row(
-            children: [
-              repo('settings-repo-zeptun', 'Zeptun Tunnel', _zeptunRepo),
-              SizedBox(width: 10 * s),
-              repo('settings-repo-aether', 'Aether Core', _aetherRepo),
-            ],
-          ),
-        ),
-        SizedBox(height: 18 * s),
-        Text(
-          'AETHONE $appVersion',
-          key: const ValueKey('settings-version'),
-          textAlign: TextAlign.center,
-          style: _yekan(11 * s, FontWeight.w400, AethColors.textSecondary),
-        ),
-      ],
     );
   }
 }

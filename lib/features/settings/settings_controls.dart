@@ -162,47 +162,117 @@ class SettingToggleRow extends StatelessWidget {
 /// follows the ambient motion style ([MotionScope]): SPRING flicks in
 /// 140 ms with an overshoot, TIDE flows in 320 ms, BLINK blinks at
 /// 90 ms, OFF lands instantly.
-class _CustomSwitch extends StatelessWidget {
-  const _CustomSwitch({super.key, required this.value, required this.onChanged});
+class _CustomSwitch extends StatefulWidget {
+  const _CustomSwitch({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
 
   final bool value;
   final ValueChanged<bool> onChanged;
 
   @override
+  State<_CustomSwitch> createState() => _CustomSwitchState();
+}
+
+/// v1.1.0 — the modern switch (owner: «ضاهر سوییچ خاموش روشن رو مدرن‌تر
+/// کن»): a 52×30 capsule — ON fills with the brand gradient and a soft
+/// green glow, OFF is a quiet outlined track; the white knob carries a
+/// drop shadow, a tick glyph when ON, and stretches while pressed (the
+/// iOS/Material-3 «squish»). Every timing rides the ambient recipe.
+class _CustomSwitchState extends State<_CustomSwitch> {
+  bool _pressed = false;
+
+  static const double _w = 52;
+  static const double _h = 30;
+  static const double _pad = 3;
+  static const double _knob = _h - _pad * 2;
+
+  @override
   Widget build(BuildContext context) {
-    const track = Size(46, 26);
     final recipe = MotionScope.of(context).recipe;
     final duration = Duration(milliseconds: recipe.controlMs);
+    final on = widget.value;
+    final knobW = _pressed ? _knob + 6 : _knob;
     return Semantics(
-      toggled: value,
+      toggled: on,
       button: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTapUp: (_) => setState(() => _pressed = false),
         // v1.0.2 — the light haptic word lands with the flip.
         onTap: () {
           AethHaptics.tap();
-          onChanged(!value);
+          widget.onChanged(!on);
         },
-        child: AnimatedContainer(
-          duration: duration,
-          curve: recipe.controlCurve,
-          width: track.width,
-          height: track.height,
-          decoration: BoxDecoration(
-            color: value ? AethColors.accentConnected : AethColors.sheetDescCard,
-            borderRadius: BorderRadius.circular(13),
-          ),
-          child: AnimatedAlign(
+        child: Padding(
+          // 48 dp touch target around the 30 dp capsule.
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          child: AnimatedContainer(
             duration: duration,
             curve: recipe.controlCurve,
-            // RTL row: the knob travels toward the visual LEFT when on.
-            alignment: value ? Alignment.centerLeft : Alignment.centerRight,
-            child: Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                color: AethColors.textPrimary,
-                shape: BoxShape.circle,
+            width: _w,
+            height: _h,
+            padding: const EdgeInsets.all(_pad),
+            decoration: BoxDecoration(
+              gradient: on ? AethColors.accentConnectedGradient : null,
+              color: on ? null : AethColors.sheetDescCard,
+              borderRadius: BorderRadius.circular(_h / 2),
+              border: Border.all(
+                color: on
+                    ? Colors.transparent
+                    : AethColors.textSecondary.withValues(alpha: 0.28),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AethColors.accentConnected.withValues(
+                    alpha: on ? 0.30 : 0,
+                  ),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: AnimatedAlign(
+              duration: duration,
+              curve: recipe.controlCurve,
+              // RTL row: the knob travels toward the visual LEFT when on.
+              alignment: on ? Alignment.centerLeft : Alignment.centerRight,
+              child: AnimatedContainer(
+                duration: duration,
+                curve: recipe.controlCurve,
+                width: knobW,
+                height: _knob,
+                decoration: BoxDecoration(
+                  color: on
+                      ? const Color(0xFFFFFFFF)
+                      : AethColors.textSecondary.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(_knob / 2),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x33000000),
+                      blurRadius: 4,
+                      offset: Offset(0, 1.5),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: AnimatedOpacity(
+                  duration: duration,
+                  opacity: on ? 1 : 0,
+                  child: SvgPicture.asset(
+                    AppAssets.iconTick,
+                    width: 14,
+                    height: 14,
+                    colorFilter: const ColorFilter.mode(
+                      AethColors.accentConnected,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -212,9 +282,6 @@ class _CustomSwitch extends StatelessWidget {
   }
 }
 
-/// An option-chip group (the protocol page's segment style): a Wrap of
-/// pills, the selected one accent-filled. White text on both states —
-/// the measured rule from the mode segments.
 class SettingPills<T> extends StatelessWidget {
   const SettingPills({
     super.key,
@@ -268,8 +335,9 @@ class SettingPills<T> extends StatelessWidget {
                   label,
                   style: TextStyle(
                     fontFamily: 'IRANYekanX',
-                    fontWeight:
-                        v == selected ? FontWeight.w700 : FontWeight.w600,
+                    fontWeight: v == selected
+                        ? FontWeight.w700
+                        : FontWeight.w600,
                     fontSize: 13 * s,
                     // v1.1.0 — readable ink on the green pick (white on
                     // #1AD995 was ~1.9:1; the deep green is ~5:1).
@@ -311,8 +379,9 @@ class SettingField extends StatefulWidget {
 }
 
 class _SettingFieldState extends State<SettingField> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initial);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
 
   @override
   void dispose() {
@@ -339,7 +408,9 @@ class _SettingFieldState extends State<SettingField> {
           ),
           SizedBox(height: 8 * s),
           TextField(
-            key: widget.keyId == null ? null : ValueKey('field-${widget.keyId}'),
+            key: widget.keyId == null
+                ? null
+                : ValueKey('field-${widget.keyId}'),
             controller: _controller,
             onChanged: widget.onChanged,
             maxLines: widget.maxLines,
@@ -620,7 +691,12 @@ class _IconGlyph extends StatelessWidget {
 /// Renders an SVG icon tinted [color] (srcIn blend — the app's standard
 /// icon treatment).
 class SvgGlyph extends StatelessWidget {
-  const SvgGlyph({super.key, required this.asset, required this.size, this.color});
+  const SvgGlyph({
+    super.key,
+    required this.asset,
+    required this.size,
+    this.color,
+  });
 
   final String asset;
   final double size;
@@ -660,7 +736,9 @@ class FlagPickStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     return Directionality(
-      textDirection: appContentDirection(context), // first tile at the visual RIGHT
+      textDirection: appContentDirection(
+        context,
+      ), // first tile at the visual RIGHT
       child: SizedBox(
         height: 72 * s,
         child: ListView.separated(

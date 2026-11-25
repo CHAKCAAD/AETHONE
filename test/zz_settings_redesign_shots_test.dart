@@ -9,6 +9,7 @@ import 'package:aethone/connection/engine.dart';
 import 'package:aethone/core/app_theme.dart';
 import 'package:aethone/features/settings/appearance_page.dart';
 import 'package:aethone/features/settings/connection_page.dart';
+import 'package:aethone/features/settings/core_page.dart';
 import 'package:aethone/features/settings/general_page.dart';
 import 'package:aethone/features/settings/psiphon_page.dart';
 import 'package:aethone/features/settings/routing_page.dart';
@@ -110,6 +111,7 @@ void main() {
         'routing': RoutingSettingsPage(store: store),
         'general': GeneralSettingsPage(store: store),
         'psiphon': PsiphonSettingsPage(store: store),
+        'core': CoreSettingsPage(store: store),
       };
       for (final e in pages.entries) {
         await t.pumpWidget(_booth(e.value, locale));
