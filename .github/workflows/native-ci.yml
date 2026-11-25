@@ -1393,6 +1393,12 @@ jobs:
           [ "$(git -C "$src" rev-parse HEAD)" = "$ZEPTUN_SHA" ] \
             || { echo "::error::zeptun pin mismatch: expected $ZEPTUN_SHA, got $(git -C "$src" rev-parse HEAD)"; exit 1; }
           echo "zeptun pin verified: $(git -C "$src" rev-parse HEAD)"
+          # v1.1.0 — the shipped tree is pin + AETHONE's hybrid-routing
+          # patch (build_native.sh applies the same file), so the gate
+          # tests exactly what ships.
+          git -C "$src" checkout -- .
+          git -C "$src" apply --whitespace=nowarn "$GITHUB_WORKSPACE/scripts/zeptun-hybrid-routing.patch"
+          echo "zeptun hybrid routing patch applied"
 
       - name: Run the zeptun test gate (upstream linux CI job, order preserved)
         run: |
@@ -1733,6 +1739,19 @@ jobs:
           set -euo pipefail
           flutter build apk --release
           ls -la build/app/outputs/flutter-apk/
+
+      # v1.1.0 — the hybrid-routing policy engine's JVM unit tests (the
+      # exact Kotlin the VpnService consults per flow: package, exact /
+      # wildcard domain, IPv4/IPv6/CIDR, priority, conflicts, default
+      # route, fail-closed). Runs on the gradle project the build above
+      # just configured.
+      - name: Hybrid routing — Kotlin policy unit tests
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon :app:testReleaseUnitTest --tests 'com.chakcaad.aethone.routing.*'
+          mkdir -p "$GITHUB_WORKSPACE/test-evidence"
+          cp -r app/build/test-results "$GITHUB_WORKSPACE/test-evidence/hybrid-routing-junit" || true
 
       # v4.35 (owner round 11, the beta-release decree: «نسخه های مختلف cpu
       # های مختلف و .. رو بیلد بگیریم») — one release APK per ABI on top of

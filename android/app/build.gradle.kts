@@ -112,6 +112,9 @@ dependencies {
     // M2: NotificationCompat + ServiceCompat for the VpnService foreground
     // notification (specialUse type gating per API level).
     implementation("androidx.core:core-ktx:1.13.1")
+    // v1.1.0 — JVM unit tests of the hybrid-routing policy engine
+    // (src/test/kotlin; run by CI's android-apk job).
+    testImplementation("junit:junit:4.13.2")
 }
 
 flutter {

@@ -310,6 +310,42 @@ class AppStrings {
   String get tunnelAppsModeDisallow => _v['tunnelAppsModeDisallow']!;
   String get tunnelAppsDesc => _v['tunnelAppsDesc']!;
   String get tunnelAppsLoading => _v['tunnelAppsLoading']!;
+
+  // ---- v1.1.0 hybrid per-tunnel routing ----
+  String get hybridRouting => _v['hybridRouting']!;
+  String get hybridRoutingOpen => _v['hybridRoutingOpen']!;
+  String get hybridRoutingDesc => _v['hybridRoutingDesc']!;
+  String get hybridRoutes => _v['hybridRoutes']!;
+  String get hybridDefaultRoute => _v['hybridDefaultRoute']!;
+  String get hybridDefaultNote => _v['hybridDefaultNote']!;
+  String get hybridApps => _v['hybridApps']!;
+  String get hybridDomains => _v['hybridDomains']!;
+  String get hybridIps => _v['hybridIps']!;
+  String get hybridAddApps => _v['hybridAddApps']!;
+  String get hybridAddDomain => _v['hybridAddDomain']!;
+  String get hybridAddIp => _v['hybridAddIp']!;
+  String get hybridDomainHint => _v['hybridDomainHint']!;
+  String get hybridIpHint => _v['hybridIpHint']!;
+  String get hybridSearchApps => _v['hybridSearchApps']!;
+  String get hybridErrEmpty => _v['hybridErrEmpty']!;
+  String get hybridErrInvalid => _v['hybridErrInvalid']!;
+  String get hybridErrDuplicate => _v['hybridErrDuplicate']!;
+  String get hybridConflict => _v['hybridConflict']!;
+  String get hybridEmpty => _v['hybridEmpty']!;
+  String get hybridInvalidTunnel => _v['hybridInvalidTunnel']!;
+  String get hybridEngineRejected => _v['hybridEngineRejected']!;
+  String get hybridRuleOff => _v['hybridRuleOff']!;
+  String get hybridSave => _v['hybridSave']!;
+  String get hybridAppliedNext => _v['hybridAppliedNext']!;
+  String get hybridApplyFailed => _v['hybridApplyFailed']!;
+  String get hybridNotRouted => _v['hybridNotRouted']!;
+  String get hybridStatusLive => _v['hybridStatusLive']!;
+  String get hybridAppUnsupported => _v['hybridAppUnsupported']!;
+  String get hybridWildcardNote => _v['hybridWildcardNote']!;
+  String get hybridPriority => _v['hybridPriority']!;
+  String get hybridLimits => _v['hybridLimits']!;
+  String get hybridPickTunnel => _v['hybridPickTunnel']!;
+  String get hybridFlows => _v['hybridFlows']!;
   String get tunnelAppsLoadFailed => _v['tunnelAppsLoadFailed']!;
 
   // v4.40 — the desktop close behavior (owner round 15)
@@ -764,6 +800,40 @@ class AppStrings {
       'tunnelAppsDesc': 'انتخاب کنید کدام برنامه‌ها از تونل عبور کنند؛ فقط در حالت اتصال «تونل» روی اندروید اعمال می‌شود و از اتصال بعدی مؤثر است.',
       'tunnelAppsLoading': 'در حال دریافت فهرست برنامه‌ها…',
       'tunnelAppsLoadFailed': 'فهرست برنامه‌ها در دسترس نیست',
+      'hybridRouting': "مسیریابی ترکیبی",
+      'hybridRoutingOpen': "مدیریت قوانین مسیر",
+      'hybridRoutingDesc': "در این پروتکل ترکیبی تعیین کنید ترافیک هر برنامه، دامنه یا IP از کدام تونل عبور کند.",
+      'hybridRoutes': "مسیرهای این پروتکل",
+      'hybridDefaultRoute': "پیش‌فرض",
+      'hybridDefaultNote': "ترافیکی که قانونی ندارد مثل قبل از مسیر پیش‌فرض {route} عبور می‌کند.",
+      'hybridApps': "مسیر برنامه‌ها",
+      'hybridDomains': "مسیر دامنه‌ها",
+      'hybridIps': "مسیر IP",
+      'hybridAddApps': "افزودن برنامه",
+      'hybridAddDomain': "افزودن دامنه",
+      'hybridAddIp': "افزودن IP",
+      'hybridDomainHint': "example.com یا *.example.com",
+      'hybridIpHint': "1.1.1.1 یا 192.168.1.0/24 یا 2606:4700::/32",
+      'hybridSearchApps': "جست‌وجوی برنامه‌ها",
+      'hybridErrEmpty': "چیزی وارد نشده",
+      'hybridErrInvalid': "ورودی معتبر نیست",
+      'hybridErrDuplicate': "این مورد قبلاً ثبت شده",
+      'hybridConflict': "با {rules} روی تونل دیگری هم‌پوشانی دارد؛ قانون دقیق‌تر اعمال می‌شود.",
+      'hybridEmpty': "هنوز قانونی ثبت نشده",
+      'hybridInvalidTunnel': "این مسیر در این پروتکل وجود ندارد؛ ترافیکش مسدود می‌شود تا قانون را اصلاح کنید",
+      'hybridEngineRejected': "موتور این قانون را نپذیرفت",
+      'hybridRuleOff': "غیرفعال",
+      'hybridSave': "ذخیره",
+      'hybridAppliedNext': "از اتصال تونل بعدی با همین پروتکل اعمال می‌شود",
+      'hybridApplyFailed': "موتور نتوانست قوانین را اعمال کند ({error})",
+      'hybridNotRouted': "این اتصال بدون مسیریابی ترکیبی شروع شده؛ یک بار دوباره وصل شوید",
+      'hybridStatusLive': "در موتور فعال است: {n} قانون",
+      'hybridAppUnsupported': "مسیریابی برنامه‌ها به اندروید ۱۰ یا بالاتر نیاز دارد",
+      'hybridWildcardNote': "example.com فقط خود همین دامنه را می‌گیرد؛ *.example.com فقط زیردامنه‌ها (مثل www.example.com) را، نه خود example.com.",
+      'hybridPriority': "اولویت: برنامه ← دامنهٔ دقیق ← دامنهٔ wildcard (دقیق‌ترین) ← IP/CIDR (کوچک‌ترین محدوده) ← مسیر پیش‌فرض. قانون برنامه بر قوانین دامنه و IP همان برنامه مقدم است.",
+      'hybridLimits': "محدودیت‌ها: دامنه از DNS خود تونل تشخیص داده می‌شود؛ برنامه‌هایی که DNS رمزگذاری‌شدهٔ خودشان (DoH/DoT) را دارند یا مستقیم به IP وصل می‌شوند فقط با قانون برنامه یا IP مسیریابی می‌شوند. قوانین IP فقط روی اتصال‌های مستقیم به IP اعمال می‌شوند. اگر تونل انتخاب‌شده در دسترس نباشد، ترافیک آن قانون مسدود می‌شود و هرگز مستقیم نمی‌رود. در این پروتکل‌ها UDP (به‌جز DNS) منتقل نمی‌شود. فقط در حالت «تونل» روی اندروید.",
+      'hybridPickTunnel': "مسیر",
+      'hybridFlows': "{n} اتصال",
       'secProtocolMode': 'حالت پروتکل',
       'protoModeSmart': 'اسمارت',
       'smartNote': 'در حالت اسمارت، خود اپ به‌جای پیش‌فرض هسته پروتکل را انتخاب می‌کند: نامزدها (ماسک، وایرگارد، گول، میم، گول کلاسیک) به ترتیب موفقیت و تأخیر اندازه‌گیری‌شدهٔ قبلی امتحان می‌شوند تا یکی وصل شود. ترتیب تلاش‌ها در صفحهٔ اصلی نمایش داده می‌شود، تأخیر اندازه‌گیری‌شده یادآوری می‌شود و انتخاب دستی شما هرگز بازنویسی نمی‌شود. فقط روی کاشی «اتوماتیک» فعال است.',
@@ -1103,6 +1173,40 @@ class AppStrings {
       'tunnelAppsDesc': 'Choose which apps go through the tunnel; applies in tunnel mode on Android, from the next connect.',
       'tunnelAppsLoading': 'Loading the app list…',
       'tunnelAppsLoadFailed': 'The app list is unavailable',
+      'hybridRouting': "Hybrid routing",
+      'hybridRoutingOpen': "Manage routing rules",
+      'hybridRoutingDesc': "Choose which tunnel of this hybrid protocol each app, domain or IP uses.",
+      'hybridRoutes': "Routes of this protocol",
+      'hybridDefaultRoute': "default",
+      'hybridDefaultNote': "Traffic without a rule keeps the default route {route}, exactly as before.",
+      'hybridApps': "App routes",
+      'hybridDomains': "Domain routes",
+      'hybridIps': "IP routes",
+      'hybridAddApps': "Add apps",
+      'hybridAddDomain': "Add domain",
+      'hybridAddIp': "Add IP",
+      'hybridDomainHint': "example.com or *.example.com",
+      'hybridIpHint': "1.1.1.1, 192.168.1.0/24 or 2606:4700::/32",
+      'hybridSearchApps': "Search apps",
+      'hybridErrEmpty': "Nothing entered",
+      'hybridErrInvalid': "Not a valid entry",
+      'hybridErrDuplicate': "Already added",
+      'hybridConflict': "Overlaps {rules} on another tunnel; the more specific rule wins.",
+      'hybridEmpty': "No rules yet",
+      'hybridInvalidTunnel': "This route does not exist in this protocol; its traffic is blocked until you fix the rule",
+      'hybridEngineRejected': "The engine refused this rule",
+      'hybridRuleOff': "Off",
+      'hybridSave': "Save",
+      'hybridAppliedNext': "Applies from the next tunnel connect with this protocol",
+      'hybridApplyFailed': "The engine could not apply the rules ({error})",
+      'hybridNotRouted': "This connection started without hybrid routing; reconnect once",
+      'hybridStatusLive': "Active in the engine: {n} rules",
+      'hybridAppUnsupported': "App routing needs Android 10 or newer",
+      'hybridWildcardNote': "example.com matches only that exact name; *.example.com matches its subdomains (like www.example.com), not example.com itself.",
+      'hybridPriority': "Priority: app → exact domain → wildcard domain (most specific) → IP/CIDR (smallest range) → default route. An app rule beats domain and IP rules for that app.",
+      'hybridLimits': "Limits: domains are recognised from the tunnel's own DNS; apps with their own encrypted DNS (DoH/DoT) or that connect straight to an IP are routed only by app or IP rules. IP rules apply only to direct-to-IP connections. If the chosen tunnel is down, that rule's traffic is blocked — it never goes direct. UDP (except DNS) is not carried in these protocols. Tunnel mode on Android only.",
+      'hybridPickTunnel': "Route",
+      'hybridFlows': "{n} connections",
       'secProtocolMode': 'Protocol mode',
       'protoModeSmart': 'SMART',
       'smartNote': 'In SMART mode the app itself picks the protocol instead of the core default: the candidates (masque, wireguard, gool, mim, gool-classic) are tried in the order of their measured success and latency until one connects. The attempt chain is shown on the home screen, the measured latency is remembered, and your manual pick is never rewritten. Active only with the AUTO tile.',
@@ -1440,6 +1544,40 @@ class AppStrings {
       'tunnelAppsDesc': 'Выберите, какие приложения проходят через туннель; действует в режиме туннеля на Android, начиная со следующего подключения.',
       'tunnelAppsLoading': 'Загрузка списка приложений…',
       'tunnelAppsLoadFailed': 'Список приложений недоступен',
+      'hybridRouting': "Гибридная маршрутизация",
+      'hybridRoutingOpen': "Правила маршрутов",
+      'hybridRoutingDesc': "Выберите, через какой туннель этого гибридного протокола идёт каждое приложение, домен или IP.",
+      'hybridRoutes': "Маршруты протокола",
+      'hybridDefaultRoute': "по умолчанию",
+      'hybridDefaultNote': "Трафик без правила идёт по маршруту по умолчанию {route}, как и раньше.",
+      'hybridApps': "Приложения",
+      'hybridDomains': "Домены",
+      'hybridIps': "IP-адреса",
+      'hybridAddApps': "Добавить приложения",
+      'hybridAddDomain': "Добавить домен",
+      'hybridAddIp': "Добавить IP",
+      'hybridDomainHint': "example.com или *.example.com",
+      'hybridIpHint': "1.1.1.1, 192.168.1.0/24 или 2606:4700::/32",
+      'hybridSearchApps': "Поиск приложений",
+      'hybridErrEmpty': "Ничего не введено",
+      'hybridErrInvalid': "Неверное значение",
+      'hybridErrDuplicate': "Уже добавлено",
+      'hybridConflict': "Пересекается с {rules} на другом туннеле; действует более точное правило.",
+      'hybridEmpty': "Правил пока нет",
+      'hybridInvalidTunnel': "Этого маршрута нет в протоколе; трафик блокируется, пока правило не исправлено",
+      'hybridEngineRejected': "Движок отклонил правило",
+      'hybridRuleOff': "Выкл.",
+      'hybridSave': "Сохранить",
+      'hybridAppliedNext': "Применится при следующем подключении туннеля с этим протоколом",
+      'hybridApplyFailed': "Движок не смог применить правила ({error})",
+      'hybridNotRouted': "Подключение начато без гибридной маршрутизации; переподключитесь",
+      'hybridStatusLive': "Активно в движке: {n}",
+      'hybridAppUnsupported': "Маршрутизация приложений требует Android 10+",
+      'hybridWildcardNote': "example.com — только это имя; *.example.com — только поддомены (www.example.com), но не сам example.com.",
+      'hybridPriority': "Приоритет: приложение → точный домен → wildcard (самый точный) → IP/CIDR (самый узкий) → маршрут по умолчанию.",
+      'hybridLimits': "Ограничения: домены определяются по DNS туннеля; приложения со своим шифрованным DNS (DoH/DoT) или прямым подключением к IP маршрутизируются только правилами приложений или IP. Правила IP действуют только для прямых подключений к IP. Если выбранный туннель недоступен, трафик правила блокируется и никогда не идёт напрямую. UDP (кроме DNS) не передаётся. Только режим туннеля на Android.",
+      'hybridPickTunnel': "Маршрут",
+      'hybridFlows': "{n} соединений",
       'secProtocolMode': 'Режим протокола',
       'protoModeSmart': 'СМАРТ',
       'smartNote': 'В режиме SMART приложение само выбирает протокол вместо значения ядра по умолчанию: кандидаты (masque, wireguard, gool, mim, gool-classic) пробуются в порядке измеренных успехов и задержек, пока один не подключится. Цепочка попыток видна на главном экране, измеренная задержка запоминается, а ваш ручной выбор никогда не перезаписывается. Активен только с плиткой AUTO.',
@@ -1776,6 +1914,40 @@ class AppStrings {
       'tunnelAppsDesc': '选择哪些应用通过隧道；仅在 Android 的隧道模式下生效，自下次连接起应用。',
       'tunnelAppsLoading': '正在获取应用列表…',
       'tunnelAppsLoadFailed': '应用列表不可用',
+      'hybridRouting': "混合路由",
+      'hybridRoutingOpen': "管理路由规则",
+      'hybridRoutingDesc': "为此混合协议选择每个应用、域名或 IP 使用哪条隧道。",
+      'hybridRoutes': "此协议的路由",
+      'hybridDefaultRoute': "默认",
+      'hybridDefaultNote': "没有规则的流量照旧走默认路由 {route}。",
+      'hybridApps': "应用路由",
+      'hybridDomains': "域名路由",
+      'hybridIps': "IP 路由",
+      'hybridAddApps': "添加应用",
+      'hybridAddDomain': "添加域名",
+      'hybridAddIp': "添加 IP",
+      'hybridDomainHint': "example.com 或 *.example.com",
+      'hybridIpHint': "1.1.1.1、192.168.1.0/24 或 2606:4700::/32",
+      'hybridSearchApps': "搜索应用",
+      'hybridErrEmpty': "未输入内容",
+      'hybridErrInvalid': "输入无效",
+      'hybridErrDuplicate': "已存在",
+      'hybridConflict': "与另一隧道上的 {rules} 重叠；更具体的规则优先。",
+      'hybridEmpty': "暂无规则",
+      'hybridInvalidTunnel': "此协议中没有该路由；在修正规则前其流量将被阻止",
+      'hybridEngineRejected': "引擎拒绝了此规则",
+      'hybridRuleOff': "已关闭",
+      'hybridSave': "保存",
+      'hybridAppliedNext': "将在下次以此协议连接隧道时生效",
+      'hybridApplyFailed': "引擎无法应用规则（{error}）",
+      'hybridNotRouted': "本次连接未启用混合路由；请重新连接一次",
+      'hybridStatusLive': "引擎中生效：{n} 条规则",
+      'hybridAppUnsupported': "应用路由需要 Android 10 或更高版本",
+      'hybridWildcardNote': "example.com 只匹配该名称本身；*.example.com 只匹配子域名（如 www.example.com），不含 example.com 本身。",
+      'hybridPriority': "优先级：应用 → 精确域名 → 通配域名（最具体）→ IP/CIDR（最小范围）→ 默认路由。",
+      'hybridLimits': "限制：域名通过隧道自身的 DNS 识别；使用自带加密 DNS（DoH/DoT）或直连 IP 的应用只能按应用或 IP 规则路由。IP 规则仅作用于直连 IP 的连接。所选隧道不可用时，该规则的流量会被阻止，绝不直连。这些协议不传输 UDP（DNS 除外）。仅限 Android 隧道模式。",
+      'hybridPickTunnel': "路由",
+      'hybridFlows': "{n} 个连接",
       'secProtocolMode': '协议模式',
       'protoModeSmart': '智能',
       'smartNote': '在 SMART 模式下，应用自行选择协议而非内核默认值：候选协议（masque、wireguard、gool、mim、gool-classic）按既往实测成功率与延迟依次尝试，直到其中一个连通。尝试链路会在主屏幕显示，实测延迟会被记住，您的手动选择永不被改写。仅在选中 AUTO 卡时生效。',
@@ -2121,6 +2293,40 @@ class AppStrings {
           'Näme programmalaryň tunelden geçýändigini saýlaň; diňe Android-iň tunel režiminde, indiki birikmeden güýje girer.',
       'tunnelAppsLoading': 'Programma sanawy alnýar…',
       'tunnelAppsLoadFailed': 'Programma sanawy elýeterli däl',
+      'hybridRouting': "Gibrid ugrukdyryş",
+      'hybridRoutingOpen': "Ugur düzgünleri",
+      'hybridRoutingDesc': "Bu gibrid protokolyň haýsy tuneli her programma, domen ýa-da IP üçin ulanylýandygyny saýlaň.",
+      'hybridRoutes': "Protokolyň ugurlary",
+      'hybridDefaultRoute': "esasy",
+      'hybridDefaultNote': "Düzgüni bolmadyk traffik öňküsi ýaly esasy {route} ugry bilen geçýär.",
+      'hybridApps': "Programma ugurlary",
+      'hybridDomains': "Domen ugurlary",
+      'hybridIps': "IP ugurlary",
+      'hybridAddApps': "Programma goş",
+      'hybridAddDomain': "Domen goş",
+      'hybridAddIp': "IP goş",
+      'hybridDomainHint': "example.com ýa-da *.example.com",
+      'hybridIpHint': "1.1.1.1, 192.168.1.0/24 ýa-da 2606:4700::/32",
+      'hybridSearchApps': "Programmalary gözle",
+      'hybridErrEmpty': "Hiç zat girizilmedi",
+      'hybridErrInvalid': "Nädogry giriş",
+      'hybridErrDuplicate': "Eýýäm goşuldy",
+      'hybridConflict': "Başga tuneldäki {rules} bilen kesişýär; has takyk düzgün ulanylýar.",
+      'hybridEmpty': "Entek düzgün ýok",
+      'hybridInvalidTunnel': "Bu ugur protokolda ýok; düzgün düzedilýänçä traffik petiklenýär",
+      'hybridEngineRejected': "Hereketlendiriji düzgüni kabul etmedi",
+      'hybridRuleOff': "Öçük",
+      'hybridSave': "Ýatda sakla",
+      'hybridAppliedNext': "Şu protokol bilen indiki tunel birikmesinden ulanylýar",
+      'hybridApplyFailed': "Hereketlendiriji düzgünleri ulanyp bilmedi ({error})",
+      'hybridNotRouted': "Bu birikme gibrid ugrukdyryşsyz başlady; bir gezek täzeden birikiň",
+      'hybridStatusLive': "Hereketlendirijide işjeň: {n} düzgün",
+      'hybridAppUnsupported': "Programma ugrukdyryşy Android 10 ýa-da täzesini talap edýär",
+      'hybridWildcardNote': "example.com diňe şol ady; *.example.com diňe subdomenleri (www.example.com) tutýar, example.com-yň özüni däl.",
+      'hybridPriority': "Ileri tutma: programma → takyk domen → wildcard → IP/CIDR → esasy ugur.",
+      'hybridLimits': "Çäkler: domenler tuneliň öz DNS-i arkaly tanalýar; öz şifrlenen DNS-i (DoH/DoT) bar ýa-da göni IP-ä birikýän programmalar diňe programma ýa-da IP düzgünleri bilen ugrukdyrylýar. Saýlanan tunel elýeterli bolmasa, düzgüniň traffigi petiklenýär we hiç haçan göni gitmeýär. Bu protokollarda UDP (DNS-den başga) geçirilmeýär. Diňe Android-da tunel tertibi.",
+      'hybridPickTunnel': "Ugur",
+      'hybridFlows': "{n} birikme",
       'secProtocolMode': 'Protokol režimi',
       'protoModeSmart': 'SMART',
       'smartNote':

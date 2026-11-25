@@ -320,6 +320,9 @@ class MainActivity : FlutterActivity() {
                     val appTunnelMode = call.argument<String>("appTunnelMode") ?: "all"
                     val appTunnelApps =
                         call.argument<List<String>>("appTunnelApps") ?: emptyList()
+                    // v1.1.0 — hybrid per-tunnel routing policy (JSON), only
+                    // for a hybrid protocol with routing on.
+                    val hybridRouting = call.argument<String>("hybridRouting")
                     // v4.26 — record the session BEFORE the start goes out:
                     // a stop that lands while this start is still in flight
                     // bumps the stop generation past it, and the straggler
@@ -336,6 +339,9 @@ class MainActivity : FlutterActivity() {
                             AethoneVpnService.EXTRA_APPS,
                             ArrayList(appTunnelApps.filter { it.isNotBlank() }),
                         )
+                    if (!hybridRouting.isNullOrBlank()) {
+                        intent.putExtra(AethoneVpnService.EXTRA_HYBRID_ROUTING, hybridRouting)
+                    }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         startForegroundService(intent)
                     } else {
@@ -389,6 +395,27 @@ class MainActivity : FlutterActivity() {
                 // visible to every app by the package-visibility rules —
                 // no QUERY_ALL_PACKAGES needed.
                 "installedApps" -> result.success(installedApps())
+                "appIcon" -> result.success(
+                    appIcon(call.argument<String>("package") ?: ""),
+                )
+                // v1.1.0 — hybrid routing: live rule update + honest status.
+                "hybridRoutingUpdate" -> {
+                    val cfg = com.chakcaad.aethone.routing.HybridRouter.parse(
+                        call.argument<String>("policy"),
+                    )
+                    if (cfg == null) {
+                        result.success(mapOf("ok" to false, "error" to "invalid-policy"))
+                    } else {
+                        val err = com.chakcaad.aethone.routing.HybridRouter.update(this, cfg)
+                        result.success(
+                            mapOf("ok" to (err == null), "error" to err) +
+                                com.chakcaad.aethone.routing.HybridRouter.status(),
+                        )
+                    }
+                }
+                "hybridRoutingStatus" -> result.success(
+                    com.chakcaad.aethone.routing.HybridRouter.status(),
+                )
                 "zeptunCounters" -> result.success(AethoneVpnService.counters())
                 // v4.19 (#7): the proxy-mode process hold (CoreHoldService).
                 "startCoreHold" -> {
@@ -469,6 +496,23 @@ class MainActivity : FlutterActivity() {
     /// v4.41 — the per-app tunneling picker's list: every LAUNCHABLE
     /// app (label + packageName), AETHONE itself excluded (tunneling the
     /// tunnel makes a loop), sorted by label.
+    /// v1.1.0 — the app's real launcher icon as PNG bytes (48 dp), for the
+    /// hybrid-routing app list; null when the package is gone.
+    private fun appIcon(pkg: String): ByteArray? = try {
+        val d = packageManager.getApplicationIcon(pkg)
+        val px = (48 * resources.displayMetrics.density).toInt().coerceIn(48, 192)
+        val bmp = android.graphics.Bitmap.createBitmap(px, px, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bmp)
+        d.setBounds(0, 0, px, px)
+        d.draw(canvas)
+        val out = java.io.ByteArrayOutputStream()
+        bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+        bmp.recycle()
+        out.toByteArray()
+    } catch (_: Exception) {
+        null
+    }
+
     private fun installedApps(): List<Map<String, String>> {
         val pm = packageManager
         val launcher = android.content.Intent(

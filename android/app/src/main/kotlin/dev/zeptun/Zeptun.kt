@@ -23,6 +23,17 @@ object Zeptun {
     }
 
     external fun nativeStart(service: Any?, fd: Int, config: String?): Int
+
+    /// AETHONE hybrid routing (scripts/zeptun-hybrid-routing.patch):
+    /// [nativeStart] plus the extra SOCKS5 route servers ("host:port,…") and
+    /// the per-flow route callback, which lands in [route].
+    external fun nativeStartRouted(service: Any?, fd: Int, config: String?, servers: String): Int
+
+    /// Called by libzeptun-jni on the engine thread for every new flow
+    /// while a routed tunnel runs. Returns zeptun's route code.
+    @JvmStatic
+    fun route(proto: Int, family: Int, src: ByteArray, sport: Int, dst: ByteArray, dport: Int, name: String?): Int =
+        com.chakcaad.aethone.routing.HybridRouter.route(proto, family, src, sport, dst, dport, name)
     external fun nativeStop()
     external fun nativeVersion(): String
     external fun nativeCounter(index: Int): Long

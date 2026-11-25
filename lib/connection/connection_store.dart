@@ -22,6 +22,7 @@ import 'core_settings.dart';
 import 'egress_locations.dart';
 import 'engine.dart';
 import 'app_tunnel.dart';
+import 'hybrid_routing.dart';
 import 'platform_engine_adapter.dart';
 import 'smart_scorecard.dart';
 import 'transport_modes.dart';
@@ -215,6 +216,62 @@ class ConnectionStore extends ChangeNotifier implements EngineConfigSource {
     if (selected == next.contains(packageName)) return;
     selected ? next.add(packageName) : next.remove(packageName);
     appTunnelApps = next;
+    notifyListeners();
+  }
+
+  /// v1.1.0 — hybrid per-tunnel routing: the user's rules PER hybrid
+  /// protocol (profile = ProtocolId.name). Profiles never share rules:
+  /// switching protocol switches rule sets, and a single-tunnel protocol
+  /// has none (the section is hidden there).
+  Map<String, List<HybridRule>> hybridRules = <String, List<HybridRule>>{};
+
+  /// The native engine's last applied state (HybridRouter.status): rule
+  /// counts, rejected rules, per-route flow counters. null = not routed.
+  Map<String, Object?>? hybridStatus;
+
+  /// The last live-apply error (null = applied or not connected).
+  String? hybridApplyError;
+
+  @override
+  List<HybridRule> hybridRulesFor(ProtocolId profile) =>
+      List.unmodifiable(hybridRules[profile.name] ?? const <HybridRule>[]);
+
+  /// Replaces one profile's rules (add / edit / delete / enable all land
+  /// here) and, when that profile's tunnel is live, pushes them to the
+  /// engine at once — new flows follow the new rules without a reconnect.
+  Future<void> setHybridRules(ProtocolId profile, List<HybridRule> rules) async {
+    if (!HybridRouting.isHybrid(profile)) return;
+    hybridRules = {...hybridRules, profile.name: List.of(rules)};
+    notifyListeners();
+    await pushHybridRules();
+  }
+
+  /// True when a hybrid tunnel of [profile] is up right now (the rules
+  /// apply live instead of at the next connect).
+  bool hybridLive(ProtocolId profile) =>
+      _machine.current == VpnState.connected &&
+      connectionMode == ConnectionMode.tunnel &&
+      effectiveProtocol == profile;
+
+  Future<void> pushHybridRules() async {
+    final engine = _engine;
+    final profile = effectiveProtocol;
+    if (engine is! PlatformEngineAdapter || !hybridLive(profile)) {
+      hybridApplyError = null;
+      return;
+    }
+    final r = await engine.applyHybridRouting(profile, hybridRulesFor(profile));
+    hybridStatus = r;
+    hybridApplyError = r == null
+        ? 'unavailable'
+        : (r['ok'] == false ? (r['error'] as String? ?? 'failed') : null);
+    notifyListeners();
+  }
+
+  Future<void> refreshHybridStatus() async {
+    final engine = _engine;
+    if (engine is! PlatformEngineAdapter) return;
+    hybridStatus = await engine.hybridRoutingStatus();
     notifyListeners();
   }
 

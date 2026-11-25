@@ -149,6 +149,16 @@ mkdir -p "$SRC_CACHE" "$OUT"
 echo "== [1/4] zeptun @ $ZEPTUN_SHA (Zig $("$ZIG" version 2>/dev/null || echo unknown)) =="
 ZEPTUN_SRC="$SRC_CACHE/zeptun"
 clone_pin "$ZEPTUN_REPO" "$ZEPTUN_SHA" "$ZEPTUN_SRC"
+# v1.1.0 — hybrid per-tunnel routing: AETHONE's recorded patch on top of the
+# pinned tree (per-flow route callback + extra SOCKS5 route servers + the
+# JNI bridge for it; scripts/zeptun-hybrid-routing.patch, docs/hybrid-routing.md).
+# The cached tree is reset first so a restored cache never double-applies.
+ZEPTUN_PATCH="$SCRIPT_DIR/zeptun-hybrid-routing.patch"
+[ -f "$ZEPTUN_PATCH" ] || die "zeptun routing patch not found: $ZEPTUN_PATCH"
+git -C "$ZEPTUN_SRC" checkout -- .
+git -C "$ZEPTUN_SRC" apply --whitespace=nowarn "$ZEPTUN_PATCH" \
+  || die "zeptun routing patch does not apply to $ZEPTUN_SHA"
+echo "[zeptun] hybrid routing patch applied ($(sha256sum "$ZEPTUN_PATCH" | cut -c1-16))"
 # Cache hygiene: zig-out persists inside the cached source tree; wipe it so a
 # restored cache can never export a stale or wrong-ABI library (see v2 note 2).
 rm -rf "$ZEPTUN_SRC/zig-out"

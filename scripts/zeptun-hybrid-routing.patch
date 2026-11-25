@@ -1,0 +1,581 @@
+diff --git a/include/zeptun.h b/include/zeptun.h
+index 6383804..ca83f2a 100644
+--- a/include/zeptun.h
++++ b/include/zeptun.h
+@@ -91,6 +91,18 @@ typedef struct {
+ #define ZEPTUN_FLOW_REJECT 3u
+ 
+ typedef uint32_t (*zeptun_flow_cb)(void *ctx, const ZeptunFlow *flow);
++
++/* AETHONE hybrid routing. The route callback runs for every new TCP and UDP
++ * flow with the domain the fake-IP table holds for the destination (NULL,0
++ * for a real address). Answer ZEPTUN_ROUTE_DEFAULT for the configured socks5
++ * server, ZEPTUN_ROUTE_SERVER(i) for the i-th server given to
++ * zeptun_set_route_servers, ZEPTUN_FLOW_DROP or ZEPTUN_FLOW_REJECT. Any other
++ * answer (ZEPTUN_FLOW_DIRECT included) rejects the flow: a route never goes
++ * direct. */
++#define ZEPTUN_ROUTE_DEFAULT 0u
++#define ZEPTUN_ROUTE_SERVER(i) (16u + (uint32_t)(i))
++#define ZEPTUN_MAX_ROUTES 4
++typedef uint32_t (*zeptun_route_cb)(void *ctx, const ZeptunFlow *flow, const char *name, size_t name_len);
+ typedef void (*zeptun_log_cb)(void *ctx, int level, const char *message, size_t len);
+ 
+ typedef struct ZeptunConfig {
+@@ -200,6 +212,9 @@ int zeptun_set_read_callback(Zeptun *tun, zeptun_packets_cb callback, void *ctx)
+ int zeptun_set_passthrough_callback(Zeptun *tun, zeptun_packets_cb callback, void *ctx);
+ int zeptun_set_protect_callback(Zeptun *tun, zeptun_protect_cb callback, void *ctx);
+ int zeptun_set_flow_callback(Zeptun *tun, zeptun_flow_cb callback, void *ctx);
++int zeptun_set_route_callback(Zeptun *tun, zeptun_route_cb callback, void *ctx);
++/* servers: "host:port" entries separated by ',' (at most ZEPTUN_MAX_ROUTES) */
++int zeptun_set_route_servers(Zeptun *tun, const char *servers);
+ int zeptun_set_device_fd(Zeptun *tun, int fd);
+ int zeptun_set_adapter_guid(Zeptun *tun, const char *guid);
+ 
+diff --git a/src/config.zig b/src/config.zig
+index d7cf252..bd0c5ea 100644
+--- a/src/config.zig
++++ b/src/config.zig
+@@ -41,6 +41,10 @@ pub const Name = struct {
+ 
+ pub const max_prefixes = 32;
+ 
++/// AETHONE hybrid routing: extra SOCKS5 servers a flow can be routed to
++/// (route 1..max_routes); route 0 is always `server`.
++pub const max_routes = 4;
++
+ pub const PrefixList = struct {
+     items: [max_prefixes]addr.Prefix = undefined,
+     len: u8 = 0,
+@@ -339,6 +343,8 @@ pub const Socks5Config = struct {
+     optimistic_data: bool = true,
+     pool_size: u16 = 4,
+     pool_idle_ms: u32 = 3_000,
++    routes: [max_routes]addr.Endpoint = @splat(.{}),
++    route_count: u8 = 0,
+ };
+ 
+ pub const DirectConfig = struct {
+diff --git a/src/engine.zig b/src/engine.zig
+index b4dd13e..407f0c5 100644
+--- a/src/engine.zig
++++ b/src/engine.zig
+@@ -954,7 +954,21 @@ pub const Engine = struct {
+     }
+ 
+     pub fn setJudge(e: *Engine, f: ?verdict.Fn, ctx: ?*anyopaque) void {
+-        e.judge = .{ .call = f, .ctx = ctx };
++        e.judge.call = f;
++        e.judge.ctx = ctx;
++    }
++
++    /// AETHONE hybrid routing: the per-flow route callback.
++    pub fn setRouter(e: *Engine, f: ?verdict.RouteFn, ctx: ?*anyopaque) void {
++        e.judge.route_call = f;
++        e.judge.route_ctx = ctx;
++    }
++
++    /// AETHONE hybrid routing: the extra SOCKS5 servers (route 1..n).
++    pub fn setRoutes(e: *Engine, routes: []const addr.Endpoint) !void {
++        if (routes.len > config.max_routes) return error.LimitExceeded;
++        for (routes, 0..) |r, i| e.cfg.handler.socks5.routes[i] = r;
++        e.cfg.handler.socks5.route_count = @intCast(routes.len);
+     }
+ 
+     pub fn setProtect(e: *Engine, f: ?*const fn (ctx: ?*anyopaque, fd: c_int) callconv(.c) bool, ctx: ?*anyopaque) void {
+diff --git a/src/ffi/ffi.zig b/src/ffi/ffi.zig
+index 5270d31..19fd610 100644
+--- a/src/ffi/ffi.zig
++++ b/src/ffi/ffi.zig
+@@ -296,6 +296,31 @@ export fn zeptun_set_flow_callback(tun: ?*anyopaque, cb: ?zeptun.flow.verdict.Fn
+     return code(.ok);
+ }
+ 
++export fn zeptun_set_route_callback(tun: ?*anyopaque, cb: ?zeptun.flow.verdict.RouteFn, ctx: ?*anyopaque) callconv(.c) c_int {
++    const h = handleOf(tun) orelse return code(.invalid_argument);
++    if (h.started.load(.acquire)) return code(.already_running);
++    h.engine.setRouter(cb, ctx);
++    return code(.ok);
++}
++
++export fn zeptun_set_route_servers(tun: ?*anyopaque, servers: ?[*:0]const u8) callconv(.c) c_int {
++    const h = handleOf(tun) orelse return code(.invalid_argument);
++    if (h.started.load(.acquire)) return code(.already_running);
++    const text = servers orelse return code(.invalid_argument);
++    var list: [zeptun.config.max_routes]zeptun.addr.Endpoint = undefined;
++    var n: usize = 0;
++    var it = std.mem.tokenizeScalar(u8, std.mem.span(text), ',');
++    while (it.next()) |raw| {
++        const item = std.mem.trim(u8, raw, " ");
++        if (item.len == 0) continue;
++        if (n == list.len) return code(.invalid_argument);
++        list[n] = zeptun.addr.Endpoint.parse(item) catch return code(.invalid_argument);
++        n += 1;
++    }
++    h.engine.setRoutes(list[0..n]) catch return code(.invalid_argument);
++    return code(.ok);
++}
++
+ export fn zeptun_set_protect_callback(tun: ?*anyopaque, cb: ?ProtectFn, ctx: ?*anyopaque) callconv(.c) c_int {
+     const h = handleOf(tun) orelse return code(.invalid_argument);
+     if (h.started.load(.acquire)) return code(.already_running);
+diff --git a/src/flow/verdict.zig b/src/flow/verdict.zig
+index 4bcf193..356efe4 100644
+--- a/src/flow/verdict.zig
++++ b/src/flow/verdict.zig
+@@ -19,14 +19,69 @@ pub const Flow = extern struct {
+ 
+ pub const Fn = *const fn (ctx: ?*anyopaque, flow: *const Flow) callconv(.c) u32;
+ 
++/// AETHONE hybrid routing: a route callback also sees the domain name the
++/// fake-IP table holds for the destination (null when the destination is a
++/// real address). Its answer: 0 = the default server, 16 + i = extra server
++/// i (handler.socks5.routes[i]), 2 = drop, 3 = reject. Anything else is
++/// refused (reject): a route answer can never send a flow direct.
++pub const RouteFn = *const fn (ctx: ?*anyopaque, flow: *const Flow, name: ?[*]const u8, name_len: usize) callconv(.c) u32;
++
++pub const route_base: u32 = 16;
++
++pub const Routed = struct {
++    action: Action,
++    route: u8 = 0,
++};
++
++fn makeFlow(proto: u8, v6: bool, src: []const u8, src_port: u16, dst: []const u8, dst_port: u16) Flow {
++    var flow: Flow = .{
++        .protocol = proto,
++        .family = if (v6) 6 else 4,
++        .source = @splat(0),
++        .destination = @splat(0),
++        .source_port = src_port,
++        .destination_port = dst_port,
++    };
++    const sl = @min(src.len, flow.source.len);
++    const dl = @min(dst.len, flow.destination.len);
++    @memcpy(flow.source[0..sl], src[0..sl]);
++    @memcpy(flow.destination[0..dl], dst[0..dl]);
++    return flow;
++}
++
++pub fn decodeRoute(v: u32, route_count: u8) Routed {
++    return switch (v) {
++        0 => .{ .action = .proxy },
++        2 => .{ .action = .drop },
++        3 => .{ .action = .reject },
++        else => if (v >= route_base and v - route_base < route_count)
++            .{ .action = .proxy, .route = @intCast(v - route_base + 1) }
++        else
++            .{ .action = .reject },
++    };
++}
++
+ pub const Judge = struct {
+     call: ?Fn = null,
+     ctx: ?*anyopaque = null,
++    route_call: ?RouteFn = null,
++    route_ctx: ?*anyopaque = null,
+ 
+     pub inline fn active(j: *const Judge) bool {
+         return j.call != null;
+     }
+ 
++    pub inline fn routing(j: *const Judge) bool {
++        return j.route_call != null;
++    }
++
++    pub fn askRoute(j: *const Judge, route_count: u8, proto: u8, v6: bool, src: []const u8, src_port: u16, dst: []const u8, dst_port: u16, name: ?[]const u8) Routed {
++        const f = j.route_call orelse return .{ .action = .proxy };
++        const flow = makeFlow(proto, v6, src, src_port, dst, dst_port);
++        const v = if (name) |n| f(j.route_ctx, &flow, n.ptr, n.len) else f(j.route_ctx, &flow, null, 0);
++        return decodeRoute(v, route_count);
++    }
++
+     pub fn ask(j: *const Judge, proto: u8, v6: bool, src: []const u8, src_port: u16, dst: []const u8, dst_port: u16) Action {
+         const f = j.call orelse return .proxy;
+         var flow: Flow = .{
+@@ -70,3 +125,33 @@ test "judge maps verdicts and passes the flow" {
+     try std.testing.expectEqual(Action.proxy, j.ask(6, true, &[_]u8{0} ** 16, 1, &[_]u8{0} ** 16, 2));
+     try std.testing.expectEqual(@as(u8, 6), Seen.last.family);
+ }
++
++test "route answers map to servers and never to direct" {
++    try std.testing.expectEqual(Action.proxy, decodeRoute(0, 2).action);
++    try std.testing.expectEqual(@as(u8, 0), decodeRoute(0, 2).route);
++    try std.testing.expectEqual(@as(u8, 1), decodeRoute(16, 2).route);
++    try std.testing.expectEqual(@as(u8, 2), decodeRoute(17, 2).route);
++    try std.testing.expectEqual(Action.reject, decodeRoute(18, 2).action);
++    try std.testing.expectEqual(Action.reject, decodeRoute(1, 2).action);
++    try std.testing.expectEqual(Action.drop, decodeRoute(2, 2).action);
++    try std.testing.expectEqual(Action.reject, decodeRoute(16, 0).action);
++}
++
++test "route callback sees the fake-ip name" {
++    const Seen = struct {
++        var name_len: usize = 0;
++        var first: u8 = 0;
++        fn answer(ctx: ?*anyopaque, flow: *const Flow, name: ?[*]const u8, len: usize) callconv(.c) u32 {
++            _ = ctx;
++            _ = flow;
++            name_len = len;
++            first = if (name) |n| n[0] else 0;
++            return 17;
++        }
++    };
++    const j: Judge = .{ .route_call = Seen.answer };
++    const r = j.askRoute(2, 6, false, &[_]u8{ 10, 0, 0, 2 }, 1, &[_]u8{ 198, 18, 0, 5 }, 443, "example.com");
++    try std.testing.expectEqual(@as(u8, 2), r.route);
++    try std.testing.expectEqual(@as(usize, 11), Seen.name_len);
++    try std.testing.expectEqual(@as(u8, 'e'), Seen.first);
++}
+diff --git a/src/handler/handler.zig b/src/handler/handler.zig
+index 09f5121..23e8260 100644
+--- a/src/handler/handler.zig
++++ b/src/handler/handler.zig
+@@ -28,6 +28,8 @@ pub fn Dial(comptime W: type) type {
+         fd: sys.fd_t = sys.invalid_fd,
+         buf: ?*DialBuf(W) = null,
+         bypass: bool = false,
++        /// AETHONE hybrid routing: 0 = socks5.server, n = socks5.routes[n-1].
++        route: u8 = 0,
+         target: addr.Endpoint = .{},
+         bound: ?addr.Endpoint = null,
+         owner: Owner = .tcp,
+@@ -353,6 +355,22 @@ pub fn Handler(comptime W: type) type {
+             return h.kind == .socks5 and build_options.enable_socks5;
+         }
+ 
++        /// The SOCKS5 server a dial goes to. A route index the config does
++        /// not hold never falls back: dialTcp refuses it first.
++        fn serverFor(h: *const Self, d: *const D) addr.Endpoint {
++            const s5 = &h.cfg.handler.socks5;
++            if (d.route != 0 and d.route <= s5.route_count) return s5.routes[d.route - 1];
++            return s5.server;
++        }
++
++        /// The domain the fake-IP table holds for an address, for the
++        /// route callback (null for a real address or without fake-IP).
++        pub fn routeName(h: *Self, a: addr.Address, out: *[dns.max_name]u8) ?[]const u8 {
++            const t = h.fake orelse return null;
++            if (t.indexOf(a) == null) return null;
++            return t.nameOf(a, out);
++        }
++
+         fn openSocket(h: *Self, w: *W, family: addr.Family, out: *sys.fd_t) sys.Errno {
+             const fd = sys.socket(family, .tcp) catch |err| {
+                 log.debug("dial socket failed: {t}", .{err});
+@@ -374,7 +392,7 @@ pub fn Handler(comptime W: type) type {
+ 
+         fn openFresh(h: *Self, w: *W, d: *D) sys.Errno {
+             const b = d.buf.?;
+-            const server = if (h.socksMode() and !d.bypass) h.cfg.handler.socks5.server else d.target;
++            const server = if (h.socksMode() and !d.bypass) h.serverFor(d) else d.target;
+             const e = h.openSocket(w, server.addr.family, &d.fd);
+             if (e != .success) return e;
+             if (h.cfg.handler.preserve_dscp) direct.setDscp(d.fd, server.addr.family, d.tos);
+@@ -403,6 +421,7 @@ pub fn Handler(comptime W: type) type {
+             d.cmd = if (owner != .udp) .connect else if (h.cfg.handler.socks5.udp_mode == .tcp) .fwd_udp else .udp_associate;
+             if (!h.takeBuf(d)) return h.finish(w, d, .nobufs);
+             const b = d.buf.?;
++            if (d.route > h.cfg.handler.socks5.route_count) return h.finish(w, d, .hostunreach);
+             if (owner != .udp) {
+                 if (h.fake) |t| {
+                     if (t.indexOf(target.addr) != null) {
+@@ -420,7 +439,7 @@ pub fn Handler(comptime W: type) type {
+                     }
+                 }
+             }
+-            if (h.socksMode() and !d.bypass and h.warm_size > 0 and owner != .udp) {
++            if (h.socksMode() and !d.bypass and d.route == 0 and h.warm_size > 0 and owner != .udp) {
+                 h.noteDemand(.tcp, w.now());
+                 if (h.takeWarm(w, .tcp)) |taken| {
+                     const fd = taken.fd;
+@@ -445,7 +464,7 @@ pub fn Handler(comptime W: type) type {
+             if (e != .success) return h.finish(w, d, e);
+             w.loop.submit(&b.c);
+             w.wheel.schedule(&b.timer, w.now() + h.connect_timeout_ms);
+-            if (h.socksMode() and !d.bypass and h.warm_size > 0 and owner != .udp) h.refill(w);
++            if (h.socksMode() and !d.bypass and d.route == 0 and h.warm_size > 0 and owner != .udp) h.refill(w);
+         }
+ 
+         fn addrEql(a: ?addr.Address, b: addr.Address) bool {
+@@ -1039,11 +1058,17 @@ pub fn Handler(comptime W: type) type {
+         }
+ 
+         pub fn udpOpen(h: *Self, w: *W, s: *U, family: addr.Family, tos: u8, bypass: bool) bool {
++            return h.udpOpenRouted(w, s, family, tos, bypass, 0);
++        }
++
++        pub fn udpOpenRouted(h: *Self, w: *W, s: *U, family: addr.Family, tos: u8, bypass: bool, route: u8) bool {
+             s.* = .{ .family = family, .tos = if (h.cfg.handler.preserve_dscp) tos else 0 };
+             if (h.kind == .socks5 and !bypass and build_options.enable_socks5) {
+                 if (h.cfg.handler.socks5.udp == .disabled) return false;
++                if (route > h.cfg.handler.socks5.route_count) return false;
+                 s.ctrl.tos = s.tos;
+-                if (h.warm_size > 0) {
++                s.ctrl.route = route;
++                if (h.warm_size > 0 and route == 0) {
+                     h.noteDemand(.udp, w.now());
+                     const taken = h.takeWarm(w, .udp);
+                     defer h.refill(w);
+@@ -1053,7 +1078,7 @@ pub fn Handler(comptime W: type) type {
+                         return true;
+                     }
+                 }
+-                h.dialTcp(w, &s.ctrl, .{ .addr = h.cfg.handler.socks5.server.addr, .port = 0 }, .udp);
++                h.dialTcp(w, &s.ctrl, .{ .addr = h.serverFor(&s.ctrl).addr, .port = 0 }, .udp);
+                 return true;
+             }
+             const fd = sys.socket(family, .udp) catch return false;
+@@ -1102,8 +1127,9 @@ pub fn Handler(comptime W: type) type {
+                 h.armRecv(w, s);
+                 return;
+             }
+-            var relay = s.ctrl.bound orelse h.cfg.handler.socks5.server;
+-            if (relay.addr.isUnspecified()) relay.addr = h.cfg.handler.socks5.server.addr;
++            const routed = h.serverFor(&s.ctrl);
++            var relay = s.ctrl.bound orelse routed;
++            if (relay.addr.isUnspecified()) relay.addr = routed.addr;
+             if (h.cfg.handler.socks5.udp_address) |ua| {
+                 if (ua.family == relay.addr.family) relay.addr = ua;
+             }
+diff --git a/src/jni/zeptun_jni.c b/src/jni/zeptun_jni.c
+index ee56f42..2f4cf1c 100644
+--- a/src/jni/zeptun_jni.c
++++ b/src/jni/zeptun_jni.c
+@@ -15,9 +15,68 @@ typedef struct {
+     jmethodID protect;
+     pthread_t thread;
+     int running;
++    /* AETHONE hybrid routing */
++    jclass route_class;
++    jmethodID route;
+ } Context;
+ 
+ static Context context;
++static pthread_key_t route_key;
++static pthread_once_t route_once = PTHREAD_ONCE_INIT;
++
++static void detach_route_thread(void *vm) {
++    if (vm != NULL) (*(JavaVM *)vm)->DetachCurrentThread((JavaVM *)vm);
++}
++
++static void make_route_key(void) {
++    pthread_key_create(&route_key, detach_route_thread);
++}
++
++/* Engine threads that ask for routes stay attached for their lifetime (one
++ * attach per worker, not per flow); the key's destructor detaches them. */
++static JNIEnv *route_env(void) {
++    JNIEnv *env = NULL;
++    if ((*context.vm)->GetEnv(context.vm, (void **)&env, JNI_VERSION_1_6) == JNI_OK) return env;
++    if ((*context.vm)->AttachCurrentThread(context.vm, &env, NULL) != JNI_OK) return NULL;
++    pthread_once(&route_once, make_route_key);
++    pthread_setspecific(route_key, context.vm);
++    return env;
++}
++
++static uint32_t route_flow(void *ctx, const ZeptunFlow *flow, const char *name, size_t name_len) {
++    (void)ctx;
++    if (context.vm == NULL || context.route_class == NULL || context.route == NULL) return ZEPTUN_ROUTE_DEFAULT;
++    JNIEnv *env = route_env();
++    if (env == NULL) return ZEPTUN_FLOW_REJECT;
++    jint alen = flow->family == 6 ? 16 : 4;
++    jbyteArray src = (*env)->NewByteArray(env, alen);
++    jbyteArray dst = (*env)->NewByteArray(env, alen);
++    jstring host = NULL;
++    uint32_t answer = ZEPTUN_FLOW_REJECT;
++    if (src == NULL || dst == NULL) goto done;
++    (*env)->SetByteArrayRegion(env, src, 0, alen, (const jbyte *)flow->source);
++    (*env)->SetByteArrayRegion(env, dst, 0, alen, (const jbyte *)flow->destination);
++    if (name != NULL && name_len > 0 && name_len < 256) {
++        char buf[256];
++        memcpy(buf, name, name_len);
++        buf[name_len] = 0;
++        host = (*env)->NewStringUTF(env, buf);
++    }
++    jint v = (*env)->CallStaticIntMethod(env, context.route_class, context.route,
++                                         (jint)flow->protocol, (jint)flow->family,
++                                         src, (jint)flow->source_port, dst, (jint)flow->destination_port, host);
++    if ((*env)->ExceptionCheck(env)) {
++        (*env)->ExceptionClear(env);
++        goto done;
++    }
++    answer = (uint32_t)v;
++done:
++    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
++    if (src != NULL) (*env)->DeleteLocalRef(env, src);
++    if (dst != NULL) (*env)->DeleteLocalRef(env, dst);
++    if (host != NULL) (*env)->DeleteLocalRef(env, host);
++    return answer;
++}
+ 
+ static JNIEnv *attach(int *attached) {
+     JNIEnv *env = NULL;
+@@ -49,7 +108,7 @@ static void *run_engine(void *arg) {
+     return NULL;
+ }
+ 
+-static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring config) {
++static jint start_with(JNIEnv *env, jobject self, jobject service, jint fd, jstring config, jstring servers) {
+     (void)self;
+     if (context.tun != NULL) return ZEPTUN_ERR_ALREADY_RUNNING;
+     memset(&context, 0, sizeof context);
+@@ -80,6 +139,30 @@ static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring c
+ 
+     if (config != NULL) zeptun_set_device_fd(context.tun, fd);
+     zeptun_set_protect_callback(context.tun, protect_socket, NULL);
++    if (servers != NULL) {
++        const char *list = (*env)->GetStringUTFChars(env, servers, NULL);
++        if (list == NULL) rc = ZEPTUN_ERR_INVALID_ARGUMENT;
++        else {
++            rc = zeptun_set_route_servers(context.tun, list);
++            (*env)->ReleaseStringUTFChars(env, servers, list);
++        }
++        jclass cls = (*env)->FindClass(env, ZEPTUN_JNI_CLASS);
++        if (rc == ZEPTUN_OK && cls != NULL) {
++            context.route_class = (jclass)(*env)->NewGlobalRef(env, cls);
++            context.route = (*env)->GetStaticMethodID(env, cls, "route", "(II[BI[BILjava/lang/String;)I");
++        }
++        if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
++        if (rc == ZEPTUN_OK && context.route == NULL) rc = ZEPTUN_ERR_INVALID_ARGUMENT;
++        if (rc == ZEPTUN_OK) rc = zeptun_set_route_callback(context.tun, route_flow, NULL);
++        if (rc != ZEPTUN_OK) {
++            zeptun_destroy(context.tun);
++            context.tun = NULL;
++            if (context.route_class != NULL) (*env)->DeleteGlobalRef(env, context.route_class);
++            context.route_class = NULL;
++            context.route = NULL;
++            return rc;
++        }
++    }
+     if (pthread_create(&context.thread, NULL, run_engine, NULL) != 0) {
+         zeptun_destroy(context.tun);
+         context.tun = NULL;
+@@ -89,6 +172,14 @@ static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring c
+     return ZEPTUN_OK;
+ }
+ 
++static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring config) {
++    return start_with(env, self, service, fd, config, NULL);
++}
++
++static jint start_routed(JNIEnv *env, jobject self, jobject service, jint fd, jstring config, jstring servers) {
++    return start_with(env, self, service, fd, config, servers);
++}
++
+ static void stop(JNIEnv *env, jobject self) {
+     (void)self;
+     if (context.tun == NULL) return;
+@@ -103,6 +194,11 @@ static void stop(JNIEnv *env, jobject self) {
+         (*env)->DeleteGlobalRef(env, context.service);
+         context.service = NULL;
+     }
++    if (context.route_class != NULL) {
++        (*env)->DeleteGlobalRef(env, context.route_class);
++        context.route_class = NULL;
++    }
++    context.route = NULL;
+ }
+ 
+ static jstring version(JNIEnv *env, jobject self) {
+@@ -124,6 +220,7 @@ static jlong counter(JNIEnv *env, jobject self, jint index) {
+ 
+ static const JNINativeMethod methods[] = {
+     { "nativeStart", "(Ljava/lang/Object;ILjava/lang/String;)I", (void *)start },
++    { "nativeStartRouted", "(Ljava/lang/Object;ILjava/lang/String;Ljava/lang/String;)I", (void *)start_routed },
+     { "nativeStop", "()V", (void *)stop },
+     { "nativeVersion", "()Ljava/lang/String;", (void *)version },
+     { "nativeCounter", "(I)J", (void *)counter },
+diff --git a/src/stack/tcp.zig b/src/stack/tcp.zig
+index d51f759..0902500 100644
+--- a/src/stack/tcp.zig
++++ b/src/stack/tcp.zig
+@@ -1,6 +1,7 @@
+ const std = @import("std");
+ const build_options = @import("build_options");
+ const addr = @import("../addr.zig");
++const dns = @import("dns.zig");
+ const config = @import("../config.zig");
+ const checksum = @import("../packet/checksum.zig");
+ const parse = @import("../packet/parse.zig");
+@@ -475,6 +476,21 @@ pub fn Tcp(comptime W: type) type {
+                     },
+                 }
+             }
++            var route: u8 = 0;
++            if (w.judge().routing()) {
++                const tcph1 = pkt.l4.tcp;
++                var name_buf: [dns.max_name]u8 = undefined;
++                const name = w.handler.routeName(addr.Address.fromSlice(pkt.ip.dst(data)), &name_buf);
++                const r = w.judge().askRoute(w.cfg.handler.socks5.route_count, parse.proto.tcp, pkt.ip.isV6(), pkt.ip.src(data), tcph1.src_port, pkt.ip.dst(data), tcph1.dst_port, name);
++                switch (r.action) {
++                    .proxy => route = r.route,
++                    .direct, .drop => return,
++                    .reject => {
++                        t.sendRstFor(w, data, pkt);
++                        return;
++                    },
++                }
++            }
+             if (t.conns.isFull()) {
+                 if (t.conns.oldest()) |old| {
+                     const oc = t.conns.value(old);
+@@ -546,6 +562,7 @@ pub fn Tcp(comptime W: type) type {
+             }
+             c.up.dial.tos = pkt.ip.tos;
+             c.up.dial.bypass = bypass;
++            c.up.dial.route = route;
+             w.handler.dialTcp(w, &c.up.dial, c.target, .tcp);
+         }
+ 
+diff --git a/src/stack/udp.zig b/src/stack/udp.zig
+index d78ad3d..d6205e2 100644
+--- a/src/stack/udp.zig
++++ b/src/stack/udp.zig
+@@ -145,6 +145,20 @@ pub fn Udp(comptime W: type) type {
+                         },
+                     }
+                 }
++                var route: u8 = 0;
++                if (w.judge().routing()) {
++                    var name_buf: [dns.max_name]u8 = undefined;
++                    const name = w.handler.routeName(addr.Address.fromSlice(pkt.ip.dst(data)), &name_buf);
++                    const r = w.judge().askRoute(w.cfg.handler.socks5.route_count, parse.proto.udp, v6, pkt.ip.src(data), uh.src_port, pkt.ip.dst(data), uh.dst_port, name);
++                    switch (r.action) {
++                        .proxy => route = r.route,
++                        .direct, .drop => return,
++                        .reject => {
++                            icmp.sendUnreachable(w, data, pkt, true);
++                            return;
++                        },
++                    }
++                }
+                 const i = u.sessions.insert(key, .{}) catch return;
+                 const s = u.sessions.value(i);
+                 s.* = .{
+@@ -153,7 +167,7 @@ pub fn Udp(comptime W: type) type {
+                 };
+                 w.counters.inc(.udp_opened);
+                 w.counters.inc(.udp_active);
+-                if (!w.handler.udpOpen(w, &s.handler, if (v6) .v6 else .v4, pkt.ip.tos, bypass)) {
++                if (!w.handler.udpOpenRouted(w, &s.handler, if (v6) .v6 else .v4, pkt.ip.tos, bypass, route)) {
+                     s.closing = true;
+                     u.release(w, s);
+                     icmp.sendUnreachable(w, data, pkt, true);
+diff --git a/src/tests/tcp_sim.zig b/src/tests/tcp_sim.zig
+index cc6a2b7..7fff8f4 100644
+--- a/src/tests/tcp_sim.zig
++++ b/src/tests/tcp_sim.zig
+@@ -88,6 +88,13 @@ const SimHandler = struct {
+     delay_ms: u64 = 0,
+     refuse_pct: u8 = 0,
+ 
++    pub fn routeName(hd: *SimHandler, a: addr.Address, out: anytype) ?[]const u8 {
++        _ = hd;
++        _ = a;
++        _ = out;
++        return null;
++    }
++
+     pub fn dialTcp(hd: *SimHandler, w: *SimWorker, d: *SimWorker.Dial, target: addr.Endpoint, owner: handler_mod.Owner) void {
+         d.owner = owner;
+         d.target = target;
