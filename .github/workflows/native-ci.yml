@@ -1749,7 +1749,7 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon :app:testReleaseUnitTest --tests 'com.chakcaad.aethone.routing.*'
+          ./gradlew --no-daemon :app:testDebugUnitTest --tests 'com.chakcaad.aethone.routing.*'
           mkdir -p "$GITHUB_WORKSPACE/test-evidence"
           cp -r app/build/test-results "$GITHUB_WORKSPACE/test-evidence/hybrid-routing-junit" || true
 
