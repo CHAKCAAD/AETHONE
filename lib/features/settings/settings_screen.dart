@@ -1,40 +1,24 @@
-/// The Settings main page — pixel-faithful rebuild of the owner's design
-/// frame «صفحه تنظیمات.jpg» (402×874; every geometry value measured on the
-/// 3× source and recorded in [AethGeometry] as `settings*` tokens).
+/// The Settings main page — v1.1.0 «control center» redesign (owner:
+/// «صفحه اصلی تنظیمات و سایر قسمت های تنظیمات رو با زبان طراحی صفحه ورود
+/// و صفحات اصلی اپ بازطراحی کن ... فقط میخوام کاربر راحت تر و بهتر به
+/// تنظیمات دسترسی داشته باشه»).
 ///
-/// Structure (phase-1 report §3.2 + pixel extraction; v4.15 renames — the
-/// owner's own words, settings round #5/#8):
-///   * Top bar: chevron tile (Right 2, visual RIGHT = back) · «تنظیمات»
-///     centered · info tile (Information Circle, visual LEFT → the Telegram
-///     channel, same behaviour as the home top bar).
-///   * Six cards, 3 columns × 2 rows (icon top / title / subtitle):
-///       row 1 visual L→R: مسیریابی‌ها (Forward) · تنظیمات عمومی
-///       (Filter 5) · تنظیمات اتصال (Lock 1)
-///       row 2 visual L→R: تنظیمات زبان (Website) · تنظیمات ظاهری
-///       (Palette) · تنظیمات امنیت (Security Safe — v4.15 #1)
-///   * Two wide pills — «سایفون» / «تور» (renamed from «تنظیمات سایفون» /
-///     «تنظیمات تور», v4.15 #8) — the REAL protocol logos (pre-rendered
-///     PNGs) tinted accent green at the leading edge, like the frame.
-///     Corners: owner CSS «Rectangle 79» r24 (v4.15 #3) — never a stadium.
-///   * Section «وضعیت پیکربندی» (renamed from «وضعیت پیشرفته», v4.15 #5;
-///     icon Menu Fries — v4.15 #7) + THREE status cards on the same 3-col
-///     grid — every value is the REAL store state (report D2: «هر سه کارت
-///     وضعیت به دادهٔ واقعی نگاشت شدند»):
-///       Kill Switch → ON/OFF · منطقهٔ مسیریابی → Latin region name ·
-///       پروتکل → AUTO / SMART.
-///   * Section «آدرس هسته ها» (renamed from «آدرس سرور اصلی», v4.15 #6;
-///     icon Situation 1 — v4.15 #8, replacing the drawn crosshair) + two
-///     pills: Zeptun Tunnel / Aether Core with the owner's own GitHub logo
-///     SVG, corners r20 (same Rectangle-79 look, v4.15 #3).
-///
-/// Subpages (v4.22 — the owner's «تنظیمات جزیی» round): every card, pill
-/// and status card opens its REAL page now — the six categories
-/// (routing / general / connection / language / appearance / security),
-/// the Psiphon/Tor family pages, the three status cards (Kill Switch →
-/// security, routing area → routing, protocol → connection) and the
-/// Aether-core entry sits on the connection page (fragment / TLS /
-/// transport / engine — the owner's headline, with the Iran fragment
-/// profiles).
+/// The login's vocabulary carries the page:
+///   * the HERO card is the login sheet — its top edge carries the same
+///     centre notch, and the notch holds the login step indicator re-read
+///     as the connection's three phases (off · connecting · on: the active
+///     phase is the wide pill, in the state's own color);
+///   * under it the login step composition — the rounded icon box (the
+///     selected protocol's own logo), the centred title and a one-line
+///     summary — and three QUICK controls (Kill Switch, connection mode,
+///     theme) that change the setting in place, no page to open;
+///   * a SEARCH field that finds any setting by name and opens its page;
+///   * the CATEGORIES as one grouped list — each row a login icon box, the
+///     title and a LIVE summary of what is set (no more guessing behind a
+///     tile). Connection + security and look + language are merged pages;
+///   * the protocol family (Psiphon / Tor / Lantern / Aether core) as a
+///     2×2 grid with each one's live exit location, and the support block
+///     (core log, the two core repositories, the version) at the bottom.
 library;
 
 import 'dart:async';
@@ -44,10 +28,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../connection/connection_state.dart';
 import '../../connection/connection_store.dart';
 import '../../connection/core_log.dart';
+import '../../connection/core_settings.dart';
+import '../../connection/transport_modes.dart';
 import '../../core/app_assets.dart';
+import '../../core/app_meta.dart';
 import '../../core/app_theme.dart';
+import '../../core/country_names.dart';
 import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../../core/motion_widgets.dart';
@@ -55,41 +44,38 @@ import '../../l10n/app_strings.dart';
 import '../shared/theme_toggle_tile.dart';
 import 'appearance_page.dart';
 import 'connection_page.dart';
+import 'core_page.dart';
 import 'general_page.dart';
-import 'language_page.dart';
 import 'lantern_page.dart';
 import 'psiphon_page.dart';
 import 'routing_page.dart';
-import 'security_page.dart';
+import 'subpage_frame.dart';
 import 'tor_page.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, required this.store});
 
   final ConnectionStore store;
 
-  /// v4.17 — owner settings round #4: «به صفحه و کارت ها انیمیشن ورود و
-  /// خروج اضافه کن». Every page block enters on its own slice of the
-  /// ROUTE timeline; v4.25 — the choreography is the STYLE'S OWN recipe
-  /// (SILK rise / TIDE drift-zoom / SPRING pop / BLINK pure fade / OFF =
-  /// untouched) and the SAME slices retrace on pop, so the exit folds
-  /// the page away gently. Blocks: top bar 0, grid rows 1–2, pills 3,
-  /// headings 4/6, status cards 5, server pills 7, core log 8.
-  /// With no route (bare-harness pumps) the child renders untouched.
-  static Widget _enter(
-    BuildContext context,
-    MotionStyle style,
-    int block,
-    Widget child,
-  ) =>
-      motionCascade(context, style, block, child);
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
 
-  /// v4.22 — pushes one of the eight sub-pages (the six cards, the two
-  /// family pills, the status cards all land here). v4.25 — every push
-  /// rides [aethPageRoute]: the page enters with the SELECTED STYLE'S own
-  /// personality (SILK fade-rise / TIDE zoom-dissolve / SPRING pop /
-  /// BLINK fade / OFF instant cut).
-  void _openSubPage(BuildContext context, Widget page) {
+class _SettingsScreenState extends State<SettingsScreen> {
+  final TextEditingController _query = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+
+  ConnectionStore get store => widget.store;
+
+  @override
+  void dispose() {
+    _query.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  void _open(Widget page) {
+    _searchFocus.unfocus();
     Navigator.of(context).push(
       aethPageRoute<void>(
         style: store.effectiveMotionStyle(context),
@@ -98,155 +84,210 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  /// v4.21 — opens the core diagnostics page (the captured stderr of both
-  /// engines — owner: «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا
-  /// بهتر بتونیم دیباگ کنیم»). v5.3 — the pattern/carried-state params are
-  /// retired with the page's patterns (the owner: patterns live on the
-  /// HOME and SPEED-TEST pages only).
-  void _openCoreLog(BuildContext context) {
-    Navigator.of(context).push(
-      aethPageRoute<void>(
-        style: store.effectiveMotionStyle(context),
-        builder: (_) => CoreLogPage(
-          style: store.effectiveMotionStyle(context),
-        ),
-      ),
-    );
-  }
+  void _openCoreLog() =>
+      _open(CoreLogPage(style: store.effectiveMotionStyle(context)));
 
   @override
   Widget build(BuildContext context) {
-    final strings = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    // The APP's ambient direction (fa ⇒ RTL), read ABOVE the LTR geometry
-    // lock below — Persian text inside the lock keeps its natural bidi
-    // direction (e.g. the trailing «...» of the pill subtitles).
-    final appDir = Directionality.maybeOf(context) ?? TextDirection.ltr;
-
-    // Subscribed to the store: the status cards + patterns re-render on
-    // every preference/state change (same pattern as the home screen).
-    // v4.25 — the effective style (the master kill-switch clamps to OFF)
-    // drives the cascade AND the small controls (MotionScope below).
     final style = store.effectiveMotionStyle(context);
     return AnimatedBuilder(
-      animation: store,
-      builder: (context, _) => Scaffold(
-        backgroundColor: AethColors.bgScreen,
-        // v5.3 (the owner: «پترن های سمت راست و چپ فقط باید در صفحه اصلی و
-        // صفحه تست سرعت نمایش داده بشن و در سایر صفحه ها نباید نمایش داده
-        // شوند») — the settings pages carry NO patterns (and no smoke) any
-        // more: the v4.21/v8a every-page rules are retired here.
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            // v4.10 lesson (main-screen defect): under the fa/RTL locale a
-            // plain Row MIRRORS — the settings frame's pixel layout is
-            // LTR-locked here (geometry only; Persian text inside renders
-            // with its own bidi direction via [appDir]).
-            SafeArea(
-              child: Directionality(
-                textDirection: TextDirection.ltr,
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AethGeometry.pageHPadding * s,
-                    ),
-                    child: MotionScope(
-                      style: style,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SizedBox(height: AethGeometry.topSafeExtraGap * s),
-                          _enter(context, style, 0, _SettingsTopBar(
-                            store: store,
-                            onBack: () => Navigator.of(context).maybePop(),
-                          )),
-                          SizedBox(height: 22 * s),
-                          _enter(context, style, 1, _SixCardGrid(
-                            onCardTap: (i) => _openSubPage(
-                              context,
-                              switch (i) {
-                                0 => RoutingSettingsPage(store: store),
-                                1 => GeneralSettingsPage(store: store),
-                                2 => ConnectionSettingsPage(store: store),
-                                3 => LanguageSettingsPage(store: store),
-                                4 => AppearanceSettingsPage(store: store),
-                                _ => SecuritySettingsPage(store: store),
-                              },
-                            ),
-                          )),
-                          SizedBox(height: AethGeometry.settingsPillGap * s),
-                          _enter(context, style, 3, _ProtocolPills(
-                            textDir: appDir,
-                            onPsiphon: () => _openSubPage(
-                              context,
-                              PsiphonSettingsPage(store: store),
-                            ),
-                            onTor: () => _openSubPage(
-                              context,
-                              TorSettingsPage(store: store),
-                            ),
-                            onLantern: () => _openSubPage(
-                              context,
-                              LanternSettingsPage(store: store),
-                            ),
-                          )),
-                          SizedBox(
-                            height: AethGeometry.settingsHeadingGapFromPills * s,
-                          ),
-                          _enter(context, style, 4, _SectionHeading(
-                            icon: AppAssets.iconMenuFries,
-                            title: strings.settingsAdvancedStatus,
-                          )),
-                          SizedBox(
-                            height: AethGeometry.settingsHeadingGapToCards * s,
-                          ),
-                          _enter(context, style, 5, _StatusCards(
-                            store: store,
-                            onKillSwitch: () => _openSubPage(
-                              context,
-                              SecuritySettingsPage(store: store),
-                            ),
-                            onRoutingArea: () => _openSubPage(
-                              context,
-                              RoutingSettingsPage(store: store),
-                            ),
-                            onProtocol: () => _openSubPage(
-                              context,
-                              ConnectionSettingsPage(store: store),
-                            ),
-                          )),
-                          SizedBox(
-                            height:
-                                AethGeometry.settingsHeading2GapToServer * s,
-                          ),
-                          // v2.1.0 (the owner's decree) — the «آدرس هسته ها»
-                          // section is BACK on the main settings page with
-                          // its previous look; the v1.5.0 move to the
-                          // general page is retired together with the
-                          // Firefox row that replaced it here.
-                          _enter(context, style, 6, _SectionHeading(
-                            icon: AppAssets.iconSituation1,
-                            title: strings.settingsMainServer,
-                          )),
-                          SizedBox(
-                            height: AethGeometry.settingsHeadingGapToCards * s,
-                          ),
-                          _enter(context, style, 7, const _ServerPills()),
-                          SizedBox(height: 22 * s),
-                          // v4.21 — the core diagnostics entry (owner:
-                          // «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا
-                          // بهتر بتونیم دیباگ کنیم») — the full captured
-                          // stderr of the engines, tailed live.
-                          _enter(context, style, 8, _CoreLogCard(
-                            onTap: () => _openCoreLog(context),
-                          )),
-                          SizedBox(height: 30 * s),
-                        ],
-                      ),
-                    ),
+      animation: Listenable.merge([store, _query]),
+      builder: (context, _) {
+        final strings = AppStrings.of(context);
+        final searching = _query.text.trim().isNotEmpty;
+        final blocks = <Widget>[
+          _SettingsTopBar(
+            store: store,
+            onBack: () => Navigator.of(context).maybePop(),
+          ),
+          SizedBox(height: 20 * s),
+          _HeroCard(
+            store: store,
+            onOpen: () => _open(ConnectionSettingsPage(store: store)),
+          ),
+          SizedBox(height: 16 * s),
+          _SearchField(controller: _query, focusNode: _searchFocus),
+          SizedBox(height: 22 * s),
+          if (searching)
+            _SearchResults(
+              entries: _searchIndex(strings),
+              query: _query.text,
+              onOpen: (e) => _open(e.builder()),
+            )
+          else ...[
+            _SectionTitle(strings.settingsCategories),
+            SizedBox(height: 10 * s),
+            _CategoryList(store: store, onOpen: _open),
+            SizedBox(height: 24 * s),
+            _SectionTitle(strings.settingsProtocolsSection),
+            SizedBox(height: 10 * s),
+            _ProtocolGrid(store: store, onOpen: _open),
+            SizedBox(height: 24 * s),
+            _SectionTitle(strings.settingsSupportSection),
+            SizedBox(height: 10 * s),
+            _SupportBlock(onCoreLog: _openCoreLog),
+          ],
+          SizedBox(height: 30 * s),
+        ];
+        return Scaffold(
+          backgroundColor: AethColors.bgScreen,
+          body: SafeArea(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () => _searchFocus.unfocus(),
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.symmetric(
+                  horizontal: AethGeometry.pageHPadding * s,
+                ),
+                child: MotionScope(
+                  style: style,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(height: AethGeometry.topSafeExtraGap * s),
+                      for (var i = 0; i < blocks.length; i++)
+                        motionCascade(context, style, i.clamp(0, 8), blocks[i]),
+                    ],
                   ),
                 ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Every setting a person may look for, by the words its page uses.
+  List<_SearchEntry> _searchIndex(AppStrings t) {
+    Widget conn() => ConnectionSettingsPage(store: store);
+    Widget routing() => RoutingSettingsPage(store: store);
+    Widget look() => AppearanceSettingsPage(store: store);
+    Widget general() => GeneralSettingsPage(store: store);
+    Widget core() => CoreSettingsPage(store: store);
+    Widget psiphon() => PsiphonSettingsPage(store: store);
+    Widget tor() => TorSettingsPage(store: store);
+    Widget lantern() => LanternSettingsPage(store: store);
+    final cs = t.settingsConnSecTitle;
+    final rt = t.settingsRouting;
+    final lk = t.settingsLookLangTitle;
+    final gn = t.settingsGeneral;
+    final cr = t.subCoreTitle;
+    return [
+      _SearchEntry(t.secKillSwitch, cs, AppAssets.iconOff, conn),
+      _SearchEntry(t.sheetHeadingMode, cs, AppAssets.iconPassword1, conn),
+      _SearchEntry(t.secIpVersion, cs, AppAssets.iconWebsite, conn),
+      _SearchEntry(t.secUpstream, cs, AppAssets.iconArrowSwapHorizontal, conn),
+      _SearchEntry(t.settingsRoutingArea, rt, AppAssets.iconRedo, routing),
+      _SearchEntry(
+        t.hybridRouting,
+        rt,
+        AppAssets.iconArrowSwapHorizontal,
+        routing,
+      ),
+      _SearchEntry(t.secRoutes, rt, AppAssets.iconRedo, routing),
+      _SearchEntry(t.tunnelApps, rt, AppAssets.iconCategory, routing),
+      _SearchEntry(t.secThemeMode, lk, AppAssets.iconMoon, look),
+      _SearchEntry(t.secHomeLook, lk, AppAssets.iconHome1, look),
+      _SearchEntry(t.secMotion, lk, AppAssets.iconActivity4, look),
+      _SearchEntry(t.animationsOffTitle, lk, AppAssets.iconCloseCircle, look),
+      _SearchEntry(t.secPatterns, lk, AppAssets.iconPalette, look),
+      _SearchEntry(t.secAppLanguage, lk, AppAssets.iconWebsite, look),
+      _SearchEntry(t.secAbout, gn, AppAssets.iconInformationCircle, general),
+      _SearchEntry(t.secNotifications, gn, AppAssets.iconNotification, general),
+      _SearchEntry(t.secCloseBehavior, gn, AppAssets.iconClose, general),
+      _SearchEntry(t.secAutoStart, gn, AppAssets.iconOff, general),
+      _SearchEntry(t.secReset, gn, AppAssets.iconRedo, general),
+      _SearchEntry(t.secFragment, cr, AppAssets.iconCrop1, core),
+      _SearchEntry(t.secTransport, cr, AppAssets.iconArrowSwapHorizontal, core),
+      _SearchEntry(t.secScanSpeed, cr, AppAssets.iconScan1, core),
+      _SearchEntry(t.secTls, cr, AppAssets.iconShieldTick, core),
+      _SearchEntry(t.echLabel, cr, AppAssets.iconShieldStar, core),
+      _SearchEntry(t.expertMode, cr, AppAssets.iconSetting, core),
+      _SearchEntry(
+        t.settingsPsiphon,
+        t.settingsProtocolsSection,
+        AppAssets.protocolPsiphonLogo,
+        psiphon,
+        tinted: false,
+      ),
+      _SearchEntry(
+        t.secFronting,
+        t.settingsPsiphon,
+        AppAssets.iconDiscovery1,
+        psiphon,
+      ),
+      _SearchEntry(
+        t.settingsTor,
+        t.settingsProtocolsSection,
+        AppAssets.protocolTorLogo,
+        tor,
+        tinted: false,
+      ),
+      _SearchEntry(t.secTorBridges, t.settingsTor, AppAssets.iconShuffle1, tor),
+      _SearchEntry(
+        t.settingsLantern,
+        t.settingsProtocolsSection,
+        AppAssets.protocolLanternLogo(light: AethThemeSync.light),
+        lantern,
+        tinted: false,
+      ),
+      _SearchEntry(
+        t.coreLogTitle,
+        t.settingsSupportSection,
+        AppAssets.iconInformationCircle,
+        () => CoreLogPage(style: store.effectiveMotionStyle(context)),
+      ),
+    ];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared text helpers
+// ---------------------------------------------------------------------------
+
+TextStyle _yekan(double size, FontWeight w, Color c, {double? height}) =>
+    TextStyle(
+      fontFamily: 'IRANYekanX',
+      fontWeight: w,
+      fontSize: size,
+      height: height,
+      color: c,
+    );
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    return Directionality(
+      textDirection: appContentDirection(context),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 6 * s),
+        child: Row(
+          children: [
+            // The login indicator's ACTIVE pill as the section mark.
+            Container(
+              width: 18 * s,
+              height: 6 * s,
+              decoration: BoxDecoration(
+                color: AethColors.accentConnected,
+                borderRadius: BorderRadius.circular(3 * s),
+              ),
+            ),
+            SizedBox(width: 8 * s),
+            Flexible(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _yekan(14 * s, FontWeight.w700, AethColors.textPrimary),
               ),
             ),
           ],
@@ -257,10 +298,7 @@ class SettingsScreen extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Top bar: theme toggle (visual LEFT) · «تنظیمات» · back chevron (visual
-// RIGHT). v4.34 — the exclamation/info tile became the night ⇄ light
-// switch (owner round 10); the Telegram link lives on in the sub-page
-// rows.
+// Top bar: theme toggle · «تنظیمات» · back chevron — unchanged positions.
 // ---------------------------------------------------------------------------
 
 class _SettingsTopBar extends StatelessWidget {
@@ -274,714 +312,446 @@ class _SettingsTopBar extends StatelessWidget {
     final strings = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     final tile = AethGeometry.topTileSize * s;
-    return SizedBox(
-      height: tile,
-      child: Row(
-        children: [
-          // LTR-locked (parent) — visual LEFT: the theme toggle (v4.34).
-          ThemeToggleTile(
-            store: store,
-            size: tile,
-            iconSize: AethGeometry.topTileIcon * s,
-            tileKey: const ValueKey('settings-theme-toggle'),
-          ),
-          const Spacer(),
-          Text(
-            strings.settingsTitle,
-            style: TextStyle(
-              fontFamily: 'IRANYekanX',
-              fontWeight: FontWeight.w700,
-              fontSize: 17 * s,
-              color: AethColors.textPrimary,
-            ),
-          ),
-          const Spacer(),
-          // Visual RIGHT: the back chevron tile (Right 2 like the frame).
-          _TileButton(
-            asset: AppAssets.iconRight2,
-            size: tile,
-            iconSize: AethGeometry.topTileIcon * s,
-            semanticLabel: 'Back',
-            onTap: onBack,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The owner «Rectangle 9» tile (50×50, #0F1510, r16, soft shadow) — the
-/// exact same tile as the home top bar.
-class _TileButton extends StatelessWidget {
-  const _TileButton({
-    required this.asset,
-    required this.size,
-    required this.iconSize,
-    required this.semanticLabel,
-    this.onTap,
-  });
-
-  final String asset;
-  final double size;
-  final double iconSize;
-  final String semanticLabel;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    return Semantics(
-      label: semanticLabel,
-      button: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            color: AethColors.topTile,
-            borderRadius:
-                BorderRadius.circular(AethGeometry.topTileRadius * s),
-            // v4.35 (owner round 11, item 1): NO shadow in light mode —
-            // the color rides the palette (night rgba(0,0,0,0.25) 0 4 4 /
-            // light transparent) and fades with the 420 ms mode tween.
-            boxShadow: [
-              BoxShadow(
-                color: AethColors.tileShadow,
-                offset: const Offset(0, 4),
-                blurRadius: 4,
-              ),
-            ],
-          ),
-          child: Center(
-            child: SvgPicture.asset(
-              asset,
-              width: iconSize,
-              height: iconSize,
-              colorFilter: ColorFilter.mode(
-                AethColors.textPrimary,
-                BlendMode.srcIn,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Six category cards (3 × 2)
-// ---------------------------------------------------------------------------
-
-class _SixCardGrid extends StatelessWidget {
-  const _SixCardGrid({required this.onCardTap});
-
-  /// v4.22 — the card's index (0..5, row-major): the page router in
-  /// [SettingsScreen.build] maps it to its sub-page (NEVER the localized
-  /// title — the index is locale-proof).
-  final void Function(int index) onCardTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = AppStrings.of(context);
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    // VISUAL left→right per row — the parent Directionality is LTR-locked
-    // so the children land EXACTLY on the frame's measured positions
-    // (row 1: مسیریابی‌ها x33 · عمومی x150 · اتصال x267).
-    final row1 = [
-      (
-        asset: AppAssets.iconRedo,
-        title: strings.settingsRouting,
-        sub: strings.settingsRoutingSub,
-      ),
-      (
-        asset: AppAssets.iconFilter5,
-        title: strings.settingsGeneral,
-        sub: strings.settingsGeneralSub,
-      ),
-      (
-        asset: AppAssets.iconLock1,
-        title: strings.settingsConnection,
-        sub: strings.settingsConnectionSub,
-      ),
-    ];
-    final row2 = [
-      (
-        asset: AppAssets.iconWebsite,
-        title: strings.settingsLanguage,
-        sub: strings.settingsLanguageSub,
-      ),
-      (
-        asset: AppAssets.iconPalette,
-        title: strings.settingsAppearance,
-        sub: strings.settingsAppearanceSub,
-      ),
-      (
-        asset: AppAssets.iconSecuritySafe,
-        title: strings.settingsSecurity,
-        sub: strings.settingsSecuritySub,
-      ),
-    ];
-    return Column(
-      children: [
-        _cardRow(context, row1, 0),
-        SizedBox(height: AethGeometry.settingsRowGap * s),
-        _cardRow(context, row2, 3),
-      ],
-    );
-  }
-
-  Widget _cardRow(
-    BuildContext context,
-    List<({String asset, String title, String sub})> cards,
-    int baseIndex,
-  ) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    return Row(
-      children: [
-        for (final (i, c) in cards.indexed) ...[
-          if (i > 0) SizedBox(width: AethGeometry.settingsCardGap * s),
-          Expanded(
-            child: _SettingsCard(
-              asset: c.asset,
-              title: c.title,
-              subtitle: c.sub,
-              onTap: () => onCardTap(baseIndex + i),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// One settings card — the shared template: green line icon top, white
-/// title, grey subtitle (or GREEN value for the status cards).
-class _SettingsCard extends StatelessWidget {
-  const _SettingsCard({
-    required this.asset,
-    required this.title,
-    required this.subtitle,
-    this.subtitleColor,
-    this.onTap,
-  });
-
-  final String asset;
-  final String title;
-  final String subtitle;
-  final Color? subtitleColor;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        height: AethGeometry.settingsCardH * s,
-        decoration: BoxDecoration(
-          color: AethColors.cardDark,
-          borderRadius:
-              BorderRadius.circular(AethGeometry.settingsCardRadius * s),
-        ),
-        child: Stack(
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: SizedBox(
+        height: tile,
+        child: Row(
           children: [
-            Positioned(
-              top: (AethGeometry.settingsCardIconTop -
-                      AethGeometry.settingsCardIconSize / 2) *
-                  s,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: SvgPicture.asset(
-                  asset,
-                  width: AethGeometry.settingsCardIconSize * s,
-                  height: AethGeometry.settingsCardIconSize * s,
-                  colorFilter: const ColorFilter.mode(
-                    AethColors.accentConnected,
-                    BlendMode.srcIn,
-                  ),
-                ),
-              ),
+            ThemeToggleTile(
+              store: store,
+              size: tile,
+              iconSize: AethGeometry.topTileIcon * s,
+              tileKey: const ValueKey('settings-theme-toggle'),
             ),
-            Positioned(
-              top: (AethGeometry.settingsCardTitleCenter -
-                      AethGeometry.settingsCardTitleSize) *
-                  s,
-              left: 6 * s,
-              right: 6 * s,
-              child: Center(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'IRANYekanX',
-                    fontWeight: FontWeight.w600,
-                    fontSize: AethGeometry.settingsCardTitleSize * s,
-                    color: AethColors.textPrimary,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: (AethGeometry.settingsCardSubCenter -
-                      AethGeometry.settingsCardSubSize) *
-                  s,
-              left: 6 * s,
-              right: 6 * s,
-              child: Center(
-                // v1.0.2 — the status value lands softly (ON/OFF, the
-                // routing region, the protocol name — was a raw swap).
-                child: AnimatedValueText(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  textStyle: TextStyle(
-                    fontFamily: 'IRANYekanX',
-                    fontWeight: FontWeight.w400,
-                    fontSize: AethGeometry.settingsCardSubSize * s,
-                    color: subtitleColor ?? AethColors.textSecondary,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Psiphon / Tor / Lantern protocol cards
-// ---------------------------------------------------------------------------
-
-class _ProtocolPills extends StatelessWidget {
-  const _ProtocolPills({
-    required this.textDir,
-    required this.onPsiphon,
-    required this.onTor,
-    required this.onLantern,
-  });
-
-  final TextDirection textDir;
-  final VoidCallback onPsiphon;
-  final VoidCallback onTor;
-  final VoidCallback onLantern;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = AppStrings.of(context);
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    // Lantern round — three cards on the six-card grid's columns, LTR-locked
-    // like the old pair: visual LEFT = Psiphon, middle = Tor, RIGHT =
-    // Lantern (the new card joins at the end of the row).
-    final cards = [
-      (
-        key: 'settings-proto-psiphon',
-        logo: AppAssets.protocolPsiphonLogo,
-        title: strings.settingsPsiphon,
-        onTap: onPsiphon,
-      ),
-      (
-        key: 'settings-proto-tor',
-        logo: AppAssets.protocolTorLogo,
-        title: strings.settingsTor,
-        onTap: onTor,
-      ),
-      (
-        key: 'settings-proto-lantern',
-        logo: AppAssets.protocolLanternLogo(light: AethThemeSync.light),
-        title: strings.settingsLantern,
-        onTap: onLantern,
-      ),
-    ];
-    return Row(
-      children: [
-        for (final (i, c) in cards.indexed) ...[
-          if (i > 0) SizedBox(width: AethGeometry.settingsCardGap * s),
-          Expanded(
-            child: _ProtocolCard(
-              key: ValueKey(c.key),
-              logo: c.logo,
-              title: c.title,
-              subtitle: strings.settingsPillSub,
-              textDir: textDir,
-              onTap: c.onTap,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// One protocol card (Psiphon / Tor / Lantern): the protocol's own logo
-/// (exact colors — the round-16 decree) stacked over the title and the
-/// grey subtitle, centered, on the pill's own surface + r24.
-class _ProtocolCard extends StatelessWidget {
-  const _ProtocolCard({
-    super.key,
-    required this.logo,
-    required this.title,
-    required this.subtitle,
-    required this.textDir,
-    this.onTap,
-  });
-
-  final String logo;
-  final String title;
-  final String subtitle;
-  final TextDirection textDir;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        height: AethGeometry.settingsProtoCardH * s,
-        decoration: BoxDecoration(
-          color: AethColors.cardDark,
-          borderRadius:
-              BorderRadius.circular(AethGeometry.settingsPillRadius * s),
-        ),
-        padding: EdgeInsets.symmetric(horizontal: 6 * s),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SvgPicture.asset(
-              logo,
-              width: AethGeometry.settingsProtoCardLogo * s,
-              height: AethGeometry.settingsProtoCardLogo * s,
-              fit: BoxFit.contain,
-            ),
-            SizedBox(height: AethGeometry.settingsProtoCardLogoGap * s),
+            const Spacer(),
             Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              textDirection: textDir,
-              style: TextStyle(
-                fontFamily: 'IRANYekanX',
-                fontWeight: FontWeight.w600,
-                fontSize: AethGeometry.settingsPillTitleSize * s,
-                height: 1.3,
-                color: AethColors.textPrimary,
-              ),
+              strings.settingsTitle,
+              style: _yekan(17 * s, FontWeight.w700, AethColors.textPrimary),
             ),
-            SizedBox(height: 2 * s),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              textDirection: textDir,
-              style: TextStyle(
-                fontFamily: 'IRANYekanX',
-                fontWeight: FontWeight.w400,
-                fontSize: AethGeometry.settingsPillSubSize * s,
-                height: 1.3,
-                color: AethColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Section headings
-// ---------------------------------------------------------------------------
-
-class _SectionHeading extends StatelessWidget {
-  const _SectionHeading({required this.icon, required this.title});
-
-  final String icon;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final Widget iconWidget = SvgPicture.asset(
-      icon,
-      width: AethGeometry.settingsHeadingIconSize * s,
-      height: AethGeometry.settingsHeadingIconSize * s,
-      colorFilter: ColorFilter.mode(
-        AethColors.textPrimary,
-        BlendMode.srcIn,
-      ),
-    );
-    // LTR-locked parent: the heading block hugs the visual RIGHT edge
-    // (measured: text x220–333, icon x336–364, block ends at x368).
-    return Align(
-      alignment: AlignmentDirectional.centerEnd,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            title,
-            textDirection: appContentDirection(context),
-            style: TextStyle(
-              fontFamily: 'IRANYekanX',
-              fontWeight: FontWeight.w700,
-              fontSize: AethGeometry.settingsHeadingSize * s,
-              color: AethColors.textPrimary,
-            ),
-          ),
-          SizedBox(width: 8 * s),
-          iconWidget,
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Status cards — REAL store state (report D2)
-// ---------------------------------------------------------------------------
-
-class _StatusCards extends StatelessWidget {
-  const _StatusCards({
-    required this.store,
-    required this.onKillSwitch,
-    required this.onRoutingArea,
-    required this.onProtocol,
-  });
-
-  final ConnectionStore store;
-
-  /// v4.22 — the three cards are now TAPPABLE: each opens the page that
-  /// owns its value (the owner: «تنظیمات به درستی توی دسته بندی مناسب
-  /// خودشون قرار بگیرن و به صفحه اصلی تنظیمات متصل باشن»).
-  final VoidCallback onKillSwitch;
-  final VoidCallback onRoutingArea;
-  final VoidCallback onProtocol;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = AppStrings.of(context);
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    return Row(
-      children: [
-        // LTR-locked: visual left→right exactly like the frame —
-        // Kill Switch (x33) · منطقهٔ مسیریابی (x150) · پروتکل (x267).
-        // The protocol value renders the mode's Latin name exactly like
-        // the frame («AUTO / SMART"); SMART alone when smart is picked
-        // (the subpage flips it).
-        Expanded(
-          child: _SettingsCard(
-            // v4.17 — owner round #1: the Kill Switch card takes the set's
-            // power glyph (Off.svg — the owner's message cut the icon name
-            // off; one-line swap when the exact name arrives).
-            asset: AppAssets.iconOff,
-            title: 'Kill Switch',
-            subtitle: store.killSwitch ? 'ON' : 'OFF',
-            subtitleColor: store.killSwitch
-                ? AethColors.accentConnected
-                : AethColors.textSecondary,
-            onTap: onKillSwitch,
-          ),
-        ),
-        SizedBox(width: AethGeometry.settingsCardGap * s),
-        Expanded(
-          child: _SettingsCard(
-            asset: AppAssets.iconRedo,
-            title: strings.settingsRoutingArea,
-            subtitle: strings.routingRegionName(store.routingRegion),
-            subtitleColor: AethColors.accentConnected,
-            onTap: onRoutingArea,
-          ),
-        ),
-        SizedBox(width: AethGeometry.settingsCardGap * s),
-        Expanded(
-          child: _SettingsCard(
-            // v4.17 — owner round #2: the protocol card takes Swap 1.svg.
-            // v4.40 — the AUTO/SMART protocol-mode row is retired (owner
-            // round 15: «حالت پروتکل ... کلا حذف کن»); the card now shows
-            // the SELECTED protocol's own name (the reference frames'
-            // intent all along).
-            asset: AppAssets.iconSwap1,
-            title: strings.protocol,
-            subtitle: strings.protocolName(store.selectedProtocol),
-            subtitleColor: AethColors.accentConnected,
-            onTap: onProtocol,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Server pills (Zeptun Tunnel / Aether Core) — GitHub logos.
-// v4.15 #3 — corners r20 (owner CSS Rectangle 79 scaled 24 × 70/84),
-// replacing the v4.14 stadium (h/2 = 35).
-// v2.1.0 — restored to the main settings page (the owner's decree);
-// each pill now opens its core's own GitHub repository (the v1.5.0
-// «آدرس هسته ها» addresses ride the tap — the look is unchanged).
-// ---------------------------------------------------------------------------
-class _ServerPills extends StatelessWidget {
-  const _ServerPills();
-
-  static const String _zeptunRepo = 'https://github.com/Noisemux/zeptun';
-  static const String _aetherRepo = 'https://github.com/CluvexStudio/Aether';
-
-  Future<void> _open(String url) async {
-    try {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } catch (_) {
-      // No handler on this host — the pill stays a plain display card.
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final h = AethGeometry.settingsServerPillH * s;
-    Widget pill(String title, String url) => Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => _open(url),
-            child: Container(
-              height: h,
-              decoration: BoxDecoration(
-                color: AethColors.cardDark,
-                borderRadius: BorderRadius.circular(
-                  AethGeometry.settingsServerPillRadius * s,
-                ),
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: AethGeometry.settingsServerInset * s,
-              ),
-              child: Row(
-                children: [
-                  // GitHub logo at the TRAILING edge (visual left in the
-                  // frame — pixel-verified: logo x50–83, text x94–174).
-                  SvgPicture.asset(
-                    AppAssets.logoGithub,
-                    width: AethGeometry.settingsServerLogoSize * s,
-                    height: AethGeometry.settingsServerLogoSize * s,
-                    fit: BoxFit.contain,
+            const Spacer(),
+            Semantics(
+              label: 'Back',
+              button: true,
+              child: GestureDetector(
+                key: const ValueKey('settings-back'),
+                behavior: HitTestBehavior.opaque,
+                onTap: onBack,
+                child: Container(
+                  width: tile,
+                  height: tile,
+                  decoration: BoxDecoration(
+                    color: AethColors.topTile,
+                    borderRadius: BorderRadius.circular(
+                      AethGeometry.topTileRadius * s,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AethColors.tileShadow,
+                        offset: const Offset(0, 4),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: SvgPicture.asset(
+                    AppAssets.iconRight2,
+                    width: AethGeometry.topTileIcon * s,
+                    height: AethGeometry.topTileIcon * s,
                     colorFilter: ColorFilter.mode(
                       AethColors.textPrimary,
                       BlendMode.srcIn,
                     ),
                   ),
-                  SizedBox(width: 10 * s),
-                  Expanded(
-                    // FittedBox keeps the FULL title inside the pill at any
-                    // locale/font — never «Zeptun Tun…» (device-test lesson).
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        style: TextStyle(
-                          fontFamily: 'IRANYekanX',
-                          fontWeight: FontWeight.w600,
-                          fontSize: AethGeometry.settingsPillTitleSize * s,
-                          color: AethColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-        );
-    return Row(
-      children: [
-        // LTR-locked: visual LEFT = Zeptun Tunnel, RIGHT = Aether Core
-        // (the frame's measured positions).
-        pill('Zeptun Tunnel', _zeptunRepo),
-        SizedBox(width: AethGeometry.settingsPillGap * s),
-        pill('Aether Core', _aetherRepo),
-      ],
+          ],
+        ),
+      ),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// v4.21 — the core diagnostics entry + page (owner device-test round 3:
-// «چطوره اون بخش متن خطا لاگ کل هسته هارو هم بده تا بهتر بتونیم دیباگ
-// کنیم»). The Kotlin layer redirects the process stderr (aether's
-// env_logger + the zeptun JNI) into filesDir/logs/core-log.txt; this page
-// tails that capture live. Same visual language as the rest of the app
-// (dark card, IRANYekanX, the home patterns behind).
+// HERO — the login sheet with its notch, the phase indicator in the notch,
+// the step composition and the three quick controls.
 // ---------------------------------------------------------------------------
 
-class _CoreLogCard extends StatelessWidget {
-  const _CoreLogCard({required this.onTap});
+enum _Phase { off, busy, on }
 
-  final VoidCallback onTap;
+_Phase _phaseOf(VpnState st) => switch (st) {
+  VpnState.connected => _Phase.on,
+  VpnState.disconnected || VpnState.failed => _Phase.off,
+  _ => _Phase.busy,
+};
+
+Color _phaseColor(_Phase p) => switch (p) {
+  _Phase.on => AethColors.accentConnected,
+  _Phase.off => AethColors.statusDisconnected,
+  _Phase.busy => AethColors.autoShieldAmber,
+};
+
+String _stateLabel(AppStrings t, VpnState st) => switch (st) {
+  VpnState.connected => t.statusConnected,
+  VpnState.connecting => t.statusConnecting,
+  VpnState.reconnecting => t.statusReconnecting,
+  VpnState.starting => t.statusStarting,
+  VpnState.waitingForPermissions => t.statusWaitingPermissions,
+  VpnState.disconnecting => t.statusDisconnecting,
+  VpnState.failed => t.statusFailed,
+  VpnState.disconnected => t.statusDisconnected,
+};
+
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({required this.store, required this.onOpen});
+
+  final ConnectionStore store;
+  final VoidCallback onOpen;
+
+  static const double _notchDepth = 22;
 
   @override
   Widget build(BuildContext context) {
-    final strings = AppStrings.of(context);
+    final t = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final phase = _phaseOf(store.state);
+    final color = _phaseColor(phase);
+    final proto = store.selectedProtocol;
+    return CustomPaint(
+      painter: _NotchedCardPainter(
+        color: AethColors.cardDark,
+        radius: 27 * s,
+        depth: _notchDepth * s,
+        s: s,
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(14 * s, 7 * s, 14 * s, 14 * s),
+        child: Column(
+          children: [
+            _PhaseIndicator(phase: phase, color: color),
+            SizedBox(height: 20 * s),
+            Semantics(
+              button: true,
+              label: t.protocolName(proto),
+              child: GestureDetector(
+                key: const ValueKey('settings-hero'),
+                behavior: HitTestBehavior.opaque,
+                onTap: onOpen,
+                child: Column(
+                  children: [
+                    SettingsIconBox(
+                      asset: AppAssets.protocolIcon(
+                        proto,
+                        light: AethThemeSync.light,
+                      ),
+                      size: 56 * s,
+                      glyph: 34 * s,
+                      tinted: false,
+                    ),
+                    SizedBox(height: 12 * s),
+                    Text(
+                      t.protocolName(proto),
+                      textAlign: TextAlign.center,
+                      style: _yekan(
+                        AethGeometry.loginTitleSize * s,
+                        FontWeight.w600,
+                        AethColors.textPrimary,
+                      ),
+                    ),
+                    SizedBox(height: 4 * s),
+                    Directionality(
+                      textDirection: appContentDirection(context),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            width: 7 * s,
+                            height: 7 * s,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          SizedBox(width: 6 * s),
+                          AnimatedValueText(
+                            _stateLabel(t, store.state),
+                            textStyle: _yekan(
+                              13 * s,
+                              FontWeight.w400,
+                              AethColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: 18 * s),
+            Directionality(
+              textDirection: appContentDirection(context),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _QuickTile(
+                      keyId: 'quick-kill-switch',
+                      icon: AppAssets.iconSecuritySafe,
+                      label: t.secKillSwitch,
+                      value: store.killSwitch ? t.settingsOn : t.settingsOff,
+                      active: store.killSwitch,
+                      onTap: () => store.setKillSwitch(!store.killSwitch),
+                    ),
+                  ),
+                  SizedBox(width: 8 * s),
+                  Expanded(
+                    child: _QuickTile(
+                      keyId: 'quick-mode',
+                      icon: AppAssets.iconPassword1,
+                      label: t.settingsModeShort,
+                      value: store.connectionMode == ConnectionMode.tunnel
+                          ? t.modeTunnel
+                          : t.modeProxy,
+                      active: true,
+                      highlight: false,
+                      onTap: () => store.setConnectionMode(
+                        store.connectionMode == ConnectionMode.tunnel
+                            ? ConnectionMode.proxy
+                            : ConnectionMode.tunnel,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8 * s),
+                  Expanded(
+                    child: _QuickTile(
+                      keyId: 'quick-theme',
+                      icon: store.themePick == AethThemePick.light
+                          ? AppAssets.iconSun1
+                          : AppAssets.iconMoon,
+                      label: t.settingsThemeShort,
+                      value: switch (store.themePick) {
+                        AethThemePick.night => t.themePickNight,
+                        AethThemePick.light => t.themePickLight,
+                        AethThemePick.auto => t.themePickAuto,
+                      },
+                      active: true,
+                      highlight: false,
+                      onTap: () => store.setThemePick(switch (store.themePick) {
+                        AethThemePick.night => AethThemePick.light,
+                        AethThemePick.light => AethThemePick.auto,
+                        AethThemePick.auto => AethThemePick.night,
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The login step indicator re-read as the connection's three phases.
+class _PhaseIndicator extends StatelessWidget {
+  const _PhaseIndicator({required this.phase, required this.color});
+
+  final _Phase phase;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = MotionScope.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final d = motionDuration(style, MotionDurations.quick);
+    return Directionality(
+      textDirection: appContentDirection(context),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final p in _Phase.values) ...[
+            if (p != _Phase.off)
+              SizedBox(width: AethGeometry.loginIndicatorGap * s),
+            AnimatedContainer(
+              duration: d,
+              curve: Curves.easeOutCubic,
+              width:
+                  (p == phase
+                      ? AethGeometry.loginIndicatorActiveW
+                      : AethGeometry.loginIndicatorDotW) *
+                  s,
+              height: AethGeometry.loginIndicatorH * s,
+              decoration: BoxDecoration(
+                color: p == phase
+                    ? color
+                    : AethColors.textSecondary.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(
+                  AethGeometry.loginIndicatorH * s / 2,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The login sheet's top edge — r27 corners and the centre notch (the
+/// login's 184-wide cut, 106 flat, eased with the same cubic shoulders).
+class _NotchedCardPainter extends CustomPainter {
+  const _NotchedCardPainter({
+    required this.color,
+    required this.radius,
+    required this.depth,
+    required this.s,
+  });
+
+  final Color color;
+  final double radius;
+  final double depth;
+  final double s;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final r = radius;
+    final c = w / 2;
+    final outer = 92 * s; // half of the login's 184 cut
+    final flat = 53 * s; // half of its 106 flat
+    final path = Path()
+      ..moveTo(0, h - r)
+      ..lineTo(0, r)
+      ..quadraticBezierTo(0, 0, r, 0)
+      ..lineTo(c - outer, 0)
+      ..cubicTo(
+        c - outer + 26 * s,
+        0,
+        c - flat - 26 * s,
+        depth,
+        c - flat,
+        depth,
+      )
+      ..lineTo(c + flat, depth)
+      ..cubicTo(c + flat + 26 * s, depth, c + outer - 26 * s, 0, c + outer, 0)
+      ..lineTo(w - r, 0)
+      ..quadraticBezierTo(w, 0, w, r)
+      ..lineTo(w, h - r)
+      ..quadraticBezierTo(w, h, w - r, h)
+      ..lineTo(r, h)
+      ..quadraticBezierTo(0, h, 0, h - r)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_NotchedCardPainter old) =>
+      old.color != color || old.radius != radius || old.depth != depth;
+}
+
+class _QuickTile extends StatefulWidget {
+  const _QuickTile({
+    required this.keyId,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.active,
+    required this.onTap,
+    this.highlight = true,
+  });
+
+  final String keyId;
+  final String icon;
+  final String label;
+  final String value;
+  final bool active;
+
+  /// An ON/OFF switch rings itself green while on; a multi-value pick
+  /// (mode, theme) keeps a quiet tile.
+  final bool highlight;
+  final VoidCallback onTap;
+
+  @override
+  State<_QuickTile> createState() => _QuickTileState();
+}
+
+class _QuickTileState extends State<_QuickTile> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = MotionScope.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final accent = widget.active
+        ? AethColors.accentConnected
+        : AethColors.textSecondary;
     return Semantics(
       button: true,
-      label: strings.coreLogTitle,
+      label: '${widget.label}: ${widget.value}',
       child: GestureDetector(
-        key: const ValueKey('settings-core-log-card'),
+        key: ValueKey(widget.keyId),
         behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          height: 58 * s,
-          decoration: BoxDecoration(
-            color: AethColors.cardDark,
-            borderRadius:
-                BorderRadius.circular(AethGeometry.settingsPillRadius * s),
-          ),
-          child: Directionality(
-            textDirection: TextDirection.ltr,
-            child: Row(
+        onTap: () {
+          AethHaptics.tap();
+          widget.onTap();
+        },
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.96 : 1,
+          duration: motionDuration(style, MotionDurations.touch),
+          child: AnimatedContainer(
+            duration: motionDuration(style, MotionDurations.quick),
+            padding: EdgeInsets.symmetric(vertical: 12 * s, horizontal: 6 * s),
+            decoration: BoxDecoration(
+              color: AethColors.bgScreen,
+              borderRadius: BorderRadius.circular(18 * s),
+              border: Border.all(
+                color: widget.active && widget.highlight
+                    ? AethColors.accentConnected.withValues(alpha: 0.45)
+                    : Colors.transparent,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(width: 16),
                 SvgPicture.asset(
-                  AppAssets.iconInformationCircle,
+                  widget.icon,
                   width: 22 * s,
                   height: 22 * s,
-                  colorFilter: const ColorFilter.mode(
-                    AethColors.accentConnected,
-                    BlendMode.srcIn,
+                  colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
+                ),
+                SizedBox(height: 6 * s),
+                Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _yekan(
+                    10.5 * s,
+                    FontWeight.w400,
+                    AethColors.textSecondary,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    strings.coreLogTitle,
-                    style: TextStyle(
-                      fontFamily: 'IRANYekanX',
-                      fontWeight: FontWeight.w500,
-                      fontSize: AethGeometry.settingsPillTitleSize * s,
-                      color: AethColors.textPrimary,
+                SizedBox(height: 2 * s),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: AnimatedValueText(
+                    widget.value,
+                    maxLines: 1,
+                    textStyle: _yekan(
+                      13 * s,
+                      FontWeight.w700,
+                      widget.active
+                          ? AethColors.textPrimary
+                          : AethColors.textSecondary,
                     ),
                   ),
                 ),
-                Text(
-                  strings.coreLogOpen,
-                  style: TextStyle(
-                    fontFamily: 'IRANYekanX',
-                    fontWeight: FontWeight.w400,
-                    fontSize: 12 * s,
-                    color: AethColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(width: 16),
               ],
             ),
           ),
@@ -991,14 +761,681 @@ class _CoreLogCard extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+class _SearchEntry {
+  const _SearchEntry(
+    this.title,
+    this.section,
+    this.icon,
+    this.builder, {
+    this.tinted = true,
+  });
+
+  final String title;
+  final String section;
+  final String icon;
+  final Widget Function() builder;
+  final bool tinted;
+}
+
+class _SearchField extends StatelessWidget {
+  const _SearchField({required this.controller, required this.focusNode});
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppStrings.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final hasText = controller.text.isNotEmpty;
+    return Directionality(
+      textDirection: appContentDirection(context),
+      child: Container(
+        height: 52 * s,
+        padding: EdgeInsets.symmetric(horizontal: 14 * s),
+        decoration: BoxDecoration(
+          color: AethColors.cardDark,
+          borderRadius: BorderRadius.circular(18 * s),
+        ),
+        child: Row(
+          children: [
+            SvgPicture.asset(
+              AppAssets.iconSearch,
+              width: 20 * s,
+              height: 20 * s,
+              colorFilter: ColorFilter.mode(
+                AethColors.textSecondary,
+                BlendMode.srcIn,
+              ),
+            ),
+            SizedBox(width: 10 * s),
+            Expanded(
+              child: TextField(
+                key: const ValueKey('settings-search'),
+                controller: controller,
+                focusNode: focusNode,
+                textInputAction: TextInputAction.search,
+                cursorColor: AethColors.accentConnected,
+                style: _yekan(14 * s, FontWeight.w400, AethColors.textPrimary),
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  hintText: t.settingsSearchHint,
+                  hintStyle: _yekan(
+                    14 * s,
+                    FontWeight.w300,
+                    AethColors.textSecondary,
+                  ),
+                ),
+              ),
+            ),
+            if (hasText)
+              Semantics(
+                button: true,
+                label: 'Clear',
+                child: GestureDetector(
+                  key: const ValueKey('settings-search-clear'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: controller.clear,
+                  child: Padding(
+                    padding: EdgeInsets.all(8 * s),
+                    child: SvgPicture.asset(
+                      AppAssets.iconCloseCircle,
+                      width: 20 * s,
+                      height: 20 * s,
+                      colorFilter: ColorFilter.mode(
+                        AethColors.textSecondary,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchResults extends StatelessWidget {
+  const _SearchResults({
+    required this.entries,
+    required this.query,
+    required this.onOpen,
+  });
+
+  final List<_SearchEntry> entries;
+  final String query;
+  final ValueChanged<_SearchEntry> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppStrings.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final q = query.trim().toLowerCase();
+    final hits = entries
+        .where(
+          (e) =>
+              e.title.toLowerCase().contains(q) ||
+              e.section.toLowerCase().contains(q),
+        )
+        .toList();
+    if (hits.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: 28 * s),
+        child: Column(
+          children: [
+            SettingsIconBox(
+              asset: AppAssets.iconSearch,
+              size: 56 * s,
+              glyph: 26 * s,
+              color: AethColors.cardDark,
+              glyphColor: AethColors.textSecondary,
+            ),
+            SizedBox(height: 12 * s),
+            Text(
+              t.settingsSearchEmpty,
+              key: const ValueKey('settings-search-empty'),
+              textAlign: TextAlign.center,
+              textDirection: appContentDirection(context),
+              style: _yekan(13 * s, FontWeight.w400, AethColors.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
+    return _GroupCard(
+      children: [
+        for (final e in hits)
+          _ListRow(
+            keyId: 'settings-hit-${e.title}',
+            icon: e.icon,
+            tinted: e.tinted,
+            title: e.title,
+            summary: e.section,
+            onTap: () => onOpen(e),
+          ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Grouped list primitives
+// ---------------------------------------------------------------------------
+
+class _GroupCard extends StatelessWidget {
+  const _GroupCard({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 6 * s),
+      decoration: BoxDecoration(
+        color: AethColors.cardDark,
+        borderRadius: BorderRadius.circular(22 * s),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0)
+              Directionality(
+                textDirection: appContentDirection(context),
+                child: Padding(
+                  padding: EdgeInsetsDirectional.only(
+                    start: 70 * s,
+                    end: 16 * s,
+                  ),
+                  child: Container(height: 1, color: AethColors.sheetSubtile),
+                ),
+              ),
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ListRow extends StatelessWidget {
+  const _ListRow({
+    required this.keyId,
+    required this.icon,
+    required this.title,
+    required this.summary,
+    required this.onTap,
+    this.tinted = true,
+  });
+
+  final String keyId;
+  final String icon;
+  final String title;
+  final String summary;
+  final VoidCallback onTap;
+  final bool tinted;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final rtl = appContentDirection(context) == TextDirection.rtl;
+    return Semantics(
+      button: true,
+      label: '$title, $summary',
+      child: GestureDetector(
+        key: ValueKey(keyId),
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          AethHaptics.tap();
+          onTap();
+        },
+        child: Directionality(
+          textDirection: appContentDirection(context),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 10 * s),
+            child: Row(
+              children: [
+                SettingsIconBox(
+                  asset: icon,
+                  size: 44 * s,
+                  glyph: tinted ? 22 * s : 28 * s,
+                  tinted: tinted,
+                ),
+                SizedBox(width: 14 * s),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _yekan(
+                          15 * s,
+                          FontWeight.w600,
+                          AethColors.textPrimary,
+                        ),
+                      ),
+                      SizedBox(height: 2 * s),
+                      AnimatedValueText(
+                        summary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textStyle: _yekan(
+                          12 * s,
+                          FontWeight.w400,
+                          AethColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 8 * s),
+                SvgPicture.asset(
+                  rtl ? AppAssets.iconLeft2 : AppAssets.iconRight2,
+                  width: 18 * s,
+                  height: 18 * s,
+                  colorFilter: ColorFilter.mode(
+                    AethColors.textSecondary,
+                    BlendMode.srcIn,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Categories — one grouped list with LIVE summaries.
+// ---------------------------------------------------------------------------
+
+String _langName(AppStrings t, String? code) => switch (code) {
+  null => t.langSystem,
+  'fa' => 'فارسی',
+  'en' => 'English',
+  'ru' => 'Русский',
+  'zh' => '中文',
+  'tk' => 'Türkmen',
+  _ => code,
+};
+
+class _CategoryList extends StatelessWidget {
+  const _CategoryList({required this.store, required this.onOpen});
+
+  final ConnectionStore store;
+  final ValueChanged<Widget> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppStrings.of(context);
+    final ip = switch (store.coreSettings.ipVersion) {
+      IpVersion.v4 => t.ipV4,
+      IpVersion.v6 => t.ipV6,
+      IpVersion.dual => t.ipDual,
+    };
+    final mode = store.connectionMode == ConnectionMode.tunnel
+        ? t.modeTunnel
+        : t.modeProxy;
+    final rules = store.hybridRules.values
+        .expand((l) => l)
+        .where((r) => r.enabled)
+        .length;
+    final theme = switch (store.themePick) {
+      AethThemePick.night => t.themePickNight,
+      AethThemePick.light => t.themePickLight,
+      AethThemePick.auto => t.themePickAuto,
+    };
+    return _GroupCard(
+      children: [
+        _ListRow(
+          keyId: 'settings-cat-connection',
+          icon: AppAssets.iconLock1,
+          title: t.settingsConnSecTitle,
+          summary:
+              '$mode • Kill Switch ${store.killSwitch ? t.settingsOn : t.settingsOff} • $ip',
+          onTap: () => onOpen(ConnectionSettingsPage(store: store)),
+        ),
+        _ListRow(
+          keyId: 'settings-cat-routing',
+          icon: AppAssets.iconRedo,
+          title: t.settingsRouting,
+          summary: [
+            store.routingRegion == null
+                ? t.routingNone
+                : countryName(
+                        store.routingRegion,
+                        locale: Localizations.localeOf(context).languageCode,
+                      ) ??
+                      t.routingRegionName(store.routingRegion),
+            if (rules > 0) '${t.hybridRouting}: ${t.settingsRulesCount(rules)}',
+          ].join(' • '),
+          onTap: () => onOpen(RoutingSettingsPage(store: store)),
+        ),
+        _ListRow(
+          keyId: 'settings-cat-look',
+          icon: AppAssets.iconPalette,
+          title: t.settingsLookLangTitle,
+          summary: '$theme • ${_langName(t, store.appLocale)}',
+          onTap: () => onOpen(AppearanceSettingsPage(store: store)),
+        ),
+        _ListRow(
+          keyId: 'settings-cat-general',
+          icon: AppAssets.iconFilter5,
+          title: t.settingsGeneral,
+          summary: t.settingsAboutSub,
+          onTap: () => onOpen(GeneralSettingsPage(store: store)),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Protocols & core — a 2×2 grid with each family's live exit location.
+// ---------------------------------------------------------------------------
+
+class _ProtocolGrid extends StatelessWidget {
+  const _ProtocolGrid({required this.store, required this.onOpen});
+
+  final ConnectionStore store;
+  final ValueChanged<Widget> onOpen;
+
+  String _exit(BuildContext context, String code) {
+    final t = AppStrings.of(context);
+    if (code == LocationWheelPolicy.autoCode) return t.settingsExitAuto;
+    return countryName(
+          code,
+          locale: Localizations.localeOf(context).languageCode,
+        ) ??
+        code.toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppStrings.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    Widget tile(
+      String keyId,
+      String logo,
+      bool tinted,
+      String title,
+      String sub,
+      Widget Function() page,
+    ) => Expanded(
+      child: _ProtocolTile(
+        keyId: keyId,
+        logo: logo,
+        tinted: tinted,
+        title: title,
+        subtitle: sub,
+        onTap: () => onOpen(page()),
+      ),
+    );
+    return Directionality(
+      textDirection: appContentDirection(context),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              tile(
+                'settings-proto-psiphon',
+                AppAssets.protocolPsiphonLogo,
+                false,
+                t.settingsPsiphon,
+                _exit(context, store.psiphonLocation),
+                () => PsiphonSettingsPage(store: store),
+              ),
+              SizedBox(width: 10 * s),
+              tile(
+                'settings-proto-tor',
+                AppAssets.protocolTorLogo,
+                false,
+                t.settingsTor,
+                _exit(context, store.torLocation),
+                () => TorSettingsPage(store: store),
+              ),
+            ],
+          ),
+          SizedBox(height: 10 * s),
+          Row(
+            children: [
+              tile(
+                'settings-proto-lantern',
+                AppAssets.protocolLanternLogo(light: AethThemeSync.light),
+                false,
+                t.settingsLantern,
+                _exit(context, store.lanternLocation),
+                () => LanternSettingsPage(store: store),
+              ),
+              SizedBox(width: 10 * s),
+              tile(
+                'settings-proto-core',
+                AppAssets.iconShieldTick,
+                true,
+                'Aether Core',
+                t.settingsCoreSub,
+                () => CoreSettingsPage(store: store),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProtocolTile extends StatelessWidget {
+  const _ProtocolTile({
+    required this.keyId,
+    required this.logo,
+    required this.tinted,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final String keyId;
+  final String logo;
+  final bool tinted;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    return Semantics(
+      button: true,
+      label: '$title, $subtitle',
+      child: GestureDetector(
+        key: ValueKey(keyId),
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          AethHaptics.tap();
+          onTap();
+        },
+        child: Container(
+          height: 74 * s,
+          padding: EdgeInsets.symmetric(horizontal: 12 * s),
+          decoration: BoxDecoration(
+            color: AethColors.cardDark,
+            borderRadius: BorderRadius.circular(22 * s),
+          ),
+          child: Row(
+            children: [
+              SettingsIconBox(
+                asset: logo,
+                size: 44 * s,
+                glyph: tinted ? 22 * s : 28 * s,
+                tinted: tinted,
+              ),
+              SizedBox(width: 10 * s),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _yekan(
+                        14 * s,
+                        FontWeight.w600,
+                        AethColors.textPrimary,
+                      ),
+                    ),
+                    SizedBox(height: 2 * s),
+                    AnimatedValueText(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textStyle: _yekan(
+                        11.5 * s,
+                        FontWeight.w400,
+                        AethColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Support — core log, the two core repositories, the version.
+// ---------------------------------------------------------------------------
+
+class _SupportBlock extends StatelessWidget {
+  const _SupportBlock({required this.onCoreLog});
+
+  final VoidCallback onCoreLog;
+
+  static const String _zeptunRepo = 'https://github.com/Noisemux/zeptun';
+  static const String _aetherRepo = 'https://github.com/CluvexStudio/Aether';
+
+  Future<void> _launch(String url) async {
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // No handler on this host — nothing to open.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppStrings.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    Widget repo(String keyId, String name, String url) => Expanded(
+      child: Semantics(
+        button: true,
+        label: name,
+        child: GestureDetector(
+          key: ValueKey(keyId),
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _launch(url),
+          child: Container(
+            height: 52 * s,
+            padding: EdgeInsets.symmetric(horizontal: 14 * s),
+            decoration: BoxDecoration(
+              color: AethColors.cardDark,
+              borderRadius: BorderRadius.circular(18 * s),
+            ),
+            child: Row(
+              children: [
+                SvgPicture.asset(
+                  AppAssets.logoGithub,
+                  width: 22 * s,
+                  height: 22 * s,
+                  colorFilter: ColorFilter.mode(
+                    AethColors.textPrimary,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                SizedBox(width: 10 * s),
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      style: _yekan(
+                        13 * s,
+                        FontWeight.w600,
+                        AethColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _GroupCard(
+          children: [
+            _ListRow(
+              keyId: 'settings-core-log-card',
+              icon: AppAssets.iconInformationCircle,
+              title: t.coreLogTitle,
+              summary: t.coreLogOpen,
+              onTap: onCoreLog,
+            ),
+          ],
+        ),
+        SizedBox(height: 10 * s),
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Row(
+            children: [
+              repo('settings-repo-zeptun', 'Zeptun Tunnel', _zeptunRepo),
+              SizedBox(width: 10 * s),
+              repo('settings-repo-aether', 'Aether Core', _aetherRepo),
+            ],
+          ),
+        ),
+        SizedBox(height: 18 * s),
+        Text(
+          'AETHONE $appVersion',
+          key: const ValueKey('settings-version'),
+          textAlign: TextAlign.center,
+          style: _yekan(11 * s, FontWeight.w400, AethColors.textSecondary),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// v4.21 — the core diagnostics page (unchanged behaviour).
+// ---------------------------------------------------------------------------
+
 /// The full-screen core log viewer: tails the capture every 2 s while
 /// open, supports copy (share sheet is out of scope — Clipboard + a toast
 /// is honest) and clear.
 class CoreLogPage extends StatefulWidget {
-  const CoreLogPage({
-    super.key,
-    this.style = MotionStyle.standard,
-  });
+  const CoreLogPage({super.key, this.style = MotionStyle.standard});
 
   /// v4.25 — the effective motion style (the page's own controls).
   /// v5.3 — the pattern params (showPatterns/connected/alive) are retired:
@@ -1168,65 +1605,63 @@ class _CoreLogPageState extends State<CoreLogPage> {
                           MotionDurations.quick,
                         ),
                         child: _loading
-                          ? Center(
-                              key: const ValueKey('core-log-loading'),
-                              child: widget.style == MotionStyle.off
-                                ? Container(
-                                    width: 36,
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: AethColors.accentConnected,
-                                        width: 4,
-                                      ),
-                                    ),
-                                  )
-                                : const CircularProgressIndicator(
-                                    color: AethColors.accentConnected,
-                                  ),
-                            )
-                          : _snapshot.isEmpty
-                              ? Center(
-                                  child: Text(
-                                    strings.coreLogEmpty,
-                                    style: TextStyle(
-                                      fontFamily: 'IRANYekanX',
-                                      fontWeight: FontWeight.w400,
-                                      fontSize: 13,
-                                      color: AethColors.textSecondary,
-                                    ),
-                                  ),
-                                )
-                          : Scrollbar(
-                              key: const ValueKey('core-log-content'),
-                              child: SingleChildScrollView(
-                                // The core's own lines are LTR (English +
-                                // timestamps); one line per log record.
-                                child: Directionality(
-                                  textDirection: TextDirection.ltr,
-                                  child: SelectionArea(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Text(
-                                        _snapshot.text,
-                                        key: const ValueKey(
-                                          'core-log-text',
+                            ? Center(
+                                key: const ValueKey('core-log-loading'),
+                                child: widget.style == MotionStyle.off
+                                    ? Container(
+                                        width: 36,
+                                        height: 36,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: AethColors.accentConnected,
+                                            width: 4,
+                                          ),
                                         ),
-                                        style: TextStyle(
-                                          fontFamily: 'IRANYekanX',
-                                          fontWeight: FontWeight.w400,
-                                          fontSize: 11,
-                                          height: 1.5,
-                                          color: AethColors.textPrimary,
+                                      )
+                                    : const CircularProgressIndicator(
+                                        color: AethColors.accentConnected,
+                                      ),
+                              )
+                            : _snapshot.isEmpty
+                            ? Center(
+                                child: Text(
+                                  strings.coreLogEmpty,
+                                  style: TextStyle(
+                                    fontFamily: 'IRANYekanX',
+                                    fontWeight: FontWeight.w400,
+                                    fontSize: 13,
+                                    color: AethColors.textSecondary,
+                                  ),
+                                ),
+                              )
+                            : Scrollbar(
+                                key: const ValueKey('core-log-content'),
+                                child: SingleChildScrollView(
+                                  // The core's own lines are LTR (English +
+                                  // timestamps); one line per log record.
+                                  child: Directionality(
+                                    textDirection: TextDirection.ltr,
+                                    child: SelectionArea(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(12),
+                                        child: Text(
+                                          _snapshot.text,
+                                          key: const ValueKey('core-log-text'),
+                                          style: TextStyle(
+                                            fontFamily: 'IRANYekanX',
+                                            fontWeight: FontWeight.w400,
+                                            fontSize: 11,
+                                            height: 1.5,
+                                            color: AethColors.textPrimary,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
+                      ),
                     ),
                   ),
                 ],

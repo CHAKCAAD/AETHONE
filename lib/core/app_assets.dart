@@ -83,6 +83,8 @@ abstract final class AppAssets {
   static const String iconGraphUp = '$_icons/Graph Up.svg';
   static const String iconDownload = '$_icons/Download.svg';
   static const String iconUpload = '$_icons/Upload.svg';
+  // v1.1.0 — the settings search field.
+  static const String iconSearch = '$_icons/Search 1.svg';
   static const String iconSetting = '$_icons/Setting.svg';
   static const String iconInformationCircle = '$_icons/Information Circle.svg';
   static const String iconMap = '$_icons/Map.svg';

@@ -38,8 +38,28 @@ class ConnectionSettingsPage extends StatelessWidget {
     final core = store.coreSettings;
     return SubPageFrame(
       store: store,
-      title: strings.settingsConnection,
+      title: strings.settingsConnSecTitle,
+      icon: AppAssets.iconLock1,
+      subtitle: strings.settingsConnSecSub,
       children: () => [
+        // v1.1.0 (settings redesign) — the security page folds in here:
+        // Kill Switch is a connection decision, one tap from the mode.
+        SubSectionHeading(
+          icon: AppAssets.iconSecuritySafe,
+          title: strings.secKillSwitch,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: SettingToggleRow(
+            keyId: 'kill-switch',
+            icon: AppAssets.iconOff,
+            title: strings.secKillSwitch,
+            description: strings.killSwitchDesc,
+            value: store.killSwitch,
+            onChanged: store.setKillSwitch,
+          ),
+        ),
+        SizedBox(height: 24 * s),
         // ---- Section: connection mode (تونل/پروکسی) ----
         SubSectionHeading(
           icon: AppAssets.iconPassword1,
@@ -170,7 +190,7 @@ class _ModeSegmentsRow extends StatelessWidget {
                 fontFamily: 'IRANYekanX',
                 fontWeight: FontWeight.w700,
                 fontSize: AethGeometry.protoSegmentTextSize * s,
-                color: AethColors.textPrimary, // white on BOTH (measured)
+                color: isSel ? AethColors.onCoreDark : AethColors.textPrimary,
               ),
             ),
           ),

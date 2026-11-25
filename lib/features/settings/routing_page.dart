@@ -42,6 +42,8 @@ class RoutingSettingsPage extends StatelessWidget {
     return SubPageFrame(
       store: store,
       title: strings.settingsRouting,
+      icon: AppAssets.iconRedo,
+      subtitle: strings.settingsRoutingSub,
       children: () => [
         // ---- Section: the routing area ----
         SubSectionHeading(

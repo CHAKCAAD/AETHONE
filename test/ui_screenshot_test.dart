@@ -199,5 +199,6 @@ void main() {
     await tester.runAsync(_loadRealFonts);
     await _save(tester, 'settings_main');
     expect(find.text('مسیریابی‌ها'), findsOneWidget);
+    expect(find.text('اتصال و امنیت'), findsOneWidget);
   }, timeout: const Timeout(Duration(minutes: 5)));
 }

@@ -44,6 +44,8 @@ class TorSettingsPage extends StatelessWidget {
     return SubPageFrame(
       store: store,
       title: strings.settingsTor,
+      icon: AppAssets.protocolTorLogo,
+      iconTinted: false,
       children: () => [
         // ---- Section: exit location ----
         SubSectionHeading(

@@ -92,6 +92,25 @@ class AppStrings {
   String get settingsAppearanceSub => _v['settingsAppearanceSub']!;
   String get settingsSecurity => _v['settingsSecurity']!;
   String get settingsSecuritySub => _v['settingsSecuritySub']!;
+  // v1.1.0 — settings redesign (control-center main page).
+  String get settingsSearchHint => _v['settingsSearchHint']!;
+  String get settingsSearchEmpty => _v['settingsSearchEmpty']!;
+  String get settingsQuick => _v['settingsQuick']!;
+  String get settingsCategories => _v['settingsCategories']!;
+  String get settingsProtocolsSection => _v['settingsProtocolsSection']!;
+  String get settingsSupportSection => _v['settingsSupportSection']!;
+  String get settingsConnSecTitle => _v['settingsConnSecTitle']!;
+  String get settingsConnSecSub => _v['settingsConnSecSub']!;
+  String get settingsLookLangTitle => _v['settingsLookLangTitle']!;
+  String get settingsLookLangSub => _v['settingsLookLangSub']!;
+  String get settingsThemeShort => _v['settingsThemeShort']!;
+  String get settingsModeShort => _v['settingsModeShort']!;
+  String get settingsOn => _v['settingsOn']!;
+  String get settingsOff => _v['settingsOff']!;
+  String get settingsAboutSub => _v['settingsAboutSub']!;
+  String get settingsCoreSub => _v['settingsCoreSub']!;
+  String get settingsExitAuto => _v['settingsExitAuto']!;
+  String settingsRulesCount(int n) => _v['settingsRulesCount']!.replaceAll('{n}', '$n');
   String get settingsPsiphon => _v['settingsPsiphon']!;
   String get settingsTor => _v['settingsTor']!;
   String get settingsLantern => _v['settingsLantern']!;
@@ -658,6 +677,24 @@ class AppStrings {
       'settingsAppearanceSub': 'شخصی‌سازی ظاهر برنامه',
       'settingsSecurity': 'تنظیمات امنیت',
       'settingsSecuritySub': 'امنیت و حریم خصوصی',
+      'settingsSearchHint': "جستجو در تنظیمات",
+      'settingsSearchEmpty': "تنظیمی با این عنوان پیدا نشد",
+      'settingsQuick': "دسترسی سریع",
+      'settingsCategories': "دسته\u200cبندی\u200cها",
+      'settingsProtocolsSection': "پروتکل\u200cها و هسته",
+      'settingsSupportSection': "پشتیبانی و عیب\u200cیابی",
+      'settingsConnSecTitle': "اتصال و امنیت",
+      'settingsConnSecSub': "حالت اتصال، Kill Switch و آی\u200cپی",
+      'settingsLookLangTitle': "ظاهر و زبان",
+      'settingsLookLangSub': "تم، انیمیشن و زبان برنامه",
+      'settingsThemeShort': "تم",
+      'settingsModeShort': "حالت",
+      'settingsOn': "روشن",
+      'settingsOff': "خاموش",
+      'settingsAboutSub': "درباره، اعلان\u200cها و بازنشانی",
+      'settingsCoreSub': "فرگمنت و TLS",
+      'settingsExitAuto': "خودکار",
+      'settingsRulesCount': "{n} قانون",
       'settingsPsiphon': 'سایفون',
       'settingsTor': 'تور',
       'settingsLantern': 'لنترن',
@@ -1032,6 +1069,24 @@ class AppStrings {
       'settingsAppearanceSub': 'Personalize the app',
       'settingsSecurity': 'Security',
       'settingsSecuritySub': 'Security & privacy',
+      'settingsSearchHint': "Search settings",
+      'settingsSearchEmpty': "No setting matches that",
+      'settingsQuick': "Quick controls",
+      'settingsCategories': "Categories",
+      'settingsProtocolsSection': "Protocols & core",
+      'settingsSupportSection': "Support & diagnostics",
+      'settingsConnSecTitle': "Connection & security",
+      'settingsConnSecSub': "Connection mode, Kill Switch and IP",
+      'settingsLookLangTitle': "Look & language",
+      'settingsLookLangSub': "Theme, motion and app language",
+      'settingsThemeShort': "Theme",
+      'settingsModeShort': "Mode",
+      'settingsOn': "On",
+      'settingsOff': "Off",
+      'settingsAboutSub': "About, notifications and reset",
+      'settingsCoreSub': "Fragment & TLS",
+      'settingsExitAuto': "Auto",
+      'settingsRulesCount': "{n} rules",
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
       'settingsLantern': 'Lantern',
@@ -1404,6 +1459,24 @@ class AppStrings {
       'settingsAppearanceSub': 'Персонализация приложения',
       'settingsSecurity': 'Безопасность',
       'settingsSecuritySub': 'Безопасность и приватность',
+      'settingsSearchHint': "Поиск в настройках",
+      'settingsSearchEmpty': "Ничего не найдено",
+      'settingsQuick': "Быстрые настройки",
+      'settingsCategories': "Разделы",
+      'settingsProtocolsSection': "Протоколы и ядро",
+      'settingsSupportSection': "Поддержка и диагностика",
+      'settingsConnSecTitle': "Подключение и безопасность",
+      'settingsConnSecSub': "Режим, Kill Switch и IP",
+      'settingsLookLangTitle': "Вид и язык",
+      'settingsLookLangSub': "Тема, анимация и язык",
+      'settingsThemeShort': "Тема",
+      'settingsModeShort': "Режим",
+      'settingsOn': "Вкл",
+      'settingsOff': "Выкл",
+      'settingsAboutSub': "О приложении, уведомления, сброс",
+      'settingsCoreSub': "Фрагментация и TLS",
+      'settingsExitAuto': "Авто",
+      'settingsRulesCount': "Правил: {n}",
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
       'settingsLantern': 'Lantern',
@@ -1774,6 +1847,24 @@ class AppStrings {
       'settingsAppearanceSub': '个性化应用外观',
       'settingsSecurity': '安全设置',
       'settingsSecuritySub': '安全与隐私',
+      'settingsSearchHint': "搜索设置",
+      'settingsSearchEmpty': "没有匹配的设置",
+      'settingsQuick': "快捷控制",
+      'settingsCategories': "分类",
+      'settingsProtocolsSection': "协议与内核",
+      'settingsSupportSection': "支持与诊断",
+      'settingsConnSecTitle': "连接与安全",
+      'settingsConnSecSub': "连接模式、Kill Switch 与 IP",
+      'settingsLookLangTitle': "外观与语言",
+      'settingsLookLangSub': "主题、动画与应用语言",
+      'settingsThemeShort': "主题",
+      'settingsModeShort': "模式",
+      'settingsOn': "开",
+      'settingsOff': "关",
+      'settingsAboutSub': "关于、通知与重置",
+      'settingsCoreSub': "分片与 TLS",
+      'settingsExitAuto': "自动",
+      'settingsRulesCount': "{n} 条规则",
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
       'settingsLantern': 'Lantern',
@@ -2150,6 +2241,24 @@ class AppStrings {
       'settingsAppearanceSub': 'Programmany özleşdiriň',
       'settingsSecurity': 'Howpsuzlyk',
       'settingsSecuritySub': 'Howpsuzlyk we gizlinlik',
+      'settingsSearchHint': "Sazlamalarda gözle",
+      'settingsSearchEmpty': "Gabat gelýän sazlama tapylmady",
+      'settingsQuick': "Çalt dolandyryş",
+      'settingsCategories': "Bölümler",
+      'settingsProtocolsSection': "Protokollar we ýadro",
+      'settingsSupportSection': "Goldaw we diagnostika",
+      'settingsConnSecTitle': "Baglanyşyk we howpsuzlyk",
+      'settingsConnSecSub': "Baglanyşyk režimi, Kill Switch we IP",
+      'settingsLookLangTitle': "Görnüş we dil",
+      'settingsLookLangSub': "Tema, animasiýa we programmanyň dili",
+      'settingsThemeShort': "Tema",
+      'settingsModeShort': "Režim",
+      'settingsOn': "Açyk",
+      'settingsOff': "Ýapyk",
+      'settingsAboutSub': "Barada, bildirişler we täzeden düzmek",
+      'settingsCoreSub': "Fragment we TLS",
+      'settingsExitAuto': "Awtomatiki",
+      'settingsRulesCount': "{n} düzgün",
       'settingsPsiphon': 'Psiphon',
       'settingsTor': 'Tor',
       'settingsLantern': 'Lantern',

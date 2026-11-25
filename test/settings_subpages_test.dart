@@ -295,9 +295,26 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.animationStyle, MotionStyle.smooth);
 
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('toggle-show-patterns')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('toggle-show-patterns')));
       await tester.pumpAndSettle();
       expect(store.showPatterns, isFalse);
+
+      // v1.1.0 — the language section lives on this page now (the
+      // login's flag buttons + the follow-system switch).
+      await tester.ensureVisible(find.byKey(const ValueKey('settings-lang-en')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('settings-lang-en')));
+      await tester.pumpAndSettle();
+      expect(store.appLocale, 'en');
+      await tester.ensureVisible(find.byKey(const ValueKey('toggle-lang-system')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('toggle-lang-system')));
+      await tester.pumpAndSettle();
+      expect(store.appLocale, isNull);
     });
   });
 
@@ -378,6 +395,8 @@ void main() {
 
       // Fronting: auto → cdn.
       expect(store.coreSettings.psiphonFronting, PsiphonFronting.auto);
+      await tester.ensureVisible(find.text('فقط CDN'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('فقط CDN'));
       await tester.pumpAndSettle();
       expect(
@@ -536,44 +555,105 @@ void main() {
     });
   });
 
-  group('main settings page routing (v4.22)', () {
-    testWidgets('the six cards, family pills and status cards open the '
-        'real pages', (tester) async {
+  group('main settings page routing (v1.1.0 control center)', () {
+    Future<void> open(WidgetTester tester, Key key) async {
+      await tester.ensureVisible(find.byKey(key));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(key));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> back(WidgetTester tester) async {
+      await tester.ensureVisible(find.byKey(const ValueKey('subpage-back')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('subpage-back')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('categories, protocol tiles and the hero open the real '
+        'pages', (tester) async {
       await _useReferenceSurface(tester);
       final store = makeStore();
       await tester.pumpWidget(_booth(SettingsScreen(store: store)));
       await tester.pumpAndSettle();
 
-      // Card 0 → routing page.
-      await tester.tap(find.text('مسیریابی‌ها'));
-      await tester.pumpAndSettle();
+      await open(tester, const ValueKey('settings-cat-routing'));
       expect(find.text('مسیرهای مستقیم و مسدود'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('subpage-back')));
-      await tester.pumpAndSettle();
+      await back(tester);
 
-      // Card 3 → language page.
-      await tester.tap(find.text('تنظیمات زبان'));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('pill-app-locale-فارسی')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('subpage-back')));
-      await tester.pumpAndSettle();
+      // Look + language is ONE page now (the language page merged in).
+      await open(tester, const ValueKey('settings-cat-look'));
+      expect(find.byKey(const ValueKey('pill-motion-استاندارد')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-lang-fa')), findsOneWidget);
+      await back(tester);
 
-      // The Psiphon pill → the psiphon page.
-      await tester.tap(find.text('سایفون'));
-      await tester.pumpAndSettle();
+      // Connection + security is ONE page now.
+      await open(tester, const ValueKey('settings-cat-connection'));
+      expect(find.byKey(const ValueKey('toggle-kill-switch')), findsOneWidget);
+      expect(find.byKey(const ValueKey('conn-mode-tunnel')), findsOneWidget);
+      await back(tester);
+
+      await open(tester, const ValueKey('settings-proto-psiphon'));
       expect(find.byKey(const ValueKey('flag-pick-auto')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('subpage-back')));
+      await back(tester);
+
+      await open(tester, const ValueKey('settings-hero'));
+      expect(find.byKey(const ValueKey('toggle-kill-switch')), findsOneWidget);
+    });
+
+    testWidgets('quick controls change the setting in place', (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(SettingsScreen(store: store)));
       await tester.pumpAndSettle();
 
-      // The Kill Switch status card → the security page.
-      await tester.dragUntilVisible(
-        find.text('Kill Switch'),
-        find.byType(SettingsScreen),
-        const Offset(0, -80),
+      final ks = store.killSwitch;
+      await tester.tap(find.byKey(const ValueKey('quick-kill-switch')));
+      await tester.pumpAndSettle();
+      expect(store.killSwitch, !ks);
+
+      final mode = store.connectionMode;
+      await tester.tap(find.byKey(const ValueKey('quick-mode')));
+      await tester.pumpAndSettle();
+      expect(store.connectionMode, isNot(mode));
+
+      final pick = store.themePick;
+      await tester.tap(find.byKey(const ValueKey('quick-theme')));
+      await tester.pumpAndSettle();
+      expect(store.themePick, isNot(pick));
+      // Still on the main page — nothing was pushed.
+      expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
+    });
+
+    testWidgets('search finds a setting and opens its page', (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(SettingsScreen(store: store)));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('settings-search')),
+        'Kill',
       );
-      await tester.tap(find.text('Kill Switch'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-cat-routing')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('settings-hit-Kill Switch')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('toggle-kill-switch')), findsOneWidget);
+      await back(tester);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('settings-search')),
+        'zzzz-no-such-setting',
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-search-empty')),
+          findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('settings-search-clear')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-cat-routing')),
+          findsOneWidget);
     });
   });
 

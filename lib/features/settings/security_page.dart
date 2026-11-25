@@ -27,6 +27,8 @@ class SecuritySettingsPage extends StatelessWidget {
     return SubPageFrame(
       store: store,
       title: strings.settingsSecurity,
+      icon: AppAssets.iconSecuritySafe,
+      subtitle: strings.settingsSecuritySub,
       children: () => [
         // ---- Section: Kill Switch ----
         SubSectionHeading(

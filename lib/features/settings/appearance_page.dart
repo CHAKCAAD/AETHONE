@@ -19,6 +19,7 @@ import '../../../core/app_theme.dart';
 import '../../../core/design_tokens.dart';
 import '../../../core/motion.dart';
 import '../../../l10n/app_strings.dart';
+import '../onboarding/login_steps.dart' show LoginFlagButton;
 import 'settings_controls.dart';
 import 'subpage_frame.dart';
 
@@ -33,7 +34,9 @@ class AppearanceSettingsPage extends StatelessWidget {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
     return SubPageFrame(
       store: store,
-      title: strings.settingsAppearance,
+      title: strings.settingsLookLangTitle,
+      icon: AppAssets.iconPalette,
+      subtitle: strings.settingsLookLangSub,
       children: () => [
         // ---- Section: the display mode (night / light / AUTO) ----
         // v4.40 (owner round 15: «یه مکانیزم میخوام برای حالت دارک و لایت
@@ -137,6 +140,92 @@ class AppearanceSettingsPage extends StatelessWidget {
             description: strings.showPatternsDesc,
             value: store.showPatterns,
             onChanged: store.setShowPatterns,
+          ),
+        ),
+
+        // v1.1.0 (settings redesign) — the language page folds in here,
+        // with the login's own flag buttons (color = picked, gray = not).
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconWebsite,
+          title: strings.secAppLanguage,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(child: _LanguagePicker(store: store)),
+      ],
+    );
+  }
+}
+
+class _LanguagePicker extends StatelessWidget {
+  const _LanguagePicker({required this.store});
+
+  final ConnectionStore store;
+
+  static const List<(String, String, String)> _langs = [
+    ('ir', 'fa', 'فارسی'),
+    ('us', 'en', 'English'),
+    ('tm', 'tk', 'Türkmen'),
+    ('ru', 'ru', 'Русский'),
+    ('cn', 'zh', '中文'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final current = store.appLocale;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Directionality(
+          textDirection: appContentDirection(context),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (final (flag, code, name) in _langs)
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        LoginFlagButton(
+                          keyId: 'settings-lang-$code',
+                          code: flag,
+                          selected: current == code,
+                          onTap: () => store.setAppLocale(code),
+                        ),
+                        SizedBox(height: 6 * s),
+                        Text(
+                          name,
+                          style: TextStyle(
+                            fontFamily: 'IRANYekanX',
+                            fontWeight: current == code
+                                ? FontWeight.w700
+                                : FontWeight.w400,
+                            fontSize: 11 * s,
+                            color: current == code
+                                ? AethColors.textPrimary
+                                : AethColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SubSectionDivider(),
+        SettingToggleRow(
+          keyId: 'lang-system',
+          icon: AppAssets.iconSetting,
+          title: strings.langSystem,
+          description: strings.langDesc,
+          value: current == null,
+          onChanged: (on) => store.setAppLocale(
+            on ? null : Localizations.localeOf(context).languageCode,
           ),
         ),
       ],

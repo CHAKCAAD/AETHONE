@@ -105,6 +105,8 @@ class _GeneralSettingsPageState extends State<GeneralSettingsPage> {
     return SubPageFrame(
       store: widget.store,
       title: strings.settingsGeneral,
+      icon: AppAssets.iconFilter5,
+      subtitle: strings.settingsAboutSub,
       children: () => [
         // ---- Section: about the app ----
         SubSectionHeading(

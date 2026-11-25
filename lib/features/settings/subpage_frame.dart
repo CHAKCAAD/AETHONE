@@ -62,10 +62,23 @@ class SubPageFrame extends StatelessWidget {
     required this.store,
     required this.title,
     required this.children,
+    this.icon,
+    this.iconTinted = true,
+    this.subtitle,
   });
 
   final ConnectionStore store;
   final String title;
+
+  /// v1.1.0 (settings redesign) — the login-style page header: the glyph
+  /// sits in the login's rounded icon box, the title and a one-line
+  /// summary centred under it (the «صفحه ورود» step composition). When
+  /// set, the top bar keeps only its two tiles; null keeps the old bar.
+  final String? icon;
+
+  /// false renders [icon] with its own colors (protocol logos).
+  final bool iconTinted;
+  final String? subtitle;
   final List<Widget> Function() children;
 
   @override
@@ -106,12 +119,27 @@ class SubPageFrame extends StatelessWidget {
                             style,
                             0,
                             _SubPageTopBar(
-                              title: title,
+                              title: icon == null ? title : '',
                               store: store,
                               onBack: () => Navigator.of(context).maybePop(),
                             ),
                           ),
-                          SizedBox(height: 22 * s),
+                          if (icon != null) ...[
+                            SizedBox(height: 6 * s),
+                            subpageEnter(
+                              context,
+                              style,
+                              0,
+                              SubPageHeader(
+                                icon: icon!,
+                                iconTinted: iconTinted,
+                                title: title,
+                                subtitle: subtitle,
+                              ),
+                            ),
+                            SizedBox(height: 26 * s),
+                          ] else
+                            SizedBox(height: 22 * s),
                           // v1.0.2 — the body column resizes SOFTLY when a
                           // conditional section (export panel, bridge/ECH
                           // fields, per-app router rows) appears or folds:
@@ -129,7 +157,8 @@ class SubPageFrame extends StatelessWidget {
                               builder: (context) {
                                 final blocks = children();
                                 return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     for (var i = 0; i < blocks.length; i++)
                                       subpageEnter(
@@ -288,6 +317,118 @@ class _TopTile extends StatelessWidget {
 /// v4.22 device lesson: long titles (e.g. «مسیرهای مستقیم و مسدود»)
 /// overflow the row at 15 px — the text rides a FittedBox scale-down
 /// (the server-pills recipe), so the FULL title always stays visible.
+/// v1.1.0 (settings redesign) — the login step composition re-used as a
+/// page header: the rounded icon box (login 44/r16, here 56/r18 on the
+/// card surface), the centred title (login 19/w500) and a short summary.
+class SubPageHeader extends StatelessWidget {
+  const SubPageHeader({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.iconTinted = true,
+  });
+
+  final String icon;
+  final String title;
+  final String? subtitle;
+  final bool iconTinted;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
+    final dir = appContentDirection(context);
+    return Column(
+      children: [
+        SettingsIconBox(
+          asset: icon,
+          size: 56 * s,
+          glyph: 28 * s,
+          tinted: iconTinted,
+          color: AethColors.cardDark,
+        ),
+        SizedBox(height: 14 * s),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          textDirection: dir,
+          style: TextStyle(
+            fontFamily: 'IRANYekanX',
+            fontWeight: FontWeight.w600,
+            fontSize: AethGeometry.loginTitleSize * s,
+            color: AethColors.textPrimary,
+          ),
+        ),
+        if (subtitle != null) ...[
+          SizedBox(height: 6 * s),
+          Text(
+            subtitle!,
+            textAlign: TextAlign.center,
+            textDirection: dir,
+            style: TextStyle(
+              fontFamily: 'IRANYekanX',
+              fontWeight: FontWeight.w300,
+              fontSize: 13 * s,
+              height: 1.5,
+              color: AethColors.textSecondary,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The login's rounded icon box (44×44 r16 in «صفحه ورود») as a shared
+/// settings primitive: an SVG glyph centred on a soft tile. Tinted glyphs
+/// take the accent green; [tinted] false keeps a logo's own colors.
+class SettingsIconBox extends StatelessWidget {
+  const SettingsIconBox({
+    super.key,
+    required this.asset,
+    required this.size,
+    required this.glyph,
+    this.tinted = true,
+    this.color,
+    this.glyphColor,
+  });
+
+  final String asset;
+  final double size;
+  final double glyph;
+  final bool tinted;
+  final Color? color;
+  final Color? glyphColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color ?? AethColors.bgScreen,
+        borderRadius: BorderRadius.circular(size * 16 / 44),
+      ),
+      alignment: Alignment.center,
+      child: SvgPicture.asset(
+        asset,
+        width: glyph,
+        height: glyph,
+        fit: BoxFit.contain,
+        colorFilter: tinted
+            ? ColorFilter.mode(
+                glyphColor ?? AethColors.accentConnected,
+                BlendMode.srcIn,
+              )
+            : null,
+      ),
+    );
+  }
+}
+
+/// A section heading — v1.1.0: a small icon box + the title, aligned to
+/// the reading START of the app's language (was pinned to the visual
+/// right in every locale).
 class SubSectionHeading extends StatelessWidget {
   const SubSectionHeading({super.key, required this.icon, required this.title});
 
@@ -297,44 +438,42 @@ class SubSectionHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    return Align(
-      alignment: AlignmentDirectional.centerEnd,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                title,
-                textDirection: appContentDirection(context),
-                style: TextStyle(
-                  fontFamily: 'IRANYekanX',
-                  fontWeight: FontWeight.w700,
-                  fontSize: AethGeometry.settingsHeadingSize * s,
-                  color: AethColors.textPrimary,
+    return Directionality(
+      textDirection: appContentDirection(context),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 4 * s),
+        child: Row(
+          children: [
+            SettingsIconBox(
+              asset: icon,
+              size: 28 * s,
+              glyph: 16 * s,
+              color: AethColors.cardDark,
+              glyphColor: AethColors.textPrimary,
+            ),
+            SizedBox(width: 10 * s),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'IRANYekanX',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14 * s,
+                    color: AethColors.textPrimary,
+                  ),
                 ),
               ),
             ),
-          ),
-          SizedBox(width: 8 * s),
-          SvgPicture.asset(
-            icon,
-            width: AethGeometry.settingsHeadingIconSize * s,
-            height: AethGeometry.settingsHeadingIconSize * s,
-            colorFilter: ColorFilter.mode(
-              AethColors.textPrimary,
-              BlendMode.srcIn,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-/// One section's dark card (r21, the settings family corners) with
-/// internal padding; rows inside are separated by [SubSectionDivider].
 class SubSectionCard extends StatelessWidget {
   const SubSectionCard({super.key, required this.child, this.padding});
 
@@ -347,7 +486,7 @@ class SubSectionCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AethColors.cardDark,
-        borderRadius: BorderRadius.circular(AethGeometry.settingsCardRadius * s),
+        borderRadius: BorderRadius.circular(22 * s),
       ),
       padding: padding ?? EdgeInsets.all(16 * s),
       child: child,
@@ -355,7 +494,6 @@ class SubSectionCard extends StatelessWidget {
   }
 }
 
-/// The hairline between rows (the descriptions-popup divider colour).
 class SubSectionDivider extends StatelessWidget {
   const SubSectionDivider({super.key});
 
@@ -373,9 +511,9 @@ class SubSectionDivider extends StatelessWidget {
 /// sections — the settings page's own gaps.
 class SubSectionGap extends StatelessWidget {
   const SubSectionGap.headingToCard({super.key})
-      : size = AethGeometry.settingsHeadingGapToCards;
+    : size = AethGeometry.settingsHeadingGapToCards;
   const SubSectionGap.cardToHeading({super.key})
-      : size = AethGeometry.settingsHeading2GapToServer;
+    : size = AethGeometry.settingsHeading2GapToServer;
   const SubSectionGap.betweenRows({super.key}) : size = 12;
 
   final double size;

@@ -17,6 +17,7 @@ import '../../core/app_assets.dart';
 import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../home/widgets/hero_logo.dart' show ScanRings;
+import 'subpage_frame.dart' show SettingsIconBox;
 
 /// A small secondary caption (option descriptions, section notes).
 class SettingInfoText extends StatelessWidget {
@@ -105,8 +106,15 @@ class SettingToggleRow extends StatelessWidget {
         children: [
           // Optional leading glyph (icon-less for the dense expert rows).
           if (icon != null) ...[
-            _IconGlyph(asset: icon!, size: 20 * s),
-            SizedBox(width: 10 * s),
+            SettingsIconBox(
+              asset: icon!,
+              size: 36 * s,
+              glyph: 19 * s,
+              glyphColor: value
+                  ? AethColors.accentConnected
+                  : AethColors.textSecondary,
+            ),
+            SizedBox(width: 12 * s),
           ],
           Expanded(
             child: Column(
@@ -254,7 +262,7 @@ class SettingPills<T> extends StatelessWidget {
                   color: v == selected
                       ? AethColors.accentConnected
                       : AethColors.sheetDescCard,
-                  borderRadius: BorderRadius.circular(14 * s),
+                  borderRadius: BorderRadius.circular(16 * s),
                 ),
                 child: Text(
                   label,
@@ -263,7 +271,11 @@ class SettingPills<T> extends StatelessWidget {
                     fontWeight:
                         v == selected ? FontWeight.w700 : FontWeight.w600,
                     fontSize: 13 * s,
-                    color: AethColors.textPrimary,
+                    // v1.1.0 — readable ink on the green pick (white on
+                    // #1AD995 was ~1.9:1; the deep green is ~5:1).
+                    color: v == selected
+                        ? AethColors.onCoreDark
+                        : AethColors.textPrimary,
                   ),
                 ),
               ),
@@ -401,8 +413,8 @@ class SettingStepperRow extends StatelessWidget {
       textDirection: appContentDirection(context),
       child: Row(
         children: [
-          _IconGlyph(asset: icon, size: 20 * s),
-          SizedBox(width: 10 * s),
+          SettingsIconBox(asset: icon, size: 36 * s, glyph: 19 * s),
+          SizedBox(width: 12 * s),
           Expanded(
             child: Text(
               label,
@@ -526,8 +538,8 @@ class SettingNavRow extends StatelessWidget {
         onTap: onTap,
         child: Row(
           children: [
-            _IconGlyph(asset: icon, size: 20 * s, color: AethColors.accentConnected),
-            SizedBox(width: 10 * s),
+            SettingsIconBox(asset: icon, size: 36 * s, glyph: 19 * s),
+            SizedBox(width: 12 * s),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -27,6 +27,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../connection/connection_store.dart';
 import '../../../connection/transport_modes.dart';
 import '../../../core/app_assets.dart';
+import '../../../core/app_theme.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
 import 'settings_controls.dart';
@@ -72,6 +73,8 @@ class LanternSettingsPage extends StatelessWidget {
     return SubPageFrame(
       store: store,
       title: strings.settingsLantern,
+      icon: AppAssets.protocolLanternLogo(light: AethThemeSync.light),
+      iconTinted: false,
       children: () => [
         // ---- Section: exit location ----
         SubSectionHeading(

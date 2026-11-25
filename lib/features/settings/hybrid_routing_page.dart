@@ -82,6 +82,8 @@ class _HybridRoutingPageState extends State<HybridRoutingPage> {
     return SubPageFrame(
       store: store,
       title: strings.hybridRouting,
+      icon: AppAssets.iconArrowSwapHorizontal,
+      subtitle: strings.hybridRoutingDesc,
       children: () {
         final all = rules;
         final invalid = HybridRouting.invalidRules(profile, all).map((r) => r.id).toSet();

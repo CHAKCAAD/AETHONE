@@ -44,6 +44,8 @@ class CoreSettingsPage extends StatelessWidget {
     return SubPageFrame(
       store: store,
       title: strings.subCoreTitle,
+      icon: AppAssets.iconShieldTick,
+      subtitle: strings.settingsCoreSub,
       children: () => [
         // ---- Section: TLS fragmentation (the owner's headline) ----
         SubSectionHeading(
