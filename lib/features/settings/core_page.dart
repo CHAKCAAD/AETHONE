@@ -43,8 +43,65 @@ class CoreSettingsPage extends StatelessWidget {
 
     return SubPageFrame(
       store: store,
-      title: strings.subCoreTitle,
+      title: 'Aether Core',
+      icon: AppAssets.brandMark,
+      iconTinted: false,
+      subtitle: strings.settingsCoreSub,
       children: () => [
+        // v1.1.0 — the core's network inputs (IP version, upstream proxy)
+        // moved here from the connection page: one home for Aether.
+        // ---- Section: IP version (v4.31) ----
+        SubSectionHeading(
+          icon: AppAssets.iconWebsite,
+          title: strings.secIpVersion,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingPills<IpVersion>(
+                keyId: 'ip-version',
+                options: [
+                  (IpVersion.v4, strings.ipV4),
+                  (IpVersion.v6, strings.ipV6),
+                  (IpVersion.dual, strings.ipDual),
+                ],
+                selected: core.ipVersion,
+                onSelect: (v) => store.updateCore((c) => c.ipVersion = v),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.ipVersionDesc),
+            ],
+          ),
+        ),
+
+        // ---- Section: upstream proxy (v4.31) ----
+        SizedBox(height: 24 * s),
+        SubSectionHeading(
+          icon: AppAssets.iconArrowSwapHorizontal,
+          title: strings.secUpstream,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingField(
+                keyId: 'upstream',
+                label: strings.upstreamLabel,
+                hint: strings.upstreamHint,
+                initial: core.upstreamProxy,
+                onChanged: (v) =>
+                    store.updateCore((c) => c.upstreamProxy = v.trim()),
+              ),
+              const SubSectionDivider(),
+              SettingInfoText(strings.upstreamDesc),
+            ],
+          ),
+        ),
+
+        SizedBox(height: 24 * s),
         // ---- Section: TLS fragmentation (the owner's headline) ----
         SubSectionHeading(
           icon: AppAssets.iconCrop1,
@@ -65,8 +122,7 @@ class CoreSettingsPage extends StatelessWidget {
                   (FragmentPreset.custom, strings.fragCustom),
                 ],
                 selected: core.fragmentPreset,
-                onSelect: (v) =>
-                    store.updateCore((c) => c.fragmentPreset = v),
+                onSelect: (v) => store.updateCore((c) => c.fragmentPreset = v),
               ),
               const SubSectionDivider(),
               SettingInfoText(fragDesc),
@@ -111,8 +167,7 @@ class CoreSettingsPage extends StatelessWidget {
                 title: strings.h2Transport,
                 description: strings.h2TransportDesc,
                 value: core.h2Transport,
-                onChanged: (v) =>
-                    store.updateCore((c) => c.h2Transport = v),
+                onChanged: (v) => store.updateCore((c) => c.h2Transport = v),
               ),
               const SubSectionDivider(),
               SettingToggleRow(
@@ -166,10 +221,7 @@ class CoreSettingsPage extends StatelessWidget {
 
         // ---- Section: Telegram (v1.0.2 — the Aether main listener) ----
         SizedBox(height: 24 * s),
-        SubSectionHeading(
-          icon: AppAssets.iconSend,
-          title: strings.secTelegram,
-        ),
+        SubSectionHeading(icon: AppAssets.iconSend, title: strings.secTelegram),
         const SubSectionGap.headingToCard(),
         SubSectionCard(
           child: TelegramProxyRow(
@@ -207,8 +259,7 @@ class CoreSettingsPage extends StatelessWidget {
             title: strings.expertMode,
             description: strings.expertModeDesc,
             value: core.expertRevealed,
-            onChanged: (v) =>
-                store.updateCore((c) => c.expertRevealed = v),
+            onChanged: (v) => store.updateCore((c) => c.expertRevealed = v),
           ),
         ),
 
@@ -220,30 +271,21 @@ class CoreSettingsPage extends StatelessWidget {
             title: strings.secTls,
           ),
           const SubSectionGap.headingToCard(),
-          SubSectionCard(
-            child: _buildTlsPanel(context, strings, s, core),
-          ),
+          SubSectionCard(child: _buildTlsPanel(context, strings, s, core)),
           // v4.31 — ECH (encrypted SNI): its own expert card, on the layer
           // it actually lives on (the MASQUE handshakes + the WARP API
           // calls), not under the fingerprint switches.
           SizedBox(height: 24 * s),
-          SubSectionHeading(
-            icon: AppAssets.iconLock1,
-            title: strings.echLabel,
-          ),
+          SubSectionHeading(icon: AppAssets.iconLock1, title: strings.echLabel),
           const SubSectionGap.headingToCard(),
-          SubSectionCard(
-            child: _buildEchPanel(context, strings, s, core),
-          ),
+          SubSectionCard(child: _buildEchPanel(context, strings, s, core)),
           SizedBox(height: 24 * s),
           SubSectionHeading(
             icon: AppAssets.iconGraphUp,
             title: strings.secEngine,
           ),
           const SubSectionGap.headingToCard(),
-          SubSectionCard(
-            child: _buildEnginePanel(context, strings, s, core),
-          ),
+          SubSectionCard(child: _buildEnginePanel(context, strings, s, core)),
         ],
 
         SizedBox(height: 16 * s),

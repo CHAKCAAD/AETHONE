@@ -29,109 +29,70 @@ void main() {
   ConnectionStore makeStore() =>
       ConnectionStore(engine: EngineNotWiredAdapter());
 
-  testWidgets('settings page renders the design structure '
-      '(top bar, 6 cards, 2 pills, status, core log)', (tester) async {
+  testWidgets('v1.1.0 control center: hero, quick controls, search, '
+      'categories, protocols, support', (tester) async {
     await useReferenceSurface(tester);
     final store = makeStore();
     await tester.pumpWidget(_booth(SettingsScreen(store: store)));
     await tester.pumpAndSettle();
 
-    // Top bar: title.
     expect(find.text('تنظیمات'), findsOneWidget);
-
-    // The six category cards (fa, verbatim from the design frame).
+    // v1.1.0 round 2 — the hero/quick-controls block is removed.
+    expect(find.byKey(const ValueKey('settings-hero')), findsNothing);
+    expect(find.byKey(const ValueKey('quick-kill-switch')), findsNothing);
+    expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
+    // Four merged categories (security folded into connection, language
+    // into look).
+    expect(find.text('اتصال و امنیت'), findsOneWidget);
     expect(find.text('مسیریابی‌ها'), findsOneWidget);
+    expect(find.text('ظاهر و زبان'), findsOneWidget);
     expect(find.text('تنظیمات عمومی'), findsOneWidget);
-    expect(find.text('تنظیمات اتصال'), findsOneWidget);
-    expect(find.text('تنظیمات زبان'), findsOneWidget);
-    expect(find.text('تنظیمات ظاهری'), findsOneWidget);
-    expect(find.text('تنظیمات امنیت'), findsOneWidget);
-
-    // The two wide protocol pills — v4.15 #8: renamed «تنظیمات سایفون» →
-    // «سایفون» and «تنظیمات تور» → «تور» (owner's own words).
-    expect(find.text('سایفون'), findsOneWidget);
-    expect(find.text('تور'), findsOneWidget);
-
-    // Section heading — v4.15 #5: «وضعیت پیشرفته» → «وضعیت پیکربندی».
-    expect(find.text('وضعیت پیکربندی'), findsOneWidget);
-
-    // v2.1.0 (the owner's decree) — the «آدرس هسته ها» section is BACK
-    // on the main settings page, its previous look restored.
-    expect(find.text('آدرس هسته ها'), findsOneWidget);
-    expect(find.text('Zeptun Tunnel'), findsOneWidget);
-    expect(find.text('Aether Core'), findsOneWidget);
-
-    // Status values — the REAL store defaults (ON / Iran / the selected
-    // protocol's own name — v4.40: the AUTO/SMART protocol-mode row is
-    // retired, the card shows the protocol itself).
-    expect(find.text('ON'), findsOneWidget);
-    expect(find.text('Iran'), findsOneWidget);
-    expect(find.text('ماسک'), findsOneWidget); // v1.0.1 default protocol name
-
-    // v2.1.0 — the Firefox pill is RETIRED with the whole protocol.
-    expect(find.text('فایرفاکس'), findsNothing);
+    expect(find.text('تنظیمات زبان'), findsNothing);
+    expect(find.text('تنظیمات امنیت'), findsNothing);
+    for (final k in [
+      'settings-proto-psiphon',
+      'settings-proto-tor',
+      'settings-proto-lantern',
+      'settings-proto-core',
+    ]) {
+      expect(find.byKey(ValueKey(k)), findsOneWidget, reason: k);
+    }
+    // Support & diagnostics moved to the general page.
+    expect(find.byKey(const ValueKey('settings-core-log-card')), findsNothing);
+    expect(AppAssets.iconSearch, contains('Search 1.svg'));
   });
 
-  testWidgets('status cards follow the REAL store state', (tester) async {
+  testWidgets('summaries follow the REAL store state', (tester) async {
     await useReferenceSurface(tester);
     final store = makeStore();
     await tester.pumpWidget(_booth(SettingsScreen(store: store)));
     await tester.pumpAndSettle();
 
-    // Defaults — the protocol card renders the SELECTED protocol's own
-    // name (v4.40: the AUTO/SMART mode row is retired by decree).
-    expect(find.text('ON'), findsOneWidget);
-    expect(find.text('ماسک'), findsOneWidget); // v1.0.1 default protocol name
-
-    // Flip every preference — the cards must re-render.
-    store.setKillSwitch(false);
-    store.selectProtocol(ProtocolId.torOnly);
-    store.setRoutingRegion(null);
+    store.setKillSwitch(true);
     await tester.pumpAndSettle();
+    expect(find.textContaining('Kill Switch روشن'), findsOneWidget);
 
-    expect(find.text('OFF'), findsOneWidget);
-    // «تور» twice: the Tor PILL (standing) + the protocol status card
-    // (v4.40: the card shows the selected protocol's own name).
-    expect(find.text('تور'), findsNWidgets(2));
-    expect(find.text('None'), findsOneWidget);
-    expect(find.text('ON'), findsNothing);
+    store.setKillSwitch(false);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Kill Switch خاموش'), findsOneWidget);
   });
 
-  testWidgets('settings page is scrollable and headings stay intact '
-      'on a short viewport', (tester) async {
-    // A short surface forces the scroll — nothing may overflow.
-    tester.view.physicalSize = const Size(402 * 3, 500 * 3);
+  testWidgets('settings page is scrollable on a short viewport',
+      (tester) async {
+    tester.view.physicalSize = const Size(360 * 3, 560 * 3);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
-
     final store = makeStore();
     await tester.pumpWidget(_booth(SettingsScreen(store: store)));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-
-    // The core-log entry exists below the fold — drag up to reveal it
-    // (v2.1.0: the «آدرس هسته ها» server pills are back on this page).
-    await tester.drag(find.byType(SettingsScreen), const Offset(0, -400));
-    await tester.pumpAndSettle();
+    await tester.dragUntilVisible(
+      find.byKey(const ValueKey('settings-proto-core')),
+      find.byType(SingleChildScrollView),
+      const Offset(0, -200),
+    );
+    expect(find.byKey(const ValueKey('settings-proto-core')), findsOneWidget);
     expect(tester.takeException(), isNull);
-    expect(find.byKey(const ValueKey('settings-core-log-card')),
-        findsOneWidget);
-  });
-
-  testWidgets('v2.1.0: the «آدرس هسته ها» server pills are back on the '
-      'main settings page (the previous look, Zeptun Tunnel + Aether Core)',
-      (tester) async {
-    await useReferenceSurface(tester);
-    final store = makeStore();
-    await tester.pumpWidget(_booth(SettingsScreen(store: store)));
-    await tester.pumpAndSettle();
-
-    // The section heading + the two pills (the pre-Firefox look).
-    expect(find.text('آدرس هسته ها'), findsOneWidget);
-    expect(find.text('Zeptun Tunnel'), findsOneWidget);
-    expect(find.text('Aether Core'), findsOneWidget);
-
-    // The Firefox row is GONE with the whole protocol.
-    expect(find.text('فایرفاکس'), findsNothing);
   });
 }
+

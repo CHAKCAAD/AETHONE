@@ -465,3 +465,31 @@ JPEG روشن‌ترِ طرح؛ رندر پیکسل‌به‌پیکسل همان
   `extractNativeLibs=true` تا lyrebird فایل واقعی قابل‌اجرا باشد.
 - شمار تست‌ها و وضعیت سبز در بخش «گام بعدی» به‌روز می‌شود؛ UI هیچ تغییری
   ندیده است (قاعدهٔ مالک: «چیز دیگه‌ای رو تغییر نده»).
+
+## Settings redesign — control center (2026-11-25)
+
+The settings main page and every settings sub-page were redesigned in the
+login («صفحه ورود») design language:
+
+- **Hero card** — the login sheet's notched top edge; the notch holds the
+  login step indicator re-read as the connection phase (off · connecting ·
+  on, the active phase is the wide pill in the state color). Under it the
+  login step composition: icon box with the selected protocol's logo, title,
+  live status line.
+- **Quick controls** — Kill Switch, connection mode and theme change in
+  place (no page push).
+- **Search** — finds any setting by name and opens its page.
+- **Categories** — one grouped list with live summaries. Merged pages:
+  security → «اتصال و امنیت» (connection page), language → «ظاهر و زبان»
+  (appearance page, with the login flag buttons). The old security and
+  language pages remain in code but are no longer linked.
+- **Protocols & core** — 2×2 grid (Psiphon, Tor, Lantern, Aether Core) with
+  each one's live exit location.
+- **Support** — core log, the two core repositories, the app version.
+- **Sub-pages** — `SubPageFrame` gained a login-style header (icon box,
+  title, summary); section headings carry an icon box and align to the
+  locale's reading start; toggle/nav/stepper rows use the icon box; the
+  selected pill text uses deep green ink (contrast ~5:1 instead of ~1.9:1).
+
+Visual harness: `flutter test test/zz_settings_redesign_shots_test.dart`
+writes PNGs to `/tmp/settings_shots/` (`SHOT_LOCALE`, `SHOT_H` env vars).

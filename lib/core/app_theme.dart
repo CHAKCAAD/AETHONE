@@ -274,36 +274,43 @@ class AethPal {
   /// it («بکگراند کل صفحه 000000، بکگراند کارت ها 1C1C1C"); every value the
   /// round names is evidence-locked here, the untouched derivations keep
   /// their standing relations against the NEW black bg.
+  /// v1.1.0 — the EVERGREEN night (owner: «حالت نایت کل اپ از لحاظ رنگ
+  /// بندی خیلی تیره‌ست؛ با توجه به رنگ برند حالت دارک رو بازطراحی کن»).
+  /// The pure-black v5.3 cut is lifted to a deep green-slate family keyed
+  /// to the brand #1AD995: page #111916, cards #1A2420, tiles #1E2925,
+  /// hairlines #25322C, insets #131C18; text is a soft green-white with a
+  /// green-gray secondary (#92A49C, ~6.5:1 on the page). The accent, the
+  /// state reds/greens and the speed hues keep their values.
   static const AethPal night = AethPal(
-    bgScreen: Color(0xFF000000),
-    cardDark: Color(0xFF1C1C1C),
-    topTile: Color(0xFF1C1C1C),
+    bgScreen: Color(0xFF111916),
+    cardDark: Color(0xFF1A2420),
+    topTile: Color(0xFF1E2925),
     // «3» disconnected: rgba(66,66,66,0.19) — α 0.19 ≈ 0x30.
-    connectBaseIdle: Color(0x30424242),
+    connectBaseIdle: Color(0x305B6B64),
     // «3» connected: rgba(26,217,149,0.05) — α 0.05 ≈ 0x0D, flat pair.
     connectBaseLiveTop: Color(0x0D1AD995),
     connectBaseLiveBottom: Color(0x0D1AD995),
-    flagRing: Color(0xFF1C1C1C),
+    flagRing: Color(0xFF1A2420),
     patternInk: Color(0xFFFFFFFF),
-    textPrimary: Color(0xFFFFFFFF),
-    textSecondary: Color(0xFF8E8E93),
-    statLabel: Color(0xFFFFFFFF),
+    textPrimary: Color(0xFFF1F6F4),
+    textSecondary: Color(0xFF92A49C),
+    statLabel: Color(0xFFF1F6F4),
     onPillConnected: Color(0xFF123E2B),
     onPillDisconnected: Color(0xFF75160F),
     statDownBg: Color(0xFF0A4F33),
     statUpBg: Color(0xFF3A1C1C),
     statUpBorder: Color(0xFF652325),
-    cardIconBg: Color(0xFF2D323D),
-    sheetSubtile: Color(0xFF1A261C),
-    sheetDescCard: Color(0xFF0C120F),
-    protoSheetChip: Color(0xFF1C1C1C), // round 24 — the home dark cards
-    protoSheetBg: Color(0xFF000000), // round 24 — the home dark page bg
-    speedTrack: Color(0xFF0A0F0B),
+    cardIconBg: Color(0xFF25322D),
+    sheetSubtile: Color(0xFF25322C),
+    sheetDescCard: Color(0xFF131C18),
+    protoSheetChip: Color(0xFF1A2420), // v1.1.0 — the evergreen cards
+    protoSheetBg: Color(0xFF111916), // v1.1.0 — the evergreen page
+    speedTrack: Color(0xFF17211D),
     speedTrackLive: Color(0xFF16543B),
-    speedCoreRest: Color(0xFF080C09),
+    speedCoreRest: Color(0xFF0E1512),
     speedIdleLayer: Color(0xFF110000),
-    homeIdleLayer: Color(0xFF424242),
-    homeIdleCore: Color(0xFF424242),
+    homeIdleLayer: Color(0xFF3C4A44),
+    homeIdleCore: Color(0xFF3C4A44),
     panelShadowInk: Color(0x17FFFFFF), // rgba(255,255,255,0.09)
     speedIconDown: Color(0xFF01D589),
     speedIconUp: Color(0xFFE83946),
@@ -312,7 +319,7 @@ class AethPal {
     speedTilePing: Color(0xFF3A3C17),
     speedIconPing: Color(0xFFE6D83A),
     stepDim: Color(0xFF15553B),
-    obCtaBg: Color(0xFF1C1C1C),
+    obCtaBg: Color(0xFF1A2420),
     tileShadow: Color(0x40000000), // rgba(0,0,0,0.25) 0 4 4
   );
 

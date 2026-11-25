@@ -123,13 +123,13 @@ void main() {
       expect(find.text('اسمارت'), findsNothing);
       expect(find.text('حالت پروتکل'), findsNothing);
 
-      // The core entry row opens the core page. v4.31 added the leg /
-      // IP-version / upstream sections above it — scroll it into view.
-      await tester.ensureVisible(find.byKey(const ValueKey('nav-core-entry')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('nav-core-entry')));
-      await tester.pumpAndSettle();
-      expect(find.text('فرگمنت TLS'), findsOneWidget);
+      // v1.1.0 — the Aether core entry, IP version and upstream proxy
+      // left this page (they live on the Aether Core page now); Kill
+      // Switch joined it.
+      expect(find.byKey(const ValueKey('nav-core-entry')), findsNothing);
+      expect(find.byKey(const ValueKey('pill-ip-version-IPv6')), findsNothing);
+      expect(find.byKey(const ValueKey('field-upstream')), findsNothing);
+      expect(find.byKey(const ValueKey('toggle-kill-switch')), findsOneWidget);
     });
 
     // -----------------------------------------------------------------
@@ -193,6 +193,11 @@ void main() {
       await tester.pumpWidget(_booth(CoreSettingsPage(store: store)));
       await tester.pumpAndSettle();
 
+      // v1.1.0 — IP version / upstream sit above the fragment card now.
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('pill-fragment-متعادل')),
+      );
+      await tester.pumpAndSettle();
       // The Iran profiles are all present.
       expect(find.text('خاموش'), findsOneWidget);
       expect(find.text('استاندارد'), findsOneWidget);
@@ -295,9 +300,26 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.animationStyle, MotionStyle.smooth);
 
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('toggle-show-patterns')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('toggle-show-patterns')));
       await tester.pumpAndSettle();
       expect(store.showPatterns, isFalse);
+
+      // v1.1.0 — the language section lives on this page now (the
+      // login's flag buttons + the follow-system switch).
+      await tester.ensureVisible(find.byKey(const ValueKey('settings-lang-en')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('settings-lang-en')));
+      await tester.pumpAndSettle();
+      expect(store.appLocale, 'en');
+      await tester.ensureVisible(find.byKey(const ValueKey('toggle-lang-system')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('toggle-lang-system')));
+      await tester.pumpAndSettle();
+      expect(store.appLocale, isNull);
     });
   });
 
@@ -378,6 +400,8 @@ void main() {
 
       // Fronting: auto → cdn.
       expect(store.coreSettings.psiphonFronting, PsiphonFronting.auto);
+      await tester.ensureVisible(find.text('فقط CDN'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('فقط CDN'));
       await tester.pumpAndSettle();
       expect(
@@ -536,44 +560,91 @@ void main() {
     });
   });
 
-  group('main settings page routing (v4.22)', () {
-    testWidgets('the six cards, family pills and status cards open the '
-        'real pages', (tester) async {
+  group('main settings page routing (v1.1.0 control center)', () {
+    Future<void> open(WidgetTester tester, Key key) async {
+      await tester.ensureVisible(find.byKey(key));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(key));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> back(WidgetTester tester) async {
+      await tester.ensureVisible(find.byKey(const ValueKey('subpage-back')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('subpage-back')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('categories, protocol tiles and the hero open the real '
+        'pages', (tester) async {
       await _useReferenceSurface(tester);
       final store = makeStore();
       await tester.pumpWidget(_booth(SettingsScreen(store: store)));
       await tester.pumpAndSettle();
 
-      // Card 0 → routing page.
-      await tester.tap(find.text('مسیریابی‌ها'));
-      await tester.pumpAndSettle();
+      await open(tester, const ValueKey('settings-cat-routing'));
       expect(find.text('مسیرهای مستقیم و مسدود'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('subpage-back')));
-      await tester.pumpAndSettle();
+      await back(tester);
 
-      // Card 3 → language page.
-      await tester.tap(find.text('تنظیمات زبان'));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('pill-app-locale-فارسی')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('subpage-back')));
-      await tester.pumpAndSettle();
+      // Look + language is ONE page now (the language page merged in).
+      await open(tester, const ValueKey('settings-cat-look'));
+      expect(find.byKey(const ValueKey('pill-motion-استاندارد')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-lang-fa')), findsOneWidget);
+      await back(tester);
 
-      // The Psiphon pill → the psiphon page.
-      await tester.tap(find.text('سایفون'));
-      await tester.pumpAndSettle();
+      // Connection + security is ONE page now.
+      await open(tester, const ValueKey('settings-cat-connection'));
+      expect(find.byKey(const ValueKey('toggle-kill-switch')), findsOneWidget);
+      expect(find.byKey(const ValueKey('conn-mode-tunnel')), findsOneWidget);
+      await back(tester);
+
+      await open(tester, const ValueKey('settings-proto-psiphon'));
       expect(find.byKey(const ValueKey('flag-pick-auto')), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('subpage-back')));
+      await back(tester);
+
+      // The Aether Core tile → the core page (IP version merged in).
+      await open(tester, const ValueKey('settings-proto-core'));
+      expect(find.byKey(const ValueKey('pill-ip-version-IPv4')),
+          findsOneWidget);
+      await back(tester);
+
+      // Support moved to the general page.
+      await open(tester, const ValueKey('settings-cat-general'));
+      await tester.ensureVisible(find.byKey(const ValueKey('nav-core-log')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('nav-repo-zeptun')), findsOneWidget);
+      expect(find.byKey(const ValueKey('nav-repo-aether')), findsOneWidget);
+    });
+
+    testWidgets('search finds a setting and opens its page', (tester) async {
+      await _useReferenceSurface(tester);
+      final store = makeStore();
+      await tester.pumpWidget(_booth(SettingsScreen(store: store)));
       await tester.pumpAndSettle();
 
-      // The Kill Switch status card → the security page.
-      await tester.dragUntilVisible(
-        find.text('Kill Switch'),
-        find.byType(SettingsScreen),
-        const Offset(0, -80),
+      await tester.enterText(
+        find.byKey(const ValueKey('settings-search')),
+        'Kill',
       );
-      await tester.tap(find.text('Kill Switch'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-cat-routing')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('settings-hit-Kill Switch')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('toggle-kill-switch')), findsOneWidget);
+      await back(tester);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('settings-search')),
+        'zzzz-no-such-setting',
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-search-empty')),
+          findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('settings-search-clear')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-cat-routing')),
+          findsOneWidget);
     });
   });
 
@@ -852,11 +923,11 @@ void main() {
       expect(store.coreSettings.psiphonReadySecs, 181);
     });
 
-    testWidgets('connection page: the IP version commits (the family-leg '
-        'section moved to the tor/psiphon pages — v4.31c)', (tester) async {
+    testWidgets('core page: the IP version commits (v1.1.0 — moved here '
+        'from the connection page)', (tester) async {
       await _useReferenceSurface(tester);
       final store = makeStore();
-      await tester.pumpWidget(_booth(ConnectionSettingsPage(store: store)));
+      await tester.pumpWidget(_booth(CoreSettingsPage(store: store)));
       await tester.pumpAndSettle();
 
       // v4.31c — the leg section is GONE from this page (owner round 8:

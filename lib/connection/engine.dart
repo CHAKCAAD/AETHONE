@@ -19,6 +19,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/app_assets.dart';
 import 'app_tunnel.dart';
+import 'hybrid_routing.dart';
 import 'connection_state.dart';
 import 'core_settings.dart';
 
@@ -198,6 +199,11 @@ abstract class EngineConfigSource {
   /// Builder's allow/disallow lists.
   AppTunnelMode get appTunnelMode;
   Set<String> get appTunnelApps;
+
+  /// v1.1.0 — hybrid per-tunnel routing: the user's rules for a hybrid
+  /// protocol (empty for every other protocol). The adapter hands them to
+  /// the native engine (HybridRouter.kt) with the tunnel start.
+  List<HybridRule> hybridRulesFor(ProtocolId profile);
 
   /// v4.32 — the AUTO/SMART protocol-mode pill (connection page +
   /// onboarding). SMART is the APP-LAYER selector (SMART_AUTO_SPEC.md §3:

@@ -42,6 +42,8 @@ class PsiphonSettingsPage extends StatelessWidget {
     return SubPageFrame(
       store: store,
       title: strings.settingsPsiphon,
+      icon: AppAssets.protocolPsiphonLogo,
+      iconTinted: false,
       children: () => [
         // ---- Section: exit location ----
         SubSectionHeading(

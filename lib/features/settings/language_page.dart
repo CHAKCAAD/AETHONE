@@ -28,6 +28,8 @@ class LanguageSettingsPage extends StatelessWidget {
     return SubPageFrame(
       store: store,
       title: strings.settingsLanguage,
+      icon: AppAssets.iconWebsite,
+      subtitle: strings.settingsLanguageSub,
       children: () => [
         SubSectionHeading(
           icon: AppAssets.iconWebsite,

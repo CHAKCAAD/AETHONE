@@ -17,11 +17,9 @@ import 'package:flutter/material.dart';
 
 import '../../../connection/connection_store.dart';
 import '../../../connection/connection_state.dart';
-import '../../../connection/core_settings.dart';
 import '../../../core/app_assets.dart';
 import '../../../core/design_tokens.dart';
 import '../../../l10n/app_strings.dart';
-import 'core_page.dart';
 import 'settings_controls.dart';
 import 'subpage_frame.dart';
 import '../../core/motion.dart';
@@ -35,11 +33,30 @@ class ConnectionSettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     final s = MediaQuery.sizeOf(context).width / AethGeometry.refWidth;
-    final core = store.coreSettings;
     return SubPageFrame(
       store: store,
-      title: strings.settingsConnection,
+      title: strings.settingsConnSecTitle,
+      icon: AppAssets.iconLock1,
+      subtitle: strings.settingsConnSecSub,
       children: () => [
+        // v1.1.0 (settings redesign) — the security page folds in here:
+        // Kill Switch is a connection decision, one tap from the mode.
+        SubSectionHeading(
+          icon: AppAssets.iconSecuritySafe,
+          title: strings.secKillSwitch,
+        ),
+        const SubSectionGap.headingToCard(),
+        SubSectionCard(
+          child: SettingToggleRow(
+            keyId: 'kill-switch',
+            icon: AppAssets.iconOff,
+            title: strings.secKillSwitch,
+            description: strings.killSwitchDesc,
+            value: store.killSwitch,
+            onChanged: store.setKillSwitch,
+          ),
+        ),
+        SizedBox(height: 24 * s),
         // ---- Section: connection mode (تونل/پروکسی) ----
         SubSectionHeading(
           icon: AppAssets.iconPassword1,
@@ -50,79 +67,6 @@ class ConnectionSettingsPage extends StatelessWidget {
           child: _ModeSegmentsRow(
             selected: store.connectionMode,
             onSelect: store.setConnectionMode,
-          ),
-        ),
-
-        // ---- Section: IP version (v4.31) ----
-        SizedBox(height: 24 * s),
-        SubSectionHeading(
-          icon: AppAssets.iconWebsite,
-          title: strings.secIpVersion,
-        ),
-        const SubSectionGap.headingToCard(),
-        SubSectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SettingPills<IpVersion>(
-                keyId: 'ip-version',
-                options: [
-                  (IpVersion.v4, strings.ipV4),
-                  (IpVersion.v6, strings.ipV6),
-                  (IpVersion.dual, strings.ipDual),
-                ],
-                selected: core.ipVersion,
-                onSelect: (v) => store.updateCore((c) => c.ipVersion = v),
-              ),
-              const SubSectionDivider(),
-              SettingInfoText(strings.ipVersionDesc),
-            ],
-          ),
-        ),
-
-        // ---- Section: upstream proxy (v4.31) ----
-        SizedBox(height: 24 * s),
-        SubSectionHeading(
-          icon: AppAssets.iconArrowSwapHorizontal,
-          title: strings.secUpstream,
-        ),
-        const SubSectionGap.headingToCard(),
-        SubSectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SettingField(
-                keyId: 'upstream',
-                label: strings.upstreamLabel,
-                hint: strings.upstreamHint,
-                initial: core.upstreamProxy,
-                onChanged: (v) =>
-                    store.updateCore((c) => c.upstreamProxy = v.trim()),
-              ),
-              const SubSectionDivider(),
-              SettingInfoText(strings.upstreamDesc),
-            ],
-          ),
-        ),
-
-        // ---- The Aether core entry row ----
-        SizedBox(height: 24 * s),
-        SubSectionCard(
-          child: SettingNavRow(
-            keyId: 'core-entry',
-            icon: AppAssets.iconShieldTick,
-            title: strings.subCoreTitle,
-            description: strings.coreRowDesc,
-            onTap: () => Navigator.of(context).push(
-              // v1.0.2 — the family route (the last stray
-              // MaterialPageRoute in the settings tree; the page now
-              // enters with the style's own personality like its
-              // siblings — the audit's «دو MaterialPageRoute سرگردان»).
-              aethPageRoute<void>(
-                style: store.effectiveMotionStyle(context),
-                builder: (_) => CoreSettingsPage(store: store),
-              ),
-            ),
           ),
         ),
       ],
@@ -160,7 +104,9 @@ class _ModeSegmentsRow extends StatelessWidget {
             curve: MotionScope.of(context).recipe.controlCurve,
             height: h,
             decoration: BoxDecoration(
-              color: isSel ? AethColors.accentConnected : AethColors.sheetDescCard,
+              color: isSel
+                  ? AethColors.accentConnected
+                  : AethColors.sheetDescCard,
               borderRadius: BorderRadius.circular(r),
             ),
             alignment: Alignment.center,
@@ -170,7 +116,7 @@ class _ModeSegmentsRow extends StatelessWidget {
                 fontFamily: 'IRANYekanX',
                 fontWeight: FontWeight.w700,
                 fontSize: AethGeometry.protoSegmentTextSize * s,
-                color: AethColors.textPrimary, // white on BOTH (measured)
+                color: isSel ? AethColors.onCoreDark : AethColors.textPrimary,
               ),
             ),
           ),

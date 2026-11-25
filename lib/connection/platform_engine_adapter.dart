@@ -67,6 +67,7 @@ import 'core_log.dart';
 import 'core_settings.dart';
 import 'egress_locations.dart';
 import 'engine.dart';
+import 'hybrid_routing.dart';
 import 'smart_scorecard.dart';
 import 'tunnel_probe.dart';
 import 'transport_modes.dart';
@@ -1330,6 +1331,17 @@ class PlatformEngineAdapter implements EngineAdapter {
           // service applies them to the VpnService Builder (allow-list /
           // disallow-list); a mode change restarts the TUN exactly like a
           // port change (see AethoneVpnService).
+          // v1.1.0 — hybrid per-tunnel routing: for a hybrid protocol the
+          // policy (both real listeners + the user's rules for THIS
+          // profile) rides the start; the patched zeptun asks the native
+          // engine per flow. null for every single-tunnel protocol, which
+          // keeps the unchanged single-upstream tunnel.
+          if (HybridRouting.isHybrid(modeId))
+            'hybridRouting': HybridRouting.policyJson(
+              modeId,
+              config.hybridRulesFor(modeId),
+              portOffset: portOffset,
+            ),
           'appTunnelMode': config.appTunnelMode.name,
           'appTunnelApps':
               config.appTunnelApps.toList(growable: false),
@@ -2551,6 +2563,51 @@ class PlatformEngineAdapter implements EngineAdapter {
     }
     final active = _lanternActiveCountry(r);
     if (active != null) _emit(EngineExitCountryResolved(active));
+  }
+
+  /// v1.1.0 — hybrid routing: replaces the rules of the LIVE routed tunnel
+  /// (HybridRouter.update). Returns the engine's applied status with `ok`
+  /// / `error`; null when no platform answers.
+  Future<Map<String, Object?>?> applyHybridRouting(
+    ProtocolId profile,
+    List<HybridRule> rules,
+  ) async {
+    final policy = HybridRouting.policyJson(profile, rules, portOffset: portOffset);
+    if (policy == null) return null;
+    try {
+      final raw = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'hybridRoutingUpdate',
+        {'policy': policy},
+      );
+      return raw?.map((k, v) => MapEntry(k.toString(), v));
+    } on PlatformException catch (e) {
+      return {'ok': false, 'error': e.code};
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// v1.1.0 — the native engine's applied routing state.
+  Future<Map<String, Object?>?> hybridRoutingStatus() async {
+    try {
+      final raw = await _channel.invokeMethod<Map<Object?, Object?>>('hybridRoutingStatus');
+      return raw?.map((k, v) => MapEntry(k.toString(), v));
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// v1.1.0 — an installed app's real launcher icon (PNG bytes).
+  static Future<Uint8List?> appIcon(String packageName) async {
+    try {
+      return await _channel.invokeMethod<Uint8List>('appIcon', {'package': packageName});
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
   }
 
   /// Lantern — re-applies the Lantern location pick to a LIVE Lantern

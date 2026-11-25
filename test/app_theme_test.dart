@@ -56,29 +56,29 @@ void main() {
 
     test('the night palette keeps every evidence-locked value', () {
       const n = AethPal.night;
-      // v5.3 — the owner's dark-mode round: «بکگراند کل صفحه باید کد رنگی
-      // 000000 داشته باشه و بکگراند کارت ها باید رنگ 1C1C1C داشته باشه».
-      expect(n.bgScreen, const Color(0xFF000000));
-      expect(n.cardDark, const Color(0xFF1C1C1C));
-      expect(n.topTile, const Color(0xFF1C1C1C));
-      expect(n.textPrimary, const Color(0xFFFFFFFF));
-      expect(n.textSecondary, const Color(0xFF8E8E93));
+      // v1.1.0 — the evergreen night (owner: the pure-black v5.3 cut read
+      // too dark; re-keyed to the brand green).
+      expect(n.bgScreen, const Color(0xFF111916));
+      expect(n.cardDark, const Color(0xFF1A2420));
+      expect(n.topTile, const Color(0xFF1E2925));
+      expect(n.textPrimary, const Color(0xFFF1F6F4));
+      expect(n.textSecondary, const Color(0xFF92A49C));
       expect(n.onPillConnected, const Color(0xFF123E2B));
       expect(n.onPillDisconnected, const Color(0xFF75160F));
       expect(n.statDownBg, const Color(0xFF0A4F33));
       expect(n.statUpBg, const Color(0xFF3A1C1C));
-      expect(n.speedCoreRest, const Color(0xFF080C09));
-      expect(n.obCtaBg, const Color(0xFF1C1C1C));
+      expect(n.speedCoreRest, const Color(0xFF0E1512));
+      expect(n.obCtaBg, const Color(0xFF1A2420));
       // v5.3 — the new dark CSS: the connect BASE tints, the flag ring,
       // the home speed button's idle family, the WHITE sheet shadow.
-      expect(n.connectBaseIdle, const Color(0x30424242));
+      expect(n.connectBaseIdle, const Color(0x305B6B64));
       expect(n.connectBaseLiveTop, const Color(0x0D1AD995));
       expect(n.connectBaseLiveBottom, const Color(0x0D1AD995));
-      expect(n.flagRing, const Color(0xFF1C1C1C));
-      expect(n.homeIdleLayer, const Color(0xFF424242));
-      expect(n.homeIdleCore, const Color(0xFF424242));
+      expect(n.flagRing, const Color(0xFF1A2420));
+      expect(n.homeIdleLayer, const Color(0xFF3C4A44));
+      expect(n.homeIdleCore, const Color(0xFF3C4A44));
       expect(n.panelShadowInk, const Color(0x17FFFFFF));
-      expect(n.statLabel, const Color(0xFFFFFFFF));
+      expect(n.statLabel, const Color(0xFFF1F6F4));
     });
 
     test('every field differs night → light (the tween has real work)', () {

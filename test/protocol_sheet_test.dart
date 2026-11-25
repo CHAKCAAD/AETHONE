@@ -98,7 +98,7 @@ void main() {
       final panelColor =
           (panelWidget.decoration! as BoxDecoration).color as Color;
       expect(panelColor, AethColors.protoSheetBg);
-      expect(panelColor, const Color(0xFF000000));
+      expect(panelColor, const Color(0xFF111916));
       expect(panelColor, isNot(AethColors.protoSheetChip));
 
       // Geometry (the view is 402×874 logical — 1:1 with the frame):

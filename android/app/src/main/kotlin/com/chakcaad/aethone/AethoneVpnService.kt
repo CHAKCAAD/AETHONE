@@ -99,6 +99,12 @@ class AethoneVpnService : VpnService() {
         const val EXTRA_APP_MODE = "appMode"
         const val EXTRA_APPS = "apps"
 
+        /// v1.1.0 — hybrid per-tunnel routing: the JSON policy (profile,
+        /// tunnels with their SOCKS5 endpoints — default first — and the
+        /// user's rules). Present only for a hybrid protocol with routing
+        /// on; absent = the unchanged single-upstream tunnel.
+        const val EXTRA_HYBRID_ROUTING = "hybridRouting"
+
         /// v4.41 (owner round 17, item 12) — the notification's «قطع اتصال»
         /// action. Handled at the very top of onStartCommand: the STORE
         /// owns the full teardown (core + TUN + state machine), so the
@@ -191,6 +197,12 @@ class AethoneVpnService : VpnService() {
     /// like a port change (an already-established TUN cannot be re-scoped).
     private var liveAppsKey: String = "all|"
 
+    /// v1.1.0 — the hybrid-routing key (profile + route servers) zeptun is
+    /// CURRENTLY serving; "" = unrouted. Rules alone never restart the
+    /// tunnel (they update live through HybridRouter.update); a different
+    /// profile or set of route servers does, like a port change.
+    private var liveRoutingKey: String = ""
+
     /// v4.21 — the session stamp from the start intent (0 when absent,
     /// e.g. an external start); echoed on EVERY event this instance emits.
     private var sessionId: Int = 0
@@ -235,6 +247,9 @@ class AethoneVpnService : VpnService() {
         @Suppress("UNCHECKED_CAST")
         val apps = (intent?.getStringArrayListExtra(EXTRA_APPS) ?: arrayListOf())
             .filter { it.isNotBlank() }
+        val routing = com.chakcaad.aethone.routing.HybridRouter.parse(
+            intent?.getStringExtra(EXTRA_HYBRID_ROUTING),
+        )
 
         // v4.26 — the straggler gate: this start was superseded by a stop
         // (a `stopVpn` processed while the start delivery was still in
@@ -293,7 +308,7 @@ class AethoneVpnService : VpnService() {
             // Each stage now names itself: consent/establish failures stay
             // "establish-failed", a nativeStart rc≠0 is
             // "zeptun-start-failed:rc=N".
-            val failReason = startTunnel(port, tcpOnly, socksStrict, appMode, apps)
+            val failReason = startTunnel(port, tcpOnly, socksStrict, appMode, apps, routing)
             if (failReason != null) {
                 EngineBridge.emit(downEvent(failReason))
                 stopSelf()
@@ -353,7 +368,9 @@ class AethoneVpnService : VpnService() {
         socksStrict: Boolean,
         appMode: String,
         apps: List<String>,
+        routing: com.chakcaad.aethone.routing.HybridRouter.Config? = null,
     ): String? {
+        val routingKey = routing?.key ?: ""
         if (zeptunUp) {
             // v4.20: a mode switch (e.g. 1819 → 1820) between connects used
             // to keep serving the OLD port — zeptun would relay into a
@@ -371,7 +388,8 @@ class AethoneVpnService : VpnService() {
             // mode/list restarts it (same semantics as a port change).
             val appsKey = "$appMode|${apps.sorted().joinToString(",")}"
             if (port != socksPort || tcpOnly != socksTcpOnly ||
-                socksStrict != socksStrictLive || appsKey != liveAppsKey
+                socksStrict != socksStrictLive || appsKey != liveAppsKey ||
+                routingKey != liveRoutingKey
             ) {
                 Log.i(
                     TAG,
@@ -381,6 +399,10 @@ class AethoneVpnService : VpnService() {
                 )
                 stopTunnel("port-change")
             } else {
+                // Same tunnel: only the rules may differ — apply them live.
+                if (routing != null) {
+                    com.chakcaad.aethone.routing.HybridRouter.update(this, routing)
+                }
                 EngineBridge.emit(upEvent(port))
                 return null
             }
@@ -503,8 +525,19 @@ class AethoneVpnService : VpnService() {
             fake_ip = true
         """.trimIndent()
 
-        val rc = Zeptun.nativeStart(this, fd.fd, toml)
+        // v1.1.0 — hybrid routing: the policy is installed BEFORE zeptun
+        // starts, so the very first flow is already routed (no window in
+        // which rules are off). The route servers are fixed for the life of
+        // this tunnel; zeptun never sends a routed flow direct.
+        val rc = if (routing != null) {
+            com.chakcaad.aethone.routing.HybridRouter.install(this, routing)
+            com.chakcaad.aethone.routing.HybridRouter.resetCounters()
+            Zeptun.nativeStartRouted(this, fd.fd, toml, routing.routeServers)
+        } else {
+            Zeptun.nativeStart(this, fd.fd, toml)
+        }
         if (rc != 0) {
+            com.chakcaad.aethone.routing.HybridRouter.markLive(false)
             Log.e(TAG, "zeptun nativeStart failed rc=$rc (port=$port)")
             fd.close()
             descriptor = null
@@ -514,11 +547,14 @@ class AethoneVpnService : VpnService() {
         socksTcpOnly = tcpOnly
         socksStrictLive = socksStrict
         liveAppsKey = "$appMode|${apps.sorted().joinToString(",")}"
+        liveRoutingKey = routingKey
+        com.chakcaad.aethone.routing.HybridRouter.markLive(routing != null)
         Log.i(
             TAG,
             "zeptun up on socks 127.0.0.1:$port udp=${if (tcpOnly) "disabled" else "enabled"} " +
                 "strict=${if (socksStrict) "sequential" else "pipelined"} " +
-                "apps=$liveAppsKey (protect callback installed)",
+                "apps=$liveAppsKey routing=${routingKey.ifEmpty { "off" }} " +
+                "(protect callback installed)",
         )
         EngineBridge.emit(upEvent(port))
         // v1.0.1 — the home widget + the QS tile flip with the real thing:
@@ -537,6 +573,8 @@ class AethoneVpnService : VpnService() {
             }
             zeptunUp = false
         }
+        liveRoutingKey = ""
+        com.chakcaad.aethone.routing.HybridRouter.markLive(false)
         descriptor?.close()
         descriptor = null
         Log.i(TAG, "tunnel down ($reason)")

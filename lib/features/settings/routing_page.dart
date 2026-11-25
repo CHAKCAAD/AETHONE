@@ -11,6 +11,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../connection/app_tunnel.dart';
+import '../../../connection/hybrid_routing.dart';
+import 'hybrid_routing_page.dart';
 import '../../../connection/connection_store.dart';
 import '../../../connection/platform_engine_adapter.dart';
 import '../../../core/app_assets.dart';
@@ -20,6 +22,10 @@ import '../../../l10n/app_strings.dart';
 import 'settings_controls.dart';
 import 'subpage_frame.dart';
 import '../../core/motion.dart';
+
+/// Tests render the hybrid-routing entry off-device (it is Android-only).
+@visibleForTesting
+bool debugShowHybridRouting = false;
 
 class RoutingSettingsPage extends StatelessWidget {
   const RoutingSettingsPage({super.key, required this.store});
@@ -36,6 +42,8 @@ class RoutingSettingsPage extends StatelessWidget {
     return SubPageFrame(
       store: store,
       title: strings.settingsRouting,
+      icon: AppAssets.iconRedo,
+      subtitle: strings.settingsRoutingSub,
       children: () => [
         // ---- Section: the routing area ----
         SubSectionHeading(
@@ -76,6 +84,38 @@ class RoutingSettingsPage extends StatelessWidget {
             ],
           ),
         ),
+
+        // ---- v1.1.0 Section: hybrid per-tunnel routing — ONLY while a
+        // hybrid protocol (two real tunnels) is selected; every
+        // single-tunnel protocol hides it entirely (its saved rules stay
+        // with their own profile and come back with it). ----
+        if (HybridRouting.isHybrid(store.selectedProtocol) &&
+            (Platform.isAndroid || debugShowHybridRouting)) ...[
+          SizedBox(height: 24 * s),
+          SubSectionHeading(
+            icon: AppAssets.iconShuffle1,
+            title: strings.hybridRouting,
+          ),
+          const SubSectionGap.headingToCard(),
+          SubSectionCard(
+            child: SettingNavRow(
+              keyId: 'hybrid-routing',
+              icon: AppAssets.iconShuffle1,
+              title: strings.hybridRoutingOpen,
+              description: strings.hybridRoutingDesc,
+              trailingValue: '${store.hybridRulesFor(store.selectedProtocol).length}',
+              onTap: () => Navigator.of(context).push(
+                aethPageRoute<void>(
+                  style: store.effectiveMotionStyle(context),
+                  builder: (_) => HybridRoutingPage(
+                    store: store,
+                    profile: store.selectedProtocol,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
 
         // ---- Section: direct & blocked routes (expert) ----
         SizedBox(height: 24 * s),

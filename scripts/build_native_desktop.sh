@@ -171,6 +171,9 @@ clone_pin() { # repo sha dir
 echo "== [1/4] zeptun @ $ZEPTUN_SHA (desktop shared library) =="
 ZEPTUN_SRC="$SRC_CACHE/zeptun"
 clone_pin "$ZEPTUN_REPO" "$ZEPTUN_SHA" "$ZEPTUN_SRC"
+# v1.1.0 — desktop ships the PRISTINE pin: a restored source cache may hold
+# the Android hybrid-routing patch (build_native.sh); reset it.
+git -C "$ZEPTUN_SRC" checkout -- .
 (
   cd "$ZEPTUN_SRC"
   rm -rf zig-out

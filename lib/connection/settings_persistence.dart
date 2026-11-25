@@ -31,6 +31,7 @@ import '../core/app_theme.dart';
 import '../core/motion.dart';
 import 'connection_state.dart';
 import 'app_tunnel.dart';
+import 'hybrid_routing.dart';
 import 'connection_store.dart';
 import 'core_settings.dart';
 import 'egress_locations.dart';
@@ -61,6 +62,8 @@ abstract final class SettingsKeys {
   /// the selected package list.
   static const appTunnelMode = 'aethone.settings.appTunnelMode';
   static const appTunnelApps = 'aethone.settings.appTunnelApps';
+  /// v1.1.0 — hybrid per-tunnel routing rules, per hybrid profile (JSON).
+  static const hybridRules = 'aethone.settings.hybridRules.v110';
   static const killSwitch = 'aethone.settings.killSwitch';
   static const homeLook = 'aethone.settings.homeLook';
   static const motionStyle = 'aethone.settings.motionStyle';
@@ -188,6 +191,10 @@ class SettingsPersistence {
               ?.where((p) => p.trim().isNotEmpty)
               .toSet() ??
           <String>{};
+      // v1.1.0 — hybrid routing rules (a corrupt blob loads as none).
+      store.hybridRules = HybridRouting.decodeAll(
+        prefs.getString(SettingsKeys.hybridRules),
+      );
       if (prefs.containsKey(SettingsKeys.killSwitch)) {
         store.killSwitch = prefs.getBool(SettingsKeys.killSwitch)!;
       }
@@ -408,6 +415,10 @@ class SettingsPersistence {
       await prefs.setStringList(
         SettingsKeys.appTunnelApps,
         store.appTunnelApps.toList(growable: false),
+      );
+      await prefs.setString(
+        SettingsKeys.hybridRules,
+        HybridRouting.encodeAll(store.hybridRules),
       );
       await prefs.setBool(SettingsKeys.killSwitch, store.killSwitch);
       await prefs.setString(SettingsKeys.homeLook, store.homeLook.name);

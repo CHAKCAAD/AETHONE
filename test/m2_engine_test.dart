@@ -20,6 +20,7 @@ import 'package:aethone/connection/aether_ffi.dart';
 import 'package:aethone/connection/connection_state.dart';
 import 'package:aethone/connection/core_settings.dart';
 import 'package:aethone/connection/engine.dart';
+import 'package:aethone/connection/hybrid_routing.dart';
 import 'package:aethone/connection/platform_engine_adapter.dart';
 import 'package:aethone/connection/smart_scorecard.dart';
 import 'package:aethone/connection/tunnel_probe.dart';
@@ -2114,6 +2115,10 @@ class _FakeCore implements AetherCoreApi {
 
 /// A config source with fixed user choices (interface getter names).
 class _FixedConfig implements EngineConfigSource {
+  /// v1.1.0 — hybrid per-tunnel routing rules (none in these walks).
+  @override
+  List<HybridRule> hybridRulesFor(ProtocolId profile) => const [];
+
   /// v4.41 — the seam's new members (routing profile + per-app pick).
   @override
   String? get routingRegion => null;
