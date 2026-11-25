@@ -88,7 +88,7 @@ class _HybridRoutingPageState extends State<HybridRoutingPage> {
         final status = store.hybridLive(profile) ? store.hybridStatus : null;
         final engineRejected = <String, String>{
           for (final r in (status?['rejected'] as List?) ?? const [])
-            if (r is Map) '${r['id']}': '${r['reason']}',
+            if (r is Map) r['id'].toString(): r['reason'].toString(),
         };
         final hits = (status?['hits'] as Map?) ?? const {};
         final routed = (status?['routed'] as Map?) ?? const {};
@@ -114,7 +114,7 @@ class _HybridRoutingPageState extends State<HybridRoutingPage> {
                       app: app,
                       tunnels: tunnels,
                       state: stateOf(r),
-                      hits: (hits['${r.id}'] as num?)?.toInt(),
+                      hits: (hits[r.id] as num?)?.toInt(),
                       onTunnel: (t) => _upsert(r.copyWith(tunnel: t)),
                       onEnabled: (v) => _upsert(r.copyWith(enabled: v)),
                       onDelete: () => _remove(r),
@@ -425,7 +425,7 @@ class _RuleRow extends StatelessWidget {
                           if (app || note != null) ...[
                             SizedBox(height: 2 * s),
                             Text(
-                              [if (app) rule.value, if (note != null) note].join(' · '),
+                              [if (app) rule.value, ?note].join(' · '),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: _t(s,
