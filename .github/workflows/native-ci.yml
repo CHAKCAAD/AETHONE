@@ -1739,6 +1739,22 @@ jobs:
           set -euo pipefail
           flutter build apk --release
           ls -la build/app/outputs/flutter-apk/
+          # v1.1.0 — R8 regression gate: libzeptun-jni resolves
+          # dev.zeptun.Zeptun.route(II[BI[BILjava/lang/String;)I by name; if
+          # shrinking drops it every hybrid connect fails with rc=-1.
+          DD="$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}/dexdump"
+          rm -rf /tmp/apkdex && mkdir -p /tmp/apkdex
+          unzip -q -o build/app/outputs/flutter-apk/app-release.apk 'classes*.dex' -d /tmp/apkdex
+          "$DD" /tmp/apkdex/classes*.dex > /tmp/apkdex/dump.txt
+          python3 - <<'PY'
+          import re, sys
+          t = open('/tmp/apkdex/dump.txt').read()
+          m = re.search(r"Class descriptor\s*: 'Ldev/zeptun/Zeptun;'(.*?)(?=Class #|\Z)", t, re.S)
+          ok = m and re.search(r"name\s*: 'route'\s*\n\s*type\s*: '\(II\[BI\[BILjava/lang/String;\)I'", m.group(1))
+          if not ok:
+              print("::error::dev.zeptun.Zeptun.route missing from the release dex (R8 stripped the JNI callback)"); sys.exit(1)
+          print("JNI callback present: dev.zeptun.Zeptun.route(II[BI[BILjava/lang/String;)I")
+          PY
 
       # v1.1.0 — the hybrid-routing policy engine's JVM unit tests (the
       # exact Kotlin the VpnService consults per flow: package, exact /

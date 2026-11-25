@@ -68,6 +68,12 @@ android {
             // updates install in place. The passwords travel with the repo
             // BY DESIGN: signature CONTINUITY for a sideload-distributed app.
             signingConfig = signingConfigs.getByName("release")
+            // v1.1.0 — keep the JNI callback surface (see proguard-rules.pro:
+            // libzeptun-jni resolves Zeptun.route by name; R8 stripped it).
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             // The launcher label of the MAIN package (the manifest reads
             // @string/app_name so the DA variant below can differ).
             resValue("string", "app_name", "AETHONE")
