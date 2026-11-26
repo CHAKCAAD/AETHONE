@@ -354,10 +354,10 @@ index 5270d31..bd59eaa 100644
      if (h.started.load(.acquire)) return code(.already_running);
 diff --git a/src/flow/shield.zig b/src/flow/shield.zig
 new file mode 100644
-index 0000000..ad99dee
+index 0000000..482c391
 --- /dev/null
 +++ b/src/flow/shield.zig
-@@ -0,0 +1,1034 @@
+@@ -0,0 +1,1036 @@
 +//! AETHONE Family Shield — the native policy matcher.
 +//!
 +//! A read-only binary snapshot (built and signed off by the Android app, see
@@ -929,11 +929,13 @@ index 0000000..ad99dee
 +    /// bumped by zeptun_revalidate_flows; workers re-check their flows
 +    epoch: std.atomic.Value(u32) = .init(0),
 +    retired: ?*Loaded = null,
-+    dns_blocked: std.atomic.Value(u64) = .init(0),
-+    flow_blocked: std.atomic.Value(u64) = .init(0),
-+    flows_killed: std.atomic.Value(u64) = .init(0),
-+    swaps: std.atomic.Value(u64) = .init(0),
-+    rejected: std.atomic.Value(u64) = .init(0),
++    // u32: 64-bit atomics are not available on every Android ABI
++    // (armeabi-v7a); the counters wrap after 2^32 events.
++    dns_blocked: std.atomic.Value(u32) = .init(0),
++    flow_blocked: std.atomic.Value(u32) = .init(0),
++    flows_killed: std.atomic.Value(u32) = .init(0),
++    swaps: std.atomic.Value(u32) = .init(0),
++    rejected: std.atomic.Value(u32) = .init(0),
 +
 +    pub const Counter = enum(u8) { dns_blocked = 0, flow_blocked = 1, flows_killed = 2, swaps = 3, rejected = 4, generation = 5, active = 6 };
 +
