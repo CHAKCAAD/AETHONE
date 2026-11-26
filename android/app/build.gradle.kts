@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -59,7 +61,7 @@ android {
         if (!ksB64.isNullOrBlank() && !ksPass.isNullOrEmpty() && !keyAlias.isNullOrBlank() && !keyPass.isNullOrEmpty()) {
             val ksFile = layout.buildDirectory.file("signing/release.p12").get().asFile
             ksFile.parentFile.mkdirs()
-            ksFile.writeBytes(java.util.Base64.getMimeDecoder().decode(ksB64.trim()))
+            ksFile.writeBytes(Base64.getMimeDecoder().decode(ksB64.trim()))
             create("release") {
                 storeFile = ksFile
                 storeType = "PKCS12"

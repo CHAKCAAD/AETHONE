@@ -1,7 +1,6 @@
 # Family Shield — release & distribution (GitHub only)
 
-Phase 1 changes **no** release behaviour (no version bump, no release, workflow untouched apart from
-the added test gates). This document is the release checklist for the first build that ships the shield.
+Phase 1 changed no release behaviour. Phase 2 changes signing (§4) — still no version bump, no release. This document is the release checklist for the first build that ships the shield.
 
 ## 1. Distribution
 
@@ -25,26 +24,29 @@ Publish a privacy policy page (suggested: GitHub Pages, e.g. `https://chakcaad.g
 and stored on the device; aggregated protection counts; domain names only with the parent's opt-in; no
 URLs; nothing sent anywhere; how to delete (clear app data). *(Page not created in phase 1.)*
 
-## 4. Signing key — current state and required change
+## 4. Signing key — rotated (phase 2)
 
-**Current state (honest):** the permanent release keystore `android/app/aethone-release.keystore` and its
-passwords are committed to the repository (`android/app/build.gradle.kts`, decided in v1.0.1 for
-signature continuity). Anyone can therefore sign an APK that installs *as an update* over AETHONE. For
-a parental-control feature this matters: a child (or anyone) could install a modified build over the
-parent's install without losing data.
+Owner decision 2026-11-26: **full rotation; the compromised key never signs a new build.** Details,
+owner commands, backup, history-purge plan and recovery: [signing-key-rotation.md](signing-key-rotation.md).
 
-**Required before the shield ships (owner decision, not done in phase 1):**
-1. Create a new release key offline; store it **only** as CI secrets (`ANDROID_KEYSTORE_B64`,
-   `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) and in an offline
-   backup (two encrypted copies, e.g. password manager + offline USB, with the recovery procedure written
-   down).
-2. Rotate with **APK Signature Scheme v3 key rotation** (`apksigner rotate` to create a lineage from the
-   committed key to the new key, then sign with `--lineage`), so existing installs on Android 9+ accept
-   the update; Android 7–8 installs need a one-time reinstall (state it in the notes).
-3. Remove the old key and passwords from the repository (history keeps them — the lineage is what makes
-   the old key harmless going forward).
-4. Recovery procedure: if the new key is lost, updates are impossible — restore from the offline
-   backup; if both copies are lost, publish a new package signature with a reinstall notice.
+* The committed keystore and its passwords are **removed from the working tree** on
+  `feature/family-shield-phase2` (history untouched until the owner-coordinated purge).
+* Compromised certificate SHA-256 (never trust, CI fails on it):
+  `EB:F3:9C:82:FD:46:D5:A4:46:91:AA:08:CE:9A:3A:B6:90:68:74:AE:9D:54:D6:E4:30:64:75:6F:38:6D:1C:79`.
+* The release key comes **only** from the GitHub Actions secrets `AETHONE_KEYSTORE_B64`,
+  `AETHONE_KEYSTORE_PASSWORD`, `AETHONE_KEY_ALIAS`, `AETHONE_KEY_PASSWORD`, exposed **only** to the
+  `release-signing` job, which re-signs the release APKs, verifies them with `apksigner`, prints the new
+  signer certificate SHA-256 and each APK SHA-256, and fails on the old or a debug certificate.
+* Secrets absent → no release candidate (debug-signed build, `publish-release` refuses). No fallback key.
+* No v3 lineage from the old key (clean break) → **existing installs can not update in place**; users
+  migrate with settings export/import: [settings-migration.md](settings-migration.md).
+* Release notes must publish the new certificate SHA-256 (from the `SIGNING.txt` of the signing job).
+
+## 4b. Release-time verification (CI, every run)
+
+`android-apk` signer gate: each APK's signer SHA-256 + APK SHA-256, fail on the compromised cert or if
+the old keystore re-appears. `release-signing`: `apksigner verify --verbose --print-certs` (v2 required),
+`zipalign -c -P 16`, new signer SHA-256 ≠ old, ≠ Android Debug, `SHA256SUMS.txt` of the signed APKs.
 
 ## 5. Sideloading warning (release notes)
 

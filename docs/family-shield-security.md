@@ -48,9 +48,9 @@ Not inspected, by design: TLS content, SNI, ECH, URLs (no interception). Filteri
 
 | Path | Status | Detail |
 |---|---|---|
-| (A) Local SOCKS listeners 127.0.0.1:1819–1822 | **Open — reported, not fixable in phase 1** | Loopback never crosses the TUN, so any app can dial the tunnel's SOCKS listener directly. zeptun's client supports RFC 1929 auth, but the listener must enforce it. Source audit of the pinned cores: **Aether 1819** — `socks.rs handshake()` always answers method `0x00` (no auth); **Tor 1820** — served by the same Aether socks server (`tor.rs` → `socks::bind_listener`); **Psiphon 1821** — psiphon-tunnel-core's goptlib SOCKS server treats username/password as pluggable-transport arguments, not credentials (not device-verified); **Lantern 1822** — `native/lanternbridge` passes only `RADIANCE_SOCKS_ADDRESS`; whether Radiance can enforce credentials there was not verified. Result: **no tunnel is labelled protected against this path**; the status says `local-socks-unauthenticated:<port>`; no tunnel is changed or broken. `SocksAuth.kt` holds the credential generator + zeptun TOML lines for a listener that gains support (flip `authCapable` only after a device test). Fixing it needs a patch to the Aether core (pinned Rust) — out of phase 1. |
+| (A) Local SOCKS listeners 127.0.0.1:1819–1822 | **Still open for the real cores — measured, reported, never Protected** (phase 2: accept-gate PoC proven on the emulator, see §8) | Loopback never crosses the TUN, so any app can dial a core's SOCKS listener. Phase-1 source audit stands: Aether 1819 and Tor-via-Aether 1820 always answer method `0x00`; Psiphon 1821 (goptlib) treats user/pass as PT args; Lantern 1822 not verified. Phase 2: `FamilyShield.probeListeners()` connects to each port at status time; a listening port that is not owned by a `LoopbackGuard` listener of this process is reported `local-socks-exposed:<ports>` and the state can not be Protected. |
 | (B) IPv6 | **Implemented (not device tested)** | With the shield on the TUN gets `fdfe:dcba:9876::1/126` + `::/0` + a v6 DNS server; zeptun carries IPv6 (fake range `fc00::/18`, CIDR rules for real v6 addresses). If the Builder refuses → status `ipv6-not-captured` + logcat error (explicit). |
-| (C) Per-app tunneling exclusions | **Reported** | Apps excluded through the existing allow/disallow lists never enter the TUN; with the shield on the status is Degraded `per-app-exclusions`. The lists themselves are unchanged (owner rule: never use them for blocking). |
+| (C) Per-app tunneling exclusions | **Audited per app (phase 2)** | `ExclusionAudit` mirrors the Builder code: `disallow` → each installed listed app `excluded-disallow-list` (no DNS / flow filtering at all); `allow` → listed apps `filtered`, **every other app** `excluded-not-in-allow-list`; uninstalled entries `not-installed` (no effect); an allow list with nothing installed falls back to the whole device (as the Builder does); AETHONE itself `self-excluded-loop-prevention` (its own sockets are `protect()`ed — its traffic is the tunnels' traffic). Any app other than AETHONE outside the TUN → Degraded `per-app-exclusions:<n>`. The lists are unchanged (owner rule). |
 | DoT / DoQ (853), QUIC (UDP/443), alternative DNS, direct IPs | Strict mode (optional, default **off**) | `strict_dot`, `strict_quic`, `strict_alt_dns`, `strict_direct_ip` (the last stays off even in strict mode by default: it breaks apps that connect by IP). If Android Private DNS is in strict *hostname* mode the 853 block is dropped (it would cut the device's DNS) and the status says `private-dns-strict`. |
 | Hard-coded resolvers on UDP/53 | Closed while the shield is on | `[dns] hijack = true`. |
 | DoH by name | Category `bypass` (HaGeZi DoH/VPN/Proxy bypass, UT1 vpn/doh) | DoH with unknown endpoints / IPs can not be detected (no TLS inspection). |
@@ -79,3 +79,37 @@ resolved with `getApplicationInfo`; owner uids come from `getConnectionOwnerUid`
 not added** (not technically needed; packages without a launcher show as `uid:N`). App blocking needs
 Android 10+ (owner uid lookup); below that the status says `app-blocking-unsupported` when restrictions exist.
 Distribution is GitHub-only (no Play constraints, no Play Services dependency was added).
+
+## 8. Phase 2 — loopback SOCKS accept gate (`LoopbackGuard.kt`)
+
+Goal: admit only AETHONE itself to a local SOCKS listener; reject every other uid and every unknown
+client (fail-closed); no port hiding, no random ports, no "loopback is safe".
+
+Identification of the client of an accepted loopback TCP connection:
+1. **Own-process socket match** — walk `/proc/self/fd`, keep `socket:[…]` links, `dup` each
+   (`ParcelFileDescriptor.fromFd`) and compare `getsockname` = client address and `getpeername` =
+   listener address. Recognises the in-process clients (zeptun's dial, Aether).
+2. **`ConnectivityManager.getConnectionOwnerUid(IPPROTO_TCP, local, remote)`** (Android 10+, active VPN
+   app), queried both ways (local = client/remote = listener, and the reverse). AOSP filters the answer to
+   uids the VPN *applies to*: AETHONE excludes itself from its own VPN, so its own sockets come back as
+   `INVALID_UID`; apps inside the VPN come back with their uid. It can name a foreign client, never confirm
+   our own — so it is evidence, not the allow criterion.
+
+Decision (pure, unit-tested): own-process match → allow; foreign uid → reject; INVALID_UID / our uid in
+another process / walk failed / Android < 10 → reject (fail-closed). Rejected clients get an RST.
+
+Where it applies today: the guard is a library + a guarded listener. It is proven on the emulator in
+front of the CI SOCKS stub (zeptun → guarded listener admitted; shell uid 2000 and root rejected —
+results in `family-shield-testing.md` §5). It does **not** protect the real cores yet, because each core
+binds its own TCP listener on 127.0.0.1 and any front proxy would still leave that listener reachable
+(that would be port hiding). Production wiring needs one of:
+* **Aether (1819, 1820 Tor)** — an accept hook in the pinned Rust core (`socks.rs`) running the same
+  own-process check natively (`/proc/self/fd` + `getsockname`/`getpeername` work in-process without
+  Android APIs), or a Unix-domain listener in the app's private directory (unreachable by other uids by
+  file permission + SELinux);
+* **Psiphon (1821)** — psiphon-tunnel-core runs as a separate process: an in-process check can not see
+  zeptun's socket; needs the client fd check against AETHONE's main pid (same uid → `/proc/<pid>/fd`
+  readable) or a Unix-socket listener; not done;
+* **Lantern (1822)** — Radiance listener (Go, separate process): same as Psiphon; not done.
+Per-session random SOCKS credentials remain non-viable while none of the four listeners enforces RFC 1929
+(phase-1 audit; no core was patched).
