@@ -1813,19 +1813,23 @@ jobs:
           # backoff / recovery, profile switching, content sources, events.
           ./gradlew --no-daemon :app:testDebugUnitTest --tests 'com.chakcaad.aethone.routing.*' --tests 'com.chakcaad.aethone.shield.*'
           mkdir -p "$GITHUB_WORKSPACE/test-evidence"
-          cp -r app/build/test-results "$GITHUB_WORKSPACE/test-evidence/hybrid-routing-junit" || true
+          # Flutter relocates the gradle build dir to <repo>/build/app
+          for d in app/build/test-results ../build/app/test-results; do [ -d "$d" ] && cp -r "$d" "$GITHUB_WORKSPACE/test-evidence/hybrid-routing-junit" || true; done
           # fail-closed: the shield suites must have actually run
           python3 - <<'PY'
           import glob, re, sys
-          files = glob.glob('app/build/test-results/testDebugUnitTest/TEST-com.chakcaad.aethone.shield.*.xml')
-          total = 0
+          pat = 'test-results/testDebugUnitTest/TEST-com.chakcaad.aethone.shield.*.xml'
+          files = glob.glob('app/build/' + pat) + glob.glob('../build/app/' + pat)
+          total = bad = 0
           for f in files:
               t = open(f).read()
-              m = re.search(r'tests="(\d+)"[^>]*failures="(\d+)"[^>]*errors="(\d+)"', t) or re.search(r'tests="(\d+)"', t)
-              total += int(m.group(1))
+              total += int(re.search(r'tests="(\d+)"', t).group(1))
+              bad += sum(int(x) for x in re.findall(r'(?:failures|errors)="(\d+)"', t.split('>',2)[1] if t.startswith('<?xml') else t.split('>',1)[0]))
           print(f"Family Shield JVM suites: {len(files)} files, {total} tests")
           if len(files) < 4 or total < 30:
               print("::error::Family Shield unit tests did not run (expected >= 4 suites / 30 tests)"); sys.exit(1)
+          if bad:
+              print(f"::error::Family Shield unit tests: {bad} failures/errors"); sys.exit(1)
           PY
 
       # v4.35 (owner round 11, the beta-release decree: «نسخه های مختلف cpu
