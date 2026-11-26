@@ -13,7 +13,6 @@
 *.keystore
 # v1.0.1 — the app's permanent release key (android/app/) is committed by
 # design; the negation lives next to its own rule in android/.gitignore.
-!android/app/aethone-release.keystore
 *.p12
 *.pfx
 *.keytab

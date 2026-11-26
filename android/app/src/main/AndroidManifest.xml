@@ -100,6 +100,12 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/aethone_widget_info"/>
         </receiver>
+        <!-- Family Shield phase 2 — CI emulator self-test driver. NOT exported
+             (only root/system can deliver to it) AND inert unless the
+             debug.aethone.shieldtest system property is 1. -->
+        <receiver
+            android:name=".shield.ShieldTestReceiver"
+            android:exported="false"/>
         <!-- v2.1.0 — the widget power button's toggle receiver. -->
         <receiver
             android:name=".WidgetToggleReceiver"

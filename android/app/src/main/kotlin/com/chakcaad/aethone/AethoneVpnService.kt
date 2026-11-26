@@ -331,6 +331,7 @@ class AethoneVpnService : VpnService() {
             // "zeptun-start-failed:rc=N".
             val failReason = startTunnel(port, tcpOnly, socksStrict, appMode, apps, routing)
             if (failReason != null) {
+                Log.e(TAG, "tunnel start refused: $failReason")
                 EngineBridge.emit(downEvent(failReason))
                 stopSelf()
                 return START_NOT_STICKY
@@ -632,7 +633,19 @@ class AethoneVpnService : VpnService() {
         liveAppsKey = "$appMode|${apps.sorted().joinToString(",")}"
         liveRoutingKey = routingKey
         liveShield = shieldPlan.active
-        if (shieldPlan.active) com.chakcaad.aethone.shield.FamilyShield.onTunnelUp(ipv6Captured)
+        com.chakcaad.aethone.shield.FamilyShield.anyTunnelUp = true
+        if (shieldPlan.active) {
+            // Family Shield phase 2: the engine must report the snapshot
+            // active before the tunnel counts as up — otherwise refuse
+            // (fail-closed, never an unfiltered "shielded" tunnel).
+            if (!com.chakcaad.aethone.shield.FamilyShield.engineHookInstalled()) {
+                Log.e(TAG, "Family Shield: engine hook not installed after start — refusing the tunnel")
+                liveShield = true
+                stopTunnel("shield-hook-missing")
+                return "shield-engine-hook-not-installed"
+            }
+            com.chakcaad.aethone.shield.FamilyShield.onTunnelUp(ipv6Captured)
+        }
         com.chakcaad.aethone.routing.HybridRouter.markLive(routing != null)
         Log.i(
             TAG,
@@ -663,6 +676,7 @@ class AethoneVpnService : VpnService() {
         if (meteredLive) com.chakcaad.aethone.analytics.TrafficMeter.end()
         meteredLive = false
         liveRoutingKey = ""
+        com.chakcaad.aethone.shield.FamilyShield.anyTunnelUp = false
         if (liveShield) com.chakcaad.aethone.shield.FamilyShield.onTunnelDown(reason)
         liveShield = false
         com.chakcaad.aethone.routing.HybridRouter.markLive(false)

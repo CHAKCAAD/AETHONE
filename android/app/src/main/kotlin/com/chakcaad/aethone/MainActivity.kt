@@ -39,6 +39,10 @@ class MainActivity : FlutterActivity() {
         private const val TAG = "AethoneMain"
         private const val REQ_VPN_PERMISSION = 4711
         private const val REQUEST_TRAFFIC_EXPORT = 4712
+        // Family Shield phase 2 — settings export / import (same picker
+        // pattern as the traffic export).
+        private const val REQUEST_SETTINGS_EXPORT = 4713
+        private const val REQUEST_SETTINGS_IMPORT = 4714
 
         /// v4.19 (#1 diagnostics): the last Java-level crash lands here so
         /// the next device test can hand it over even without adb.
@@ -286,6 +290,11 @@ class MainActivity : FlutterActivity() {
             "aethone/engine",
         )
         EngineBridge.channel = channel
+        // Family Shield (phase 2): the admin / status API. Native is the
+        // source of truth; Flutter only calls in (no UI in this phase).
+        com.chakcaad.aethone.shield.ShieldChannel.register(
+            this, flutterEngine.dartExecutor.binaryMessenger, ::settingsPicker,
+        )
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "paths" -> result.success(
@@ -559,6 +568,70 @@ class MainActivity : FlutterActivity() {
     }
 
     private var pendingExport: Pair<String, MethodChannel.Result>? = null
+    private var pendingSettings: Pair<Map<String, Any?>, MethodChannel.Result>? = null
+
+    /// settingsExport -> ACTION_CREATE_DOCUMENT, settingsImport ->
+    /// ACTION_OPEN_DOCUMENT; the file is read/written off the main thread.
+    private fun settingsPicker(method: String, args: Map<String, Any?>, result: MethodChannel.Result) {
+        if (pendingSettings != null) {
+            result.success(mapOf("ok" to false, "error" to "busy"))
+            return
+        }
+        val export = method == "settingsExport"
+        val pick = if (export) {
+            val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(java.util.Date())
+            Intent(Intent.ACTION_CREATE_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("application/json")
+                .putExtra(Intent.EXTRA_TITLE, "aethone-settings-$stamp.json")
+        } else {
+            Intent(Intent.ACTION_OPEN_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("*/*")
+        }
+        pendingSettings = args to result
+        try {
+            startActivityForResult(pick, if (export) REQUEST_SETTINGS_EXPORT else REQUEST_SETTINGS_IMPORT)
+        } catch (e: Exception) {
+            pendingSettings = null
+            result.success(mapOf("ok" to false, "error" to "no-picker"))
+        }
+    }
+
+    private fun finishSettings(export: Boolean, uri: android.net.Uri?) {
+        val (args, result) = pendingSettings ?: return
+        pendingSettings = null
+        if (uri == null) {
+            result.success(mapOf("ok" to false, "error" to "cancelled"))
+            return
+        }
+        analyticsIo(result) {
+            if (export) {
+                val text = com.chakcaad.aethone.shield.ShieldChannel.exportText(this)
+                contentResolver.openOutputStream(uri, "wt")!!.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                mapOf("ok" to true, "bytes" to text.length)
+            } else {
+                val bytes = contentResolver.openInputStream(uri)!!.use { input ->
+                    val out = java.io.ByteArrayOutputStream()
+                    val buf = ByteArray(16 * 1024)
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        out.write(buf, 0, n)
+                        if (out.size() > com.chakcaad.aethone.shield.SettingsBackup.MAX_BYTES) break
+                    }
+                    out.toByteArray()
+                }
+                if (bytes.size > com.chakcaad.aethone.shield.SettingsBackup.MAX_BYTES) {
+                    mapOf("ok" to false, "error" to "invalid-file", "detail" to "too-large")
+                } else {
+                    com.chakcaad.aethone.shield.ShieldChannel.importText(
+                        this, String(bytes, Charsets.UTF_8), args["token"] as? String,
+                    )
+                }
+            }
+        }
+    }
 
     private fun <T> analyticsIo(result: MethodChannel.Result, block: () -> T) {
         val main = android.os.Handler(android.os.Looper.getMainLooper())
@@ -640,6 +713,10 @@ class MainActivity : FlutterActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_SETTINGS_EXPORT || requestCode == REQUEST_SETTINGS_IMPORT) {
+            finishSettings(requestCode == REQUEST_SETTINGS_EXPORT, if (resultCode == RESULT_OK) data?.data else null)
+            return
+        }
         if (requestCode == REQUEST_TRAFFIC_EXPORT) {
             finishTrafficExport(if (resultCode == RESULT_OK) data?.data else null)
             return

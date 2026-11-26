@@ -38,36 +38,44 @@ android {
         versionName = flutter.versionName
     }
 
+    // Signing-key rotation (Family Shield phase 2, owner decision
+    // 2026-11-26): the release key that used to be committed here is
+    // COMPROMISED (keystore + passwords are public in git history) and must
+    // never sign a new build. The release key now comes ONLY from four
+    // environment variables (GitHub Actions secrets, see
+    // docs/signing-key-rotation.md):
+    //   AETHONE_KEYSTORE_B64       base64 of the PKCS12 keystore
+    //   AETHONE_KEYSTORE_PASSWORD  store password
+    //   AETHONE_KEY_ALIAS          key alias
+    //   AETHONE_KEY_PASSWORD       key password
+    // All four present -> the release build is signed with that key.
+    // Any missing -> the release build is DEBUG-signed and is NOT a release
+    // candidate (CI marks it so). There is no other fallback.
     signingConfigs {
-        // v1.0.1 — the PERMANENT release key (owner: «آپدیت رو با امضا
-        // نسخه قبلی ریلیز کن که قابلیت آپدیت روی نسخه قبل رو داشته
-        // باشه»): committed at android/app/aethone-release.keystore so
-        // every CI run and every local clone signs IDENTICALLY — updates
-        // install in place from v1.0.1 onward. v1.0.0 itself was signed
-        // by a throwaway CI debug key that died with its runner, so that
-        // one version needs a one-time uninstall (recorded honestly in
-        // the v1.0.1 release notes). The passwords travel with the repo
-        // BY DESIGN: this key exists for signature CONTINUITY of a
-        // sideload-distributed app, not for secrecy — anyone could sign
-        // their own build either way; only this exact key lets an install
-        // update over another.
-        create("release") {
-            storeFile = file("aethone-release.keystore")
-            storePassword = "aethone-release"
-            keyAlias = "aethone-release"
-            keyPassword = "aethone-release"
+        val ksB64 = System.getenv("AETHONE_KEYSTORE_B64")
+        val ksPass = System.getenv("AETHONE_KEYSTORE_PASSWORD")
+        val keyAlias = System.getenv("AETHONE_KEY_ALIAS")
+        val keyPass = System.getenv("AETHONE_KEY_PASSWORD")
+        if (!ksB64.isNullOrBlank() && !ksPass.isNullOrEmpty() && !keyAlias.isNullOrBlank() && !keyPass.isNullOrEmpty()) {
+            val ksFile = layout.buildDirectory.file("signing/release.p12").get().asFile
+            ksFile.parentFile.mkdirs()
+            ksFile.writeBytes(java.util.Base64.getMimeDecoder().decode(ksB64.trim()))
+            create("release") {
+                storeFile = ksFile
+                storeType = "PKCS12"
+                storePassword = ksPass
+                this.keyAlias = keyAlias
+                keyPassword = keyPass
+            }
         }
     }
 
     buildTypes {
         release {
-            // v1.0.1+ — the PERMANENT release key (owner: «آپدیت رو با
-            // امضا نسخه قبل ریلیز کن که قابلیت آپدیت روی نسخه قبل رو
-            // داشته باشه»): committed at android/app/aethone-release.keystore
-            // so every CI run and every local clone signs IDENTICALLY —
-            // updates install in place. The passwords travel with the repo
-            // BY DESIGN: signature CONTINUITY for a sideload-distributed app.
-            signingConfig = signingConfigs.getByName("release")
+            // Secrets present -> the rotated release key; otherwise the
+            // debug key (NOT a release candidate). Never the old key.
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
             // v1.1.0 — keep the JNI callback surface (see proguard-rules.pro:
             // libzeptun-jni resolves Zeptun.route by name; R8 stripped it).
             proguardFiles(

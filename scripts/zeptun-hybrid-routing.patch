@@ -1,5 +1,5 @@
 diff --git a/include/zeptun.h b/include/zeptun.h
-index 6383804..f695d0a 100644
+index 6383804..54bf75a 100644
 --- a/include/zeptun.h
 +++ b/include/zeptun.h
 @@ -91,6 +91,47 @@ typedef struct {
@@ -50,7 +50,7 @@ index 6383804..f695d0a 100644
  typedef void (*zeptun_log_cb)(void *ctx, int level, const char *message, size_t len);
  
  typedef struct ZeptunConfig {
-@@ -200,6 +241,18 @@ int zeptun_set_read_callback(Zeptun *tun, zeptun_packets_cb callback, void *ctx)
+@@ -200,6 +241,19 @@ int zeptun_set_read_callback(Zeptun *tun, zeptun_packets_cb callback, void *ctx)
  int zeptun_set_passthrough_callback(Zeptun *tun, zeptun_packets_cb callback, void *ctx);
  int zeptun_set_protect_callback(Zeptun *tun, zeptun_protect_cb callback, void *ctx);
  int zeptun_set_flow_callback(Zeptun *tun, zeptun_flow_cb callback, void *ctx);
@@ -63,7 +63,8 @@ index 6383804..f695d0a 100644
 +int zeptun_set_shield_route_callback(Zeptun *tun, zeptun_shield_route_cb callback, void *ctx);
 +int zeptun_set_revalidate_callback(Zeptun *tun, zeptun_revalidate_cb callback, void *ctx);
 +int zeptun_revalidate_flows(Zeptun *tun);
-+/* 0 dns_blocked, 1 flow_blocked, 2 flows_killed, 3 swaps, 4 rejected, 5 generation, 6 active */
++/* 0 dns_blocked, 1 flow_blocked, 2 flows_killed, 3 swaps, 4 rejected, 5 generation, 6 active, 7 v6_packets
++   (event counts, u32, wrap modulo 2^32 — take wrap-safe deltas) */
 +int64_t zeptun_shield_counter(Zeptun *tun, int index);
 +uint32_t zeptun_shield_check(Zeptun *tun, const char *name, size_t name_len, const uint8_t *dst, size_t dst_len, uint8_t proto, uint16_t port);
  int zeptun_set_device_fd(Zeptun *tun, int fd);
@@ -237,7 +238,7 @@ index b4dd13e..cdb6b12 100644
          if (e.gauges.len > 0) e.allocator.free(e.gauges);
          e.allocator.destroy(e);
 diff --git a/src/ffi/ffi.zig b/src/ffi/ffi.zig
-index 5270d31..bd59eaa 100644
+index 5270d31..e154102 100644
 --- a/src/ffi/ffi.zig
 +++ b/src/ffi/ffi.zig
 @@ -296,6 +296,111 @@ export fn zeptun_set_flow_callback(tun: ?*anyopaque, cb: ?zeptun.flow.verdict.Fn
@@ -328,7 +329,7 @@ index 5270d31..bd59eaa 100644
 +/// 5 generation of the active snapshot, 6 active (0/1).
 +export fn zeptun_shield_counter(tun: ?*anyopaque, index: c_int) callconv(.c) i64 {
 +    const h = handleOf(tun) orelse return -1;
-+    if (index < 0 or index > 6) return -1;
++    if (index < 0 or index > 7) return -1;
 +    return @intCast(h.engine.shield.counter(@enumFromInt(@as(u8, @intCast(index)))));
 +}
 +
@@ -354,10 +355,10 @@ index 5270d31..bd59eaa 100644
      if (h.started.load(.acquire)) return code(.already_running);
 diff --git a/src/flow/shield.zig b/src/flow/shield.zig
 new file mode 100644
-index 0000000..482c391
+index 0000000..1023c4e
 --- /dev/null
 +++ b/src/flow/shield.zig
-@@ -0,0 +1,1036 @@
+@@ -0,0 +1,1065 @@
 +//! AETHONE Family Shield — the native policy matcher.
 +//!
 +//! A read-only binary snapshot (built and signed off by the Android app, see
@@ -930,14 +931,24 @@ index 0000000..482c391
 +    epoch: std.atomic.Value(u32) = .init(0),
 +    retired: ?*Loaded = null,
 +    // u32: 64-bit atomics are not available on every Android ABI
-+    // (armeabi-v7a); the counters wrap after 2^32 events.
++    // (armeabi-v7a). Every counter below counts EVENTS (never bytes) and
++    // wraps modulo 2^32; readers must take wrap-safe deltas
++    // ((now - before) mod 2^32, see ShieldCounters.kt).
++    /// DNS queries answered NXDOMAIN by the shield (dns.answerShield)
 +    dns_blocked: std.atomic.Value(u32) = .init(0),
++    /// new TCP/UDP flows refused at open (RST / ICMP unreachable)
 +    flow_blocked: std.atomic.Value(u32) = .init(0),
++    /// open flows aborted by zeptun_revalidate_flows
 +    flows_killed: std.atomic.Value(u32) = .init(0),
++    /// successful snapshot installs (including clears)
 +    swaps: std.atomic.Value(u32) = .init(0),
++    /// snapshots refused by validation
 +    rejected: std.atomic.Value(u32) = .init(0),
++    /// IPv6 packets delivered from the TUN to the stack (phase 2: proof
++    /// that IPv6 is captured and reaches the engine)
++    v6_packets: std.atomic.Value(u32) = .init(0),
 +
-+    pub const Counter = enum(u8) { dns_blocked = 0, flow_blocked = 1, flows_killed = 2, swaps = 3, rejected = 4, generation = 5, active = 6 };
++    pub const Counter = enum(u8) { dns_blocked = 0, flow_blocked = 1, flows_killed = 2, swaps = 3, rejected = 4, generation = 5, active = 6, v6_packets = 7 };
 +
 +    pub fn counter(s: *State, c: Counter) u64 {
 +        return switch (c) {
@@ -952,6 +963,7 @@ index 0000000..482c391
 +                break :blk if (g) |snap| snap.generation else 0;
 +            },
 +            .active => @intFromBool(s.current.load(.seq_cst) != null),
++            .v6_packets => s.v6_packets.load(.monotonic),
 +        };
 +    }
 +
@@ -1393,6 +1405,24 @@ index 0000000..482c391
 +    try std.testing.expectEqual(Level.mandatory, s.checkName("evil.example").level);
 +    try std.testing.expect(s.checkFlow(null, try addr.Address.parse("10.1.2.3"), false, 6, 80).block);
 +    try std.testing.expect(s.checkFlow(null, try addr.Address.parse("2001:db8::9"), false, 6, 80).block);
++}
++
++test "shield counters are u32 event counts that wrap modulo 2^32" {
++    var st: State = .{};
++    st.dns_blocked.store(std.math.maxInt(u32) - 1, .monotonic);
++    _ = st.dns_blocked.fetchAdd(1, .monotonic);
++    try std.testing.expectEqual(@as(u64, std.math.maxInt(u32)), st.counter(.dns_blocked));
++    _ = st.dns_blocked.fetchAdd(1, .monotonic);
++    try std.testing.expectEqual(@as(u64, 0), st.counter(.dns_blocked));
++    _ = st.dns_blocked.fetchAdd(5, .monotonic);
++    try std.testing.expectEqual(@as(u64, 5), st.counter(.dns_blocked));
++    // wrap-safe delta, the formula ShieldCounters.kt uses
++    const before: u32 = std.math.maxInt(u32) - 2;
++    const after: u32 = 4;
++    try std.testing.expectEqual(@as(u32, 7), after -% before);
++    st.v6_packets.store(std.math.maxInt(u32), .monotonic);
++    _ = st.v6_packets.fetchAdd(1, .monotonic);
++    try std.testing.expectEqual(@as(u64, 0), st.counter(.v6_packets));
 +}
 diff --git a/src/flow/verdict.zig b/src/flow/verdict.zig
 index 4bcf193..7420f23 100644
@@ -2262,6 +2292,22 @@ index 4d01b3d..98d3026 100644
  fn fuzzAnswer(_: void, smith: *std.testing.Smith) anyerror!void {
      const t = try Table.init(std.testing.allocator, try addr.Prefix.parse("198.18.0.0/15"), try addr.Prefix.parse("fc00::/18"), 64, 1);
      defer t.deinit();
+diff --git a/src/stack/stack.zig b/src/stack/stack.zig
+index 046e15d..2b02fab 100644
+--- a/src/stack/stack.zig
++++ b/src/stack/stack.zig
+@@ -57,6 +57,11 @@ pub fn dispatch(w: anytype, b: *pool.Buffer, vh: gso.VirtioNetHdr) void {
+ 
+ fn deliver(w: anytype, b: *pool.Buffer, vh: gso.VirtioNetHdr, pkt: parse.Packet) void {
+     const W = @TypeOf(w.*);
++    // AETHONE Family Shield (phase 2): proof that IPv6 packets from the TUN
++    // reach the engine (status reads it as counter 7, event count, wraps).
++    if (comptime @hasDecl(W, "shieldState")) {
++        if (pkt.ip.isV6()) _ = w.shieldState().v6_packets.fetchAdd(1, .monotonic);
++    }
+     if (build_options.enable_icmp and pkt.ip.ttl <= 1) {
+         if (icmp.expired(w, b, pkt)) {
+             w.counters.inc(.icmp_time_exceeded);
 diff --git a/src/stack/tcp.zig b/src/stack/tcp.zig
 index d51f759..4f7cbe1 100644
 --- a/src/stack/tcp.zig

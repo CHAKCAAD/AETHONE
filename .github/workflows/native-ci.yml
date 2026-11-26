@@ -379,6 +379,11 @@ env:
   GRADLE_VERSION:     "9.8.2"         # 2026-10-19; AGP 9.4.0 requires >= 9.6.0
   AGP_VERSION:        "9.4.0"
   BUILD_TOOLS_VERSION: "36.0.0"
+  # Signing-key rotation (Family Shield phase 2): the SHA-256 of the
+  # COMPROMISED release certificate (keystore + passwords were committed in
+  # git history). No build may ever be signed by it — every signer gate
+  # below fails on a match. docs/signing-key-rotation.md.
+  OLD_COMPROMISED_CERT_SHA256: "ebf39c82fd46d5a44691aa08ce9a3ab6906874ae9d54d6e43064756f386d1c79"
   NDK_EVAL_CANDIDATE: "28.2.13676358"  # r28c — evaluation candidate per N4 (NOT approved for use)
   NDK_LTS_CURRENT:    "30.0.16248370"  # r30 — current LTS, recorded only; upgrades go through the N8 gate
 
@@ -1826,8 +1831,10 @@ jobs:
               total += int(re.search(r'tests="(\d+)"', t).group(1))
               bad += sum(int(x) for x in re.findall(r'(?:failures|errors)="(\d+)"', t.split('>',2)[1] if t.startswith('<?xml') else t.split('>',1)[0]))
           print(f"Family Shield JVM suites: {len(files)} files, {total} tests")
-          if len(files) < 4 or total < 30:
-              print("::error::Family Shield unit tests did not run (expected >= 4 suites / 30 tests)"); sys.exit(1)
+          if len(files) < 5 or total < 45:
+              print("::error::Family Shield unit tests did not run (expected >= 5 suites / 45 tests incl. ShieldPhase2Test)"); sys.exit(1)
+          if not any('ShieldPhase2Test' in f for f in files):
+              print("::error::ShieldPhase2Test (phase-2 admin/status/backup/guard suite) missing"); sys.exit(1)
           if bad:
               print(f"::error::Family Shield unit tests: {bad} failures/errors"); sys.exit(1)
           PY
@@ -1880,6 +1887,25 @@ jobs:
           done
           echo "apksigner verify: PASS on all 4 (debug-signed — test install ONLY, not a release signature)"
 
+      # Signing-key rotation: this job never sees the release secrets (least
+      # privilege — they live only in the release-signing job), so every
+      # APK here is DEBUG-signed and NOT a release candidate. The gate proves
+      # the compromised key signed none of them and records each APK's
+      # signer + SHA-256.
+      - name: Signer gate (never the compromised key; NOT a release candidate)
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}"
+          [ ! -e android/app/aethone-release.keystore ] || { echo "::error::the compromised keystore is back in the tree"; exit 1; }
+          for APK in build/app/outputs/flutter-apk/app-*.apk; do
+            cert="$("$BT/apksigner" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1 | tr -d ': ' | tr 'A-F' 'a-f')"
+            [ -n "$cert" ] || { echo "::error::no signer certificate on $APK"; exit 1; }
+            if [ "$cert" = "$OLD_COMPROMISED_CERT_SHA256" ]; then
+              echo "::error::$APK is signed by the COMPROMISED release key"; exit 1
+            fi
+            echo "$(basename "$APK"): signer SHA-256 $cert | apk SHA-256 $(sha256sum "$APK" | cut -d' ' -f1) | NOT a release candidate (debug-signed)"
+          done
+
       - name: Dist naming + sha256 manifest
         run: |
           set -euo pipefail
@@ -1896,6 +1922,7 @@ jobs:
             echo "application_id=com.chakcaad.aethone minSdk=24 (CANDIDATE, not proven) targetSdk=36"
             echo "scope=v1.0.0 (round 18 — the 1.0.0 public Android release): universal release APK + per-ABI splits (arm64-v8a / armeabi-v7a / x86_64) embedding the native cores (libaether.so + liblyrebird.so + libpsiphon.so [psiphon-tunnel-core] + libzeptun-jni.so; extractNativeLibs=true). Real connect path: Aether in-process via C API + zeptun via VpnService JNI (FGS-first walk order) + end-to-end probe-RETRY gate with per-mode ready budgets (psiphon 210 s, tor 360 s — v4.20) + tor --tor-pt on the packaged lyrebird. The preview-debug APK (arm64-only) runs the PREVIEW_MODE simulator (debug builds only, by code)."
             echo "native_pins=aether@$(grep -o '"aether": "[0-9a-f]*"' native-out/native-arm64-v8a/manifest.json | cut -d'"' -f4) zeptun@$(grep -o '"zeptun": "[0-9a-f]*"' native-out/native-arm64-v8a/manifest.json | cut -d'"' -f4)"
+            echo "signing=DEBUG KEY — NOT A RELEASE CANDIDATE (the release-signing job re-signs with the rotated key from secrets)"
             echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > dist/BUILD_INFO.txt
           sha256sum dist/*.apk | tee dist/SHA256SUMS.txt
@@ -2926,10 +2953,231 @@ jobs:
   # the releases list, which the tag lookup does not return). Fail-closed:
   # a missing release or a failed upload fails the job.
   # =========================================================================
+  # =========================================================================
+  # Family Shield phase 2 — release-signing: the ONLY job that sees the
+  # release key (least privilege: the build job, which runs Gradle/Flutter
+  # and third-party plugins, never does). It re-signs the release APKs the
+  # android-apk job produced with the ROTATED key from the four secrets
+  # (docs/signing-key-rotation.md). Secrets absent -> nothing is signed, the
+  # job says so and the run has NO release candidate (publish-release then
+  # refuses). There is no fallback key of any kind.
+  # =========================================================================
+  release-signing:
+    name: "Release signing (rotated key from secrets — least privilege)"
+    needs: android-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      signed: ${{ steps.sign.outputs.signed }}
+    env:
+      AETHONE_KEYSTORE_B64: ${{ secrets.AETHONE_KEYSTORE_B64 }}
+      AETHONE_KEYSTORE_PASSWORD: ${{ secrets.AETHONE_KEYSTORE_PASSWORD }}
+      AETHONE_KEY_ALIAS: ${{ secrets.AETHONE_KEY_ALIAS }}
+      AETHONE_KEY_PASSWORD: ${{ secrets.AETHONE_KEY_PASSWORD }}
+    steps:
+      - name: Download the APK artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: aethone-apk-r${{ github.run_number }}
+          path: apk
+
+      - name: Install pinned build-tools (apksigner + zipalign)
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "build-tools;${BUILD_TOOLS_VERSION}" > /dev/null
+          [ -x "$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}/apksigner" ] || { echo "::error::apksigner missing"; exit 1; }
+
+      - name: Sign with the rotated release key (or record NO release candidate)
+        id: sign
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}"
+          R="${{ github.run_number }}"
+          mkdir -p signed status
+          missing=""
+          for v in AETHONE_KEYSTORE_B64 AETHONE_KEYSTORE_PASSWORD AETHONE_KEY_ALIAS AETHONE_KEY_PASSWORD; do
+            [ -n "${!v:-}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::release secrets missing:${missing} — NO release candidate in this run (APKs stay debug-signed)"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "status=no-secrets" > status/build-status-release-signing.txt
+            exit 0
+          fi
+          umask 077
+          KS="$RUNNER_TEMP/aethone-release.p12"
+          printf '%s' "$AETHONE_KEYSTORE_B64" | base64 -d > "$KS" || { echo "::error::AETHONE_KEYSTORE_B64 is not valid base64"; exit 1; }
+          {
+            echo "run_id=${{ github.run_id }}"
+            echo "commit=${{ github.sha }}"
+            echo "ref=${{ github.ref }}"
+          } > signed/SIGNING.txt
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            in="apk/aethone-${abi}-r${R}.apk"
+            [ -f "$in" ] || { echo "::error::$in missing"; exit 1; }
+            out="signed/aethone-${abi}-r${R}.apk"
+            "$BT/apksigner" sign --ks "$KS" --ks-type PKCS12 \
+              --ks-pass env:AETHONE_KEYSTORE_PASSWORD --ks-key-alias "$AETHONE_KEY_ALIAS" \
+              --key-pass env:AETHONE_KEY_PASSWORD \
+              --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+              --alignment-preserved true --out "$out" "$in"
+          done
+          "$BT/apksigner" sign --ks "$KS" --ks-type PKCS12 \
+            --ks-pass env:AETHONE_KEYSTORE_PASSWORD --ks-key-alias "$AETHONE_KEY_ALIAS" \
+            --key-pass env:AETHONE_KEY_PASSWORD \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+            --alignment-preserved true --out "signed/aethone-universal-r${R}.apk" "apk/aethone-ui-r${R}-release-universal.apk"
+          rm -f "$KS"
+          for f in signed/*.apk; do
+            "$BT/zipalign" -c -P 16 -v 4 "$f" > /dev/null || { echo "::error::zipalign -P 16 broken by re-signing: $f"; exit 1; }
+            "$BT/apksigner" verify --verbose --print-certs "$f" > "$f.verify.txt"
+            grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" "$f.verify.txt" || { echo "::error::v2 signature missing on $f"; cat "$f.verify.txt"; exit 1; }
+            cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$f.verify.txt" | head -1 | tr -d ': ' | tr 'A-F' 'a-f')"
+            n="$(grep -c '^Signer #' "$f.verify.txt" || true)"
+            [ -n "$cert" ] || { echo "::error::no signer on $f"; exit 1; }
+            [ "$cert" != "$OLD_COMPROMISED_CERT_SHA256" ] || { echo "::error::$f is signed by the COMPROMISED key"; exit 1; }
+            grep -q "^Signer #1 certificate DN: CN=Android Debug" "$f.verify.txt" && { echo "::error::$f carries the debug certificate"; exit 1; }
+            sha="$(sha256sum "$f" | cut -d' ' -f1)"
+            echo "$(basename "$f"): signer cert SHA-256 = $cert (signers: $n) | APK SHA-256 = $sha" | tee -a signed/SIGNING.txt
+            rm -f "$f.verify.txt"
+          done
+          ( cd signed && sha256sum *.apk > SHA256SUMS.txt )
+          echo "NEW RELEASE SIGNER CERT SHA-256: $cert" | tee -a signed/SIGNING.txt
+          echo "release_candidate=true (rotated key)" >> signed/SIGNING.txt
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+          echo "status=success" > status/build-status-release-signing.txt
+
+      - name: Remove key material (always)
+        if: always()
+        run: rm -f "$RUNNER_TEMP/aethone-release.p12"
+
+      - name: Upload the signed release APKs
+        if: steps.sign.outputs.signed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aethone-apk-signed-r${{ github.run_number }}
+          path: signed/
+          if-no-files-found: error
+
+  # =========================================================================
+  # Family Shield phase 2 — shield-e2e: the shield on a REAL emulator with the
+  # packaged release APK (x86_64 cores): DNS NXDOMAIN through the TUN, app
+  # blocking by uid, loopback SOCKS access control (LoopbackGuard PoC),
+  # cached fake IP after a live block, flow revalidation, profile switching,
+  # IPv6 capture, settings export, fail-closed start. Driver:
+  # scripts/shield_e2e.sh (fail-closed: any FAIL fails the job).
+  # =========================================================================
+  shield-e2e:
+    name: "Family Shield e2e (emulator: DNS, uid, loopback guard, IPv6, revalidation)"
+    needs: android-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      SDK_ROOT: /usr/local/lib/android/sdk
+      EMU_VERSION: "37.3.10"
+      EMU_BUILD: "16970787"
+      EMU_SHA1: "5f7314368fc6c05c937f6991bb4106214dc389e7"
+      SYSIMG_PKG: "system-images;android-36;google_apis_ps16k;x86_64"
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Download the APK artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: aethone-apk-r${{ github.run_number }}
+          path: apk-dist
+
+      - name: KVM + pinned emulator + 16KB system image
+        run: |
+          set -euo pipefail
+          [ -e /dev/kvm ] || { echo "::error::/dev/kvm unavailable"; exit 1; }
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm && sleep 2
+          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --install "emulator" "platform-tools" "${SYSIMG_PKG}" | tail -3
+          EMU_ZIP="emulator-linux_x64-${EMU_BUILD}.zip"
+          for i in 1 2 3; do curl -fsSL --retry 3 -o "/tmp/$EMU_ZIP" "https://dl.google.com/android/repository/$EMU_ZIP" && break; sleep 20; done
+          echo "${EMU_SHA1}  /tmp/$EMU_ZIP" | sha1sum -c -
+          rm -rf "$SDK_ROOT/emulator.pinned" && mkdir -p "$SDK_ROOT/emulator.pinned"
+          unzip -q "/tmp/$EMU_ZIP" -d "$SDK_ROOT/emulator.pinned"
+          if [ -f "$SDK_ROOT/emulator/package.xml" ]; then cp "$SDK_ROOT/emulator/package.xml" "$SDK_ROOT/emulator.pinned/emulator/"; fi
+          rm -rf "$SDK_ROOT/emulator" && mv "$SDK_ROOT/emulator.pinned/emulator" "$SDK_ROOT/emulator"
+          ldconfig -p | grep -q libpulse.so.0 || { sudo apt-get update -qq >/dev/null 2>&1 || true; sudo apt-get install -y -qq libpulse0 >/dev/null; }
+          "$SDK_ROOT/emulator/emulator" -version | grep -q "${EMU_VERSION//./\\.}" || { echo "::error::emulator pin drift"; exit 1; }
+
+      - name: Boot the emulator
+        env:
+          ANDROID_AVD_HOME: ${{ github.workspace }}/.avd
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$PATH"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | avdmanager create avd -n aethone-shield -k "${SYSIMG_PKG}"
+          adb start-server
+          emulator -avd aethone-shield -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics \
+            -accel on -gpu swiftshader_indirect -memory 4096 -cores 4 > emulator-boot.log 2>&1 &
+          echo $! > emulator.pid
+          sleep 30
+          for i in $(seq 1 90); do
+            [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && { echo "booted"; exit 0; }
+            kill -0 "$(cat emulator.pid)" 2>/dev/null || { echo "::error::emulator exited"; tail -60 emulator-boot.log; exit 1; }
+            sleep 10
+          done
+          echo "::error::emulator did not boot"; tail -60 emulator-boot.log; exit 1
+
+      - name: Install APK, grant VPN consent, adb root
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          APK="$(find apk-dist -name 'aethone-ui-*-release-universal.apk' -type f | head -1)"
+          [ -n "$APK" ] || { echo "::error::universal release APK missing"; exit 1; }
+          adb install -r "$APK"
+          adb shell appops set com.chakcaad.aethone ACTIVATE_VPN allow
+          adb root
+          adb wait-for-device
+          for i in $(seq 1 30); do [ "$(adb shell id -u 2>/dev/null | tr -d '\r')" = "0" ] && break; sleep 2; done
+          [ "$(adb shell id -u | tr -d '\r')" = "0" ] || { echo "::error::adb root failed"; exit 1; }
+          mkdir -p shield-evidence
+          {
+            echo "sdk=$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
+            echo "abi=$(adb shell getprop ro.product.cpu.abi | tr -d '\r')"
+            echo "apk=$APK"
+          } | tee shield-evidence/env.txt
+
+      - name: Family Shield end-to-end tests (fail-closed)
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          EV=shield-evidence bash scripts/shield_e2e.sh
+
+      - name: Shut down + status
+        if: always()
+        run: |
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          adb emu kill >/dev/null 2>&1 || true
+          mkdir -p status
+          echo "status=${{ job.status }}" > status/build-status-shield-e2e.txt
+
+      - name: Upload shield-e2e evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shield-e2e-evidence
+          path: |
+            shield-evidence/
+            status/
+          if-no-files-found: warn
+
   publish-release:
     name: "Publish release assets (default branch only)"
-    needs: [android-apk, linux-packages]
-    if: github.ref == 'refs/heads/ci-bootstrap/v4.4'
+    needs: [android-apk, release-signing, linux-packages]
+    # never publish without the rotated release signature (no fallback key)
+    if: github.ref == 'refs/heads/ci-bootstrap/v4.4' && needs.release-signing.outputs.signed == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -2942,6 +3190,11 @@ jobs:
         with:
           name: aethone-apk-r${{ github.run_number }}
           path: apk
+      - name: Download the SIGNED release APKs (rotated key)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: aethone-apk-signed-r${{ github.run_number }}
+          path: apk-signed
       - name: Download the Linux package artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -2953,9 +3206,10 @@ jobs:
           R="${{ github.run_number }}"
           mkdir -p out
           for abi in arm64-v8a armeabi-v7a x86_64; do
-            cp "apk/aethone-${abi}-r${R}.apk" out/
+            cp "apk-signed/aethone-${abi}-r${R}.apk" out/
           done
           cp apk/BUILD_INFO.txt "out/BUILD_INFO-android-r${R}.txt"
+          cp apk-signed/SIGNING.txt "out/SIGNING-android-r${R}.txt"
           ( cd out && sha256sum aethone-*-r${R}.apk > "SHA256SUMS-android-r${R}.txt" )
           cp linux/* out/
           ls -la out/
@@ -3146,7 +3400,7 @@ jobs:
 
   status-summary:
     name: Status summary (real CI results vs NOT TESTED)
-    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui, android-apk, apk-smoke, desktop-native, desktop-bundle, desktop-smoke, linux-packages]
+    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui, android-apk, apk-smoke, release-signing, shield-e2e, desktop-native, desktop-bundle, desktop-smoke, linux-packages]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -3189,6 +3443,10 @@ jobs:
           fu="${{ needs.flutter-ui.result }}"
           aa="${{ needs.android-apk.result }}"
           as="${{ needs.apk-smoke.result }}"
+          rsg="${{ needs.release-signing.result }} (signed=${{ needs.release-signing.outputs.signed }})"
+          se="${{ needs.shield-e2e.result }}"
+          echo "release-signing: $rsg"
+          echo "shield-e2e   : $se"
           dn="${{ needs.desktop-native.result }}"
           db="${{ needs.desktop-bundle.result }}"
           ds="${{ needs.desktop-smoke.result }}"
@@ -3436,6 +3694,10 @@ jobs:
           fu="${{ needs.flutter-ui.result }}"
           aa="${{ needs.android-apk.result }}"
           as="${{ needs.apk-smoke.result }}"
+          rsg="${{ needs.release-signing.result }} (signed=${{ needs.release-signing.outputs.signed }})"
+          se="${{ needs.shield-e2e.result }}"
+          echo "release-signing: $rsg"
+          echo "shield-e2e   : $se"
           dn="${{ needs.desktop-native.result }}"
           db="${{ needs.desktop-bundle.result }}"
           ds="${{ needs.desktop-smoke.result }}"

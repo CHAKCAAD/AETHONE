@@ -58,6 +58,17 @@ object FamilyShield {
     @Volatile private var perAppExclusions = false
     @Volatile private var tunnelPorts: List<Int> = emptyList()
     @Volatile private var privateDnsStrict = false
+    @Volatile private var appMode: String = "all"
+    @Volatile private var appList: List<String> = emptyList()
+    @Volatile private var pinCore: ParentPin? = null
+
+    /// wrap-safe 64-bit totals of zeptun's u32 event counters
+    val counters = ShieldCounters()
+
+    /// Self-test only (ShieldTestReceiver, debug property + root-only
+    /// broadcast): extra app ids treated as restricted, so the CI emulator can
+    /// exercise the uid path with the shell uid (2000), which has no package.
+    val testRestrictedAppIds: MutableSet<Int> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     val events = ShieldEvents()
     private val flowUids = ConcurrentHashMap<String, Long>() // key → (uid shl 32) | (minute stamp)
@@ -78,6 +89,19 @@ object FamilyShield {
         }
     }
 
+    /// The process-wide PIN core (admin sessions live in memory only).
+    fun pin(context: Context): ParentPin {
+        pinCore?.let { return it }
+        synchronized(this) {
+            pinCore?.let { return it }
+            val p = ParentPin(repo(context), KeystorePepper())
+            pinCore = p
+            return p
+        }
+    }
+
+    fun admin(context: Context): ShieldAdmin = ShieldAdmin(repo(context), pin(context))
+
     /// True while a shielded tunnel is running (a routed start is required).
     val active: Boolean get() = runtime != null
 
@@ -96,6 +120,8 @@ object FamilyShield {
             return StartPlan(active = false)
         }
         perAppExclusions = appMode == "allow" || (appMode == "disallow" && apps.isNotEmpty())
+        this.appMode = appMode
+        this.appList = apps
         tunnelPorts = listOf(port)
         if (!cfg.enabled) {
             clearNative()
@@ -134,6 +160,10 @@ object FamilyShield {
         tunnelUp = true
         ipv6Captured = ipv6
     }
+
+    /// Any tunnel (shielded or not) — lets the status say "reconnect
+    /// required" when the shield was enabled while an unshielded tunnel runs.
+    @Volatile var anyTunnelUp = false
 
     /// The runtime itself stays: a restart (port / protocol change) calls
     /// [prepareStart] again before the next engine runs, and the first flows
@@ -221,7 +251,7 @@ object FamilyShield {
     ): ShieldDecision.Decision? {
         val rt = runtime ?: return null
         val verdict = if (shieldAware) ShieldSnapshot.Verdict.decode(nativeVerdict) else ShieldSnapshot.Verdict.INACTIVE
-        val d = ShieldDecision.decide(verdict, uid, rt.restrictedAppIds)
+        val d = ShieldDecision.decide(verdict, uid, if (testRestrictedAppIds.isEmpty()) rt.restrictedAppIds else rt.restrictedAppIds + testRestrictedAppIds)
         if (d is ShieldDecision.Decision.Block) {
             events.record("flow_block", d.level, d.category, appLabel(uid), name)
         } else if (uid != null && uid >= 0) {
@@ -248,7 +278,7 @@ object FamilyShield {
         val rt = runtime ?: return 0
         val v = flowUids[flowKey(proto, src, sport, dst, dport)] ?: return 0
         val uid = (v ushr 32).toInt()
-        if ((uid % 100_000) in rt.restrictedAppIds) {
+        if ((uid % 100_000) in rt.restrictedAppIds || (uid % 100_000) in testRestrictedAppIds) {
             events.record("flow_killed", ShieldSnapshot.Level.APP, null, appLabel(uid), name)
             return 1
         }
@@ -298,36 +328,80 @@ object FamilyShield {
         }
     }
 
-    /// Read-only status for the UI (phase 2) and diagnostics.
+    /// The engine reports the snapshot active (zeptun shield counter 6).
+    fun engineHookInstalled(): Boolean = try { Zeptun.nativeShieldCounter(6) == 1L } catch (_: Throwable) { false }
+
+    fun exclusionAudit(context: Context): ExclusionAudit.Report {
+        val pm = context.packageManager
+        return ExclusionAudit.audit(appMode, appList, context.packageName) { p ->
+            try { pm.getApplicationInfo(p, 0); true } catch (_: Exception) { false }
+        }
+    }
+
+    /// Live probe of the four local SOCKS ports (127.0.0.1:1819–1822): a
+    /// port that accepts a TCP connection is a listener; it counts as
+    /// guarded only when a LoopbackGuard listener of this process owns it.
+    /// Blocking I/O (≤ 4 × 150 ms) — never call on the main thread.
+    fun probeListeners(): List<ShieldStatus.Listener> = SocksAuth.Listener.entries.map { l ->
+        val listening = try {
+            java.net.Socket().use { s ->
+                s.connect(java.net.InetSocketAddress(java.net.InetAddress.getByName("127.0.0.1"), l.port), 150)
+                true
+            }
+        } catch (_: Exception) { false }
+        ShieldStatus.Listener(l.port, listening, guarded = listening && l.port in LoopbackGuard.guardedPorts)
+    }
+
+    /// Status derived from real system state only (call off the main thread:
+    /// it probes the local listeners).
     fun status(context: Context): Map<String, Any?> {
         val cfg = try { repo(context).config() } catch (_: Throwable) { ShieldConfig() }
         val rt = runtime
+        val hook = tunnelUp && engineHookInstalled()
+        val listeners = if (tunnelUp) probeListeners() else emptyList()
+        val audit = exclusionAudit(context)
+        fun raw(i: Int): Long = try { Zeptun.nativeShieldCounter(i) } catch (_: Throwable) { -1L }
+        val totals = (0..7).associateWith { i -> if (i == 5 || i == 6) raw(i) else counters.observe(i, raw(i)) }
+        val v6Engine = raw(7) >= 0
         val res = ShieldStatus.compute(
             ShieldStatus.Inputs(
                 enabled = cfg.enabled,
                 tunnelUp = tunnelUp,
                 snapshotLive = rt != null && snapshotInstalled,
                 error = lastError?.let { "shield-$it" },
-                ipv6Captured = ipv6Captured,
-                perAppExclusions = perAppExclusions,
-                unauthenticatedPorts = SocksAuth.unprotected(tunnelPorts),
+                engineHookInstalled = hook,
+                ipv6Captured = ipv6Captured && v6Engine,
+                perAppExclusions = if (audit.degrading) audit.reasons() else emptyList(),
+                listeners = listeners,
                 privateDnsStrict = privateDnsStrict,
                 appBlockingSupported = appBlockingSupported,
                 hasAppRestrictions = (rt?.restrictedPackages?.isNotEmpty() == true),
+                unshieldedTunnel = anyTunnelUp && !tunnelUp,
             ),
         )
-        fun counter(i: Int): Long = try { Zeptun.nativeShieldCounter(i) } catch (_: Throwable) { -1L }
         return mapOf(
-            "state" to res.state.name.lowercase(),
+            "state" to res.state.wire,
             "reasons" to res.reasons,
             "enabled" to cfg.enabled,
+            "tunnelUp" to tunnelUp,
+            "engineHook" to hook,
             "profile" to rt?.profileId,
             "generation" to rt?.generation,
-            "dnsBlocked" to counter(0),
-            "flowBlocked" to counter(1),
-            "flowsKilled" to counter(2),
-            "snapshotRejected" to counter(4),
+            "dnsBlocked" to totals[0],
+            "flowBlocked" to totals[1],
+            "flowsKilled" to totals[2],
+            "snapshotSwaps" to totals[3],
+            "snapshotRejected" to totals[4],
+            "ipv6Packets" to totals[7],
+            "ipv6Route" to ipv6Captured,
             "appBlockingSupported" to appBlockingSupported,
+            "listeners" to listeners.map { mapOf("port" to it.port, "listening" to it.listening, "guarded" to it.guarded) },
+            "exclusions" to mapOf(
+                "mode" to audit.mode,
+                "othersExcluded" to audit.othersExcluded,
+                "apps" to audit.entries.map { mapOf("package" to it.packageName, "state" to it.state.wire) },
+            ),
+            "pendingEvents" to events.pendingCount(),
         )
     }
 }

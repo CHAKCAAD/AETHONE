@@ -157,11 +157,12 @@ class ShieldCoreTest {
         val ok = ShieldStatus.compute(ShieldStatus.Inputs(enabled = true, tunnelUp = true, snapshotLive = true))
         assertEquals(ShieldStatus.State.PROTECTED, ok.state)
         val deg = ShieldStatus.compute(
-            ShieldStatus.Inputs(true, true, true, ipv6Captured = false, perAppExclusions = true, unauthenticatedPorts = listOf(1819)),
+            ShieldStatus.Inputs(true, true, true, ipv6Captured = false, perAppExclusions = listOf("com.x"),
+                listeners = listOf(ShieldStatus.Listener(1819, listening = true, guarded = false))),
         )
         assertEquals(ShieldStatus.State.DEGRADED, deg.state)
-        assertEquals(listOf("ipv6-not-captured", "per-app-exclusions", "local-socks-unauthenticated:1819"), deg.reasons)
-        assertEquals(ShieldStatus.State.OFF, ShieldStatus.compute(ShieldStatus.Inputs(false, true, true)).state)
-        assertEquals(ShieldStatus.State.FAILED, ShieldStatus.compute(ShieldStatus.Inputs(true, false, false, error = "shield-x")).state)
+        assertEquals(listOf("ipv6-not-captured", "per-app-exclusions:1", "local-socks-exposed:1819"), deg.reasons)
+        assertEquals(ShieldStatus.State.INACTIVE, ShieldStatus.compute(ShieldStatus.Inputs(false, true, true)).state)
+        assertEquals(ShieldStatus.State.VALIDATION_FAILED, ShieldStatus.compute(ShieldStatus.Inputs(true, false, false, error = "shield-x")).state)
     }
 }

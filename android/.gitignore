@@ -20,4 +20,3 @@ key.properties
 # android/app/build.gradle.kts): signature continuity for a
 # sideload-distributed app — every CI run and clone must sign identically
 # so updates install in place. This key exists for continuity, not secrecy.
-!aethone-release.keystore
