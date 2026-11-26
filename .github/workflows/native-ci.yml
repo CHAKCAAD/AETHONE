@@ -3034,7 +3034,7 @@ jobs:
             "$BT/apksigner" verify --verbose --print-certs "$f" > "$f.verify.txt"
             grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" "$f.verify.txt" || { echo "::error::v2 signature missing on $f"; cat "$f.verify.txt"; exit 1; }
             cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$f.verify.txt" | head -1 | tr -d ': ' | tr 'A-F' 'a-f')"
-            n="$(grep -c '^Signer #' "$f.verify.txt" || true)"
+            n="$(grep -c '^Signer #[0-9]* certificate DN' "$f.verify.txt" || true)"
             [ -n "$cert" ] || { echo "::error::no signer on $f"; exit 1; }
             [ "$cert" != "$OLD_COMPROMISED_CERT_SHA256" ] || { echo "::error::$f is signed by the COMPROMISED key"; exit 1; }
             grep -q "^Signer #1 certificate DN: CN=Android Debug" "$f.verify.txt" && { echo "::error::$f carries the debug certificate"; exit 1; }

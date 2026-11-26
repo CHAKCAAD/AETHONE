@@ -33,7 +33,6 @@ class ShieldTestReceiver : BroadcastReceiver() {
         const val TEST_PIN = "583920"
         @Volatile private var token: String? = null
         @Volatile private var stub: LoopbackGuard.GuardedListener? = null
-        private val profileIds = HashMap<String, String>()
 
         fun enabledByProperty(): Boolean = try {
             val p = Runtime.getRuntime().exec(arrayOf("getprop", "debug.aethone.shieldtest"))
@@ -67,8 +66,21 @@ class ShieldTestReceiver : BroadcastReceiver() {
         }, "aethone-shield-test").start()
     }
 
+    /// The process may be restarted between commands (state lives in the
+    /// SQLite store): the session is re-opened with the test PIN on demand.
+    private fun session(app: Context): String? {
+        val pin = FamilyShield.pin(app)
+        if (!pin.checkToken(token) && pin.isSet) {
+            token = (ShieldChannel.handle(app, "pinVerify", mapOf("pin" to TEST_PIN)) as Map<*, *>)["token"] as? String
+        }
+        return token
+    }
+
+    private fun profileId(app: Context, k: String?): String? =
+        FamilyShield.repo(app).profiles().firstOrNull { it.name == "ci-" + (k ?: "a") }?.id
+
     private fun admin(app: Context, m: String, a: Map<String, Any?> = emptyMap()): Map<String, Any?> {
-        val r = ShieldChannel.handle(app, m, a + mapOf("token" to token))
+        val r = ShieldChannel.handle(app, m, a + mapOf("token" to session(app)))
         @Suppress("UNCHECKED_CAST")
         return r as Map<String, Any?>
     }
@@ -76,13 +88,12 @@ class ShieldTestReceiver : BroadcastReceiver() {
     private fun run(app: Context, cmd: String, i: Intent) {
         when (cmd) {
             "setup" -> {
-                if (!FamilyShield.pin(app).isSet) admin(app, "pinSetup", mapOf("pin" to TEST_PIN))
-                val v = admin(app, "pinVerify", mapOf("pin" to TEST_PIN))
-                token = v["token"] as? String
+                if (!FamilyShield.pin(app).isSet) ShieldChannel.handle(app, "pinSetup", mapOf("pin" to TEST_PIN))
+                session(app)
+                val profileIds = HashMap<String, String?>()
                 for (k in listOf("a", "b")) {
-                    @Suppress("UNCHECKED_CAST")
-                    val p = admin(app, "createProfile", mapOf("name" to "ci-$k", "preset" to "custom"))["profile"] as Map<String, Any?>
-                    profileIds[k] = p["id"] as String
+                    if (profileId(app, k) == null) admin(app, "createProfile", mapOf("name" to "ci-$k", "preset" to "custom"))
+                    profileIds[k] = profileId(app, k)
                     admin(app, "setUnknownPolicy", mapOf("profileId" to profileIds[k], "policy" to "allow"))
                 }
                 admin(app, "addRule", mapOf("profileId" to profileIds["a"], "kind" to "root", "value" to "blocked.aethone-test.example", "action" to "block"))
@@ -99,16 +110,16 @@ class ShieldTestReceiver : BroadcastReceiver() {
                     result("guard", mapOf("verdict" to v.toString(), "from" to from.toString(), "ownProcess" to e.ownProcess,
                         "uidClientView" to e.uidClientView, "uidServerView" to e.uidServerView, "ownUid" to e.ownUid))
                 }) { s -> socks(s) }.start()
-                result("stub", mapOf("ok" to true, "procNetTcpReadable" to LoopbackGuard.procNetReadable()))
+                result("stub", mapOf("ok" to true, "pid" to android.os.Process.myPid(), "procNetTcpReadable" to LoopbackGuard.procNetReadable()))
             }
             "block", "allow-rule" -> {
-                val r = admin(app, "addRule", mapOf("profileId" to (i.getStringExtra("profile")?.let { profileIds[it] } ?: profileIds["a"]),
+                val r = admin(app, "addRule", mapOf("profileId" to profileId(app, i.getStringExtra("profile")),
                     "kind" to "root", "value" to i.getStringExtra("domain"), "action" to "block"))
                 result(cmd, mapOf("ok" to r["ok"], "applied" to r["applied"], "error" to r["error"]))
             }
             "switch" -> {
-                val r = admin(app, "switchProfile", mapOf("id" to profileIds[i.getStringExtra("to") ?: "a"]))
-                result("switch", mapOf("ok" to r["ok"], "applied" to r["applied"], "to" to i.getStringExtra("to")))
+                val r = admin(app, "switchProfile", mapOf("id" to profileId(app, i.getStringExtra("to"))))
+                result("switch", mapOf("ok" to r["ok"], "applied" to r["applied"], "error" to r["error"], "to" to i.getStringExtra("to")))
             }
             "restrict-uid" -> {
                 val uid = i.getIntExtra("uid", -1)
@@ -117,7 +128,7 @@ class ShieldTestReceiver : BroadcastReceiver() {
                 val rv = try { Zeptun.nativeRevalidateFlows() } catch (t: Throwable) { -99 }
                 result("restrict-uid", mapOf("uid" to uid, "on" to i.getBooleanExtra("on", true), "revalidate" to rv))
             }
-            "status" -> result("status", FamilyShield.status(app))
+            "status" -> result("status", FamilyShield.status(app) + mapOf("pid" to android.os.Process.myPid()))
             "own-connect" -> {
                 // an in-process client of the guarded listener (must be admitted)
                 val port = i.getIntExtra("port", 1819)
@@ -140,7 +151,7 @@ class ShieldTestReceiver : BroadcastReceiver() {
             }
             "repair" -> {
                 val repo = FamilyShield.repo(app)
-                repo.saveConfig(repo.config().copy(activeProfileId = profileIds["a"], generation = repo.config().generation + 1))
+                repo.saveConfig(repo.config().copy(activeProfileId = profileId(app, "a"), generation = repo.config().generation + 1))
                 result("repair", mapOf("ok" to true))
             }
             "export" -> {

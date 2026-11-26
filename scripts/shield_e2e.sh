@@ -52,9 +52,6 @@ WAIT=120 S="$(cmd setup)"; echo "setup: $S" | tee "$EV/setup.json"
 echo "$S" | grep -q '"ok":true' && pass "PIN setup + session + profiles + enable through the admin API" || fail "setup failed: $S"
 echo "$S" | grep -q '"gatedWithoutToken":"session-required"' && pass "gated admin call without a parent session is refused" || fail "gating: $S"
 
-S="$(cmd stub --ei port 1819)"; echo "stub: $S" | tee "$EV/stub.json"
-echo "$S" | grep -q '"ok":true' && pass "guarded SOCKS stub listening on 127.0.0.1:1819" || fail "stub: $S"
-
 echo "=== tunnel up (shielded, real packaged zeptun) ==="
 adb shell am start-foreground-service -n "$PKG/.AethoneVpnService" --ei port 1819 --ei session 7
 up=0
@@ -70,6 +67,12 @@ if [ "$up" -ne 1 ]; then
 fi
 pass "shielded tunnel up (snapshot installed before the engine thread, engine hook checked)"
 sleep 2
+# the stub is started inside the (now foreground) VPN process: an idle
+# receiver-only process can be reclaimed between commands (seen on run
+# 45861953726 — the stub vanished with it).
+S="$(cmd stub --ei port 1819)"; echo "stub: $S" | tee "$EV/stub.json"
+echo "$S" | grep -q '"ok":true' && pass "guarded SOCKS stub listening on 127.0.0.1:1819" || fail "stub: $S"
+echo "app pid: $(adb shell pidof com.chakcaad.aethone | tr -d '\r')" | tee -a "$RES"
 adb shell ip addr > "$EV/ip-addr.txt" 2>&1 || true
 adb shell ip -6 route show table all > "$EV/ip6-routes.txt" 2>&1 || true
 adb shell dumpsys connectivity > "$EV/dumpsys-connectivity.txt" 2>&1 || true
@@ -114,6 +117,7 @@ if [ -z "$IP" ]; then fail "no fake IP for allowed2: $P"; else
   echo "$O" | grep -q "AETHONE-STUB" && pass "cached fake IP $IP reaches the tunnel while allowed" || fail "fake IP $IP did not connect: $O"
   B="$(stub_seen allowed2.aethone-test.example)"
   S="$(cmd block --es domain allowed2.aethone-test.example)"; echo "block: $S" >> "$EV/cache.txt"
+  echo "$S" | grep -q '"applied":"ok"' || fail "block op did not apply (cache test not meaningful): $S"
   echo "$S" | grep -q '"applied":"ok"' && pass "live rule applied (atomic snapshot swap, no tunnel restart)" || fail "live block: $S"
   O="$(nc_shell "$IP" 80)"; echo "after: $O" >> "$EV/cache.txt"
   echo "$O" | grep -q "AETHONE-STUB" && fail "cached fake IP still reached the tunnel after the block" || pass "cached fake IP $IP refused at flow open after the block"
@@ -142,6 +146,7 @@ echo "$O" | grep -q "AETHONE-STUB" && pass "uid 2000 released: flows pass again"
 
 echo "=== profile switching ==="
 S="$(cmd switch --es to b)"; echo "$S" > "$EV/switch.txt"
+echo "$S" | grep -q '"applied":"ok"' || fail "switch to b did not apply: $S"
 O="$(nc_shell switch.aethone-test.example 80)"; echo "b/switch: $O" >> "$EV/switch.txt"
 echo "$O" | grep -q "AETHONE-STUB" && fail "profile b: switch.* not blocked" || pass "profile b active: its rule blocks switch.aethone-test.example"
 O="$(nc_shell blocked.aethone-test.example 80)"; echo "b/blocked: $O" >> "$EV/switch.txt"
@@ -180,6 +185,7 @@ adb shell am stop-service "$PKG/.AethoneVpnService" > /dev/null 2>&1 || true
 results stub-connect > "$EV/stub-connects.txt"
 results stub-close > "$EV/stub-closes.txt"
 adb logcat -d > "$EV/logcat-full.txt" 2>/dev/null || true
+echo "app pid at end: $(adb shell pidof com.chakcaad.aethone | tr -d '\r')" | tee -a "$RES"
 echo ""
 echo "=== summary ==="
 grep -c '^PASS' "$RES" | sed 's/^/passed: /'
