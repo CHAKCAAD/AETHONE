@@ -84,6 +84,10 @@ echo "$S" | grep -q '"ipv6Route":true' && pass "status: IPv6 route + address acc
 
 echo "=== DNS filtering through the TUN ==="
 O="$(nc_shell allowed.aethone-test.example 80)"; echo "$O" > "$EV/nc-allowed.txt"
+sleep 1
+echo "app pid after the first routed flow: $(adb shell pidof com.chakcaad.aethone | tr -d '\r')" | tee -a "$RES"
+adb logcat -d -b crash > "$EV/crash-after-first-flow.txt" 2>&1 || true
+adb logcat -d -b main,system -s AethoneVpn AethoneShield AethoneHybrid AethoneGuard AndroidRuntime DEBUG libc zeptun ActivityManager:I > "$EV/logcat-after-first-flow.txt" 2>&1 || true
 echo "$O" | grep -q "AETHONE-STUB" && pass "allowed name resolves (fake IP) and reaches the tunnel" || fail "allowed name did not reach the stub: $O"
 for name in blocked.aethone-test.example www.blocked.aethone-test.example; do
   O="$(nc_shell "$name" 80)"; echo "$O" > "$EV/nc-$name.txt"
@@ -172,11 +176,11 @@ echo "=== fail-closed start (enabled shield, broken profile) ==="
 adb shell am stop-service "$PKG/.AethoneVpnService" > /dev/null 2>&1 || true
 sleep 3
 cmd break > /dev/null
-adb logcat -c
+M0="$(adb logcat -d -s AethoneVpn | wc -l)"
 adb shell am start-foreground-service -n "$PKG/.AethoneVpnService" --ei port 1819 --ei session 8
 refused=0
-for _ in $(seq 1 20); do sleep 1; adb logcat -d -s AethoneVpn | grep -q "tunnel start refused: shield-no-active-profile" && { refused=1; break; }; done
-adb logcat -d -s AethoneVpn > "$EV/fail-closed-logcat.txt" 2>/dev/null || true
+for _ in $(seq 1 20); do sleep 1; adb logcat -d -s AethoneVpn | tail -n +$((M0 + 1)) | grep -q "tunnel start refused: shield-no-active-profile" && { refused=1; break; }; done
+adb logcat -d -s AethoneVpn | tail -n +$((M0 + 1)) > "$EV/fail-closed-logcat.txt" 2>/dev/null || true
 [ "$refused" -eq 1 ] && pass "start refused fail-closed (no unfiltered tunnel)" || fail "broken shield start not refused"
 grep -q "zeptun up on socks" "$EV/fail-closed-logcat.txt" && fail "tunnel came up with a broken shield" || pass "no TUN established with a broken shield"
 cmd repair > /dev/null
@@ -184,7 +188,10 @@ adb shell am stop-service "$PKG/.AethoneVpnService" > /dev/null 2>&1 || true
 
 results stub-connect > "$EV/stub-connects.txt"
 results stub-close > "$EV/stub-closes.txt"
-adb logcat -d > "$EV/logcat-full.txt" 2>/dev/null || true
+adb logcat -d -b all > "$EV/logcat-full.txt" 2>/dev/null || true
+adb logcat -d -b crash > "$EV/logcat-crash.txt" 2>/dev/null || true
+mkdir -p "$EV/tombstones"
+for t in $(adb shell ls /data/tombstones 2>/dev/null | tr -d '\r' | grep -v '\.pb$' | tail -3); do adb shell cat "/data/tombstones/$t" > "$EV/tombstones/$t.txt" 2>/dev/null || true; done
 echo "app pid at end: $(adb shell pidof com.chakcaad.aethone | tr -d '\r')" | tee -a "$RES"
 echo ""
 echo "=== summary ==="

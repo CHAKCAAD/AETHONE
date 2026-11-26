@@ -178,6 +178,16 @@ class ShieldPhase2Test {
         assertTrue(d(false, 0, -1).reason.startsWith("foreign-uid:0"))
     }
 
+    @Test fun loopbackAddressesCompareAcrossV4MappedForms() {
+        val v4 = java.net.InetSocketAddress(java.net.InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)), 46464)
+        val mappedBytes = ByteArray(16).also { it[10] = -1; it[11] = -1; it[12] = 127; it[15] = 1 }
+        val mapped = java.net.InetSocketAddress(java.net.Inet6Address.getByAddress(null, mappedBytes, -1), 46464)
+        assertTrue(LoopbackGuard.sameEndpoint(v4, mapped))
+        assertFalse(LoopbackGuard.sameEndpoint(v4, java.net.InetSocketAddress(v4.address, 46465)))
+        val other = java.net.InetSocketAddress(java.net.InetAddress.getByAddress(byteArrayOf(127, 0, 0, 2)), 46464)
+        assertFalse(LoopbackGuard.sameEndpoint(v4, other))
+    }
+
     // ------------------------------------------------------------ counters
 
     @Test fun u32CountersAreReadWrapSafe() {

@@ -1,7 +1,27 @@
-# Family Shield (parental control) — phase 1
+# Family Shield (parental control) — phase 1 + phase 2
 
-Status: **core policy engine implemented (native zeptun + Kotlin); no UI; not device tested; not released.**
-Branch `feature/family-shield-phase1`. Plan: phase 0 report (owner-approved 2026-11-26).
+Status: **phase 2 on branch `feature/family-shield-phase2`: method-channel API, real-state status,
+loopback accept-gate PoC, signing-key rotation, settings export/import, emulator e2e. No UI (phase 3 not
+approved); no real device used; not merged, not released.** Phase 1 below is unchanged history.
+
+Phase-2 docs: [channel API](family-shield-channel.md) · [key rotation](signing-key-rotation.md) ·
+[settings migration](settings-migration.md); security §5/§8, testing §5, release §4 updated.
+
+## Phase 2 deliverables (2026-11-26)
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Method channel `aethone/family_shield` (enable/disable, status, profiles, rules, PIN-session gating, events, export/import) | Implemented; ShieldAdmin JVM-tested; driven on the emulator through the same handler |
+| 2 | VpnService + zeptun wiring: DNS NXDOMAIN, uid app blocking before the SOCKS dial, live snapshot swap + `zeptun_revalidate_flows`, batched events; shielded start refused if the engine hook is missing | Implemented; emulator e2e (see testing §5) |
+| 3 | Status from real state: Protected / Degraded / Inactive / Validation failed + reasons | Implemented; JVM + emulator |
+| 4 | Loopback SOCKS accept gate (getConnectionOwnerUid + own-process socket match, fail-closed) | PoC implemented + emulator-tested on the CI stub listener; **not wired to the real cores** (they bind their own TCP listeners) → real listeners stay `local-socks-exposed` |
+| 5 | IPv6 capture validated by an engine counter (zeptun counter 7) | Implemented; emulator |
+| 6 | Per-app exclusion audit per app | Implemented; JVM-tested; emulator shows the whole-device case only |
+| 7 | u32 counters: all count events (none count bytes); wrap test (Zig) + wrap-safe 64-bit Kotlin totals | Implemented + tested |
+| 8 | Signing-key rotation prep (secrets-only, least privilege, old-cert gate, docs) | Implemented; CI signed with the owner's new key |
+| 9 | Settings export/import + migration plan | Implemented; JVM + emulator export; picker import not emulator-tested |
+| 10 | Tests wired into native-ci.yml fail-closed | ShieldPhase2Test gate (≥5 suites/45 tests), `shield-e2e` job, `release-signing` job |
+
 
 Read next: [architecture](family-shield-architecture.md) · [security](family-shield-security.md) ·
 [content sources](family-shield-content-sources.md) · [testing](family-shield-testing.md) ·

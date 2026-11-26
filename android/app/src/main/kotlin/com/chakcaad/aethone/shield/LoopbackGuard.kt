@@ -71,6 +71,21 @@ object LoopbackGuard {
 
     // ---------------------------------------------------------------- Android
 
+    /// Canonical address bytes: an IPv4-mapped IPv6 address (::ffff:a.b.c.d,
+    /// what a dual-stack AF_INET6 socket reports for an IPv4 peer) compares
+    /// equal to the plain IPv4 address. Run 45866309599 showed zeptun's own
+    /// dial being refused when the two forms were compared directly.
+    fun canonical(a: InetAddress?): List<Byte> {
+        val b = a?.address ?: return emptyList()
+        if (b.size == 16 && (0 until 10).all { b[it] == 0.toByte() } && b[10] == 0xff.toByte() && b[11] == 0xff.toByte()) {
+            return b.copyOfRange(12, 16).toList()
+        }
+        return b.toList()
+    }
+
+    fun sameEndpoint(x: InetSocketAddress, y: InetSocketAddress): Boolean =
+        x.port == y.port && canonical(x.address) == canonical(y.address)
+
     /// True when [client] (the accepted socket's remote end) is a socket of
     /// this process connected to [listener]. Null when the walk failed.
     fun ownProcessSocket(client: InetSocketAddress, listener: InetSocketAddress): Boolean? {
@@ -86,9 +101,9 @@ object LoopbackGuard {
             try {
                 pfd = ParcelFileDescriptor.fromFd(fd)
                 val local = Os.getsockname(pfd.fileDescriptor) as? InetSocketAddress ?: continue
-                if (local.port != client.port || local.address != client.address) continue
+                if (!sameEndpoint(local, client)) continue
                 val peer = Os.getpeername(pfd.fileDescriptor) as? InetSocketAddress ?: continue
-                if (peer.port == listener.port && peer.address == listener.address) return true
+                if (sameEndpoint(peer, listener)) return true
             } catch (_: Exception) {
                 // not an inet socket / closed meanwhile
             } finally {
