@@ -105,6 +105,11 @@ class AethoneVpnService : VpnService() {
         /// on; absent = the unchanged single-upstream tunnel.
         const val EXTRA_HYBRID_ROUTING = "hybridRouting"
 
+        /// Traffic Analytics — the profile (protocol id) this tunnel's usage
+        /// is booked under, and the route id of a single-tunnel protocol.
+        /// Absent (older Dart) = "unknown" / the profile itself.
+        const val EXTRA_ANALYTICS_PROFILE = "analyticsProfile"
+
         /// v4.41 (owner round 17, item 12) — the notification's «قطع اتصال»
         /// action. Handled at the very top of onStartCommand: the STORE
         /// owns the full teardown (core + TUN + state machine), so the
@@ -181,6 +186,8 @@ class AethoneVpnService : VpnService() {
     private var descriptor: ParcelFileDescriptor? = null
     private var socksPort: Int = 1819
     private var zeptunUp = false
+    private var meteredLive = false
+    private var meteredProfile = ""
 
     /// v4.31 — the udp mode zeptun is CURRENTLY serving; a mode switch
     /// between a UDP-carrying leg and a TCP-only one on the SAME port
@@ -202,6 +209,13 @@ class AethoneVpnService : VpnService() {
     /// tunnel (they update live through HybridRouter.update); a different
     /// profile or set of route servers does, like a port change.
     private var liveRoutingKey: String = ""
+
+    /// Traffic Analytics: the profile of the current start intent.
+    private var analyticsProfile: String = "unknown"
+
+    private fun analyticsRoutes(
+        routing: com.chakcaad.aethone.routing.HybridRouter.Config?,
+    ): List<String> = routing?.endpoints?.keys?.toList() ?: listOf(analyticsProfile)
 
     /// v4.21 — the session stamp from the start intent (0 when absent,
     /// e.g. an external start); echoed on EVERY event this instance emits.
@@ -250,6 +264,8 @@ class AethoneVpnService : VpnService() {
         val routing = com.chakcaad.aethone.routing.HybridRouter.parse(
             intent?.getStringExtra(EXTRA_HYBRID_ROUTING),
         )
+        analyticsProfile = intent?.getStringExtra(EXTRA_ANALYTICS_PROFILE)
+            ?: routing?.profile ?: "unknown"
 
         // v4.26 — the straggler gate: this start was superseded by a stop
         // (a `stopVpn` processed while the start delivery was still in
@@ -403,6 +419,15 @@ class AethoneVpnService : VpnService() {
                 if (routing != null) {
                     com.chakcaad.aethone.routing.HybridRouter.update(this, routing)
                 }
+                // Traffic Analytics: a different protocol on the same target
+                // books its usage under its own profile from here on (a new
+                // session; the earlier one closes with its last flush).
+                if (meteredLive && meteredProfile != analyticsProfile) {
+                    com.chakcaad.aethone.analytics.TrafficMeter.begin(
+                        this, analyticsProfile, analyticsRoutes(routing), ::readCounter,
+                    )
+                    meteredProfile = analyticsProfile
+                }
                 EngineBridge.emit(upEvent(port))
                 return null
             }
@@ -529,14 +554,30 @@ class AethoneVpnService : VpnService() {
         // starts, so the very first flow is already routed (no window in
         // which rules are off). The route servers are fixed for the life of
         // this tunnel; zeptun never sends a routed flow direct.
+        // Traffic Analytics: the meter starts BEFORE zeptun (the first flow
+        // is already observed). A single-tunnel protocol is started routed
+        // with NO route servers and no policy — every flow answers the
+        // default route, exactly where nativeStart sends it — only so the
+        // flow-open and meter callbacks run. Analytics off = the plain
+        // v1.0.2 start, no callbacks at all.
+        com.chakcaad.aethone.analytics.TrafficMeter.init(this)
+        val metered = com.chakcaad.aethone.analytics.TrafficMeter.enabled
+        if (metered) {
+            com.chakcaad.aethone.analytics.TrafficMeter.begin(
+                this, analyticsProfile, analyticsRoutes(routing), ::readCounter,
+            )
+        }
         val rc = if (routing != null) {
             com.chakcaad.aethone.routing.HybridRouter.install(this, routing)
             com.chakcaad.aethone.routing.HybridRouter.resetCounters()
             Zeptun.nativeStartRouted(this, fd.fd, toml, routing.routeServers)
+        } else if (metered) {
+            Zeptun.nativeStartRouted(this, fd.fd, toml, "")
         } else {
             Zeptun.nativeStart(this, fd.fd, toml)
         }
         if (rc != 0) {
+            com.chakcaad.aethone.analytics.TrafficMeter.end()
             com.chakcaad.aethone.routing.HybridRouter.markLive(false)
             Log.e(TAG, "zeptun nativeStart failed rc=$rc (port=$port)")
             fd.close()
@@ -544,6 +585,8 @@ class AethoneVpnService : VpnService() {
             return "zeptun-start-failed:rc=$rc"
         }
         zeptunUp = true
+        meteredLive = metered
+        meteredProfile = analyticsProfile
         socksTcpOnly = tcpOnly
         socksStrictLive = socksStrict
         liveAppsKey = "$appMode|${apps.sorted().joinToString(",")}"
@@ -573,6 +616,10 @@ class AethoneVpnService : VpnService() {
             }
             zeptunUp = false
         }
+        // after nativeStop: its shutdown delivered the open flows' last
+        // meter reports; now the final flush + session end.
+        if (meteredLive) com.chakcaad.aethone.analytics.TrafficMeter.end()
+        meteredLive = false
         liveRoutingKey = ""
         com.chakcaad.aethone.routing.HybridRouter.markLive(false)
         descriptor?.close()

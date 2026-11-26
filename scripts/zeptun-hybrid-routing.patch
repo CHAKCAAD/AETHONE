@@ -1,8 +1,8 @@
 diff --git a/include/zeptun.h b/include/zeptun.h
-index 6383804..ca83f2a 100644
+index 6383804..cee8a63 100644
 --- a/include/zeptun.h
 +++ b/include/zeptun.h
-@@ -91,6 +91,18 @@ typedef struct {
+@@ -91,6 +91,33 @@ typedef struct {
  #define ZEPTUN_FLOW_REJECT 3u
  
  typedef uint32_t (*zeptun_flow_cb)(void *ctx, const ZeptunFlow *flow);
@@ -18,14 +18,30 @@ index 6383804..ca83f2a 100644
 +#define ZEPTUN_ROUTE_SERVER(i) (16u + (uint32_t)(i))
 +#define ZEPTUN_MAX_ROUTES 4
 +typedef uint32_t (*zeptun_route_cb)(void *ctx, const ZeptunFlow *flow, const char *name, size_t name_len);
++
++/* AETHONE traffic analytics. The meter callback runs on the engine thread
++ * that owns a proxied TCP flow, with the payload bytes the flow moved since
++ * its previous report: up = written to its SOCKS5 stream (app -> tunnel),
++ * down = read from it (tunnel -> app). A live flow reports at most every 2 s
++ * or 256 KiB; its last report has closed = 1. route is the route the flow was
++ * really dialled on (0 = default server, n = route server n-1). */
++typedef struct {
++    ZeptunFlow flow;
++    uint8_t route;
++    uint8_t closed;
++    uint64_t up;
++    uint64_t down;
++} ZeptunMeterRecord;
++typedef void (*zeptun_meter_cb)(void *ctx, const ZeptunMeterRecord *record);
  typedef void (*zeptun_log_cb)(void *ctx, int level, const char *message, size_t len);
  
  typedef struct ZeptunConfig {
-@@ -200,6 +212,9 @@ int zeptun_set_read_callback(Zeptun *tun, zeptun_packets_cb callback, void *ctx)
+@@ -200,6 +227,10 @@ int zeptun_set_read_callback(Zeptun *tun, zeptun_packets_cb callback, void *ctx)
  int zeptun_set_passthrough_callback(Zeptun *tun, zeptun_packets_cb callback, void *ctx);
  int zeptun_set_protect_callback(Zeptun *tun, zeptun_protect_cb callback, void *ctx);
  int zeptun_set_flow_callback(Zeptun *tun, zeptun_flow_cb callback, void *ctx);
 +int zeptun_set_route_callback(Zeptun *tun, zeptun_route_cb callback, void *ctx);
++int zeptun_set_meter_callback(Zeptun *tun, zeptun_meter_cb callback, void *ctx);
 +/* servers: "host:port" entries separated by ',' (at most ZEPTUN_MAX_ROUTES) */
 +int zeptun_set_route_servers(Zeptun *tun, const char *servers);
  int zeptun_set_device_fd(Zeptun *tun, int fd);
@@ -56,10 +72,18 @@ index d7cf252..bd0c5ea 100644
  
  pub const DirectConfig = struct {
 diff --git a/src/engine.zig b/src/engine.zig
-index b4dd13e..407f0c5 100644
+index b4dd13e..47c2c6f 100644
 --- a/src/engine.zig
 +++ b/src/engine.zig
-@@ -954,7 +954,21 @@ pub const Engine = struct {
+@@ -596,6 +596,7 @@ pub fn Worker(comptime L: type) type {
+                 w.engine.requestStop();
+             };
+             w.wheel.advance(w.loop.now(), w, onTimer);
++            if (has_userspace_tcp) w.tcp.meterSweep(w, w.loop.now());
+             _ = w.pollSources();
+             w.trimPool(w.loop.now());
+             if (w.engine.elastic) |el| w.elasticStep(el);
+@@ -954,7 +955,27 @@ pub const Engine = struct {
      }
  
      pub fn setJudge(e: *Engine, f: ?verdict.Fn, ctx: ?*anyopaque) void {
@@ -74,6 +98,12 @@ index b4dd13e..407f0c5 100644
 +        e.judge.route_ctx = ctx;
 +    }
 +
++    /// AETHONE traffic analytics: the per-flow byte meter callback.
++    pub fn setMeter(e: *Engine, f: ?verdict.MeterFn, ctx: ?*anyopaque) void {
++        e.judge.meter_call = f;
++        e.judge.meter_ctx = ctx;
++    }
++
 +    /// AETHONE hybrid routing: the extra SOCKS5 servers (route 1..n).
 +    pub fn setRoutes(e: *Engine, routes: []const addr.Endpoint) !void {
 +        if (routes.len > config.max_routes) return error.LimitExceeded;
@@ -83,10 +113,10 @@ index b4dd13e..407f0c5 100644
  
      pub fn setProtect(e: *Engine, f: ?*const fn (ctx: ?*anyopaque, fd: c_int) callconv(.c) bool, ctx: ?*anyopaque) void {
 diff --git a/src/ffi/ffi.zig b/src/ffi/ffi.zig
-index 5270d31..19fd610 100644
+index 5270d31..649b59e 100644
 --- a/src/ffi/ffi.zig
 +++ b/src/ffi/ffi.zig
-@@ -296,6 +296,31 @@ export fn zeptun_set_flow_callback(tun: ?*anyopaque, cb: ?zeptun.flow.verdict.Fn
+@@ -296,6 +296,38 @@ export fn zeptun_set_flow_callback(tun: ?*anyopaque, cb: ?zeptun.flow.verdict.Fn
      return code(.ok);
  }
  
@@ -94,6 +124,13 @@ index 5270d31..19fd610 100644
 +    const h = handleOf(tun) orelse return code(.invalid_argument);
 +    if (h.started.load(.acquire)) return code(.already_running);
 +    h.engine.setRouter(cb, ctx);
++    return code(.ok);
++}
++
++export fn zeptun_set_meter_callback(tun: ?*anyopaque, cb: ?zeptun.flow.verdict.MeterFn, ctx: ?*anyopaque) callconv(.c) c_int {
++    const h = handleOf(tun) orelse return code(.invalid_argument);
++    if (h.started.load(.acquire)) return code(.already_running);
++    h.engine.setMeter(cb, ctx);
 +    return code(.ok);
 +}
 +
@@ -119,10 +156,10 @@ index 5270d31..19fd610 100644
      const h = handleOf(tun) orelse return code(.invalid_argument);
      if (h.started.load(.acquire)) return code(.already_running);
 diff --git a/src/flow/verdict.zig b/src/flow/verdict.zig
-index 4bcf193..356efe4 100644
+index 4bcf193..51fb156 100644
 --- a/src/flow/verdict.zig
 +++ b/src/flow/verdict.zig
-@@ -19,14 +19,69 @@ pub const Flow = extern struct {
+@@ -19,14 +19,109 @@ pub const Flow = extern struct {
  
  pub const Fn = *const fn (ctx: ?*anyopaque, flow: *const Flow) callconv(.c) u32;
  
@@ -134,6 +171,28 @@ index 4bcf193..356efe4 100644
 +pub const RouteFn = *const fn (ctx: ?*anyopaque, flow: *const Flow, name: ?[*]const u8, name_len: usize) callconv(.c) u32;
 +
 +pub const route_base: u32 = 16;
++
++/// AETHONE traffic analytics: one metered byte report for a proxied flow.
++/// `up` is payload the app sent that zeptun wrote to the flow's SOCKS5
++/// stream; `down` is payload zeptun read from that stream for the app (the
++/// upstream_tx/rx_bytes measuring point, per flow). Both are DELTAS since the
++/// previous report of the same flow; `closed` = 1 on the flow's last report.
++/// `route` is the route the flow was really dialled on (0 = default server,
++/// n = routes[n-1]).
++pub const MeterRecord = extern struct {
++    flow: Flow,
++    route: u8,
++    closed: u8,
++    up: u64,
++    down: u64,
++};
++
++pub const MeterFn = *const fn (ctx: ?*anyopaque, rec: *const MeterRecord) callconv(.c) void;
++
++/// A live flow reports at least this often while it moves bytes ...
++pub const meter_interval_ms: u64 = 2_000;
++/// ... or as soon as this many unreported bytes pile up.
++pub const meter_flush_bytes: u64 = 256 * 1024;
 +
 +pub const Routed = struct {
 +    action: Action,
@@ -173,6 +232,24 @@ index 4bcf193..356efe4 100644
      ctx: ?*anyopaque = null,
 +    route_call: ?RouteFn = null,
 +    route_ctx: ?*anyopaque = null,
++    meter_call: ?MeterFn = null,
++    meter_ctx: ?*anyopaque = null,
++
++    pub inline fn metering(j: *const Judge) bool {
++        return j.meter_call != null;
++    }
++
++    pub fn report(j: *const Judge, proto: u8, v6: bool, src: []const u8, src_port: u16, dst: []const u8, dst_port: u16, route: u8, up: u64, down: u64, closed: bool) void {
++        const f = j.meter_call orelse return;
++        const rec: MeterRecord = .{
++            .flow = makeFlow(proto, v6, src, src_port, dst, dst_port),
++            .route = route,
++            .closed = @intFromBool(closed),
++            .up = up,
++            .down = down,
++        };
++        f(j.meter_ctx, &rec);
++    }
  
      pub inline fn active(j: *const Judge) bool {
          return j.call != null;
@@ -192,7 +269,7 @@ index 4bcf193..356efe4 100644
      pub fn ask(j: *const Judge, proto: u8, v6: bool, src: []const u8, src_port: u16, dst: []const u8, dst_port: u16) Action {
          const f = j.call orelse return .proxy;
          var flow: Flow = .{
-@@ -70,3 +125,33 @@ test "judge maps verdicts and passes the flow" {
+@@ -70,3 +165,57 @@ test "judge maps verdicts and passes the flow" {
      try std.testing.expectEqual(Action.proxy, j.ask(6, true, &[_]u8{0} ** 16, 1, &[_]u8{0} ** 16, 2));
      try std.testing.expectEqual(@as(u8, 6), Seen.last.family);
  }
@@ -225,6 +302,30 @@ index 4bcf193..356efe4 100644
 +    try std.testing.expectEqual(@as(u8, 2), r.route);
 +    try std.testing.expectEqual(@as(usize, 11), Seen.name_len);
 +    try std.testing.expectEqual(@as(u8, 'e'), Seen.first);
++}
++
++test "meter report carries the flow, the real route and the deltas" {
++    const Seen = struct {
++        var last: MeterRecord = undefined;
++        var calls: usize = 0;
++        fn got(ctx: ?*anyopaque, rec: *const MeterRecord) callconv(.c) void {
++            _ = ctx;
++            last = rec.*;
++            calls += 1;
++        }
++    };
++    var j: Judge = .{};
++    j.report(6, false, &[_]u8{ 10, 0, 0, 2 }, 40000, &[_]u8{ 198, 18, 0, 9 }, 443, 1, 10, 20, false);
++    try std.testing.expectEqual(@as(usize, 0), Seen.calls);
++    j.meter_call = Seen.got;
++    j.report(6, false, &[_]u8{ 10, 0, 0, 2 }, 40000, &[_]u8{ 198, 18, 0, 9 }, 443, 1, 1500, 64000, true);
++    try std.testing.expectEqual(@as(usize, 1), Seen.calls);
++    try std.testing.expectEqual(@as(u8, 1), Seen.last.route);
++    try std.testing.expectEqual(@as(u8, 1), Seen.last.closed);
++    try std.testing.expectEqual(@as(u64, 1500), Seen.last.up);
++    try std.testing.expectEqual(@as(u64, 64000), Seen.last.down);
++    try std.testing.expectEqual(@as(u16, 40000), Seen.last.flow.source_port);
++    try std.testing.expectEqualSlices(u8, &[_]u8{ 198, 18, 0, 9 }, Seen.last.flow.destination[0..4]);
 +}
 diff --git a/src/handler/handler.zig b/src/handler/handler.zig
 index 09f5121..23e8260 100644
@@ -338,16 +439,18 @@ index 09f5121..23e8260 100644
                  if (ua.family == relay.addr.family) relay.addr = ua;
              }
 diff --git a/src/jni/zeptun_jni.c b/src/jni/zeptun_jni.c
-index ee56f42..2f4cf1c 100644
+index ee56f42..63ac587 100644
 --- a/src/jni/zeptun_jni.c
 +++ b/src/jni/zeptun_jni.c
-@@ -15,9 +15,68 @@ typedef struct {
+@@ -15,9 +15,93 @@ typedef struct {
      jmethodID protect;
      pthread_t thread;
      int running;
 +    /* AETHONE hybrid routing */
 +    jclass route_class;
 +    jmethodID route;
++    /* AETHONE traffic analytics (optional: absent method = no meter) */
++    jmethodID meter;
  } Context;
  
  static Context context;
@@ -407,10 +510,33 @@ index ee56f42..2f4cf1c 100644
 +    if (host != NULL) (*env)->DeleteLocalRef(env, host);
 +    return answer;
 +}
++
++static void meter_flow(void *ctx, const ZeptunMeterRecord *rec) {
++    (void)ctx;
++    if (context.vm == NULL || context.route_class == NULL || context.meter == NULL) return;
++    JNIEnv *env = route_env();
++    if (env == NULL) return;
++    const ZeptunFlow *flow = &rec->flow;
++    jint alen = flow->family == 6 ? 16 : 4;
++    jbyteArray src = (*env)->NewByteArray(env, alen);
++    jbyteArray dst = (*env)->NewByteArray(env, alen);
++    if (src != NULL && dst != NULL) {
++        (*env)->SetByteArrayRegion(env, src, 0, alen, (const jbyte *)flow->source);
++        (*env)->SetByteArrayRegion(env, dst, 0, alen, (const jbyte *)flow->destination);
++        (*env)->CallStaticVoidMethod(env, context.route_class, context.meter,
++                                     (jint)flow->protocol, (jint)flow->family,
++                                     src, (jint)flow->source_port, dst, (jint)flow->destination_port,
++                                     (jint)rec->route, (jlong)rec->up, (jlong)rec->down,
++                                     (jboolean)(rec->closed != 0));
++    }
++    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
++    if (src != NULL) (*env)->DeleteLocalRef(env, src);
++    if (dst != NULL) (*env)->DeleteLocalRef(env, dst);
++}
  
  static JNIEnv *attach(int *attached) {
      JNIEnv *env = NULL;
-@@ -49,7 +108,7 @@ static void *run_engine(void *arg) {
+@@ -49,7 +133,7 @@ static void *run_engine(void *arg) {
      return NULL;
  }
  
@@ -419,7 +545,7 @@ index ee56f42..2f4cf1c 100644
      (void)self;
      if (context.tun != NULL) return ZEPTUN_ERR_ALREADY_RUNNING;
      memset(&context, 0, sizeof context);
-@@ -80,6 +139,30 @@ static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring c
+@@ -80,6 +164,39 @@ static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring c
  
      if (config != NULL) zeptun_set_device_fd(context.tun, fd);
      zeptun_set_protect_callback(context.tun, protect_socket, NULL);
@@ -438,6 +564,15 @@ index ee56f42..2f4cf1c 100644
 +        if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
 +        if (rc == ZEPTUN_OK && context.route == NULL) rc = ZEPTUN_ERR_INVALID_ARGUMENT;
 +        if (rc == ZEPTUN_OK) rc = zeptun_set_route_callback(context.tun, route_flow, NULL);
++        if (rc == ZEPTUN_OK && cls != NULL) {
++            /* optional: an app without Zeptun.meter simply runs unmetered */
++            context.meter = (*env)->GetStaticMethodID(env, cls, "meter", "(II[BI[BIIJJZ)V");
++            if ((*env)->ExceptionCheck(env)) {
++                (*env)->ExceptionClear(env);
++                context.meter = NULL;
++            }
++            if (context.meter != NULL) rc = zeptun_set_meter_callback(context.tun, meter_flow, NULL);
++        }
 +        if (rc != ZEPTUN_OK) {
 +            zeptun_destroy(context.tun);
 +            context.tun = NULL;
@@ -450,7 +585,7 @@ index ee56f42..2f4cf1c 100644
      if (pthread_create(&context.thread, NULL, run_engine, NULL) != 0) {
          zeptun_destroy(context.tun);
          context.tun = NULL;
-@@ -89,6 +172,14 @@ static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring c
+@@ -89,6 +206,14 @@ static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring c
      return ZEPTUN_OK;
  }
  
@@ -465,7 +600,7 @@ index ee56f42..2f4cf1c 100644
  static void stop(JNIEnv *env, jobject self) {
      (void)self;
      if (context.tun == NULL) return;
-@@ -103,6 +194,11 @@ static void stop(JNIEnv *env, jobject self) {
+@@ -103,6 +228,12 @@ static void stop(JNIEnv *env, jobject self) {
          (*env)->DeleteGlobalRef(env, context.service);
          context.service = NULL;
      }
@@ -474,10 +609,11 @@ index ee56f42..2f4cf1c 100644
 +        context.route_class = NULL;
 +    }
 +    context.route = NULL;
++    context.meter = NULL;
  }
  
  static jstring version(JNIEnv *env, jobject self) {
-@@ -124,6 +220,7 @@ static jlong counter(JNIEnv *env, jobject self, jint index) {
+@@ -124,6 +255,7 @@ static jlong counter(JNIEnv *env, jobject self, jint index) {
  
  static const JNINativeMethod methods[] = {
      { "nativeStart", "(Ljava/lang/Object;ILjava/lang/String;)I", (void *)start },
@@ -486,18 +622,40 @@ index ee56f42..2f4cf1c 100644
      { "nativeVersion", "()Ljava/lang/String;", (void *)version },
      { "nativeCounter", "(I)J", (void *)counter },
 diff --git a/src/stack/tcp.zig b/src/stack/tcp.zig
-index d51f759..0902500 100644
+index d51f759..05ea6d4 100644
 --- a/src/stack/tcp.zig
 +++ b/src/stack/tcp.zig
-@@ -1,6 +1,7 @@
+@@ -1,6 +1,8 @@
  const std = @import("std");
  const build_options = @import("build_options");
  const addr = @import("../addr.zig");
 +const dns = @import("dns.zig");
++const verdict = @import("../flow/verdict.zig");
  const config = @import("../config.zig");
  const checksum = @import("../packet/checksum.zig");
  const parse = @import("../packet/parse.zig");
-@@ -475,6 +476,21 @@ pub fn Tcp(comptime W: type) type {
+@@ -141,6 +143,11 @@ pub fn Tcp(comptime W: type) type {
+             migrating: bool = false,
+             moved: bool = false,
+             meter_epoch: u8 = 0,
++            /// AETHONE traffic analytics: payload bytes not yet reported to
++            /// the meter callback (they travel with the conn on migration).
++            mt_up: u64 = 0,
++            mt_down: u64 = 0,
++            mt_last: u64 = 0,
+             move_to: u16 = 0,
+             meter: u32 = 0,
+             local: [16]u8 = @splat(0),
+@@ -244,6 +251,8 @@ pub fn Tcp(comptime W: type) type {
+         rx_initial: u32,
+         rx_budget: u64,
+         rx_grown: u64 = 0,
++        /// AETHONE traffic analytics: next idle-flow meter sweep (ms).
++        mt_sweep_at: u64 = 0,
+         tx_budget: u64,
+         tx_grown: u64 = 0,
+         rx_ceiling: u64 = std.math.maxInt(u64),
+@@ -475,6 +484,21 @@ pub fn Tcp(comptime W: type) type {
                      },
                  }
              }
@@ -519,7 +677,7 @@ index d51f759..0902500 100644
              if (t.conns.isFull()) {
                  if (t.conns.oldest()) |old| {
                      const oc = t.conns.value(old);
-@@ -546,6 +562,7 @@ pub fn Tcp(comptime W: type) type {
+@@ -546,6 +570,7 @@ pub fn Tcp(comptime W: type) type {
              }
              c.up.dial.tos = pkt.ip.tos;
              c.up.dial.bypass = bypass;
@@ -527,6 +685,109 @@ index d51f759..0902500 100644
              w.handler.dialTcp(w, &c.up.dial, c.target, .tcp);
          }
  
+@@ -569,6 +594,7 @@ pub fn Tcp(comptime W: type) type {
+             up.connected = true;
+             if (d.early_sent > 0) {
+                 w.counters.add(.upstream_tx_bytes, d.early_sent);
++                t.meterAdd(w, c, d.early_sent, 0);
+                 t.consumeRx(w, c, d.early_sent);
+                 d.early_sent = 0;
+             }
+@@ -584,6 +610,7 @@ pub fn Tcp(comptime W: type) type {
+                 c.tx.push(b);
+                 c.tx_bytes += b.len;
+                 w.counters.add(.upstream_rx_bytes, b.len);
++                t.meterAdd(w, c, 0, b.len);
+                 t.markDirty(c);
+             }
+             if (c.state == .connecting) {
+@@ -1526,6 +1553,7 @@ pub fn Tcp(comptime W: type) type {
+                 up.bulk = n >= (b.cap - b.headroom()) / 2;
+                 w.counters.add(.upstream_rx_bytes, n);
+                 elastic.meterAdd(&c.meter, &c.meter_epoch, w.now(), n);
++                t.meterAdd(w, c, 0, n);
+                 c.tx_bytes += n;
+                 const merged = if (c.tx.tail) |tail| n <= b.cap / 4 and tail.tailroom() >= n else false;
+                 if (merged) {
+@@ -1659,6 +1687,7 @@ pub fn Tcp(comptime W: type) type {
+             if (result >= 0) {
+                 const n: u32 = @intCast(result);
+                 w.counters.add(.upstream_tx_bytes, n);
++                t.meterAdd(w, c, n, 0);
+                 if (n < up.tx_len) {
+                     t.consumeRx(w, c, n);
+                     t.setRcvCap(w, c, c.rcv_cap / 2);
+@@ -1767,6 +1796,33 @@ pub fn Tcp(comptime W: type) type {
+             t.beginRelease(w, c);
+         }
+ 
++        /// AETHONE traffic analytics: count payload on the flow and report it
++        /// at most every meter_interval_ms / meter_flush_bytes. Cheap when no
++        /// meter is installed (one branch).
++        inline fn meterAdd(t: *Self, w: *W, c: *Conn, up: u64, down: u64) void {
++            if (!w.judge().metering()) return;
++            c.mt_up += up;
++            c.mt_down += down;
++            const now = w.now();
++            if (c.mt_last == 0) c.mt_last = now;
++            if (c.mt_up + c.mt_down >= verdict.meter_flush_bytes or now -% c.mt_last >= verdict.meter_interval_ms) {
++                t.meterFlush(w, c, false);
++            }
++        }
++
++        fn meterFlush(t: *Self, w: *W, c: *Conn, closed: bool) void {
++            _ = t;
++            if (!w.judge().metering()) return;
++            c.mt_last = w.now();
++            // A live flow with nothing new is not worth a JNI call; the last
++            // report always goes out so the listener can forget the flow.
++            if (!closed and c.mt_up == 0 and c.mt_down == 0) return;
++            const al: usize = if (c.v6) 16 else 4;
++            w.judge().report(parse.proto.tcp, c.v6, c.remote[0..al], c.remote_port, c.local[0..al], c.local_port, c.up.dial.route, c.mt_up, c.mt_down, closed);
++            c.mt_up = 0;
++            c.mt_down = 0;
++        }
++
+         fn beginRelease(t: *Self, w: *W, c: *Conn) void {
+             if (c.releasing) return;
+             c.releasing = true;
+@@ -1816,6 +1872,7 @@ pub fn Tcp(comptime W: type) type {
+             t.releaseSndCap(c);
+             w.counters.dec(.tcp_active);
+             w.counters.inc(.tcp_closed);
++            t.meterFlush(w, c, true);
+             t.conns.remove(t.connIndex(c));
+         }
+ 
+@@ -1854,10 +1911,28 @@ pub fn Tcp(comptime W: type) type {
+             w.transmitParts(hdr[0 .. ip_hlen + 20], .{}, &.{});
+         }
+ 
++        /// AETHONE traffic analytics: a flow that went idle with unreported
++        /// bytes still reports within ~2 intervals (meterAdd only runs when
++        /// bytes move). Called from the worker loop; walks the table at most
++        /// once per meter_interval_ms.
++        pub fn meterSweep(t: *Self, w: *W, now: u64) void {
++            if (!w.judge().metering() or now < t.mt_sweep_at) return;
++            t.mt_sweep_at = now + verdict.meter_interval_ms;
++            var it = t.conns.iterator();
++            while (it.next()) |i| {
++                const c = t.conns.value(i);
++                if (c.moved or c.migrating or c.releasing) continue;
++                if ((c.mt_up != 0 or c.mt_down != 0) and now -% c.mt_last >= verdict.meter_interval_ms) {
++                    t.meterFlush(w, c, false);
++                }
++            }
++        }
++
+         pub fn shutdownAll(t: *Self, w: *W) void {
+             var it = t.conns.iterator();
+             while (it.next()) |i| {
+                 const c = t.conns.value(i);
++                if (!c.moved and !c.migrating) t.meterFlush(w, c, false);
+                 if (c.moved) {
+                     t.dropForward(c);
+                 } else if (!c.releasing) {
 diff --git a/src/stack/udp.zig b/src/stack/udp.zig
 index d78ad3d..d6205e2 100644
 --- a/src/stack/udp.zig

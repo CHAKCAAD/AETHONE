@@ -145,11 +145,21 @@ object HybridRouter {
     }
 
     /// The JNI entry (via dev.zeptun.Zeptun.route). Never throws.
+    /// Also the flow-open event of Traffic Analytics: a metered single-tunnel
+    /// start runs with no policy (every flow → the default route) only so
+    /// this callback sees each flow; the owner uid is looked up once and
+    /// shared by the policy and the meter.
     fun route(proto: Int, family: Int, src: ByteArray, sport: Int, dst: ByteArray, dport: Int, name: String?): Int {
-        val p = policy.get() ?: return ROUTE_DEFAULT
+        val p = policy.get()
+        val metering = com.chakcaad.aethone.analytics.TrafficMeter.active
+        if (p == null) {
+            if (metering) observe(proto, src, sport, dst, dport, name, null, ROUTE_DEFAULT)
+            return ROUTE_DEFAULT
+        }
         return try {
-            val owners = if (p.hasAppRules) owners(proto, src, sport, dst, dport) else emptyList()
-            when (val d = p.decide(owners, name, if (name == null) dst else null)) {
+            val uid = if (p.hasAppRules || metering) ownerUid(proto, src, sport, dst, dport) else null
+            val owners = if (p.hasAppRules && uid != null) packagesOf(uid) else emptyList()
+            val answer = when (val d = p.decide(owners, name, if (name == null) dst else null)) {
                 is HybridPolicy.Decision.Refuse -> {
                     refused.incrementAndGet()
                     hits.getOrPut(d.ruleId) { AtomicLong() }.incrementAndGet()
@@ -161,6 +171,8 @@ object HybridRouter {
                     if (d.tunnel == 0) ROUTE_DEFAULT else ROUTE_BASE + d.tunnel - 1
                 }
             }
+            if (metering && answer != ROUTE_REJECT) observe(proto, src, sport, dst, dport, name, uid, answer)
+            answer
         } catch (t: Throwable) {
             // Fail-closed: an engine error refuses the flow (the app retries);
             // it never sends the flow somewhere the user did not choose.
@@ -170,11 +182,21 @@ object HybridRouter {
         }
     }
 
-    private fun owners(proto: Int, src: ByteArray, sport: Int, dst: ByteArray, dport: Int): List<String> {
-        if (!appRoutingSupported) return emptyList()
-        val ctx = appContext ?: return emptyList()
-        if (proto != PROTO_TCP && proto != PROTO_UDP) return emptyList()
-        val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return emptyList()
+    private fun observe(proto: Int, src: ByteArray, sport: Int, dst: ByteArray, dport: Int, name: String?, uid: Int?, answer: Int) {
+        try {
+            com.chakcaad.aethone.analytics.TrafficMeter.onFlowOpen(proto, src, sport, dst, dport, name, uid)
+        } catch (_: Throwable) {
+            // analytics never affects routing
+        }
+    }
+
+    /// The platform's socket-owner lookup (API 29+); INVALID_UID when it
+    /// cannot name one.
+    private fun ownerUid(proto: Int, src: ByteArray, sport: Int, dst: ByteArray, dport: Int): Int {
+        if (!appRoutingSupported) return Process.INVALID_UID
+        val ctx = appContext ?: return Process.INVALID_UID
+        if (proto != PROTO_TCP && proto != PROTO_UDP) return Process.INVALID_UID
+        val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return Process.INVALID_UID
         val uid = try {
             cm.getConnectionOwnerUid(
                 proto,
@@ -184,12 +206,12 @@ object HybridRouter {
         } catch (_: Exception) {
             Process.INVALID_UID
         }
-        if (uid == Process.INVALID_UID || uid < 0) {
-            unattributed.incrementAndGet()
-            return emptyList()
-        }
-        return uidPackages[uid % 100_000] ?: emptyList()
+        if (uid == Process.INVALID_UID || uid < 0) unattributed.incrementAndGet()
+        return uid
     }
+
+    private fun packagesOf(uid: Int): List<String> =
+        if (uid == Process.INVALID_UID || uid < 0) emptyList() else uidPackages[uid % 100_000] ?: emptyList()
 
     /// The honest applied state for the UI.
     fun status(): Map<String, Any?> {

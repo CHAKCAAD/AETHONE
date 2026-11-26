@@ -1342,6 +1342,10 @@ class PlatformEngineAdapter implements EngineAdapter {
               config.hybridRulesFor(modeId),
               portOffset: portOffset,
             ),
+          // Traffic Analytics — the profile this tunnel's usage is booked
+          // under (the effective mode's protocol id; a hybrid policy also
+          // carries it). Routes of a single-tunnel mode = this id.
+          'analyticsProfile': modeId.name,
           'appTunnelMode': config.appTunnelMode.name,
           'appTunnelApps':
               config.appTunnelApps.toList(growable: false),

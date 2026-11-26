@@ -27,6 +27,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../analytics/traffic_strings.dart';
 import '../../connection/connection_state.dart';
 import '../../connection/connection_store.dart';
 import '../../connection/core_log.dart';
@@ -38,6 +39,7 @@ import '../../core/design_tokens.dart';
 import '../../core/motion.dart';
 import '../../core/motion_widgets.dart';
 import '../../l10n/app_strings.dart';
+import '../analytics/traffic_analytics_page.dart';
 import '../shared/theme_toggle_tile.dart';
 import 'appearance_page.dart';
 import 'connection_page.dart';
@@ -720,6 +722,14 @@ class _CategoryList extends StatelessWidget {
           title: t.settingsLookLangTitle,
           summary: '$theme • ${_langName(t, store.appLocale)}',
           onTap: () => onOpen(AppearanceSettingsPage(store: store)),
+        ),
+        // Traffic Analytics — usage per app / route from the engine's meter.
+        _ListRow(
+          keyId: 'settings-cat-traffic',
+          icon: AppAssets.iconGraphUp,
+          title: TrafficStrings.of(context).title,
+          summary: TrafficStrings.of(context).subtitle,
+          onTap: () => onOpen(TrafficAnalyticsPage(store: store)),
         ),
         _ListRow(
           keyId: 'settings-cat-general',
