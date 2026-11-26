@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Family Shield (phase 1), Android 12+: same exclusions for cloud backup and
+     device-to-device transfer (see backup_rules.xml). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="family_shield.db" />
+        <exclude domain="database" path="family_shield.db-wal" />
+        <exclude domain="database" path="family_shield.db-shm" />
+        <exclude domain="file" path="shield" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="family_shield.db" />
+        <exclude domain="database" path="family_shield.db-wal" />
+        <exclude domain="database" path="family_shield.db-shm" />
+        <exclude domain="file" path="shield" />
+    </device-transfer>
+</data-extraction-rules>

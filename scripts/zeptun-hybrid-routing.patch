@@ -1,8 +1,8 @@
 diff --git a/include/zeptun.h b/include/zeptun.h
-index 6383804..cee8a63 100644
+index 6383804..f695d0a 100644
 --- a/include/zeptun.h
 +++ b/include/zeptun.h
-@@ -91,6 +91,33 @@ typedef struct {
+@@ -91,6 +91,47 @@ typedef struct {
  #define ZEPTUN_FLOW_REJECT 3u
  
  typedef uint32_t (*zeptun_flow_cb)(void *ctx, const ZeptunFlow *flow);
@@ -33,10 +33,24 @@ index 6383804..cee8a63 100644
 +    uint64_t down;
 +} ZeptunMeterRecord;
 +typedef void (*zeptun_meter_cb)(void *ctx, const ZeptunMeterRecord *record);
++
++/* AETHONE Family Shield. The snapshot is the read-only binary policy built by
++ * the app (format v1: flow/shield.zig). shield = the native verdict of the
++ * flow: bit 31 = a snapshot is active, bits 0..7 = 1 block / 0 allow,
++ * bits 8..15 = rule level (1 mandatory, 2 parent blocklist, 4 category,
++ * 5 parent allowlist, 6 unknown domain, 7 strict mode), bits 16..23 =
++ * category index + 1. A blocked flow is rejected (TCP RST / ICMP
++ * unreachable) whatever the callback answers; blocked DNS names get NXDOMAIN
++ * (no SOA) before any fake-IP slot is taken. */
++typedef uint32_t (*zeptun_shield_route_cb)(void *ctx, const ZeptunFlow *flow, const char *name, size_t name_len, uint32_t shield);
++/* return non-zero to abort the flow after zeptun_revalidate_flows */
++typedef uint32_t (*zeptun_revalidate_cb)(void *ctx, const ZeptunFlow *flow, const char *name, size_t name_len, uint32_t shield);
++#define ZEPTUN_SHIELD_ACTIVE 0x80000000u
++#define ZEPTUN_SHIELD_BLOCK 0x1u
  typedef void (*zeptun_log_cb)(void *ctx, int level, const char *message, size_t len);
  
  typedef struct ZeptunConfig {
-@@ -200,6 +227,10 @@ int zeptun_set_read_callback(Zeptun *tun, zeptun_packets_cb callback, void *ctx)
+@@ -200,6 +241,18 @@ int zeptun_set_read_callback(Zeptun *tun, zeptun_packets_cb callback, void *ctx)
  int zeptun_set_passthrough_callback(Zeptun *tun, zeptun_packets_cb callback, void *ctx);
  int zeptun_set_protect_callback(Zeptun *tun, zeptun_protect_cb callback, void *ctx);
  int zeptun_set_flow_callback(Zeptun *tun, zeptun_flow_cb callback, void *ctx);
@@ -44,6 +58,14 @@ index 6383804..cee8a63 100644
 +int zeptun_set_meter_callback(Zeptun *tun, zeptun_meter_cb callback, void *ctx);
 +/* servers: "host:port" entries separated by ',' (at most ZEPTUN_MAX_ROUTES) */
 +int zeptun_set_route_servers(Zeptun *tun, const char *servers);
++int zeptun_shield_validate(const uint8_t *snapshot, size_t len);
++int zeptun_set_shield_snapshot(Zeptun *tun, const uint8_t *snapshot, size_t len);
++int zeptun_set_shield_route_callback(Zeptun *tun, zeptun_shield_route_cb callback, void *ctx);
++int zeptun_set_revalidate_callback(Zeptun *tun, zeptun_revalidate_cb callback, void *ctx);
++int zeptun_revalidate_flows(Zeptun *tun);
++/* 0 dns_blocked, 1 flow_blocked, 2 flows_killed, 3 swaps, 4 rejected, 5 generation, 6 active */
++int64_t zeptun_shield_counter(Zeptun *tun, int index);
++uint32_t zeptun_shield_check(Zeptun *tun, const char *name, size_t name_len, const uint8_t *dst, size_t dst_len, uint8_t proto, uint16_t port);
  int zeptun_set_device_fd(Zeptun *tun, int fd);
  int zeptun_set_adapter_guid(Zeptun *tun, const char *guid);
  
@@ -72,10 +94,47 @@ index d7cf252..bd0c5ea 100644
  
  pub const DirectConfig = struct {
 diff --git a/src/engine.zig b/src/engine.zig
-index b4dd13e..47c2c6f 100644
+index b4dd13e..cdb6b12 100644
 --- a/src/engine.zig
 +++ b/src/engine.zig
-@@ -596,6 +596,7 @@ pub fn Worker(comptime L: type) type {
+@@ -13,6 +13,7 @@ const pool = @import("packet/pool.zig");
+ const gso = @import("packet/gso.zig");
+ const timeouts = @import("flow/timeouts.zig");
+ const verdict = @import("flow/verdict.zig");
++const shield_mod = @import("flow/shield.zig");
+ const stack = @import("stack/stack.zig");
+ const handler_mod = @import("handler/handler.zig");
+ const route = @import("route/route.zig");
+@@ -121,6 +122,8 @@ pub fn Worker(comptime L: type) type {
+         wake_mask: u64 = 0,
+         thread: ?std.Thread = null,
+         network_epoch: u32 = 0,
++        /// AETHONE Family Shield: the revalidation epoch this worker has applied.
++        shield_epoch: u32 = 0,
+         last_activity_ns: u64 = 0,
+         activity_mark: u64 = 0,
+         rebalance_seen: u32 = 0,
+@@ -145,6 +148,7 @@ pub fn Worker(comptime L: type) type {
+             w.wake_mask = 0;
+             w.thread = null;
+             w.network_epoch = engine.network_epoch.load(.acquire);
++            w.shield_epoch = engine.shield.epoch.load(.acquire);
+             w.last_activity_ns = 0;
+             w.activity_mark = 0;
+             w.rebalance_seen = if (engine.elastic) |el| el.rebalance_seq.load(.acquire) else 0;
+@@ -271,6 +275,11 @@ pub fn Worker(comptime L: type) type {
+             return &w.engine.judge;
+         }
+ 
++        /// AETHONE Family Shield: the engine's live snapshot holder.
++        pub inline fn shieldState(w: *const Self) *shield_mod.State {
++            return &w.engine.shield;
++        }
++
+         pub inline fn caps(w: *const Self) device.Capabilities {
+             return w.dev_caps;
+         }
+@@ -596,6 +605,7 @@ pub fn Worker(comptime L: type) type {
                  w.engine.requestStop();
              };
              w.wheel.advance(w.loop.now(), w, onTimer);
@@ -83,7 +142,37 @@ index b4dd13e..47c2c6f 100644
              _ = w.pollSources();
              w.trimPool(w.loop.now());
              if (w.engine.elastic) |el| w.elasticStep(el);
-@@ -954,7 +955,27 @@ pub const Engine = struct {
+@@ -604,6 +614,12 @@ pub fn Worker(comptime L: type) type {
+                 w.network_epoch = epoch;
+                 w.resetNetwork();
+             }
++            const sepoch = w.engine.shield.epoch.load(.acquire);
++            if (sepoch != w.shield_epoch) {
++                w.shield_epoch = sepoch;
++                if (has_userspace_tcp) w.tcp.revalidate(w);
++                w.udp.revalidate(w);
++            }
+             w.flushOutput();
+         }
+ 
+@@ -884,6 +900,8 @@ pub const Engine = struct {
+     passthrough_shared: ?*device.external.Shared = null,
+     protect: handler_mod.direct.Protect = .{},
+     judge: verdict.Judge = .{},
++    /// AETHONE Family Shield: the atomically swapped policy snapshot.
++    shield: shield_mod.State = .{},
+     route_state: route.State = .{},
+     netns: route.netns.Handle = .{},
+     workers: ?Workers = null,
+@@ -908,6 +926,7 @@ pub const Engine = struct {
+         const e = try allocator.create(Engine);
+         errdefer allocator.destroy(e);
+         e.* = .{ .allocator = allocator, .cfg = cfg, .device_kind = cfg.device.kind };
++        e.shield.allocator = allocator;
+         if (cfg.dnsActive() and e.cfg.route.dns.len == 0) {
+             if (cfg.dnsAddress4()) |a| e.cfg.route.dns.append(.{ .addr = a, .bits = 32 }) catch {};
+             if (cfg.dnsAddress6()) |a| e.cfg.route.dns.append(.{ .addr = a, .bits = 128 }) catch {};
+@@ -954,7 +973,54 @@ pub const Engine = struct {
      }
  
      pub fn setJudge(e: *Engine, f: ?verdict.Fn, ctx: ?*anyopaque) void {
@@ -104,6 +193,33 @@ index b4dd13e..47c2c6f 100644
 +        e.judge.meter_ctx = ctx;
 +    }
 +
++    /// AETHONE Family Shield: the route callback that also gets the native
++    /// shield verdict (replaces the plain route callback when set).
++    pub fn setShieldRouter(e: *Engine, f: ?verdict.ShieldRouteFn, ctx: ?*anyopaque) void {
++        e.judge.shield_route_call = f;
++        e.judge.shield_route_ctx = ctx;
++    }
++
++    /// AETHONE Family Shield: the app-layer revalidation callback.
++    pub fn setRevalidate(e: *Engine, f: ?verdict.RevalidateFn, ctx: ?*anyopaque) void {
++        e.judge.reval_call = f;
++        e.judge.reval_ctx = ctx;
++    }
++
++    /// AETHONE Family Shield: validate + atomically swap the snapshot (any
++    /// time, running or not). Null clears it. A refused snapshot leaves the
++    /// previous one active.
++    pub fn installShield(e: *Engine, bytes: ?[]const u8) shield_mod.Error!void {
++        try e.shield.install(bytes);
++    }
++
++    /// AETHONE Family Shield: every worker re-checks its live flows on its
++    /// next loop turn and aborts the ones the current policy blocks.
++    pub fn revalidateFlows(e: *Engine) void {
++        e.shield.bumpEpoch();
++        e.wakeAll();
++    }
++
 +    /// AETHONE hybrid routing: the extra SOCKS5 servers (route 1..n).
 +    pub fn setRoutes(e: *Engine, routes: []const addr.Endpoint) !void {
 +        if (routes.len > config.max_routes) return error.LimitExceeded;
@@ -112,11 +228,19 @@ index b4dd13e..47c2c6f 100644
      }
  
      pub fn setProtect(e: *Engine, f: ?*const fn (ctx: ?*anyopaque, fd: c_int) callconv(.c) bool, ctx: ?*anyopaque) void {
+@@ -1486,6 +1552,7 @@ pub const Engine = struct {
+         if (e.external) |s| s.deinit();
+         if (e.passthrough_shared) |s| s.deinit();
+         if (e.fake_dns) |t| t.deinit();
++        e.shield.deinit();
+         if (e.counters.len > 0) e.allocator.free(e.counters);
+         if (e.gauges.len > 0) e.allocator.free(e.gauges);
+         e.allocator.destroy(e);
 diff --git a/src/ffi/ffi.zig b/src/ffi/ffi.zig
-index 5270d31..649b59e 100644
+index 5270d31..bd59eaa 100644
 --- a/src/ffi/ffi.zig
 +++ b/src/ffi/ffi.zig
-@@ -296,6 +296,38 @@ export fn zeptun_set_flow_callback(tun: ?*anyopaque, cb: ?zeptun.flow.verdict.Fn
+@@ -296,6 +296,111 @@ export fn zeptun_set_flow_callback(tun: ?*anyopaque, cb: ?zeptun.flow.verdict.Fn
      return code(.ok);
  }
  
@@ -152,14 +276,1127 @@ index 5270d31..649b59e 100644
 +    return code(.ok);
 +}
 +
++// ---- AETHONE Family Shield ------------------------------------------------
++
++const shield = zeptun.flow.shield;
++
++fn shieldCode(err: shield.Error) c_int {
++    return switch (err) {
++        error.OutOfMemory => code(.out_of_memory),
++        else => code(.config_error),
++    };
++}
++
++/// Validates a shield snapshot completely without installing it.
++export fn zeptun_shield_validate(bytes: ?[*]const u8, len: usize) callconv(.c) c_int {
++    const p = bytes orelse return code(.invalid_argument);
++    _ = shield.Snapshot.parse(p[0..len]) catch |err| return shieldCode(err);
++    return code(.ok);
++}
++
++/// Validates, copies and atomically installs a snapshot (any time, running or
++/// not). NULL / 0 clears the shield. A refused snapshot keeps the previous one.
++export fn zeptun_set_shield_snapshot(tun: ?*anyopaque, bytes: ?[*]const u8, len: usize) callconv(.c) c_int {
++    const h = handleOf(tun) orelse return code(.invalid_argument);
++    const slice: ?[]const u8 = if (bytes) |p| (if (len > 0) p[0..len] else null) else null;
++    h.engine.installShield(slice) catch |err| return shieldCode(err);
++    return code(.ok);
++}
++
++export fn zeptun_set_shield_route_callback(tun: ?*anyopaque, cb: ?zeptun.flow.verdict.ShieldRouteFn, ctx: ?*anyopaque) callconv(.c) c_int {
++    const h = handleOf(tun) orelse return code(.invalid_argument);
++    if (h.started.load(.acquire)) return code(.already_running);
++    h.engine.setShieldRouter(cb, ctx);
++    return code(.ok);
++}
++
++export fn zeptun_set_revalidate_callback(tun: ?*anyopaque, cb: ?zeptun.flow.verdict.RevalidateFn, ctx: ?*anyopaque) callconv(.c) c_int {
++    const h = handleOf(tun) orelse return code(.invalid_argument);
++    if (h.started.load(.acquire)) return code(.already_running);
++    h.engine.setRevalidate(cb, ctx);
++    return code(.ok);
++}
++
++/// Every worker re-checks its live flows on its next loop turn.
++export fn zeptun_revalidate_flows(tun: ?*anyopaque) callconv(.c) c_int {
++    const h = handleOf(tun) orelse return code(.invalid_argument);
++    h.engine.revalidateFlows();
++    return code(.ok);
++}
++
++/// 0 dns_blocked, 1 flow_blocked, 2 flows_killed, 3 swaps, 4 rejected,
++/// 5 generation of the active snapshot, 6 active (0/1).
++export fn zeptun_shield_counter(tun: ?*anyopaque, index: c_int) callconv(.c) i64 {
++    const h = handleOf(tun) orelse return -1;
++    if (index < 0 or index > 6) return -1;
++    return @intCast(h.engine.shield.counter(@enumFromInt(@as(u8, @intCast(index)))));
++}
++
++/// Diagnostics / tests: the encoded verdict for a name (may be NULL) and a
++/// destination address (4 or 16 bytes), 0 when no snapshot is active.
++export fn zeptun_shield_check(tun: ?*anyopaque, name: ?[*]const u8, name_len: usize, dst: ?[*]const u8, dst_len: usize, proto: u8, port: u16) callconv(.c) u32 {
++    const h = handleOf(tun) orelse return 0;
++    const st = &h.engine.shield;
++    defer st.release();
++    const snap = st.acquire() orelse return 0;
++    var buf: [shield.max_name]u8 = undefined;
++    const n: ?[]const u8 = if (name) |p| shield.normalize(p[0..name_len], &buf) else null;
++    const a: addr.Address = if (dst) |p| (if (dst_len == 16) addr.Address.v6(p[0..16].*) else if (dst_len == 4) addr.Address.v4(p[0..4].*) else return 0) else addr.Address.v4(.{ 0, 0, 0, 0 });
++    if (name != null and n == null) {
++        // an un-normalizable name is never on a list: judge it as unknown
++        return snap.checkFlow(null, a, true, proto, port).encode();
++    }
++    return snap.checkFlow(n, a, dst == null, proto, port).encode();
++}
++
  export fn zeptun_set_protect_callback(tun: ?*anyopaque, cb: ?ProtectFn, ctx: ?*anyopaque) callconv(.c) c_int {
      const h = handleOf(tun) orelse return code(.invalid_argument);
      if (h.started.load(.acquire)) return code(.already_running);
+diff --git a/src/flow/shield.zig b/src/flow/shield.zig
+new file mode 100644
+index 0000000..ad99dee
+--- /dev/null
++++ b/src/flow/shield.zig
+@@ -0,0 +1,1034 @@
++//! AETHONE Family Shield — the native policy matcher.
++//!
++//! A read-only binary snapshot (built and signed off by the Android app, see
++//! docs/family-shield-architecture.md in AETHONE) holds every domain rule and
++//! IP/CIDR rule of the active profile. zeptun consults it
++//!   * at DNS time (`dns.answerShield`): a blocked name gets NXDOMAIN without
++//!     SOA, before any fake-IP slot is taken and before any upstream query;
++//!   * at flow open (TCP SYN / first UDP datagram): the fake-IP name or the
++//!     real destination address is checked again, so a cached fake IP can not
++//!     bypass the DNS-time block, and the verdict is handed to the route
++//!     callback (the app layer adds per-app blocks);
++//!   * on `zeptun_revalidate_flows`: every live flow is re-checked against the
++//!     new snapshot and the newly blocked ones are aborted.
++//!
++//! Snapshot format v1 (little endian; the Kotlin builder ShieldSnapshot.kt
++//! writes exactly this):
++//!
++//!   header (128 bytes)
++//!     0  magic "AETHSHLD"            8  version u16 = 1   10 header_len u16 = 128
++//!     12 flags u32                   16 total_len u32     20 generation u32
++//!     24 enabled_cats u64            32 mandatory_cats u64
++//!     40 allow_cats u64              48 domain_count u32  52 bucket_count u32
++//!     56 v4_count u32                60 v6_count u32      64 strings_len u32
++//!     68 profile u32                 72..96 reserved (zero)
++//!     96 sha256 (32 bytes) of the whole file with these 32 bytes zeroed
++//!   entries  domain_count x 40: hash u64 (FNV-1a 64 of the name), str_off u32,
++//!            str_len u16, reserved u16, self_flags u32, sub_flags u32,
++//!            self_cats u64, sub_cats u64
++//!   buckets  bucket_count x u32 (entry index + 1, 0 = empty; linear probing
++//!            from hash & (bucket_count - 1))
++//!   v4       v4_count x 24: addr[4] (network order), prefix u8, pad[3],
++//!            flags u32, pad u32, cats u64 — sorted by (prefix, addr), unique
++//!   v6       v6_count x 32: addr[16], prefix u8, pad[3], flags u32, cats u64
++//!   strings  strings_len bytes (normalized names: lowercase ASCII / punycode)
++//!
++//! "self" bits apply to the name itself, "sub" bits to every strict subdomain
++//! (label boundary: `example.com` never matches `notexample.com`). An exact
++//! rule sets self only, a wildcard `*.example.com` sub only, a root rule
++//! (`example.com` and everything under it) both.
++const std = @import("std");
++const addr = @import("../addr.zig");
++
++pub const magic = "AETHSHLD";
++pub const version: u16 = 1;
++pub const header_len: usize = 128;
++pub const entry_len: usize = 40;
++pub const v4_len: usize = 24;
++pub const v6_len: usize = 32;
++pub const max_name = 253;
++
++/// header flags
++pub const flag_unknown_block: u32 = 1 << 0;
++pub const flag_strict_dot: u32 = 1 << 1;
++pub const flag_strict_quic: u32 = 1 << 2;
++pub const flag_strict_direct_ip: u32 = 1 << 3;
++pub const flag_strict_alt_dns: u32 = 1 << 4;
++const known_header_flags: u32 = 0x1f;
++
++/// rule flags
++pub const rule_parent_block: u32 = 1 << 0;
++pub const rule_parent_allow: u32 = 1 << 1;
++const known_rule_flags: u32 = 0x3;
++
++/// Rule levels (the owner's priority order; 3 = app restrictions lives in the
++/// app layer because it needs the flow's owner uid).
++pub const Level = enum(u8) {
++    none = 0,
++    mandatory = 1,
++    parent_block = 2,
++    app = 3,
++    category = 4,
++    parent_allow = 5,
++    unknown = 6,
++    strict = 7,
++};
++
++pub const Verdict = struct {
++    block: bool = false,
++    level: Level = .none,
++    /// category bit index + 1 (0 = none)
++    category: u8 = 0,
++
++    pub const allow: Verdict = .{};
++
++    /// The u32 handed to the route / revalidate callbacks:
++    /// bit 31 = a snapshot is active, bits 0..7 = 1 block / 0 allow,
++    /// bits 8..15 = level, bits 16..23 = category index + 1.
++    pub fn encode(v: Verdict) u32 {
++        return (@as(u32, 1) << 31) | @as(u32, @intFromBool(v.block)) | (@as(u32, @intFromEnum(v.level)) << 8) | (@as(u32, v.category) << 16);
++    }
++};
++
++pub const Error = error{
++    TooShort,
++    BadMagic,
++    BadVersion,
++    BadHeader,
++    BadLength,
++    BadChecksum,
++    BadEntry,
++    BadBuckets,
++    BadCidr,
++    OutOfMemory,
++};
++
++pub fn fnv1a64(s: []const u8) u64 {
++    var h: u64 = 0xcbf29ce484222325;
++    for (s) |c| {
++        h ^= c;
++        h *%= 0x100000001b3;
++    }
++    return h;
++}
++
++inline fn rd16(b: []const u8, off: usize) u16 {
++    return std.mem.readInt(u16, b[off..][0..2], .little);
++}
++inline fn rd32(b: []const u8, off: usize) u32 {
++    return std.mem.readInt(u32, b[off..][0..4], .little);
++}
++inline fn rd64(b: []const u8, off: usize) u64 {
++    return std.mem.readInt(u64, b[off..][0..8], .little);
++}
++
++fn validChar(c: u8) bool {
++    return (c >= 'a' and c <= 'z') or (c >= '0' and c <= '9') or c == '-' or c == '_';
++}
++
++/// A normalized name: 1..253 bytes, labels of 1..63 [a-z0-9-_], dot separated.
++pub fn validName(s: []const u8) bool {
++    if (s.len == 0 or s.len > max_name) return false;
++    var label: usize = 0;
++    for (s) |c| {
++        if (c == '.') {
++            if (label == 0) return false;
++            label = 0;
++            continue;
++        }
++        if (!validChar(c)) return false;
++        label += 1;
++        if (label > 63) return false;
++    }
++    return label != 0;
++}
++
++/// A parsed, fully validated snapshot. Read only; never mutated after load.
++pub const Snapshot = struct {
++    bytes: []const u8,
++    flags: u32,
++    generation: u32,
++    enabled: u64,
++    mandatory: u64,
++    allow_cats: u64,
++    domains: u32,
++    buckets: u32,
++    v4: u32,
++    v6: u32,
++    entries_off: usize,
++    buckets_off: usize,
++    v4_off: usize,
++    v6_off: usize,
++    strings_off: usize,
++    strings_len: usize,
++
++    pub fn parse(b: []const u8) Error!Snapshot {
++        if (b.len < header_len) return error.TooShort;
++        if (!std.mem.eql(u8, b[0..8], magic)) return error.BadMagic;
++        if (rd16(b, 8) != version) return error.BadVersion;
++        if (rd16(b, 10) != header_len) return error.BadHeader;
++        const flags = rd32(b, 12);
++        if (flags & ~known_header_flags != 0) return error.BadHeader;
++        for (b[72..96]) |z| if (z != 0) return error.BadHeader;
++        if (rd32(b, 16) != b.len) return error.BadLength;
++        const domains = rd32(b, 48);
++        const buckets = rd32(b, 52);
++        const v4 = rd32(b, 56);
++        const v6 = rd32(b, 60);
++        const strings_len = rd32(b, 64);
++        if (buckets == 0 or !std.math.isPowerOfTwo(buckets)) return error.BadBuckets;
++        if (@as(u64, domains) >= buckets) return error.BadBuckets;
++        const total: u64 = header_len + @as(u64, domains) * entry_len + @as(u64, buckets) * 4 + @as(u64, v4) * v4_len + @as(u64, v6) * v6_len + strings_len;
++        if (total != b.len) return error.BadLength;
++        // checksum: sha256 of the file with its checksum field zeroed
++        var h = std.crypto.hash.sha2.Sha256.init(.{});
++        h.update(b[0..96]);
++        h.update(&([_]u8{0} ** 32));
++        h.update(b[header_len..]);
++        var digest: [32]u8 = undefined;
++        h.final(&digest);
++        if (!std.mem.eql(u8, &digest, b[96..128])) return error.BadChecksum;
++        const entries_off = header_len;
++        const buckets_off = entries_off + @as(usize, domains) * entry_len;
++        const v4_off = buckets_off + @as(usize, buckets) * 4;
++        const v6_off = v4_off + @as(usize, v4) * v4_len;
++        const strings_off = v6_off + @as(usize, v6) * v6_len;
++        const s: Snapshot = .{
++            .bytes = b,
++            .flags = flags,
++            .generation = rd32(b, 20),
++            .enabled = rd64(b, 24),
++            .mandatory = rd64(b, 32),
++            .allow_cats = rd64(b, 40),
++            .domains = domains,
++            .buckets = buckets,
++            .v4 = v4,
++            .v6 = v6,
++            .entries_off = entries_off,
++            .buckets_off = buckets_off,
++            .v4_off = v4_off,
++            .v6_off = v6_off,
++            .strings_off = strings_off,
++            .strings_len = strings_len,
++        };
++        try s.validateBody();
++        return s;
++    }
++
++    fn validateBody(s: *const Snapshot) Error!void {
++        const b = s.bytes;
++        // every entry: sane string, matching hash, known flags, reachable by
++        // probing, and unique (probing finds this very entry)
++        var i: u32 = 0;
++        while (i < s.domains) : (i += 1) {
++            const e = s.entries_off + @as(usize, i) * entry_len;
++            const off = rd32(b, e + 8);
++            const len = rd16(b, e + 12);
++            if (rd16(b, e + 14) != 0) return error.BadEntry;
++            if (@as(u64, off) + len > s.strings_len) return error.BadEntry;
++            const name = b[s.strings_off + off ..][0..len];
++            if (!validName(name)) return error.BadEntry;
++            if (rd64(b, e) != fnv1a64(name)) return error.BadEntry;
++            if ((rd32(b, e + 16) | rd32(b, e + 20)) & ~known_rule_flags != 0) return error.BadEntry;
++            if (s.find(name) != i) return error.BadEntry;
++        }
++        var used: u32 = 0;
++        var k: u32 = 0;
++        while (k < s.buckets) : (k += 1) {
++            const v = rd32(b, s.buckets_off + @as(usize, k) * 4);
++            if (v == 0) continue;
++            if (v > s.domains) return error.BadBuckets;
++            used += 1;
++        }
++        if (used != s.domains) return error.BadBuckets;
++        try s.validateCidrs(false);
++        try s.validateCidrs(true);
++    }
++
++    fn validateCidrs(s: *const Snapshot, v6: bool) Error!void {
++        const b = s.bytes;
++        const n = if (v6) s.v6 else s.v4;
++        const rl: usize = if (v6) v6_len else v4_len;
++        const al: usize = if (v6) 16 else 4;
++        const base = if (v6) s.v6_off else s.v4_off;
++        var prev: ?[]const u8 = null;
++        var prev_prefix: u8 = 0;
++        var i: u32 = 0;
++        while (i < n) : (i += 1) {
++            const r = base + @as(usize, i) * rl;
++            const a = b[r..][0..al];
++            const prefix = b[r + al];
++            if (prefix > al * 8) return error.BadCidr;
++            for (b[r + al + 1 .. r + al + 4]) |z| if (z != 0) return error.BadCidr;
++            const flags = rd32(b, r + al + 4);
++            if (flags & ~known_rule_flags != 0) return error.BadCidr;
++            if (!v6 and rd32(b, r + 12) != 0) return error.BadCidr;
++            // host bits must be zero
++            var bit: usize = prefix;
++            while (bit < al * 8) : (bit += 1) {
++                if (a[bit / 8] & (@as(u8, 0x80) >> @intCast(bit % 8)) != 0) return error.BadCidr;
++            }
++            if (prev) |p| {
++                // strictly increasing by (prefix, addr)
++                if (prefix < prev_prefix) return error.BadCidr;
++                if (prefix == prev_prefix and std.mem.order(u8, p, a) != .lt) return error.BadCidr;
++            }
++            prev = a;
++            prev_prefix = prefix;
++        }
++    }
++
++    fn nameAt(s: *const Snapshot, i: u32) []const u8 {
++        const e = s.entries_off + @as(usize, i) * entry_len;
++        return s.bytes[s.strings_off + rd32(s.bytes, e + 8) ..][0..rd16(s.bytes, e + 12)];
++    }
++
++    /// The entry index holding exactly `name`, if any.
++    pub fn find(s: *const Snapshot, name: []const u8) ?u32 {
++        if (s.domains == 0) return null;
++        const h = fnv1a64(name);
++        const mask: u64 = s.buckets - 1;
++        var slot: u64 = h & mask;
++        var probes: u32 = 0;
++        while (probes < s.buckets) : (probes += 1) {
++            const v = rd32(s.bytes, s.buckets_off + @as(usize, @intCast(slot)) * 4);
++            if (v == 0) return null;
++            const i = v - 1;
++            if (i >= s.domains) return null;
++            const e = s.entries_off + @as(usize, i) * entry_len;
++            if (rd64(s.bytes, e) == h and std.mem.eql(u8, s.nameAt(i), name)) return i;
++            slot = (slot + 1) & mask;
++        }
++        return null;
++    }
++
++    pub const Acc = struct {
++        flags: u32 = 0,
++        cats: u64 = 0,
++        matched: bool = false,
++    };
++
++    /// Collects the bits of every rule that covers `name`: the exact entry's
++    /// self bits, and the sub bits of every proper suffix cut at a dot.
++    pub fn matchName(s: *const Snapshot, name: []const u8, acc: *Acc) void {
++        if (s.find(name)) |i| {
++            const e = s.entries_off + @as(usize, i) * entry_len;
++            acc.flags |= rd32(s.bytes, e + 16);
++            acc.cats |= rd64(s.bytes, e + 24);
++            acc.matched = true;
++        }
++        var pos: usize = 0;
++        while (std.mem.indexOfScalarPos(u8, name, pos, '.')) |dot| {
++            const suffix = name[dot + 1 ..];
++            pos = dot + 1;
++            if (suffix.len == 0) break;
++            if (s.find(suffix)) |i| {
++                const e = s.entries_off + @as(usize, i) * entry_len;
++                acc.flags |= rd32(s.bytes, e + 20);
++                acc.cats |= rd64(s.bytes, e + 32);
++                acc.matched = true;
++            }
++        }
++    }
++
++    /// Collects the bits of every CIDR rule containing `a` (all prefixes).
++    pub fn matchAddr(s: *const Snapshot, a: addr.Address, acc: *Acc) void {
++        const v6 = a.family == .v6;
++        const n = if (v6) s.v6 else s.v4;
++        const rl: usize = if (v6) v6_len else v4_len;
++        const al: usize = if (v6) 16 else 4;
++        const base = if (v6) s.v6_off else s.v4_off;
++        // entries are sorted by (prefix, addr): binary search each prefix group
++        var lo: u32 = 0;
++        while (lo < n) {
++            const prefix = s.bytes[base + @as(usize, lo) * rl + al];
++            var hi = lo;
++            while (hi < n and s.bytes[base + @as(usize, hi) * rl + al] == prefix) hi += 1;
++            var masked: [16]u8 = @splat(0);
++            maskInto(a.bytes[0..al], prefix, masked[0..al]);
++            var l = lo;
++            var r = hi;
++            while (l < r) {
++                const mid = l + (r - l) / 2;
++                const rec = base + @as(usize, mid) * rl;
++                switch (std.mem.order(u8, s.bytes[rec..][0..al], masked[0..al])) {
++                    .eq => {
++                        acc.flags |= rd32(s.bytes, rec + al + 4);
++                        acc.cats |= rd64(s.bytes, rec + (if (v6) al + 8 else al + 12));
++                        acc.matched = true;
++                        break;
++                    },
++                    .lt => l = mid + 1,
++                    .gt => r = mid,
++                }
++            }
++            lo = hi;
++        }
++    }
++
++    /// The owner's priority order over the collected bits (levels 1, 2, 4,
++    /// 5, 6; the strict network rules are checked by the caller in between).
++    pub fn judge(s: *const Snapshot, acc: Acc) Verdict {
++        const m = acc.cats & s.mandatory;
++        if (m != 0) return .{ .block = true, .level = .mandatory, .category = firstBit(m) };
++        if (acc.flags & rule_parent_block != 0) return .{ .block = true, .level = .parent_block };
++        const allowed = acc.flags & rule_parent_allow != 0;
++        const c = acc.cats & s.enabled & ~s.mandatory;
++        if (c != 0 and !allowed) return .{ .block = true, .level = .category, .category = firstBit(c) };
++        if (allowed) return .{ .level = .parent_allow };
++        const ac = acc.cats & s.allow_cats;
++        if (ac != 0) return .{ .level = .parent_allow, .category = firstBit(ac) };
++        if (s.flags & flag_unknown_block != 0) return .{ .block = true, .level = .unknown };
++        return .{};
++    }
++
++    /// DNS time: the verdict for a (normalized) query name.
++    pub fn checkName(s: *const Snapshot, name: []const u8) Verdict {
++        var acc: Acc = .{};
++        s.matchName(name, &acc);
++        return s.judge(acc);
++    }
++
++    /// Flow time. `name` is the fake-IP name (null for a real address or an
++    /// expired mapping); `fake` says the destination is in the fake range.
++    pub fn checkFlow(s: *const Snapshot, name: ?[]const u8, dst: addr.Address, fake: bool, proto: u8, dport: u16) Verdict {
++        var acc: Acc = .{};
++        if (name) |n| s.matchName(n, &acc);
++        if (!fake) s.matchAddr(dst, &acc);
++        // mandatory security and the parent's locked blocklist come first
++        const m = acc.cats & s.mandatory;
++        if (m != 0) return .{ .block = true, .level = .mandatory, .category = firstBit(m) };
++        if (acc.flags & rule_parent_block != 0) return .{ .block = true, .level = .parent_block };
++        // strict mode (optional): encrypted / alternative resolvers and QUIC
++        if (s.strictBlocks(name != null, fake, proto, dport)) return .{ .block = true, .level = .strict };
++        return s.judge(acc);
++    }
++
++    fn strictBlocks(s: *const Snapshot, named: bool, fake: bool, proto: u8, dport: u16) bool {
++        const f = s.flags;
++        if (f & flag_strict_dot != 0 and dport == 853) return true;
++        if (f & flag_strict_quic != 0 and proto == 17 and dport == 443) return true;
++        if (f & flag_strict_alt_dns != 0 and dport == 53 and !fake) return true;
++        if (f & flag_strict_direct_ip != 0 and !named and !fake) return true;
++        return false;
++    }
++};
++
++fn firstBit(v: u64) u8 {
++    return @as(u8, @intCast(@ctz(v))) + 1;
++}
++
++fn maskInto(src: []const u8, prefix: u8, out: []u8) void {
++    var i: usize = 0;
++    while (i < src.len) : (i += 1) {
++        const bits_before = i * 8;
++        if (prefix >= bits_before + 8) {
++            out[i] = src[i];
++        } else if (prefix <= bits_before) {
++            out[i] = 0;
++        } else {
++            const keep: u3 = @intCast(prefix - bits_before);
++            out[i] = src[i] & ~(@as(u8, 0xff) >> keep);
++        }
++    }
++}
++
++/// Normalizes a name the way the snapshot builder does: ASCII lowercase, one
++/// trailing dot dropped, every label carrying non-ASCII UTF-8 punycode
++/// encoded ("xn--"). Returns null for a name that can never be a rule
++/// (empty, too long, bad UTF-8, a character outside [a-z0-9-_]).
++/// Limit: no Unicode case folding / NFC (IDNA mapping) — the builder applies
++/// java.net.IDN, so exotic mappings (e.g. "ß") may differ; DNS queries are
++/// already punycode on the wire, so this path only matters for odd callers.
++pub fn normalize(in: []const u8, out: *[max_name]u8) ?[]const u8 {
++    var name = in;
++    if (name.len > 0 and name[name.len - 1] == '.') name = name[0 .. name.len - 1];
++    if (name.len == 0) return null;
++    var n: usize = 0;
++    var it = std.mem.splitScalar(u8, name, '.');
++    var first = true;
++    while (it.next()) |label| {
++        if (label.len == 0) return null;
++        if (!first) {
++            if (n >= max_name) return null;
++            out[n] = '.';
++            n += 1;
++        }
++        first = false;
++        var ascii = true;
++        for (label) |c| if (c >= 0x80) {
++            ascii = false;
++            break;
++        };
++        if (ascii) {
++            if (n + label.len > max_name) return null;
++            for (label) |c| {
++                out[n] = std.ascii.toLower(c);
++                n += 1;
++            }
++        } else {
++            const w = punycodeLabel(label, out[n..]) orelse return null;
++            n += w;
++        }
++    }
++    const res = out[0..n];
++    if (!validName(res)) return null;
++    return res;
++}
++
++/// RFC 3492 encoding of one label with the "xn--" prefix; ASCII letters are
++/// lowercased first. Returns the bytes written or null.
++fn punycodeLabel(label: []const u8, out: []u8) ?usize {
++    var cps: [64]u21 = undefined;
++    var count: usize = 0;
++    var view = std.unicode.Utf8View.init(label) catch return null;
++    var it = view.iterator();
++    while (it.nextCodepoint()) |cp0| {
++        if (count == cps.len) return null;
++        const cp: u21 = if (cp0 < 0x80) std.ascii.toLower(@intCast(cp0)) else cp0;
++        cps[count] = cp;
++        count += 1;
++    }
++    const base: u32 = 36;
++    const tmin: u32 = 1;
++    const tmax: u32 = 26;
++    var o: usize = 0;
++    const put = struct {
++        fn f(buf: []u8, pos: *usize, c: u8) bool {
++            if (pos.* >= buf.len) return false;
++            buf[pos.*] = c;
++            pos.* += 1;
++            return true;
++        }
++    }.f;
++    for ("xn--") |c| if (!put(out, &o, c)) return null;
++    var basic: usize = 0;
++    for (cps[0..count]) |cp| if (cp < 0x80) {
++        if (!put(out, &o, @intCast(cp))) return null;
++        basic += 1;
++    };
++    var h: usize = basic;
++    if (basic > 0) if (!put(out, &o, '-')) return null;
++    var n: u32 = 0x80;
++    var delta: u32 = 0;
++    var bias: u32 = 72;
++    while (h < count) {
++        var m: u32 = std.math.maxInt(u32);
++        for (cps[0..count]) |cp| if (cp >= n and cp < m) {
++            m = cp;
++        };
++        delta +|= (m - n) * @as(u32, @intCast(h + 1));
++        n = m;
++        for (cps[0..count]) |cp| {
++            if (cp < n) delta += 1;
++            if (cp == n) {
++                var q = delta;
++                var k: u32 = base;
++                while (true) : (k += base) {
++                    const t = if (k <= bias) tmin else if (k >= bias + tmax) tmax else k - bias;
++                    if (q < t) break;
++                    if (!put(out, &o, digit(t + (q - t) % (base - t)))) return null;
++                    q = (q - t) / (base - t);
++                }
++                if (!put(out, &o, digit(q))) return null;
++                bias = adapt(delta, @intCast(h + 1), h == basic);
++                delta = 0;
++                h += 1;
++            }
++        }
++        delta += 1;
++        n += 1;
++    }
++    return o;
++}
++
++fn digit(d: u32) u8 {
++    return if (d < 26) @intCast('a' + d) else @intCast('0' + d - 26);
++}
++
++fn adapt(delta0: u32, numpoints: u32, first: bool) u32 {
++    var delta = if (first) delta0 / 700 else delta0 / 2;
++    delta += delta / numpoints;
++    var k: u32 = 0;
++    while (delta > ((36 - 1) * 26) / 2) : (k += 36) delta /= 36 - 1;
++    return k + (36 * delta) / (delta + 38);
++}
++
++/// The live, swappable snapshot of one engine.
++pub const State = struct {
++    const Loaded = struct {
++        bytes: []u8,
++        snap: Snapshot,
++        next: ?*Loaded = null,
++    };
++
++    allocator: ?std.mem.Allocator = null,
++    current: std.atomic.Value(?*Loaded) = .init(null),
++    readers: std.atomic.Value(u32) = .init(0),
++    writer: std.atomic.Value(bool) = .init(false),
++    /// bumped by zeptun_revalidate_flows; workers re-check their flows
++    epoch: std.atomic.Value(u32) = .init(0),
++    retired: ?*Loaded = null,
++    dns_blocked: std.atomic.Value(u64) = .init(0),
++    flow_blocked: std.atomic.Value(u64) = .init(0),
++    flows_killed: std.atomic.Value(u64) = .init(0),
++    swaps: std.atomic.Value(u64) = .init(0),
++    rejected: std.atomic.Value(u64) = .init(0),
++
++    pub const Counter = enum(u8) { dns_blocked = 0, flow_blocked = 1, flows_killed = 2, swaps = 3, rejected = 4, generation = 5, active = 6 };
++
++    pub fn counter(s: *State, c: Counter) u64 {
++        return switch (c) {
++            .dns_blocked => s.dns_blocked.load(.monotonic),
++            .flow_blocked => s.flow_blocked.load(.monotonic),
++            .flows_killed => s.flows_killed.load(.monotonic),
++            .swaps => s.swaps.load(.monotonic),
++            .rejected => s.rejected.load(.monotonic),
++            .generation => blk: {
++                const g = s.acquire();
++                defer s.release();
++                break :blk if (g) |snap| snap.generation else 0;
++            },
++            .active => @intFromBool(s.current.load(.seq_cst) != null),
++        };
++    }
++
++    pub inline fn active(s: *const State) bool {
++        return s.current.load(.monotonic) != null;
++    }
++
++    /// Reader side: pin the current snapshot for one short lookup. Every
++    /// acquire must be followed by release on the same thread.
++    pub fn acquire(s: *State) ?*const Snapshot {
++        _ = s.readers.fetchAdd(1, .seq_cst);
++        const p = s.current.load(.seq_cst) orelse return null;
++        return &p.snap;
++    }
++
++    pub fn release(s: *State) void {
++        _ = s.readers.fetchSub(1, .seq_cst);
++    }
++
++    fn lockWriter(s: *State) void {
++        while (s.writer.cmpxchgWeak(false, true, .acquire, .monotonic) != null) std.Thread.yield() catch {};
++    }
++
++    fn unlockWriter(s: *State) void {
++        s.writer.store(false, .release);
++    }
++
++    /// Validates `bytes` completely, copies them and swaps them in
++    /// atomically. An invalid snapshot is refused and the previous one stays
++    /// active. Null/empty clears the shield.
++    pub fn install(s: *State, bytes: ?[]const u8) Error!void {
++        const alloc = s.allocator orelse return error.OutOfMemory;
++        var fresh: ?*Loaded = null;
++        if (bytes) |b| if (b.len > 0) {
++            _ = Snapshot.parse(b) catch |err| {
++                _ = s.rejected.fetchAdd(1, .monotonic);
++                return err;
++            };
++            const copy = alloc.alloc(u8, b.len) catch return error.OutOfMemory;
++            errdefer alloc.free(copy);
++            @memcpy(copy, b);
++            const l = alloc.create(Loaded) catch return error.OutOfMemory;
++            // parse again on the private copy (the views must point into it)
++            l.* = .{ .bytes = copy, .snap = Snapshot.parse(copy) catch unreachable };
++            fresh = l;
++        };
++        s.lockWriter();
++        defer s.unlockWriter();
++        const old = s.current.swap(fresh, .seq_cst);
++        _ = s.swaps.fetchAdd(1, .monotonic);
++        if (old) |o| s.retire(o);
++    }
++
++    /// Frees `o` once no reader can still hold it. Readers pin only for one
++    /// lookup, so the wait is short; if it ever is not, the snapshot is kept
++    /// on the retired list and freed with the engine.
++    fn retire(s: *State, o: *Loaded) void {
++        var spins: u32 = 0;
++        while (s.readers.load(.seq_cst) != 0) : (spins += 1) {
++            if (spins > 200_000) {
++                o.next = s.retired;
++                s.retired = o;
++                return;
++            }
++            std.Thread.yield() catch {};
++        }
++        s.free(o);
++    }
++
++    fn free(s: *State, o: *Loaded) void {
++        const alloc = s.allocator.?;
++        alloc.free(o.bytes);
++        alloc.destroy(o);
++    }
++
++    pub fn bumpEpoch(s: *State) void {
++        _ = s.epoch.fetchAdd(1, .release);
++    }
++
++    pub fn deinit(s: *State) void {
++        if (s.allocator == null) return;
++        if (s.current.swap(null, .seq_cst)) |o| s.free(o);
++        var r = s.retired;
++        while (r) |o| {
++            r = o.next;
++            s.free(o);
++        }
++        s.retired = null;
++    }
++};
++
++// ---------------------------------------------------------------- tests ----
++
++/// Test-only builder producing the v1 format (the shipped builder is Kotlin).
++pub const TestBuilder = struct {
++    pub const Rule = struct { name: []const u8, self_flags: u32 = 0, sub_flags: u32 = 0, self_cats: u64 = 0, sub_cats: u64 = 0 };
++    pub const Cidr = struct { a: []const u8, prefix: u8, flags: u32 = 0, cats: u64 = 0 };
++
++    pub fn build(alloc: std.mem.Allocator, flags: u32, enabled: u64, mandatory: u64, allow_cats: u64, rules: []const Rule, v4: []const Cidr, v6: []const Cidr) ![]u8 {
++        var buckets: u32 = 1;
++        while (buckets < rules.len * 2 + 1) buckets *= 2;
++        var strings_len: usize = 0;
++        for (rules) |r| strings_len += r.name.len;
++        const total = header_len + rules.len * entry_len + buckets * 4 + v4.len * v4_len + v6.len * v6_len + strings_len;
++        const b = try alloc.alloc(u8, total);
++        @memset(b, 0);
++        @memcpy(b[0..8], magic);
++        std.mem.writeInt(u16, b[8..10], version, .little);
++        std.mem.writeInt(u16, b[10..12], header_len, .little);
++        std.mem.writeInt(u32, b[12..16], flags, .little);
++        std.mem.writeInt(u32, b[16..20], @intCast(total), .little);
++        std.mem.writeInt(u32, b[20..24], 7, .little);
++        std.mem.writeInt(u64, b[24..32], enabled, .little);
++        std.mem.writeInt(u64, b[32..40], mandatory, .little);
++        std.mem.writeInt(u64, b[40..48], allow_cats, .little);
++        std.mem.writeInt(u32, b[48..52], @intCast(rules.len), .little);
++        std.mem.writeInt(u32, b[52..56], buckets, .little);
++        std.mem.writeInt(u32, b[56..60], @intCast(v4.len), .little);
++        std.mem.writeInt(u32, b[60..64], @intCast(v6.len), .little);
++        std.mem.writeInt(u32, b[64..68], @intCast(strings_len), .little);
++        const eo = header_len;
++        const bo = eo + rules.len * entry_len;
++        const v4o = bo + buckets * 4;
++        const v6o = v4o + v4.len * v4_len;
++        const so = v6o + v6.len * v6_len;
++        var soff: usize = 0;
++        for (rules, 0..) |r, i| {
++            const e = eo + i * entry_len;
++            const h = fnv1a64(r.name);
++            std.mem.writeInt(u64, b[e..][0..8], h, .little);
++            std.mem.writeInt(u32, b[e + 8 ..][0..4], @intCast(soff), .little);
++            std.mem.writeInt(u16, b[e + 12 ..][0..2], @intCast(r.name.len), .little);
++            std.mem.writeInt(u32, b[e + 16 ..][0..4], r.self_flags, .little);
++            std.mem.writeInt(u32, b[e + 20 ..][0..4], r.sub_flags, .little);
++            std.mem.writeInt(u64, b[e + 24 ..][0..8], r.self_cats, .little);
++            std.mem.writeInt(u64, b[e + 32 ..][0..8], r.sub_cats, .little);
++            @memcpy(b[so + soff ..][0..r.name.len], r.name);
++            soff += r.name.len;
++            var slot: usize = @intCast(h & (buckets - 1));
++            while (std.mem.readInt(u32, b[bo + slot * 4 ..][0..4], .little) != 0) slot = (slot + 1) & (buckets - 1);
++            std.mem.writeInt(u32, b[bo + slot * 4 ..][0..4], @intCast(i + 1), .little);
++        }
++        for (v4, 0..) |c, i| {
++            const r = v4o + i * v4_len;
++            @memcpy(b[r..][0..4], c.a[0..4]);
++            b[r + 4] = c.prefix;
++            std.mem.writeInt(u32, b[r + 8 ..][0..4], c.flags, .little);
++            std.mem.writeInt(u64, b[r + 16 ..][0..8], c.cats, .little);
++        }
++        for (v6, 0..) |c, i| {
++            const r = v6o + i * v6_len;
++            @memcpy(b[r..][0..16], c.a[0..16]);
++            b[r + 16] = c.prefix;
++            std.mem.writeInt(u32, b[r + 20 ..][0..4], c.flags, .little);
++            std.mem.writeInt(u64, b[r + 24 ..][0..8], c.cats, .little);
++        }
++        seal(b);
++        return b;
++    }
++
++    pub fn seal(b: []u8) void {
++        @memset(b[96..128], 0);
++        var digest: [32]u8 = undefined;
++        std.crypto.hash.sha2.Sha256.hash(b, &digest, .{});
++        @memcpy(b[96..128], &digest);
++    }
++};
++
++const cat_adult: u64 = 1 << 2;
++const cat_malware: u64 = 1 << 0;
++const cat_phishing: u64 = 1 << 1;
++const cat_social: u64 = 1 << 5;
++
++fn sampleSnapshot(alloc: std.mem.Allocator, flags: u32) ![]u8 {
++    const rules = [_]TestBuilder.Rule{
++        // root rule: the name and every subdomain
++        .{ .name = "example.com", .self_cats = cat_adult, .sub_cats = cat_adult },
++        // exact rule only
++        .{ .name = "exact.test", .self_flags = rule_parent_block },
++        // wildcard: subdomains only
++        .{ .name = "wild.test", .sub_flags = rule_parent_block },
++        .{ .name = "evil.test", .self_cats = cat_malware, .sub_cats = cat_malware },
++        .{ .name = "safe.example.com", .self_flags = rule_parent_allow, .sub_flags = rule_parent_allow },
++        .{ .name = "phish.example.com", .self_flags = rule_parent_allow, .self_cats = cat_phishing },
++        .{ .name = "xn--mnchen-3ya.de", .self_flags = rule_parent_block, .sub_flags = rule_parent_block },
++        .{ .name = "kids.test", .self_flags = rule_parent_allow, .sub_flags = rule_parent_allow },
++    };
++    const v4 = [_]TestBuilder.Cidr{
++        .{ .a = &[_]u8{ 1, 1, 1, 1 }, .prefix = 32, .cats = cat_social },
++        .{ .a = &[_]u8{ 10, 0, 0, 0 }, .prefix = 8, .flags = rule_parent_block },
++        .{ .a = &[_]u8{ 203, 0, 113, 0 }, .prefix = 24, .flags = rule_parent_allow },
++    };
++    // sorted by (prefix, addr)
++    var sorted4 = v4;
++    std.mem.sort(TestBuilder.Cidr, &sorted4, {}, struct {
++        fn lt(_: void, a: TestBuilder.Cidr, b: TestBuilder.Cidr) bool {
++            if (a.prefix != b.prefix) return a.prefix < b.prefix;
++            return std.mem.order(u8, a.a, b.a) == .lt;
++        }
++    }.lt);
++    var six: [16]u8 = @splat(0);
++    six[0] = 0x20;
++    six[1] = 0x01;
++    six[2] = 0x0d;
++    six[3] = 0xb8;
++    const v6 = [_]TestBuilder.Cidr{.{ .a = &six, .prefix = 32, .flags = rule_parent_block }};
++    return TestBuilder.build(alloc, flags, cat_adult | cat_social | cat_malware | cat_phishing, cat_malware | cat_phishing, 0, &rules, &sorted4, &v6);
++}
++
++test "shield: exact, root, wildcard and strict label boundary" {
++    const b = try sampleSnapshot(std.testing.allocator, 0);
++    defer std.testing.allocator.free(b);
++    const s = try Snapshot.parse(b);
++    // root rule covers the apex and subdomains
++    try std.testing.expect(s.checkName("example.com").block);
++    try std.testing.expect(s.checkName("a.b.example.com").block);
++    try std.testing.expectEqual(Level.category, s.checkName("www.example.com").level);
++    // label boundary
++    try std.testing.expect(!s.checkName("notexample.com").block);
++    try std.testing.expect(!s.checkName("example.com.evil").block);
++    try std.testing.expect(!s.checkName("com").block);
++    // exact only
++    try std.testing.expect(s.checkName("exact.test").block);
++    try std.testing.expect(!s.checkName("www.exact.test").block);
++    // wildcard: subdomains, not the apex
++    try std.testing.expect(!s.checkName("wild.test").block);
++    try std.testing.expect(s.checkName("x.wild.test").block);
++    try std.testing.expectEqual(Level.parent_block, s.checkName("a.x.wild.test").level);
++}
++
++test "shield: priority — mandatory > blocklist > categories > allowlist > unknown" {
++    const b = try sampleSnapshot(std.testing.allocator, 0);
++    defer std.testing.allocator.free(b);
++    const s = try Snapshot.parse(b);
++    // allowlist overrides the adult category for its subtree
++    const ok = s.checkName("safe.example.com");
++    try std.testing.expect(!ok.block);
++    try std.testing.expectEqual(Level.parent_allow, ok.level);
++    try std.testing.expect(!s.checkName("cdn.safe.example.com").block);
++    // the allowlist never overrides mandatory security
++    const ph = s.checkName("phish.example.com");
++    try std.testing.expect(ph.block);
++    try std.testing.expectEqual(Level.mandatory, ph.level);
++    try std.testing.expectEqual(@as(u8, 2), ph.category);
++    try std.testing.expectEqual(Level.mandatory, s.checkName("dl.evil.test").level);
++    // unknown domains pass unless the profile blocks them
++    try std.testing.expect(!s.checkName("unknown.org").block);
++    try std.testing.expectEqual(Level.none, s.checkName("unknown.org").level);
++}
++
++test "shield: allowlist-only profile blocks unknown domains" {
++    const b = try sampleSnapshot(std.testing.allocator, flag_unknown_block);
++    defer std.testing.allocator.free(b);
++    const s = try Snapshot.parse(b);
++    try std.testing.expectEqual(Level.unknown, s.checkName("unknown.org").level);
++    try std.testing.expect(s.checkName("unknown.org").block);
++    try std.testing.expect(!s.checkName("kids.test").block);
++    try std.testing.expect(!s.checkName("games.kids.test").block);
++    try std.testing.expect(s.checkName("notkids.test").block);
++}
++
++test "shield: IDN names normalize to punycode and match" {
++    const b = try sampleSnapshot(std.testing.allocator, 0);
++    defer std.testing.allocator.free(b);
++    const s = try Snapshot.parse(b);
++    var buf: [max_name]u8 = undefined;
++    const n = normalize("WWW.München.DE.", &buf).?;
++    try std.testing.expectEqualStrings("www.xn--mnchen-3ya.de", n);
++    try std.testing.expect(s.checkName(n).block);
++    try std.testing.expect(s.checkName("xn--mnchen-3ya.de").block);
++    var b2: [max_name]u8 = undefined;
++    try std.testing.expectEqualStrings("xn--bcher-kva.example", normalize("bücher.example", &b2).?);
++    try std.testing.expectEqualStrings("xn--fiqs8s", normalize("中国", &b2).?);
++    try std.testing.expect(normalize("bad..name", &b2) == null);
++    try std.testing.expect(normalize("", &b2) == null);
++    try std.testing.expect(normalize("sp ace.com", &b2) == null);
++}
++
++test "shield: IPv4 and IPv6 CIDR matching" {
++    const b = try sampleSnapshot(std.testing.allocator, 0);
++    defer std.testing.allocator.free(b);
++    const s = try Snapshot.parse(b);
++    const v4 = try addr.Address.parse("10.20.30.40");
++    try std.testing.expectEqual(Level.parent_block, s.checkFlow(null, v4, false, 6, 443).level);
++    try std.testing.expect(!s.checkFlow(null, try addr.Address.parse("11.0.0.1"), false, 6, 443).block);
++    try std.testing.expectEqual(Level.category, s.checkFlow(null, try addr.Address.parse("1.1.1.1"), false, 6, 443).level);
++    try std.testing.expect(!s.checkFlow(null, try addr.Address.parse("1.1.1.2"), false, 6, 443).block);
++    try std.testing.expectEqual(Level.parent_allow, s.checkFlow(null, try addr.Address.parse("203.0.113.77"), false, 6, 443).level);
++    try std.testing.expect(s.checkFlow(null, try addr.Address.parse("2001:db8::1"), false, 6, 443).block);
++    try std.testing.expect(!s.checkFlow(null, try addr.Address.parse("2001:db9::1"), false, 6, 443).block);
++    // a fake address never matches the CIDR rules (its real IP is unknown)
++    try std.testing.expect(!s.checkFlow(null, v4, true, 6, 443).block);
++    // flow time re-checks the fake-IP name (cached fake IPs can not bypass)
++    try std.testing.expect(s.checkFlow("www.example.com", try addr.Address.parse("198.18.0.9"), true, 6, 443).block);
++}
++
++test "shield: strict mode blocks DoT/DoQ, QUIC, alternative DNS and direct IPs" {
++    const b = try sampleSnapshot(std.testing.allocator, flag_strict_dot | flag_strict_quic | flag_strict_alt_dns | flag_strict_direct_ip);
++    defer std.testing.allocator.free(b);
++    const s = try Snapshot.parse(b);
++    const real = try addr.Address.parse("9.9.9.9");
++    const fake = try addr.Address.parse("198.18.0.5");
++    try std.testing.expectEqual(Level.strict, s.checkFlow("dns.example", fake, true, 6, 853).level);
++    try std.testing.expectEqual(Level.strict, s.checkFlow("x.org", fake, true, 17, 443).level);
++    try std.testing.expect(!s.checkFlow("x.org", fake, true, 6, 443).block);
++    try std.testing.expectEqual(Level.strict, s.checkFlow(null, real, false, 17, 53).level);
++    try std.testing.expectEqual(Level.strict, s.checkFlow(null, real, false, 6, 443).level);
++    // strict off: none of these are blocked
++    const b0 = try sampleSnapshot(std.testing.allocator, 0);
++    defer std.testing.allocator.free(b0);
++    const s0 = try Snapshot.parse(b0);
++    try std.testing.expect(!s0.checkFlow("dns.example", fake, true, 6, 853).block);
++    try std.testing.expect(!s0.checkFlow(null, real, false, 17, 443).block);
++}
++
++test "shield: invalid snapshots are rejected" {
++    const alloc = std.testing.allocator;
++    const b = try sampleSnapshot(alloc, 0);
++    defer alloc.free(b);
++    _ = try Snapshot.parse(b);
++    try std.testing.expectError(error.TooShort, Snapshot.parse(b[0..64]));
++    try std.testing.expectError(error.BadLength, Snapshot.parse(b[0 .. b.len - 1]));
++    const c = try alloc.dupe(u8, b);
++    defer alloc.free(c);
++    // one flipped payload bit breaks the checksum
++    c[c.len - 1] ^= 1;
++    try std.testing.expectError(error.BadChecksum, Snapshot.parse(c));
++    c[c.len - 1] ^= 1;
++    _ = try Snapshot.parse(c);
++    // bad magic / version
++    c[0] = 'X';
++    try std.testing.expectError(error.BadMagic, Snapshot.parse(c));
++    c[0] = 'A';
++    c[8] = 9;
++    try std.testing.expectError(error.BadVersion, Snapshot.parse(c));
++    c[8] = 1;
++    // a resealed snapshot with a broken entry hash is still refused
++    std.mem.writeInt(u64, c[header_len..][0..8], 1234, .little);
++    TestBuilder.seal(c);
++    try std.testing.expectError(error.BadEntry, Snapshot.parse(c));
++    // CIDR with host bits set
++    const bad = [_]TestBuilder.Cidr{.{ .a = &[_]u8{ 10, 0, 0, 1 }, .prefix = 8 }};
++    const cb = try TestBuilder.build(alloc, 0, 0, 0, 0, &.{}, &bad, &.{});
++    defer alloc.free(cb);
++    try std.testing.expectError(error.BadCidr, Snapshot.parse(cb));
++    // uppercase / invalid names are refused (the builder normalizes)
++    const up = [_]TestBuilder.Rule{.{ .name = "Example.com", .self_flags = rule_parent_block }};
++    const ub = try TestBuilder.build(alloc, 0, 0, 0, 0, &up, &.{}, &.{});
++    defer alloc.free(ub);
++    try std.testing.expectError(error.BadEntry, Snapshot.parse(ub));
++    // unknown header flags
++    const fb = try TestBuilder.build(alloc, 1 << 20, 0, 0, 0, &.{}, &.{}, &.{});
++    defer alloc.free(fb);
++    try std.testing.expectError(error.BadHeader, Snapshot.parse(fb));
++}
++
++test "shield: atomic install keeps the previous snapshot on a bad one" {
++    const alloc = std.testing.allocator;
++    var st: State = .{ .allocator = alloc };
++    defer st.deinit();
++    try std.testing.expect(!st.active());
++    const b = try sampleSnapshot(alloc, 0);
++    defer alloc.free(b);
++    try st.install(b);
++    try std.testing.expect(st.active());
++    {
++        const s = st.acquire().?;
++        defer st.release();
++        try std.testing.expect(s.checkName("example.com").block);
++    }
++    // corrupt copy is refused, the old one stays
++    const c = try alloc.dupe(u8, b);
++    defer alloc.free(c);
++    c[200] ^= 0xff;
++    try std.testing.expectError(error.BadChecksum, st.install(c));
++    try std.testing.expectEqual(@as(u64, 1), st.counter(.rejected));
++    {
++        const s = st.acquire().?;
++        defer st.release();
++        try std.testing.expect(s.checkName("www.example.com").block);
++    }
++    // replace with an allowlist-only snapshot
++    const b2 = try sampleSnapshot(alloc, flag_unknown_block);
++    defer alloc.free(b2);
++    try st.install(b2);
++    {
++        const s = st.acquire().?;
++        defer st.release();
++        try std.testing.expect(s.checkName("unknown.org").block);
++    }
++    // the installed copy is private: mutating the caller's buffer changes nothing
++    b2[0] = 'Z';
++    {
++        const s = st.acquire().?;
++        defer st.release();
++        try std.testing.expect(s.checkName("unknown.org").block);
++    }
++    // clear
++    try st.install(null);
++    try std.testing.expect(!st.active());
++    try std.testing.expect(st.acquire() == null);
++    st.release();
++    try std.testing.expectEqual(@as(u64, 3), st.counter(.swaps));
++}
++
++test "shield: verdict encoding" {
++    const v: Verdict = .{ .block = true, .level = .category, .category = 3 };
++    try std.testing.expectEqual(@as(u32, 0x8003_0401), v.encode());
++    try std.testing.expectEqual(@as(u32, 0x8000_0000), Verdict.allow.encode());
++}
++
++test "shield: empty snapshot is valid and allows everything" {
++    const alloc = std.testing.allocator;
++    const b = try TestBuilder.build(alloc, 0, 0, 0, 0, &.{}, &.{}, &.{});
++    defer alloc.free(b);
++    const s = try Snapshot.parse(b);
++    try std.testing.expect(!s.checkName("anything.com").block);
++}
++
++test "shield: Kotlin golden snapshot (ShieldSnapshotTest) parses with identical verdicts" {
++    // Built by the app's ShieldSnapshot.build (android/.../ShieldSnapshotTest
++    // golden(): sha256 e339ca8cd8b7ad32e0e137094e05be2ae39f2511613e2b6525c2c5cab79ba68b).
++    const hex = "4145544853484c440100800001000000770100002a000000070000000000000003000000000000000020000000000000030000000800000001000000010000002700000000000000000000000000000000000000000000000000000000000000e9f4a0e7b41ad2e04f81203788072c266c778736b432045cd6845b00a5561327732449d209d99163000000000d0000000000000000000000040000000000000004000000000000002bc8e844683a7a950d0000000c00000000000000000000000100000000000000010000000000000001d6ba9765c14193190000000e00000002000000020000000000000000000000000000000000000000000000030000000000000001000000020000000000000000000000000000000a000000080000000100000000000000000000000000000020010db8000000000000000000000000200000000100000000000000000000006164756c742e6578616d706c656576696c2e6578616d706c657363686f6f6c2e6578616d706c65";
++    var bytes: [hex.len / 2]u8 = undefined;
++    _ = try std.fmt.hexToBytes(&bytes, hex);
++    var digest: [32]u8 = undefined;
++    std.crypto.hash.sha2.Sha256.hash(&bytes, &digest, .{});
++    var want: [32]u8 = undefined;
++    _ = try std.fmt.hexToBytes(&want, "e339ca8cd8b7ad32e0e137094e05be2ae39f2511613e2b6525c2c5cab79ba68b");
++    try std.testing.expectEqualSlices(u8, &want, &digest);
++    const s = try Snapshot.parse(&bytes);
++    try std.testing.expectEqual(@as(u32, 42), s.generation);
++    try std.testing.expectEqual(@as(u32, 3), s.domains);
++    try std.testing.expect(s.checkName("www.adult.example").block);
++    try std.testing.expectEqual(Level.category, s.checkName("www.adult.example").level);
++    try std.testing.expect(!s.checkName("a.school.example").block);
++    try std.testing.expectEqual(Level.parent_allow, s.checkName("a.school.example").level);
++    try std.testing.expectEqual(Level.unknown, s.checkName("random.test").level);
++    try std.testing.expectEqual(Level.mandatory, s.checkName("evil.example").level);
++    try std.testing.expect(s.checkFlow(null, try addr.Address.parse("10.1.2.3"), false, 6, 80).block);
++    try std.testing.expect(s.checkFlow(null, try addr.Address.parse("2001:db8::9"), false, 6, 80).block);
++}
 diff --git a/src/flow/verdict.zig b/src/flow/verdict.zig
-index 4bcf193..51fb156 100644
+index 4bcf193..7420f23 100644
 --- a/src/flow/verdict.zig
 +++ b/src/flow/verdict.zig
-@@ -19,14 +19,109 @@ pub const Flow = extern struct {
+@@ -19,14 +19,138 @@ pub const Flow = extern struct {
  
  pub const Fn = *const fn (ctx: ?*anyopaque, flow: *const Flow) callconv(.c) u32;
  
@@ -171,6 +1408,16 @@ index 4bcf193..51fb156 100644
 +pub const RouteFn = *const fn (ctx: ?*anyopaque, flow: *const Flow, name: ?[*]const u8, name_len: usize) callconv(.c) u32;
 +
 +pub const route_base: u32 = 16;
++
++/// AETHONE Family Shield: the route callback that also receives the native
++/// shield verdict of the flow (flow/shield.zig Verdict.encode; 0 = no shield
++/// snapshot). When installed it is used instead of RouteFn.
++pub const ShieldRouteFn = *const fn (ctx: ?*anyopaque, flow: *const Flow, name: ?[*]const u8, name_len: usize, shield: u32) callconv(.c) u32;
++
++/// AETHONE Family Shield: asked for every live flow after
++/// zeptun_revalidate_flows. Non-zero = abort the flow (TCP RST / UDP close),
++/// 0 = keep it untouched.
++pub const RevalidateFn = *const fn (ctx: ?*anyopaque, flow: *const Flow, name: ?[*]const u8, name_len: usize, shield: u32) callconv(.c) u32;
 +
 +/// AETHONE traffic analytics: one metered byte report for a proxied flow.
 +/// `up` is payload the app sent that zeptun wrote to the flow's SOCKS5
@@ -234,6 +1481,10 @@ index 4bcf193..51fb156 100644
 +    route_ctx: ?*anyopaque = null,
 +    meter_call: ?MeterFn = null,
 +    meter_ctx: ?*anyopaque = null,
++    shield_route_call: ?ShieldRouteFn = null,
++    shield_route_ctx: ?*anyopaque = null,
++    reval_call: ?RevalidateFn = null,
++    reval_ctx: ?*anyopaque = null,
 +
 +    pub inline fn metering(j: *const Judge) bool {
 +        return j.meter_call != null;
@@ -256,20 +1507,35 @@ index 4bcf193..51fb156 100644
      }
  
 +    pub inline fn routing(j: *const Judge) bool {
-+        return j.route_call != null;
++        return j.route_call != null or j.shield_route_call != null;
 +    }
 +
-+    pub fn askRoute(j: *const Judge, route_count: u8, proto: u8, v6: bool, src: []const u8, src_port: u16, dst: []const u8, dst_port: u16, name: ?[]const u8) Routed {
-+        const f = j.route_call orelse return .{ .action = .proxy };
++    /// `shield` = the native Family Shield verdict (0 when no snapshot);
++    /// only the shield-aware callback sees it.
++    pub fn askRoute(j: *const Judge, route_count: u8, proto: u8, v6: bool, src: []const u8, src_port: u16, dst: []const u8, dst_port: u16, name: ?[]const u8, shield: u32) Routed {
 +        const flow = makeFlow(proto, v6, src, src_port, dst, dst_port);
++        if (j.shield_route_call) |g| {
++            const v = if (name) |n| g(j.shield_route_ctx, &flow, n.ptr, n.len, shield) else g(j.shield_route_ctx, &flow, null, 0, shield);
++            return decodeRoute(v, route_count);
++        }
++        const f = j.route_call orelse return .{ .action = .proxy };
 +        const v = if (name) |n| f(j.route_ctx, &flow, n.ptr, n.len) else f(j.route_ctx, &flow, null, 0);
 +        return decodeRoute(v, route_count);
++    }
++
++    /// AETHONE Family Shield: asks the app layer whether a live flow must be
++    /// aborted after a rule change (false when no callback is installed).
++    pub fn askRevalidate(j: *const Judge, proto: u8, v6: bool, src: []const u8, src_port: u16, dst: []const u8, dst_port: u16, name: ?[]const u8, shield: u32) bool {
++        const f = j.reval_call orelse return false;
++        const flow = makeFlow(proto, v6, src, src_port, dst, dst_port);
++        const v = if (name) |n| f(j.reval_ctx, &flow, n.ptr, n.len, shield) else f(j.reval_ctx, &flow, null, 0, shield);
++        return v != 0;
 +    }
 +
      pub fn ask(j: *const Judge, proto: u8, v6: bool, src: []const u8, src_port: u16, dst: []const u8, dst_port: u16) Action {
          const f = j.call orelse return .proxy;
          var flow: Flow = .{
-@@ -70,3 +165,57 @@ test "judge maps verdicts and passes the flow" {
+@@ -70,3 +194,97 @@ test "judge maps verdicts and passes the flow" {
      try std.testing.expectEqual(Action.proxy, j.ask(6, true, &[_]u8{0} ** 16, 1, &[_]u8{0} ** 16, 2));
      try std.testing.expectEqual(@as(u8, 6), Seen.last.family);
  }
@@ -298,7 +1564,7 @@ index 4bcf193..51fb156 100644
 +        }
 +    };
 +    const j: Judge = .{ .route_call = Seen.answer };
-+    const r = j.askRoute(2, 6, false, &[_]u8{ 10, 0, 0, 2 }, 1, &[_]u8{ 198, 18, 0, 5 }, 443, "example.com");
++    const r = j.askRoute(2, 6, false, &[_]u8{ 10, 0, 0, 2 }, 1, &[_]u8{ 198, 18, 0, 5 }, 443, "example.com", 0);
 +    try std.testing.expectEqual(@as(u8, 2), r.route);
 +    try std.testing.expectEqual(@as(usize, 11), Seen.name_len);
 +    try std.testing.expectEqual(@as(u8, 'e'), Seen.first);
@@ -327,8 +1593,48 @@ index 4bcf193..51fb156 100644
 +    try std.testing.expectEqual(@as(u16, 40000), Seen.last.flow.source_port);
 +    try std.testing.expectEqualSlices(u8, &[_]u8{ 198, 18, 0, 9 }, Seen.last.flow.destination[0..4]);
 +}
++
++test "shield route callback receives the native verdict and wins over the plain one" {
++    const Seen = struct {
++        var verdict: u32 = 0;
++        var plain_calls: usize = 0;
++        fn plain(ctx: ?*anyopaque, flow: *const Flow, name: ?[*]const u8, len: usize) callconv(.c) u32 {
++            _ = ctx;
++            _ = flow;
++            _ = name;
++            _ = len;
++            plain_calls += 1;
++            return 0;
++        }
++        fn shielded(ctx: ?*anyopaque, flow: *const Flow, name: ?[*]const u8, len: usize, shield: u32) callconv(.c) u32 {
++            _ = ctx;
++            _ = flow;
++            _ = name;
++            _ = len;
++            verdict = shield;
++            return 3;
++        }
++        fn kill(ctx: ?*anyopaque, flow: *const Flow, name: ?[*]const u8, len: usize, shield: u32) callconv(.c) u32 {
++            _ = ctx;
++            _ = name;
++            _ = len;
++            _ = shield;
++            return if (flow.destination_port == 443) 1 else 0;
++        }
++    };
++    var j: Judge = .{ .route_call = Seen.plain, .shield_route_call = Seen.shielded };
++    try std.testing.expect(j.routing());
++    const r = j.askRoute(0, 6, false, &[_]u8{ 10, 0, 0, 2 }, 1, &[_]u8{ 198, 18, 0, 5 }, 443, "x.test", 0x8000_0401);
++    try std.testing.expectEqual(Action.reject, r.action);
++    try std.testing.expectEqual(@as(u32, 0x8000_0401), Seen.verdict);
++    try std.testing.expectEqual(@as(usize, 0), Seen.plain_calls);
++    try std.testing.expect(!j.askRevalidate(6, false, &[_]u8{ 10, 0, 0, 2 }, 1, &[_]u8{ 1, 1, 1, 1 }, 443, null, 0));
++    j.reval_call = Seen.kill;
++    try std.testing.expect(j.askRevalidate(6, false, &[_]u8{ 10, 0, 0, 2 }, 1, &[_]u8{ 1, 1, 1, 1 }, 443, null, 0));
++    try std.testing.expect(!j.askRevalidate(6, false, &[_]u8{ 10, 0, 0, 2 }, 1, &[_]u8{ 1, 1, 1, 1 }, 80, null, 0));
++}
 diff --git a/src/handler/handler.zig b/src/handler/handler.zig
-index 09f5121..23e8260 100644
+index 09f5121..e73a809 100644
 --- a/src/handler/handler.zig
 +++ b/src/handler/handler.zig
 @@ -28,6 +28,8 @@ pub fn Dial(comptime W: type) type {
@@ -340,7 +1646,7 @@ index 09f5121..23e8260 100644
          target: addr.Endpoint = .{},
          bound: ?addr.Endpoint = null,
          owner: Owner = .tcp,
-@@ -353,6 +355,22 @@ pub fn Handler(comptime W: type) type {
+@@ -353,6 +355,29 @@ pub fn Handler(comptime W: type) type {
              return h.kind == .socks5 and build_options.enable_socks5;
          }
  
@@ -360,10 +1666,17 @@ index 09f5121..23e8260 100644
 +            return t.nameOf(a, out);
 +        }
 +
++        /// AETHONE Family Shield: whether an address lies in the fake-IP range
++        /// (its real address is unknown, so CIDR rules never apply to it).
++        pub fn isFake(h: *Self, a: addr.Address) bool {
++            const t = h.fake orelse return false;
++            return t.contains(a);
++        }
++
          fn openSocket(h: *Self, w: *W, family: addr.Family, out: *sys.fd_t) sys.Errno {
              const fd = sys.socket(family, .tcp) catch |err| {
                  log.debug("dial socket failed: {t}", .{err});
-@@ -374,7 +392,7 @@ pub fn Handler(comptime W: type) type {
+@@ -374,7 +399,7 @@ pub fn Handler(comptime W: type) type {
  
          fn openFresh(h: *Self, w: *W, d: *D) sys.Errno {
              const b = d.buf.?;
@@ -372,7 +1685,7 @@ index 09f5121..23e8260 100644
              const e = h.openSocket(w, server.addr.family, &d.fd);
              if (e != .success) return e;
              if (h.cfg.handler.preserve_dscp) direct.setDscp(d.fd, server.addr.family, d.tos);
-@@ -403,6 +421,7 @@ pub fn Handler(comptime W: type) type {
+@@ -403,6 +428,7 @@ pub fn Handler(comptime W: type) type {
              d.cmd = if (owner != .udp) .connect else if (h.cfg.handler.socks5.udp_mode == .tcp) .fwd_udp else .udp_associate;
              if (!h.takeBuf(d)) return h.finish(w, d, .nobufs);
              const b = d.buf.?;
@@ -380,7 +1693,7 @@ index 09f5121..23e8260 100644
              if (owner != .udp) {
                  if (h.fake) |t| {
                      if (t.indexOf(target.addr) != null) {
-@@ -420,7 +439,7 @@ pub fn Handler(comptime W: type) type {
+@@ -420,7 +446,7 @@ pub fn Handler(comptime W: type) type {
                      }
                  }
              }
@@ -389,7 +1702,7 @@ index 09f5121..23e8260 100644
                  h.noteDemand(.tcp, w.now());
                  if (h.takeWarm(w, .tcp)) |taken| {
                      const fd = taken.fd;
-@@ -445,7 +464,7 @@ pub fn Handler(comptime W: type) type {
+@@ -445,7 +471,7 @@ pub fn Handler(comptime W: type) type {
              if (e != .success) return h.finish(w, d, e);
              w.loop.submit(&b.c);
              w.wheel.schedule(&b.timer, w.now() + h.connect_timeout_ms);
@@ -398,7 +1711,7 @@ index 09f5121..23e8260 100644
          }
  
          fn addrEql(a: ?addr.Address, b: addr.Address) bool {
-@@ -1039,11 +1058,17 @@ pub fn Handler(comptime W: type) type {
+@@ -1039,11 +1065,17 @@ pub fn Handler(comptime W: type) type {
          }
  
          pub fn udpOpen(h: *Self, w: *W, s: *U, family: addr.Family, tos: u8, bypass: bool) bool {
@@ -417,7 +1730,7 @@ index 09f5121..23e8260 100644
                      h.noteDemand(.udp, w.now());
                      const taken = h.takeWarm(w, .udp);
                      defer h.refill(w);
-@@ -1053,7 +1078,7 @@ pub fn Handler(comptime W: type) type {
+@@ -1053,7 +1085,7 @@ pub fn Handler(comptime W: type) type {
                          return true;
                      }
                  }
@@ -426,7 +1739,7 @@ index 09f5121..23e8260 100644
                  return true;
              }
              const fd = sys.socket(family, .udp) catch return false;
-@@ -1102,8 +1127,9 @@ pub fn Handler(comptime W: type) type {
+@@ -1102,8 +1134,9 @@ pub fn Handler(comptime W: type) type {
                  h.armRecv(w, s);
                  return;
              }
@@ -439,10 +1752,10 @@ index 09f5121..23e8260 100644
                  if (ua.family == relay.addr.family) relay.addr = ua;
              }
 diff --git a/src/jni/zeptun_jni.c b/src/jni/zeptun_jni.c
-index ee56f42..63ac587 100644
+index ee56f42..58a8b9c 100644
 --- a/src/jni/zeptun_jni.c
 +++ b/src/jni/zeptun_jni.c
-@@ -15,9 +15,93 @@ typedef struct {
+@@ -15,10 +15,154 @@ typedef struct {
      jmethodID protect;
      pthread_t thread;
      int running;
@@ -451,9 +1764,20 @@ index ee56f42..63ac587 100644
 +    jmethodID route;
 +    /* AETHONE traffic analytics (optional: absent method = no meter) */
 +    jmethodID meter;
++    /* AETHONE Family Shield (optional: absent methods = plain route only) */
++    jmethodID route_shield;
++    jmethodID revalidate;
  } Context;
  
  static Context context;
+ 
++/* AETHONE Family Shield: the snapshot the app installed, kept here so a
++ * (re)start applies it BEFORE the engine thread runs (no unfiltered window),
++ * and swapped live into a running engine. Guarded by shield_lock, which also
++ * serialises start/stop against the shield calls. */
++static pthread_mutex_t shield_lock = PTHREAD_MUTEX_INITIALIZER;
++static uint8_t *pending_snapshot = NULL;
++static size_t pending_len = 0;
 +static pthread_key_t route_key;
 +static pthread_once_t route_once = PTHREAD_ONCE_INIT;
 +
@@ -511,6 +1835,55 @@ index ee56f42..63ac587 100644
 +    return answer;
 +}
 +
++/* Shared body of the shield-aware route and revalidate calls: the Kotlin
++ * signature is (II[BI[BILjava/lang/String;I)I for both. */
++static uint32_t call_shield_method(jmethodID method, const ZeptunFlow *flow, const char *name, size_t name_len, uint32_t shield, uint32_t on_error) {
++    if (context.vm == NULL || context.route_class == NULL || method == NULL) return on_error;
++    JNIEnv *env = route_env();
++    if (env == NULL) return on_error;
++    jint alen = flow->family == 6 ? 16 : 4;
++    jbyteArray src = (*env)->NewByteArray(env, alen);
++    jbyteArray dst = (*env)->NewByteArray(env, alen);
++    jstring host = NULL;
++    uint32_t answer = on_error;
++    if (src == NULL || dst == NULL) goto done;
++    (*env)->SetByteArrayRegion(env, src, 0, alen, (const jbyte *)flow->source);
++    (*env)->SetByteArrayRegion(env, dst, 0, alen, (const jbyte *)flow->destination);
++    if (name != NULL && name_len > 0 && name_len < 256) {
++        char buf[256];
++        memcpy(buf, name, name_len);
++        buf[name_len] = 0;
++        host = (*env)->NewStringUTF(env, buf);
++    }
++    jint v = (*env)->CallStaticIntMethod(env, context.route_class, method,
++                                         (jint)flow->protocol, (jint)flow->family,
++                                         src, (jint)flow->source_port, dst, (jint)flow->destination_port, host,
++                                         (jint)shield);
++    if ((*env)->ExceptionCheck(env)) {
++        (*env)->ExceptionClear(env);
++        goto done;
++    }
++    answer = (uint32_t)v;
++done:
++    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
++    if (src != NULL) (*env)->DeleteLocalRef(env, src);
++    if (dst != NULL) (*env)->DeleteLocalRef(env, dst);
++    if (host != NULL) (*env)->DeleteLocalRef(env, host);
++    return answer;
++}
++
++static uint32_t route_shield_flow(void *ctx, const ZeptunFlow *flow, const char *name, size_t name_len, uint32_t shield) {
++    (void)ctx;
++    /* fail-closed: an exception rejects the flow */
++    return call_shield_method(context.route_shield, flow, name, name_len, shield, ZEPTUN_FLOW_REJECT);
++}
++
++static uint32_t revalidate_flow(void *ctx, const ZeptunFlow *flow, const char *name, size_t name_len, uint32_t shield) {
++    (void)ctx;
++    /* an exception keeps the flow (the native verdict was already applied) */
++    return call_shield_method(context.revalidate, flow, name, name_len, shield, 0);
++}
++
 +static void meter_flow(void *ctx, const ZeptunMeterRecord *rec) {
 +    (void)ctx;
 +    if (context.vm == NULL || context.route_class == NULL || context.meter == NULL) return;
@@ -533,10 +1906,11 @@ index ee56f42..63ac587 100644
 +    if (src != NULL) (*env)->DeleteLocalRef(env, src);
 +    if (dst != NULL) (*env)->DeleteLocalRef(env, dst);
 +}
- 
++
  static JNIEnv *attach(int *attached) {
      JNIEnv *env = NULL;
-@@ -49,7 +133,7 @@ static void *run_engine(void *arg) {
+     *attached = 0;
+@@ -49,7 +193,7 @@ static void *run_engine(void *arg) {
      return NULL;
  }
  
@@ -545,7 +1919,7 @@ index ee56f42..63ac587 100644
      (void)self;
      if (context.tun != NULL) return ZEPTUN_ERR_ALREADY_RUNNING;
      memset(&context, 0, sizeof context);
-@@ -80,6 +164,39 @@ static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring c
+@@ -80,6 +224,66 @@ static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring c
  
      if (config != NULL) zeptun_set_device_fd(context.tun, fd);
      zeptun_set_protect_callback(context.tun, protect_socket, NULL);
@@ -573,6 +1947,21 @@ index ee56f42..63ac587 100644
 +            }
 +            if (context.meter != NULL) rc = zeptun_set_meter_callback(context.tun, meter_flow, NULL);
 +        }
++        if (rc == ZEPTUN_OK && cls != NULL) {
++            /* AETHONE Family Shield: the shield-aware route + revalidation */
++            context.route_shield = (*env)->GetStaticMethodID(env, cls, "routeShield", "(II[BI[BILjava/lang/String;I)I");
++            if ((*env)->ExceptionCheck(env)) {
++                (*env)->ExceptionClear(env);
++                context.route_shield = NULL;
++            }
++            if (context.route_shield != NULL) rc = zeptun_set_shield_route_callback(context.tun, route_shield_flow, NULL);
++            context.revalidate = (*env)->GetStaticMethodID(env, cls, "revalidate", "(II[BI[BILjava/lang/String;I)I");
++            if ((*env)->ExceptionCheck(env)) {
++                (*env)->ExceptionClear(env);
++                context.revalidate = NULL;
++            }
++            if (rc == ZEPTUN_OK && context.revalidate != NULL) rc = zeptun_set_revalidate_callback(context.tun, revalidate_flow, NULL);
++        }
 +        if (rc != ZEPTUN_OK) {
 +            zeptun_destroy(context.tun);
 +            context.tun = NULL;
@@ -582,25 +1971,52 @@ index ee56f42..63ac587 100644
 +            return rc;
 +        }
 +    }
++    if (pending_snapshot != NULL) {
++        /* Family Shield on: the policy is in force before the first packet;
++         * if it can not be installed the tunnel does not start (fail-closed). */
++        rc = zeptun_set_shield_snapshot(context.tun, pending_snapshot, pending_len);
++        if (rc != ZEPTUN_OK) {
++            zeptun_destroy(context.tun);
++            context.tun = NULL;
++            if (context.route_class != NULL) (*env)->DeleteGlobalRef(env, context.route_class);
++            context.route_class = NULL;
++            return rc;
++        }
++    }
      if (pthread_create(&context.thread, NULL, run_engine, NULL) != 0) {
          zeptun_destroy(context.tun);
          context.tun = NULL;
-@@ -89,6 +206,14 @@ static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring c
+@@ -89,7 +293,29 @@ static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring c
      return ZEPTUN_OK;
  }
  
 +static jint start(JNIEnv *env, jobject self, jobject service, jint fd, jstring config) {
-+    return start_with(env, self, service, fd, config, NULL);
++    pthread_mutex_lock(&shield_lock);
++    jint rc = start_with(env, self, service, fd, config, NULL);
++    pthread_mutex_unlock(&shield_lock);
++    return rc;
 +}
 +
 +static jint start_routed(JNIEnv *env, jobject self, jobject service, jint fd, jstring config, jstring servers) {
-+    return start_with(env, self, service, fd, config, servers);
++    pthread_mutex_lock(&shield_lock);
++    jint rc = start_with(env, self, service, fd, config, servers);
++    pthread_mutex_unlock(&shield_lock);
++    return rc;
 +}
 +
++static void stop_locked(JNIEnv *env, jobject self);
++
  static void stop(JNIEnv *env, jobject self) {
++    pthread_mutex_lock(&shield_lock);
++    stop_locked(env, self);
++    pthread_mutex_unlock(&shield_lock);
++}
++
++static void stop_locked(JNIEnv *env, jobject self) {
      (void)self;
      if (context.tun == NULL) return;
-@@ -103,6 +228,12 @@ static void stop(JNIEnv *env, jobject self) {
+     zeptun_stop(context.tun);
+@@ -103,6 +329,83 @@ static void stop(JNIEnv *env, jobject self) {
          (*env)->DeleteGlobalRef(env, context.service);
          context.service = NULL;
      }
@@ -610,10 +2026,81 @@ index ee56f42..63ac587 100644
 +    }
 +    context.route = NULL;
 +    context.meter = NULL;
++    context.route_shield = NULL;
++    context.revalidate = NULL;
++}
++
++/* AETHONE Family Shield: validate + keep + (if running) swap in. null clears.
++ * An invalid snapshot is refused and the previous one stays everywhere. */
++static jint shield_snapshot(JNIEnv *env, jobject self, jbyteArray bytes) {
++    (void)self;
++    jint rc = ZEPTUN_OK;
++    pthread_mutex_lock(&shield_lock);
++    if (bytes == NULL) {
++        free(pending_snapshot);
++        pending_snapshot = NULL;
++        pending_len = 0;
++        if (context.tun != NULL) rc = zeptun_set_shield_snapshot(context.tun, NULL, 0);
++        pthread_mutex_unlock(&shield_lock);
++        return rc;
++    }
++    jsize len = (*env)->GetArrayLength(env, bytes);
++    uint8_t *copy = len > 0 ? (uint8_t *)malloc((size_t)len) : NULL;
++    if (copy == NULL) {
++        pthread_mutex_unlock(&shield_lock);
++        return len > 0 ? ZEPTUN_ERR_OUT_OF_MEMORY : ZEPTUN_ERR_INVALID_ARGUMENT;
++    }
++    (*env)->GetByteArrayRegion(env, bytes, 0, len, (jbyte *)copy);
++    if ((*env)->ExceptionCheck(env)) {
++        (*env)->ExceptionClear(env);
++        free(copy);
++        pthread_mutex_unlock(&shield_lock);
++        return ZEPTUN_ERR_INVALID_ARGUMENT;
++    }
++    rc = zeptun_shield_validate(copy, (size_t)len);
++    if (rc == ZEPTUN_OK && context.tun != NULL) rc = zeptun_set_shield_snapshot(context.tun, copy, (size_t)len);
++    if (rc == ZEPTUN_OK) {
++        free(pending_snapshot);
++        pending_snapshot = copy;
++        pending_len = (size_t)len;
++    } else {
++        free(copy);
++    }
++    pthread_mutex_unlock(&shield_lock);
++    return rc;
++}
++
++static jint shield_validate(JNIEnv *env, jobject self, jbyteArray bytes) {
++    (void)self;
++    if (bytes == NULL) return ZEPTUN_ERR_INVALID_ARGUMENT;
++    jsize len = (*env)->GetArrayLength(env, bytes);
++    jbyte *p = (*env)->GetByteArrayElements(env, bytes, NULL);
++    if (p == NULL) return ZEPTUN_ERR_OUT_OF_MEMORY;
++    jint rc = zeptun_shield_validate((const uint8_t *)p, (size_t)len);
++    (*env)->ReleaseByteArrayElements(env, bytes, p, JNI_ABORT);
++    return rc;
++}
++
++static jint revalidate_flows(JNIEnv *env, jobject self) {
++    (void)env;
++    (void)self;
++    pthread_mutex_lock(&shield_lock);
++    jint rc = context.tun != NULL ? zeptun_revalidate_flows(context.tun) : ZEPTUN_ERR_NOT_RUNNING;
++    pthread_mutex_unlock(&shield_lock);
++    return rc;
++}
++
++static jlong shield_counter(JNIEnv *env, jobject self, jint index) {
++    (void)env;
++    (void)self;
++    pthread_mutex_lock(&shield_lock);
++    jlong v = context.tun != NULL ? (jlong)zeptun_shield_counter(context.tun, (int)index) : -1;
++    pthread_mutex_unlock(&shield_lock);
++    return v;
  }
  
  static jstring version(JNIEnv *env, jobject self) {
-@@ -124,6 +255,7 @@ static jlong counter(JNIEnv *env, jobject self, jint index) {
+@@ -124,9 +427,14 @@ static jlong counter(JNIEnv *env, jobject self, jint index) {
  
  static const JNINativeMethod methods[] = {
      { "nativeStart", "(Ljava/lang/Object;ILjava/lang/String;)I", (void *)start },
@@ -621,20 +2108,173 @@ index ee56f42..63ac587 100644
      { "nativeStop", "()V", (void *)stop },
      { "nativeVersion", "()Ljava/lang/String;", (void *)version },
      { "nativeCounter", "(I)J", (void *)counter },
++    { "nativeShieldSnapshot", "([B)I", (void *)shield_snapshot },
++    { "nativeShieldValidate", "([B)I", (void *)shield_validate },
++    { "nativeRevalidateFlows", "()I", (void *)revalidate_flows },
++    { "nativeShieldCounter", "(I)J", (void *)shield_counter },
+ };
+ 
+ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
+diff --git a/src/root.zig b/src/root.zig
+index 12defb5..b8ea29e 100644
+--- a/src/root.zig
++++ b/src/root.zig
+@@ -31,6 +31,7 @@ pub const flow = struct {
+     pub const table = @import("flow/table.zig");
+     pub const timeouts = @import("flow/timeouts.zig");
+     pub const verdict = @import("flow/verdict.zig");
++    pub const shield = @import("flow/shield.zig");
+     pub const nat = @import("flow/nat.zig");
+     pub const slab = @import("flow/slab.zig");
+ };
+@@ -82,6 +83,9 @@ test {
+     _ = flow.timeouts;
+     _ = flow.nat;
+     _ = flow.slab;
++    _ = flow.verdict;
++    _ = flow.shield;
+     _ = @import("tests/engine_tests.zig");
+     _ = @import("tests/tcp_sim.zig");
++    _ = @import("tests/shield_engine_tests.zig");
+ }
+diff --git a/src/stack/dns.zig b/src/stack/dns.zig
+index 4d01b3d..98d3026 100644
+--- a/src/stack/dns.zig
++++ b/src/stack/dns.zig
+@@ -6,6 +6,7 @@ const parse = @import("../packet/parse.zig");
+ const pool = @import("../packet/pool.zig");
+ const gso = @import("../packet/gso.zig");
+ const ip = @import("ip.zig");
++const shield = @import("../flow/shield.zig");
+ 
+ pub const max_name = 253;
+ pub const port: u16 = 53;
+@@ -287,6 +288,18 @@ fn finishHeader(out: []u8, query_flags: u16, rcode: u16, answers: u16) void {
+ }
+ 
+ pub fn answer(t: *Table, query: []const u8, out: []u8, can_forward: bool) Outcome {
++    return answerShield(t, null, query, out, can_forward);
++}
++
++/// rcode 3 (NXDOMAIN)
++const rcode_nxdomain: u16 = 3;
++
++/// AETHONE Family Shield: `answer` with the shield consulted right after the
++/// name is parsed and BEFORE `t.resolve` — a blocked name gets NXDOMAIN with
++/// no SOA (nothing to cache negatively, so an unblock acts at once), for
++/// every query type (A, AAAA, HTTPS/SVCB, MX …). No fake-IP slot is taken
++/// and nothing is forwarded upstream.
++pub fn answerShield(t: *Table, sh: ?*shield.State, query: []const u8, out: []u8, can_forward: bool) Outcome {
+     if (query.len < 12 or out.len < 12) return .drop;
+     const flags = be16(query, 2);
+     if (flags & 0x8000 != 0) return .drop;
+@@ -321,6 +334,18 @@ pub fn answer(t: *Table, query: []const u8, out: []u8, can_forward: bool) Outcom
+     const qclass = be16(query, off + 2);
+     const qend = off + 4;
+     if (out.len < qend + 28) return .drop;
++    if (sh) |st| if (nlen > 0 and !bad) {
++        if (st.acquire()) |snap| {
++            const v = snap.checkName(name[0..nlen]);
++            st.release();
++            if (v.block) {
++                _ = st.dns_blocked.fetchAdd(1, .monotonic);
++                @memcpy(out[0..qend], query[0..qend]);
++                finishHeader(out, flags, rcode_nxdomain, 0);
++                return .{ .reply = qend };
++            }
++        } else st.release();
++    };
+     const want4 = qtype == type_a and t.range4 != null;
+     const want6 = qtype == type_aaaa and t.range6 != null;
+     const mapped = qclass == class_in and (want4 or want6) and nlen > 0 and !bad;
+@@ -349,13 +374,17 @@ pub fn answer(t: *Table, query: []const u8, out: []u8, can_forward: bool) Outcom
+ }
+ 
+ pub fn reply(w: anytype, t: *Table, b: *pool.Buffer, pkt: parse.Packet, can_forward: bool) Outcome {
++    return replyShield(w, t, null, b, pkt, can_forward);
++}
++
++pub fn replyShield(w: anytype, t: *Table, sh: ?*shield.State, b: *pool.Buffer, pkt: parse.Packet, can_forward: bool) Outcome {
+     const data = b.bytes();
+     const query = data[pkt.payload_off..][0..pkt.payload_len];
+     const nb = w.pool.get() orelse return .drop;
+     const v6 = pkt.ip.isV6();
+     const ip_hlen: u16 = ip.headerLen(v6);
+     const room = nb.cap - nb.headroom();
+-    const outcome = answer(t, query, nb.ptr[nb.headroom()..][0..room], can_forward);
++    const outcome = answerShield(t, sh, query, nb.ptr[nb.headroom()..][0..room], can_forward);
+     const n = switch (outcome) {
+         .reply => |len| len,
+         else => {
+@@ -464,6 +493,53 @@ test "fake dns evicts least recently used names" {
+     try std.testing.expectEqual(@as(usize, 16), seen);
+ }
+ 
++test "shield: blocked names get NXDOMAIN without SOA and take no fake-ip slot" {
++    const alloc = std.testing.allocator;
++    const t = try Table.init(alloc, try addr.Prefix.parse("198.18.0.0/15"), try addr.Prefix.parse("fc00::/18"), 1000, 1);
++    defer t.deinit();
++    var st: shield.State = .{ .allocator = alloc };
++    defer st.deinit();
++    const rules = [_]shield.TestBuilder.Rule{.{ .name = "blocked.test", .self_flags = shield.rule_parent_block, .sub_flags = shield.rule_parent_block }};
++    const snap = try shield.TestBuilder.build(alloc, 0, 0, 0, 0, &rules, &.{}, &.{});
++    defer alloc.free(snap);
++    try st.install(snap);
++    var q: [512]u8 = undefined;
++    var out: [512]u8 = undefined;
++    const type_https: u16 = 65;
++    const type_svcb: u16 = 64;
++    for ([_]u16{ type_a, type_aaaa, type_https, type_svcb, 15 }) |qt| {
++        const query = buildQuery(&q, 0x4242, "WWW.Blocked.TEST", qt);
++        // can_forward = true: a blocked name is never forwarded either
++        const n = answerShield(t, &st, query, &out, true).reply;
++        try std.testing.expectEqual(query.len, n);
++        try std.testing.expectEqual(@as(u16, 0x4242), be16(&out, 0));
++        try std.testing.expectEqual(@as(u16, 3), be16(&out, 2) & 0xf); // NXDOMAIN
++        try std.testing.expect(be16(&out, 2) & 0x8000 != 0);
++        try std.testing.expectEqual(@as(u16, 0), be16(&out, 6)); // no answers
++        try std.testing.expectEqual(@as(u16, 0), be16(&out, 8)); // no SOA / authority
++        try std.testing.expectEqual(@as(u16, 0), be16(&out, 10));
++    }
++    try std.testing.expectEqual(@as(u32, 0), t.used); // no fake-IP slot taken
++    try std.testing.expectEqual(@as(u64, 5), st.counter(.dns_blocked));
++    // the label boundary holds at DNS time too
++    const ok = buildQuery(&q, 1, "notblocked.test", type_a);
++    const n = answerShield(t, &st, ok, &out, false).reply;
++    try std.testing.expectEqual(@as(u16, 0), be16(&out, 2) & 0xf);
++    try std.testing.expectEqual(@as(u16, 1), be16(&out, 6));
++    try std.testing.expectEqual(ok.len + 16, n);
++    try std.testing.expectEqual(@as(u32, 1), t.used);
++    // AAAA of an allowed name still gets its fake v6
++    const ok6 = buildQuery(&q, 2, "allowed.test", type_aaaa);
++    _ = answerShield(t, &st, ok6, &out, false).reply;
++    try std.testing.expectEqual(@as(u16, 1), be16(&out, 6));
++    // no snapshot: unchanged behaviour
++    try st.install(null);
++    const again = buildQuery(&q, 3, "blocked.test", type_a);
++    _ = answerShield(t, &st, again, &out, false).reply;
++    try std.testing.expectEqual(@as(u16, 0), be16(&out, 2) & 0xf);
++    try std.testing.expectEqual(@as(u16, 1), be16(&out, 6));
++}
++
+ fn fuzzAnswer(_: void, smith: *std.testing.Smith) anyerror!void {
+     const t = try Table.init(std.testing.allocator, try addr.Prefix.parse("198.18.0.0/15"), try addr.Prefix.parse("fc00::/18"), 64, 1);
+     defer t.deinit();
 diff --git a/src/stack/tcp.zig b/src/stack/tcp.zig
-index d51f759..05ea6d4 100644
+index d51f759..4f7cbe1 100644
 --- a/src/stack/tcp.zig
 +++ b/src/stack/tcp.zig
-@@ -1,6 +1,8 @@
+@@ -1,6 +1,9 @@
  const std = @import("std");
  const build_options = @import("build_options");
  const addr = @import("../addr.zig");
 +const dns = @import("dns.zig");
 +const verdict = @import("../flow/verdict.zig");
++const shield = @import("../flow/shield.zig");
  const config = @import("../config.zig");
  const checksum = @import("../packet/checksum.zig");
  const parse = @import("../packet/parse.zig");
-@@ -141,6 +143,11 @@ pub fn Tcp(comptime W: type) type {
+@@ -141,6 +144,11 @@ pub fn Tcp(comptime W: type) type {
              migrating: bool = false,
              moved: bool = false,
              meter_epoch: u8 = 0,
@@ -646,7 +2286,7 @@ index d51f759..05ea6d4 100644
              move_to: u16 = 0,
              meter: u32 = 0,
              local: [16]u8 = @splat(0),
-@@ -244,6 +251,8 @@ pub fn Tcp(comptime W: type) type {
+@@ -244,6 +252,8 @@ pub fn Tcp(comptime W: type) type {
          rx_initial: u32,
          rx_budget: u64,
          rx_grown: u64 = 0,
@@ -655,29 +2295,56 @@ index d51f759..05ea6d4 100644
          tx_budget: u64,
          tx_grown: u64 = 0,
          rx_ceiling: u64 = std.math.maxInt(u64),
-@@ -475,6 +484,21 @@ pub fn Tcp(comptime W: type) type {
+@@ -475,6 +485,48 @@ pub fn Tcp(comptime W: type) type {
                      },
                  }
              }
 +            var route: u8 = 0;
++            // AETHONE Family Shield: the fake-IP name (or the real address)
++            // is checked again at flow open, so a fake IP an app cached
++            // before a block can not bypass it. The verdict rides the route
++            // callback (the app layer adds per-app blocks and records the
++            // event) and is enforced here whatever the callback answers.
++            const tcph1 = pkt.l4.tcp;
++            const sh = shieldOf(w);
++            const shielding = if (sh) |s| s.active() else false;
++            const dst_a = addr.Address.fromSlice(pkt.ip.dst(data));
++            var name_buf: [dns.max_name]u8 = undefined;
++            var name: ?[]const u8 = null;
++            if (shielding or w.judge().routing()) name = w.handler.routeName(dst_a, &name_buf);
++            var sv: shield.Verdict = .{};
++            var scode: u32 = 0;
++            if (sh) |st| if (shielding) {
++                if (st.acquire()) |snap| {
++                    sv = snap.checkFlow(name, dst_a, w.handler.isFake(dst_a), parse.proto.tcp, tcph1.dst_port);
++                    scode = sv.encode();
++                }
++                st.release();
++            };
 +            if (w.judge().routing()) {
-+                const tcph1 = pkt.l4.tcp;
-+                var name_buf: [dns.max_name]u8 = undefined;
-+                const name = w.handler.routeName(addr.Address.fromSlice(pkt.ip.dst(data)), &name_buf);
-+                const r = w.judge().askRoute(w.cfg.handler.socks5.route_count, parse.proto.tcp, pkt.ip.isV6(), pkt.ip.src(data), tcph1.src_port, pkt.ip.dst(data), tcph1.dst_port, name);
++                const r = w.judge().askRoute(w.cfg.handler.socks5.route_count, parse.proto.tcp, pkt.ip.isV6(), pkt.ip.src(data), tcph1.src_port, pkt.ip.dst(data), tcph1.dst_port, name, scode);
 +                switch (r.action) {
 +                    .proxy => route = r.route,
-+                    .direct, .drop => return,
++                    .direct, .drop => {
++                        if (sv.block) countBlocked(sh);
++                        return;
++                    },
 +                    .reject => {
++                        if (sv.block) countBlocked(sh);
 +                        t.sendRstFor(w, data, pkt);
 +                        return;
 +                    },
 +                }
 +            }
++            if (sv.block) {
++                countBlocked(sh);
++                t.sendRstFor(w, data, pkt);
++                return;
++            }
              if (t.conns.isFull()) {
                  if (t.conns.oldest()) |old| {
                      const oc = t.conns.value(old);
-@@ -546,6 +570,7 @@ pub fn Tcp(comptime W: type) type {
+@@ -546,6 +598,7 @@ pub fn Tcp(comptime W: type) type {
              }
              c.up.dial.tos = pkt.ip.tos;
              c.up.dial.bypass = bypass;
@@ -685,7 +2352,7 @@ index d51f759..05ea6d4 100644
              w.handler.dialTcp(w, &c.up.dial, c.target, .tcp);
          }
  
-@@ -569,6 +594,7 @@ pub fn Tcp(comptime W: type) type {
+@@ -569,6 +622,7 @@ pub fn Tcp(comptime W: type) type {
              up.connected = true;
              if (d.early_sent > 0) {
                  w.counters.add(.upstream_tx_bytes, d.early_sent);
@@ -693,7 +2360,7 @@ index d51f759..05ea6d4 100644
                  t.consumeRx(w, c, d.early_sent);
                  d.early_sent = 0;
              }
-@@ -584,6 +610,7 @@ pub fn Tcp(comptime W: type) type {
+@@ -584,6 +638,7 @@ pub fn Tcp(comptime W: type) type {
                  c.tx.push(b);
                  c.tx_bytes += b.len;
                  w.counters.add(.upstream_rx_bytes, b.len);
@@ -701,7 +2368,7 @@ index d51f759..05ea6d4 100644
                  t.markDirty(c);
              }
              if (c.state == .connecting) {
-@@ -1526,6 +1553,7 @@ pub fn Tcp(comptime W: type) type {
+@@ -1526,6 +1581,7 @@ pub fn Tcp(comptime W: type) type {
                  up.bulk = n >= (b.cap - b.headroom()) / 2;
                  w.counters.add(.upstream_rx_bytes, n);
                  elastic.meterAdd(&c.meter, &c.meter_epoch, w.now(), n);
@@ -709,7 +2376,7 @@ index d51f759..05ea6d4 100644
                  c.tx_bytes += n;
                  const merged = if (c.tx.tail) |tail| n <= b.cap / 4 and tail.tailroom() >= n else false;
                  if (merged) {
-@@ -1659,6 +1687,7 @@ pub fn Tcp(comptime W: type) type {
+@@ -1659,6 +1715,7 @@ pub fn Tcp(comptime W: type) type {
              if (result >= 0) {
                  const n: u32 = @intCast(result);
                  w.counters.add(.upstream_tx_bytes, n);
@@ -717,7 +2384,7 @@ index d51f759..05ea6d4 100644
                  if (n < up.tx_len) {
                      t.consumeRx(w, c, n);
                      t.setRcvCap(w, c, c.rcv_cap / 2);
-@@ -1767,6 +1796,33 @@ pub fn Tcp(comptime W: type) type {
+@@ -1767,6 +1824,33 @@ pub fn Tcp(comptime W: type) type {
              t.beginRelease(w, c);
          }
  
@@ -751,7 +2418,7 @@ index d51f759..05ea6d4 100644
          fn beginRelease(t: *Self, w: *W, c: *Conn) void {
              if (c.releasing) return;
              c.releasing = true;
-@@ -1816,6 +1872,7 @@ pub fn Tcp(comptime W: type) type {
+@@ -1816,6 +1900,7 @@ pub fn Tcp(comptime W: type) type {
              t.releaseSndCap(c);
              w.counters.dec(.tcp_active);
              w.counters.inc(.tcp_closed);
@@ -759,10 +2426,57 @@ index d51f759..05ea6d4 100644
              t.conns.remove(t.connIndex(c));
          }
  
-@@ -1854,10 +1911,28 @@ pub fn Tcp(comptime W: type) type {
+@@ -1854,10 +1939,75 @@ pub fn Tcp(comptime W: type) type {
              w.transmitParts(hdr[0 .. ip_hlen + 20], .{}, &.{});
          }
  
++        inline fn countBlocked(sh: ?*shield.State) void {
++            if (sh) |s| _ = s.flow_blocked.fetchAdd(1, .monotonic);
++        }
++
++        inline fn shieldOn(sh: ?*shield.State) bool {
++            return if (sh) |s| s.active() else false;
++        }
++
++        inline fn shieldOf(w: *W) ?*shield.State {
++            if (comptime @hasDecl(W, "shieldState")) return w.shieldState();
++            return null;
++        }
++
++        /// AETHONE Family Shield: re-checks every live flow after a rule
++        /// change (zeptun_revalidate_flows). A flow the native snapshot now
++        /// blocks, or the app layer asks to end, is aborted with a RST to the
++        /// app; every other flow is left untouched.
++        pub fn revalidate(t: *Self, w: *W) void {
++            const sh = shieldOf(w);
++            const shielding = if (sh) |s| s.active() else false;
++            const asking = w.judge().reval_call != null;
++            if (!shielding and !asking) return;
++            var it = t.conns.iterator();
++            while (it.next()) |i| {
++                const c = t.conns.value(i);
++                if (c.moved or c.migrating or c.releasing or c.state == .closed) continue;
++                const al: usize = if (c.v6) 16 else 4;
++                const dst_a = addr.Address.fromSlice(c.local[0..al]);
++                var name_buf: [dns.max_name]u8 = undefined;
++                const name = w.handler.routeName(dst_a, &name_buf);
++                var sv: shield.Verdict = .{};
++                var scode: u32 = 0;
++                if (sh) |st| if (shielding) {
++                    if (st.acquire()) |snap| {
++                        sv = snap.checkFlow(name, dst_a, w.handler.isFake(dst_a), parse.proto.tcp, c.local_port);
++                        scode = sv.encode();
++                    }
++                    st.release();
++                };
++                const kill = sv.block or w.judge().askRevalidate(parse.proto.tcp, c.v6, c.remote[0..al], c.remote_port, c.local[0..al], c.local_port, name, scode);
++                if (kill) {
++                    if (sh) |s| _ = s.flows_killed.fetchAdd(1, .monotonic);
++                    t.abort(w, c, true);
++                }
++            }
++        }
++
 +        /// AETHONE traffic analytics: a flow that went idle with unreported
 +        /// bytes still reports within ~2 intervals (meterAdd only runs when
 +        /// bytes move). Called from the worker loop; walks the table at most
@@ -789,31 +2503,71 @@ index d51f759..05ea6d4 100644
                      t.dropForward(c);
                  } else if (!c.releasing) {
 diff --git a/src/stack/udp.zig b/src/stack/udp.zig
-index d78ad3d..d6205e2 100644
+index d78ad3d..06bad42 100644
 --- a/src/stack/udp.zig
 +++ b/src/stack/udp.zig
-@@ -145,6 +145,20 @@ pub fn Udp(comptime W: type) type {
+@@ -13,6 +13,7 @@ const dns = @import("dns.zig");
+ const handler_mod = @import("../handler/handler.zig");
+ const elastic = @import("../elastic.zig");
+ const config = @import("../config.zig");
++const shield = @import("../flow/shield.zig");
+ 
+ pub fn Udp(comptime W: type) type {
+     return struct {
+@@ -35,6 +36,9 @@ pub fn Udp(comptime W: type) type {
+ 
+         pub const Session = struct {
+             client: addr.Endpoint = .{},
++            /// AETHONE Family Shield: the destination the session was opened
++            /// (and judged) for; other destinations are checked per datagram.
++            open_dst: addr.Endpoint = .{},
+             dns_orig: ?addr.Endpoint = null,
+             closing: bool = false,
+             moved: bool = false,
+@@ -92,7 +96,7 @@ pub fn Udp(comptime W: type) type {
+                     w.counters.inc(.dns_hijacked);
+                     const upstream = w.cfg.dns.upstream;
+                     if (w.handler.fake) |t| {
+-                        switch (dns.reply(w, t, b, pkt, upstream != null)) {
++                        switch (dns.replyShield(w, t, shieldOf(w), b, pkt, upstream != null)) {
+                             .reply => {
+                                 w.counters.inc(.dns_fake_answers);
+                                 return;
+@@ -145,15 +149,41 @@ pub fn Udp(comptime W: type) type {
                          },
                      }
                  }
 +                var route: u8 = 0;
++                const sh = shieldOf(w);
++                const sv = shieldVerdict(w, sh, data, pkt, uh.dst_port);
 +                if (w.judge().routing()) {
 +                    var name_buf: [dns.max_name]u8 = undefined;
 +                    const name = w.handler.routeName(addr.Address.fromSlice(pkt.ip.dst(data)), &name_buf);
-+                    const r = w.judge().askRoute(w.cfg.handler.socks5.route_count, parse.proto.udp, v6, pkt.ip.src(data), uh.src_port, pkt.ip.dst(data), uh.dst_port, name);
++                    const r = w.judge().askRoute(w.cfg.handler.socks5.route_count, parse.proto.udp, v6, pkt.ip.src(data), uh.src_port, pkt.ip.dst(data), uh.dst_port, name, if (shieldOn(sh)) sv.encode() else 0);
 +                    switch (r.action) {
 +                        .proxy => route = r.route,
-+                        .direct, .drop => return,
++                        .direct, .drop => {
++                            if (sv.block) countBlocked(sh);
++                            return;
++                        },
 +                        .reject => {
++                            if (sv.block) countBlocked(sh);
 +                            icmp.sendUnreachable(w, data, pkt, true);
 +                            return;
 +                        },
 +                    }
 +                }
++                if (sv.block) {
++                    countBlocked(sh);
++                    icmp.sendUnreachable(w, data, pkt, true);
++                    return;
++                }
                  const i = u.sessions.insert(key, .{}) catch return;
                  const s = u.sessions.value(i);
                  s.* = .{
-@@ -153,7 +167,7 @@ pub fn Udp(comptime W: type) type {
+                     .client = .{ .addr = addr.Address.fromSlice(pkt.ip.src(data)), .port = uh.src_port },
++                    .open_dst = .{ .addr = addr.Address.fromSlice(pkt.ip.dst(data)), .port = uh.dst_port },
+                     .last_active = now,
                  };
                  w.counters.inc(.udp_opened);
                  w.counters.inc(.udp_active);
@@ -822,11 +2576,368 @@ index d78ad3d..d6205e2 100644
                      s.closing = true;
                      u.release(w, s);
                      icmp.sendUnreachable(w, data, pkt, true);
+@@ -180,6 +210,19 @@ pub fn Udp(comptime W: type) type {
+             s.last_active = now;
+             elastic.meterAdd(&s.meter, &s.meter_epoch, now, pkt.payload_len);
+             var dst: addr.Endpoint = .{ .addr = addr.Address.fromSlice(pkt.ip.dst(data)), .port = uh.dst_port };
++            // AETHONE Family Shield: one UDP socket can talk to many peers
++            // (endpoint-independent NAT); a datagram to a destination other
++            // than the one the session was judged for is checked on its own.
++            if (redirect == null and !dst.eql(s.open_dst)) {
++                const sh = shieldOf(w);
++                if (shieldOn(sh)) {
++                    if (shieldVerdict(w, sh, data, pkt, uh.dst_port).block) {
++                        countBlocked(sh);
++                        icmp.sendUnreachable(w, data, pkt, true);
++                        return;
++                    }
++                }
++            }
+             if (redirect) |r| {
+                 s.dns_orig = dst;
+                 dst = r;
+@@ -188,6 +231,63 @@ pub fn Udp(comptime W: type) type {
+             w.handler.udpSend(w, &s.handler, dst, b, b.off + pkt.payload_off, pkt.payload_len, seg);
+         }
+ 
++        inline fn countBlocked(sh: ?*shield.State) void {
++            if (sh) |s| _ = s.flow_blocked.fetchAdd(1, .monotonic);
++        }
++
++        inline fn shieldOn(sh: ?*shield.State) bool {
++            return if (sh) |s| s.active() else false;
++        }
++
++        inline fn shieldOf(w: *W) ?*shield.State {
++            if (comptime @hasDecl(W, "shieldState")) return w.shieldState();
++            return null;
++        }
++
++        fn shieldVerdict(w: *W, sh: ?*shield.State, data: []const u8, pkt: parse.Packet, dport: u16) shield.Verdict {
++            const st = sh orelse return .{};
++            if (!st.active()) return .{};
++            defer st.release();
++            const snap = st.acquire() orelse return .{};
++            const dst_a = addr.Address.fromSlice(pkt.ip.dst(data));
++            var name_buf: [dns.max_name]u8 = undefined;
++            const name = w.handler.routeName(dst_a, &name_buf);
++            return snap.checkFlow(name, dst_a, w.handler.isFake(dst_a), parse.proto.udp, dport);
++        }
++
++        /// AETHONE Family Shield: re-checks every live UDP session against the
++        /// destination it was opened for; blocked ones are closed, the rest
++        /// are left untouched.
++        pub fn revalidate(u: *Self, w: *W) void {
++            const sh = shieldOf(w);
++            const shielding = if (sh) |s| s.active() else false;
++            const asking = w.judge().reval_call != null;
++            if (!shielding and !asking) return;
++            var it = u.sessions.iterator();
++            while (it.next()) |i| {
++                const s = u.sessions.value(i);
++                if (s.closing or s.moved) continue;
++                const d = s.open_dst;
++                const al: usize = if (d.addr.family == .v6) 16 else 4;
++                var name_buf: [dns.max_name]u8 = undefined;
++                const name = w.handler.routeName(d.addr, &name_buf);
++                var sv: shield.Verdict = .{};
++                var scode: u32 = 0;
++                if (sh) |st| if (shielding) {
++                    if (st.acquire()) |snap| {
++                        sv = snap.checkFlow(name, d.addr, w.handler.isFake(d.addr), parse.proto.udp, d.port);
++                        scode = sv.encode();
++                    }
++                    st.release();
++                };
++                const kill = sv.block or w.judge().askRevalidate(parse.proto.udp, d.addr.family == .v6, s.client.addr.bytes[0..al], s.client.port, d.addr.bytes[0..al], d.port, name, scode);
++                if (kill) {
++                    if (sh) |st| _ = st.flows_killed.fetchAdd(1, .monotonic);
++                    u.close(w, s);
++                }
++            }
++        }
++
+         fn eqlOpt(a: ?addr.Address, b: addr.Address) bool {
+             return if (a) |x| x.eql(b) else false;
+         }
+diff --git a/src/tests/shield_engine_tests.zig b/src/tests/shield_engine_tests.zig
+new file mode 100644
+index 0000000..e33a8d0
+--- /dev/null
++++ b/src/tests/shield_engine_tests.zig
+@@ -0,0 +1,267 @@
++//! AETHONE Family Shield — end-to-end engine tests (external device, real
++//! sockets on loopback): DNS NXDOMAIN through the engine, TCP RST and UDP
++//! ICMP reject before any dial, flow-time re-check of a cached fake IP, and
++//! revalidation of live flows after a rule change.
++const std = @import("std");
++const addr = @import("../addr.zig");
++const config = @import("../config.zig");
++const engine = @import("../engine.zig");
++const sys = @import("../io/sys.zig");
++const parse = @import("../packet/parse.zig");
++const stats = @import("../stats.zig");
++const external = @import("../device/external.zig");
++const shield = @import("../flow/shield.zig");
++const h = @import("helpers.zig");
++
++fn directConfig() config.Config {
++    var cfg = config.Config.fromPreset(.mobile);
++    cfg.device.kind = .external;
++    cfg.stack.mode = .userspace;
++    cfg.handler.kind = .direct;
++    cfg.io.workers = 1;
++    cfg.log_level = .warn;
++    cfg.stack.tcp_timestamps = false;
++    return cfg;
++}
++
++fn blockV4(alloc: std.mem.Allocator, a: [4]u8, prefix: u8) ![]u8 {
++    const v4 = [_]shield.TestBuilder.Cidr{.{ .a = &a, .prefix = prefix, .flags = shield.rule_parent_block }};
++    return shield.TestBuilder.build(alloc, 0, 0, 0, 0, &.{}, &v4, &.{});
++}
++
++fn inject(e: *engine.Engine, pkt: []const u8) !void {
++    const pk: external.Packet = .{ .data = pkt.ptr, .len = pkt.len };
++    if (e.external.?.injectBatch(&.{pk}) != 1) return error.InjectFailed;
++}
++
++/// Next packet for `port` (the client side), skipping others.
++fn nextFor(c: *h.Collector, port: u16, timeout_ms: u64, out: []u8) ?parse.Packet {
++    const deadline = sys.monotonicMs() + timeout_ms;
++    while (sys.monotonicMs() < deadline) {
++        const raw = c.next(20, out) orelse continue;
++        const p = parse.parse(raw) catch continue;
++        switch (p.l4) {
++            .tcp => |t| if (t.dst_port == port) return p,
++            .udp => |u| if (u.dst_port == port) return p,
++            .icmp => return p,
++            else => {},
++        }
++    }
++    return null;
++}
++
++const syn_opts = [_]u8{ 2, 4, 0x05, 0xb4, 4, 2, 1, 3, 3, 7 };
++
++test "shield engine: blocked TCP SYN gets RST and is never dialled" {
++    if (!sys.is_linux) return error.SkipZigTest;
++    const alloc = std.testing.allocator;
++    var echo: h.TcpEcho = .{ .fd = -1, .port = 0 };
++    try echo.start();
++    defer echo.deinit();
++    var collector: h.Collector = .{};
++    const e = try engine.Engine.create(alloc, directConfig());
++    defer e.destroy();
++    e.external.?.setOutput(h.Collector.output, &collector);
++    const snap = try blockV4(alloc, .{ 127, 0, 0, 1 }, 32);
++    defer alloc.free(snap);
++    try e.installShield(snap);
++    try e.start();
++    var buf: [256]u8 = undefined;
++    const client = try addr.Endpoint.parse("10.0.0.2:40001");
++    const server: addr.Endpoint = .{ .addr = try addr.Address.parse("127.0.0.1"), .port = echo.port };
++    try inject(e, h.buildTcp4(&buf, client, server, .{ .seq = 999, .ack = 0, .flags = 0x02, .options = &syn_opts }));
++    var out: [2048]u8 = undefined;
++    const p = nextFor(&collector, 40001, 3000, &out) orelse return error.NoReply;
++    try std.testing.expect(p.l4 == .tcp);
++    try std.testing.expect(p.l4.tcp.flags.rst);
++    var s: stats.Snapshot = .{};
++    e.snapshot(&s);
++    try std.testing.expectEqual(@as(u64, 0), s.tcp_opened);
++    try std.testing.expectEqual(@as(u64, 1), e.shield.counter(.flow_blocked));
++    try std.testing.expectEqual(@as(u64, 0), echo.bytes.load(.acquire));
++    e.stop();
++}
++
++test "shield engine: blocked UDP gets ICMP port unreachable" {
++    if (!sys.is_linux) return error.SkipZigTest;
++    const alloc = std.testing.allocator;
++    var echo: h.UdpEcho = .{ .fd = -1, .port = 0 };
++    try echo.start();
++    defer echo.deinit();
++    var collector: h.Collector = .{};
++    const e = try engine.Engine.create(alloc, directConfig());
++    defer e.destroy();
++    e.external.?.setOutput(h.Collector.output, &collector);
++    const snap = try blockV4(alloc, .{ 127, 0, 0, 0 }, 8);
++    defer alloc.free(snap);
++    try e.installShield(snap);
++    try e.start();
++    var buf: [256]u8 = undefined;
++    const client = try addr.Endpoint.parse("10.0.0.2:5556");
++    const server: addr.Endpoint = .{ .addr = try addr.Address.parse("127.0.0.1"), .port = echo.port };
++    try inject(e, h.buildUdp4(&buf, client, server, "blocked"));
++    var out: [2048]u8 = undefined;
++    const p = nextFor(&collector, 5556, 3000, &out) orelse return error.NoReply;
++    try std.testing.expect(p.l4 == .icmp);
++    var s: stats.Snapshot = .{};
++    e.snapshot(&s);
++    try std.testing.expectEqual(@as(u64, 0), s.udp_opened);
++    try std.testing.expectEqual(@as(u64, 1), e.shield.counter(.flow_blocked));
++    e.stop();
++}
++
++/// Opens a TCP flow through the engine to `server` and completes the
++/// handshake; returns the client's next sequence / ack numbers.
++const Flow = struct {
++    client: addr.Endpoint,
++    server: addr.Endpoint,
++    snd: u32 = 1000,
++    rcv: u32 = 0,
++
++    fn open(f: *Flow, e: *engine.Engine, c: *h.Collector) !void {
++        var buf: [256]u8 = undefined;
++        try inject(e, h.buildTcp4(&buf, f.client, f.server, .{ .seq = 999, .ack = 0, .flags = 0x02, .options = &syn_opts }));
++        var out: [2048]u8 = undefined;
++        const p = nextFor(c, f.client.port, 3000, &out) orelse return error.NoSynAck;
++        if (p.l4 != .tcp or !(p.l4.tcp.flags.syn and p.l4.tcp.flags.ack)) return error.NoSynAck;
++        f.rcv = p.l4.tcp.seq +% 1;
++        try inject(e, h.buildTcp4(&buf, f.client, f.server, .{ .seq = f.snd, .ack = f.rcv, .flags = 0x10 }));
++    }
++
++    fn send(f: *Flow, e: *engine.Engine, data: []const u8) !void {
++        var buf: [512]u8 = undefined;
++        try inject(e, h.buildTcp4(&buf, f.client, f.server, .{ .seq = f.snd, .ack = f.rcv, .flags = 0x18, .payload = data }));
++        f.snd +%= @intCast(data.len);
++    }
++};
++
++test "shield engine: revalidation aborts a newly blocked flow and leaves an allowed one untouched" {
++    if (!sys.is_linux) return error.SkipZigTest;
++    const alloc = std.testing.allocator;
++    var echo1: h.TcpEcho = .{ .fd = -1, .port = 0 };
++    try echo1.start();
++    defer echo1.deinit();
++    var echo2: h.TcpEcho = .{ .fd = -1, .port = 0, .host = "127.0.0.2:0" };
++    echo2.start() catch return error.SkipZigTest; // 127.0.0.2 not bindable here
++    defer echo2.deinit();
++    var collector: h.Collector = .{};
++    const e = try engine.Engine.create(alloc, directConfig());
++    defer e.destroy();
++    e.external.?.setOutput(h.Collector.output, &collector);
++    // an active snapshot that blocks nothing relevant
++    const none = try blockV4(alloc, .{ 192, 0, 2, 0 }, 24);
++    defer alloc.free(none);
++    try e.installShield(none);
++    try e.start();
++    var a: Flow = .{ .client = try addr.Endpoint.parse("10.0.0.2:40010"), .server = .{ .addr = try addr.Address.parse("127.0.0.1"), .port = echo1.port } };
++    var b: Flow = .{ .client = try addr.Endpoint.parse("10.0.0.2:40011"), .server = .{ .addr = try addr.Address.parse("127.0.0.2"), .port = echo2.port } };
++    try a.open(e, &collector);
++    try b.open(e, &collector);
++    // rule change: 127.0.0.1 becomes blocked; then revalidate
++    const block = try blockV4(alloc, .{ 127, 0, 0, 1 }, 32);
++    defer alloc.free(block);
++    try e.installShield(block);
++    e.revalidateFlows();
++    var out: [2048]u8 = undefined;
++    var got_rst = false;
++    const deadline = sys.monotonicMs() + 3000;
++    while (!got_rst and sys.monotonicMs() < deadline) {
++        const p = nextFor(&collector, 40010, 100, &out) orelse continue;
++        if (p.l4 == .tcp and p.l4.tcp.flags.rst) got_rst = true;
++    }
++    try std.testing.expect(got_rst);
++    try std.testing.expectEqual(@as(u64, 1), e.shield.counter(.flows_killed));
++    // flow b still carries data both ways
++    try b.send(e, "still allowed");
++    var echoed = false;
++    const d2 = sys.monotonicMs() + 3000;
++    while (!echoed and sys.monotonicMs() < d2) {
++        const p = nextFor(&collector, 40011, 100, &out) orelse continue;
++        if (p.l4 == .tcp and p.l4.tcp.flags.rst) return error.AllowedFlowReset;
++        if (p.payload_len > 0) echoed = true;
++    }
++    try std.testing.expect(echoed);
++    e.stop();
++}
++
++fn dnsQuery(buf: []u8, id: u16, name: []const u8, qtype: u16) []u8 {
++    std.mem.writeInt(u16, buf[0..2], id, .big);
++    std.mem.writeInt(u16, buf[2..4], 0x0100, .big);
++    std.mem.writeInt(u16, buf[4..6], 1, .big);
++    @memset(buf[6..12], 0);
++    var off: usize = 12;
++    var it = std.mem.splitScalar(u8, name, '.');
++    while (it.next()) |label| {
++        buf[off] = @intCast(label.len);
++        @memcpy(buf[off + 1 ..][0..label.len], label);
++        off += 1 + label.len;
++    }
++    buf[off] = 0;
++    std.mem.writeInt(u16, buf[off + 1 ..][0..2], qtype, .big);
++    std.mem.writeInt(u16, buf[off + 3 ..][0..2], 1, .big);
++    return buf[0 .. off + 5];
++}
++
++test "shield engine: fake-ip DNS answers NXDOMAIN for blocked names and re-checks cached fake IPs at flow open" {
++    if (!sys.is_linux) return error.SkipZigTest;
++    const alloc = std.testing.allocator;
++    var collector: h.Collector = .{};
++    var cfg = config.Config.fromPreset(.mobile);
++    cfg.device.kind = .external;
++    cfg.stack.mode = .userspace;
++    cfg.handler.kind = .socks5;
++    cfg.handler.socks5.server = try addr.Endpoint.parse("127.0.0.1:9");
++    cfg.dns.fake_ip = true;
++    cfg.io.workers = 1;
++    cfg.log_level = .warn;
++    const e = try engine.Engine.create(alloc, cfg);
++    defer e.destroy();
++    e.external.?.setOutput(h.Collector.output, &collector);
++    const rules = [_]shield.TestBuilder.Rule{.{ .name = "blocked.test", .self_flags = shield.rule_parent_block, .sub_flags = shield.rule_parent_block }};
++    const snap = try shield.TestBuilder.build(alloc, 0, 0, 0, 0, &rules, &.{}, &.{});
++    defer alloc.free(snap);
++    try e.installShield(snap);
++    try e.start();
++    const resolver = try addr.Endpoint.parse("172.19.0.2:53");
++    var q: [256]u8 = undefined;
++    var pb: [512]u8 = undefined;
++    var out: [2048]u8 = undefined;
++    var port: u16 = 30000;
++    // blocked: A, AAAA, HTTPS (65), SVCB (64) → NXDOMAIN, no answers, no authority
++    for ([_]u16{ 1, 28, 65, 64 }) |qt| {
++        port += 1;
++        const client: addr.Endpoint = .{ .addr = try addr.Address.parse("10.0.0.2"), .port = port };
++        try inject(e, h.buildUdp4(&pb, client, resolver, dnsQuery(&q, port, "www.blocked.test", qt)));
++        const p = nextFor(&collector, port, 3000, &out) orelse return error.NoDnsReply;
++        const dns = out[p.payload_off..][0..p.payload_len];
++        try std.testing.expectEqual(@as(u16, 3), std.mem.readInt(u16, dns[2..4], .big) & 0xf);
++        try std.testing.expectEqual(@as(u16, 0), std.mem.readInt(u16, dns[6..8], .big));
++        try std.testing.expectEqual(@as(u16, 0), std.mem.readInt(u16, dns[8..10], .big));
++    }
++    try std.testing.expectEqual(@as(u64, 4), e.shield.counter(.dns_blocked));
++    // allowed: a fake IP comes back
++    port += 1;
++    const c2: addr.Endpoint = .{ .addr = try addr.Address.parse("10.0.0.2"), .port = port };
++    try inject(e, h.buildUdp4(&pb, c2, resolver, dnsQuery(&q, port, "cached.test", 1)));
++    const p2 = nextFor(&collector, port, 3000, &out) orelse return error.NoDnsReply;
++    const dns2 = out[p2.payload_off..][0..p2.payload_len];
++    try std.testing.expectEqual(@as(u16, 0), std.mem.readInt(u16, dns2[2..4], .big) & 0xf);
++    try std.testing.expectEqual(@as(u16, 1), std.mem.readInt(u16, dns2[6..8], .big));
++    const fake = addr.Address.v4(dns2[dns2.len - 4 ..][0..4].*);
++    try std.testing.expect(e.fake_dns.?.contains(fake));
++    // the parent blocks cached.test later; the app still holds the fake IP
++    const rules2 = [_]shield.TestBuilder.Rule{.{ .name = "cached.test", .self_flags = shield.rule_parent_block, .sub_flags = shield.rule_parent_block }};
++    const snap2 = try shield.TestBuilder.build(alloc, 0, 0, 0, 0, &rules2, &.{}, &.{});
++    defer alloc.free(snap2);
++    try e.installShield(snap2);
++    var tb: [256]u8 = undefined;
++    const tc = try addr.Endpoint.parse("10.0.0.2:41000");
++    try inject(e, h.buildTcp4(&tb, tc, .{ .addr = fake, .port = 443 }, .{ .seq = 999, .ack = 0, .flags = 0x02, .options = &syn_opts }));
++    const p3 = nextFor(&collector, 41000, 3000, &out) orelse return error.NoReply;
++    try std.testing.expect(p3.l4 == .tcp and p3.l4.tcp.flags.rst);
++    try std.testing.expectEqual(@as(u64, 1), e.shield.counter(.flow_blocked));
++    var s: stats.Snapshot = .{};
++    e.snapshot(&s);
++    try std.testing.expectEqual(@as(u64, 0), s.tcp_opened);
++    e.stop();
++}
 diff --git a/src/tests/tcp_sim.zig b/src/tests/tcp_sim.zig
-index cc6a2b7..7fff8f4 100644
+index cc6a2b7..6352f78 100644
 --- a/src/tests/tcp_sim.zig
 +++ b/src/tests/tcp_sim.zig
-@@ -88,6 +88,13 @@ const SimHandler = struct {
+@@ -88,6 +88,19 @@ const SimHandler = struct {
      delay_ms: u64 = 0,
      refuse_pct: u8 = 0,
  
@@ -835,6 +2946,12 @@ index cc6a2b7..7fff8f4 100644
 +        _ = a;
 +        _ = out;
 +        return null;
++    }
++
++    pub fn isFake(hd: *SimHandler, a: addr.Address) bool {
++        _ = hd;
++        _ = a;
++        return false;
 +    }
 +
      pub fn dialTcp(hd: *SimHandler, w: *SimWorker, d: *SimWorker.Dial, target: addr.Endpoint, owner: handler_mod.Owner) void {

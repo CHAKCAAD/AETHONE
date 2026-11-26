@@ -98,6 +98,12 @@ object HybridRouter {
         }
     }
 
+    /// Gives the router the context its owner-uid lookup needs, for routed
+    /// starts without a hybrid policy (analytics / Family Shield only).
+    fun attach(context: Context) {
+        appContext = context.applicationContext
+    }
+
     /// Installs [cfg] for the tunnel that is about to start (or is running).
     fun install(context: Context, cfg: Config) {
         appContext = context.applicationContext
@@ -144,41 +150,69 @@ object HybridRouter {
         return out
     }
 
-    /// The JNI entry (via dev.zeptun.Zeptun.route). Never throws.
+    /// The JNI entry (via dev.zeptun.Zeptun.route / routeShield). Never throws.
     /// Also the flow-open event of Traffic Analytics: a metered single-tunnel
     /// start runs with no policy (every flow → the default route) only so
-    /// this callback sees each flow; the owner uid is looked up once and
-    /// shared by the policy and the meter.
-    fun route(proto: Int, family: Int, src: ByteArray, sport: Int, dst: ByteArray, dport: Int, name: String?): Int {
-        val p = policy.get()
-        val metering = com.chakcaad.aethone.analytics.TrafficMeter.active
-        if (p == null) {
-            if (metering) observe(proto, src, sport, dst, dport, name, null, ROUTE_DEFAULT)
-            return ROUTE_DEFAULT
-        }
+    /// this callback sees each flow.
+    ///
+    /// Order (Family Shield, docs/family-shield-architecture.md):
+    ///   1. the owner uid is looked up ONCE when any layer needs it and is
+    ///      shared by the shield, the hybrid policy and the meter;
+    ///   2. Family Shield decides first — a blocked flow is rejected (TCP RST
+    ///      / ICMP unreachable) before the hybrid policy and before any
+    ///      SOCKS dial, and it is never handed to the traffic meter;
+    ///   3. the hybrid policy routes what passed (unchanged);
+    ///   4. the meter observes the flows that were not rejected.
+    /// [shield] is zeptun's native shield verdict; [shieldAware] = false for
+    /// the legacy callback (the shield then fails closed if it is active).
+    fun route(
+        proto: Int, family: Int, src: ByteArray, sport: Int, dst: ByteArray, dport: Int,
+        name: String?, shield: Int = 0, shieldAware: Boolean = false,
+    ): Int {
         return try {
-            val uid = if (p.hasAppRules || metering) ownerUid(proto, src, sport, dst, dport) else null
-            val owners = if (p.hasAppRules && uid != null) packagesOf(uid) else emptyList()
-            val answer = when (val d = p.decide(owners, name, if (name == null) dst else null)) {
-                is HybridPolicy.Decision.Refuse -> {
-                    refused.incrementAndGet()
-                    hits.getOrPut(d.ruleId) { AtomicLong() }.incrementAndGet()
-                    ROUTE_REJECT
-                }
-                is HybridPolicy.Decision.Route -> {
-                    routed.getOrPut(p.tunnels[d.tunnel]) { AtomicLong() }.incrementAndGet()
-                    d.ruleId?.let { hits.getOrPut(it) { AtomicLong() }.incrementAndGet() }
-                    if (d.tunnel == 0) ROUTE_DEFAULT else ROUTE_BASE + d.tunnel - 1
-                }
+            val p = policy.get()
+            val metering = com.chakcaad.aethone.analytics.TrafficMeter.active
+            val shieldOn = com.chakcaad.aethone.shield.FamilyShield.active
+            val needUid = com.chakcaad.aethone.shield.RouteGate.needsUid(
+                shieldOn && com.chakcaad.aethone.shield.FamilyShield.needsUid,
+                p?.hasAppRules == true,
+                metering,
+            )
+            // no context yet (should not happen on a routed start): leave the
+            // lookup to the meter's own fallback instead of booking INVALID
+            val uid = if (needUid && appContext != null) ownerUid(proto, src, sport, dst, dport) else null
+            val sd = if (shieldOn) {
+                com.chakcaad.aethone.shield.FamilyShield.decide(proto, src, sport, dst, dport, name, uid, shield, shieldAware)
+            } else {
+                null
             }
-            if (metering && answer != ROUTE_REJECT) observe(proto, src, sport, dst, dport, name, uid, answer)
-            answer
+            val out = com.chakcaad.aethone.shield.RouteGate.combine(sd, metering) {
+                if (p == null) ROUTE_DEFAULT else hybridAnswer(p, uid, name, dst)
+            }
+            if (out.observe) observe(proto, src, sport, dst, dport, name, uid, out.answer)
+            out.answer
         } catch (t: Throwable) {
             // Fail-closed: an engine error refuses the flow (the app retries);
             // it never sends the flow somewhere the user did not choose.
             lastError = t.javaClass.simpleName + ": " + (t.message ?: "")
             refused.incrementAndGet()
             ROUTE_REJECT
+        }
+    }
+
+    private fun hybridAnswer(p: HybridPolicy, uid: Int?, name: String?, dst: ByteArray): Int {
+        val owners = if (p.hasAppRules && uid != null) packagesOf(uid) else emptyList()
+        return when (val d = p.decide(owners, name, if (name == null) dst else null)) {
+            is HybridPolicy.Decision.Refuse -> {
+                refused.incrementAndGet()
+                hits.getOrPut(d.ruleId) { AtomicLong() }.incrementAndGet()
+                ROUTE_REJECT
+            }
+            is HybridPolicy.Decision.Route -> {
+                routed.getOrPut(p.tunnels[d.tunnel]) { AtomicLong() }.incrementAndGet()
+                d.ruleId?.let { hits.getOrPut(it) { AtomicLong() }.incrementAndGet() }
+                if (d.tunnel == 0) ROUTE_DEFAULT else ROUTE_BASE + d.tunnel - 1
+            }
         }
     }
 

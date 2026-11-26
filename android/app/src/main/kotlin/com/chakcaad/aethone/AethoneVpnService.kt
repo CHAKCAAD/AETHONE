@@ -210,6 +210,11 @@ class AethoneVpnService : VpnService() {
     /// profile or set of route servers does, like a port change.
     private var liveRoutingKey: String = ""
 
+    /// Family Shield: whether the running zeptun was started shielded (IPv6
+    /// captured, DNS hijack, routed callbacks). Toggling it restarts the
+    /// tunnel like a port change; rule edits alone never do.
+    private var liveShield: Boolean = false
+
     /// Traffic Analytics: the profile of the current start intent.
     private var analyticsProfile: String = "unknown"
 
@@ -387,6 +392,12 @@ class AethoneVpnService : VpnService() {
         routing: com.chakcaad.aethone.routing.HybridRouter.Config? = null,
     ): String? {
         val routingKey = routing?.key ?: ""
+        // Family Shield — compiled and handed to libzeptun-jni BEFORE any
+        // TUN exists; the snapshot is in force before the first packet. A
+        // shield the user enabled that can not be installed refuses the
+        // start (fail-closed) instead of connecting unfiltered.
+        val shieldPlan = com.chakcaad.aethone.shield.FamilyShield.prepareStart(this, appMode, apps, port)
+        shieldPlan.error?.let { return it }
         if (zeptunUp) {
             // v4.20: a mode switch (e.g. 1819 → 1820) between connects used
             // to keep serving the OLD port — zeptun would relay into a
@@ -405,7 +416,7 @@ class AethoneVpnService : VpnService() {
             val appsKey = "$appMode|${apps.sorted().joinToString(",")}"
             if (port != socksPort || tcpOnly != socksTcpOnly ||
                 socksStrict != socksStrictLive || appsKey != liveAppsKey ||
-                routingKey != liveRoutingKey
+                routingKey != liveRoutingKey || shieldPlan.active != liveShield
             ) {
                 Log.i(
                     TAG,
@@ -418,6 +429,11 @@ class AethoneVpnService : VpnService() {
                 // Same tunnel: only the rules may differ — apply them live.
                 if (routing != null) {
                     com.chakcaad.aethone.routing.HybridRouter.update(this, routing)
+                }
+                // Family Shield: prepareStart swapped the new snapshot into
+                // the running engine; re-check the flows already open.
+                if (shieldPlan.active) {
+                    try { Zeptun.nativeRevalidateFlows() } catch (t: Throwable) { Log.w(TAG, "revalidate failed", t) }
                 }
                 // Traffic Analytics: a different protocol on the same target
                 // books its usage under its own profile from here on (a new
@@ -458,6 +474,25 @@ class AethoneVpnService : VpnService() {
             .addAddress("172.19.0.1", 30)
             .addRoute("0.0.0.0", 0)
             .addDnsServer("172.19.0.2")
+        // Family Shield, bypass (B): without an IPv6 route every IPv6 flow
+        // leaves through the physical network and never meets the shield.
+        // zeptun carries IPv6 natively (fake range fc00::/18, device address
+        // fdfe:dcba:9876::1/126 = its preset default, DNS on ::2), so the
+        // TUN takes ::/0 while the shield is on. Shield off: unchanged
+        // (IPv4-only TUN, exactly as before).
+        var ipv6Captured = !shieldPlan.active
+        if (shieldPlan.captureIpv6) {
+            try {
+                builder.addAddress("fdfe:dcba:9876::1", 126)
+                builder.addRoute("::", 0)
+                builder.addDnsServer("fdfe:dcba:9876::2")
+                ipv6Captured = true
+            } catch (e: Exception) {
+                // explicit, never silent: the shield status turns Degraded
+                // («ipv6-not-captured») — IPv6 traffic would bypass it.
+                Log.e(TAG, "Family Shield: IPv6 capture failed — IPv6 bypasses the shield", e)
+            }
+        }
         // v4.41 (owner round 17, item 4) — per-app tunneling. The two
         // Builder lists are mutually exclusive (mixing them throws), so:
         //  * "allow": every VALID selected package joins the allow-list —
@@ -548,6 +583,7 @@ class AethoneVpnService : VpnService() {
 
             [dns]
             fake_ip = true
+            ${if (shieldPlan.hijackDns) "hijack = true" else ""}
         """.trimIndent()
 
         // v1.1.0 — hybrid routing: the policy is installed BEFORE zeptun
@@ -561,6 +597,7 @@ class AethoneVpnService : VpnService() {
         // flow-open and meter callbacks run. Analytics off = the plain
         // v1.0.2 start, no callbacks at all.
         com.chakcaad.aethone.analytics.TrafficMeter.init(this)
+        com.chakcaad.aethone.routing.HybridRouter.attach(this)
         val metered = com.chakcaad.aethone.analytics.TrafficMeter.enabled
         if (metered) {
             com.chakcaad.aethone.analytics.TrafficMeter.begin(
@@ -571,7 +608,10 @@ class AethoneVpnService : VpnService() {
             com.chakcaad.aethone.routing.HybridRouter.install(this, routing)
             com.chakcaad.aethone.routing.HybridRouter.resetCounters()
             Zeptun.nativeStartRouted(this, fd.fd, toml, routing.routeServers)
-        } else if (metered) {
+        } else if (metered || shieldPlan.active) {
+            // Family Shield is a trigger for the routed start too: the flow
+            // callback carries the shield verdict and app restrictions even
+            // on a single-tunnel protocol (no route servers, no policy).
             Zeptun.nativeStartRouted(this, fd.fd, toml, "")
         } else {
             Zeptun.nativeStart(this, fd.fd, toml)
@@ -591,6 +631,8 @@ class AethoneVpnService : VpnService() {
         socksStrictLive = socksStrict
         liveAppsKey = "$appMode|${apps.sorted().joinToString(",")}"
         liveRoutingKey = routingKey
+        liveShield = shieldPlan.active
+        if (shieldPlan.active) com.chakcaad.aethone.shield.FamilyShield.onTunnelUp(ipv6Captured)
         com.chakcaad.aethone.routing.HybridRouter.markLive(routing != null)
         Log.i(
             TAG,
@@ -621,6 +663,8 @@ class AethoneVpnService : VpnService() {
         if (meteredLive) com.chakcaad.aethone.analytics.TrafficMeter.end()
         meteredLive = false
         liveRoutingKey = ""
+        if (liveShield) com.chakcaad.aethone.shield.FamilyShield.onTunnelDown(reason)
+        liveShield = false
         com.chakcaad.aethone.routing.HybridRouter.markLive(false)
         descriptor?.close()
         descriptor = null

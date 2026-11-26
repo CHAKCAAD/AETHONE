@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Family Shield (phase 1): the parent PIN state and the shield policy never
+     leave the device through Auto Backup (Android 6–11). The SQLite store
+     lives in noBackupFilesDir (never backed up by the platform); these rules
+     also exclude the snapshot directory and any copy under the normal
+     database / file domains. Everything else keeps its existing backup
+     behaviour (only exclusions are listed). The PIN pepper is an Android
+     Keystore key, which is never part of a backup. -->
+<full-backup-content>
+    <exclude domain="database" path="family_shield.db" />
+    <exclude domain="database" path="family_shield.db-wal" />
+    <exclude domain="database" path="family_shield.db-shm" />
+    <exclude domain="file" path="shield" />
+</full-backup-content>

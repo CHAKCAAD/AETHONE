@@ -36,7 +36,7 @@ zeptun dials the chosen SOCKS5 listener → WARP / Psiphon / Tor inside Aether
 ```
 
 * **Where the engine lives:** the decision is native (Kotlin, in the VpnService process) and is enforced by zeptun at dial time. Flutter only edits and stores rules; it never decides a route.
-* **zeptun patch** (`scripts/zeptun-hybrid-routing.patch`, applied to the pinned tree by `scripts/build_native.sh` and by the CI zig-test gate; since 2026-11-26 it also carries the Traffic Analytics per-flow meter — see `docs/traffic-analytics.md`):
+* **zeptun patch** (`scripts/zeptun-hybrid-routing.patch`, applied to the pinned tree by `scripts/build_native.sh` and by the CI zig-test gate; since 2026-11-26 it also carries the Traffic Analytics per-flow meter — see `docs/traffic-analytics.md` — and the Family Shield matcher / DNS hook / revalidation — see `docs/family-shield-architecture.md`):
   * `handler.socks5.routes[0..4]` — extra SOCKS5 servers; `Dial.route` picks one per flow; the warm pool stays for route 0 only.
   * `zeptun_set_route_callback` / `zeptun_set_route_servers` (C ABI) and `Judge.askRoute` — answer decoding is **fail-closed**: any unknown answer, including "direct", rejects the flow; an out-of-range route index is refused, never defaulted.
   * TCP (`stack/tcp.zig`) and UDP (`stack/udp.zig`) ask the router once per new flow, passing the fake-IP domain when the destination is a fake address.
@@ -124,3 +124,10 @@ Persistence key: `aethone.settings.hybridRules.v110` (profile → rule list).
 * One JNI call per new flow (plus one binder call when app rules exist) on the engine thread; fine for normal use, untested under very high connection rates.
 * Hybrid modes are TCP-only (existing); IPv6 is not routed into the TUN (existing).
 * A user-overridden `AETHER_PSIPHON_BIND` / `AETHER_TOR_BIND` (expert env) would point routes at the wrong port; such flows fail closed.
+
+## 12. Family Shield (phase 1, 2026-11-26)
+
+`HybridRouter.route` now looks the owner uid up once for every layer that needs it and evaluates
+Family Shield **before** this policy: a flow the shield blocks is rejected before `HybridPolicy.decide`
+and before any SOCKS dial. With the shield off the routing behaviour above is unchanged. Details:
+`docs/family-shield-architecture.md`.

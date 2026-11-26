@@ -1781,6 +1781,21 @@ jobs:
           if not ok:
               print("::error::dev.zeptun.Zeptun.route missing from the release dex (R8 stripped the JNI callback)"); sys.exit(1)
           print("JNI callback present: dev.zeptun.Zeptun.route(II[BI[BILjava/lang/String;)I")
+          # Family Shield (phase 1): the shield-aware callbacks libzeptun-jni
+          # resolves by name, and the natives RegisterNatives binds (one
+          # missing native fails the whole registration -> no tunnel at all).
+          need = [
+              ("routeShield", r"\(II\[BI\[BILjava/lang/String;I\)I"),
+              ("revalidate", r"\(II\[BI\[BILjava/lang/String;I\)I"),
+              ("nativeShieldSnapshot", r"\(\[B\)I"),
+              ("nativeShieldValidate", r"\(\[B\)I"),
+              ("nativeRevalidateFlows", r"\(\)I"),
+              ("nativeShieldCounter", r"\(I\)J"),
+          ]
+          for name, sig in need:
+              if not re.search(r"name\s*: '" + name + r"'\s*\n\s*type\s*: '" + sig + "'", m.group(1)):
+                  print(f"::error::dev.zeptun.Zeptun.{name} missing from the release dex (R8 / JNI surface)"); sys.exit(1)
+              print(f"JNI surface present: dev.zeptun.Zeptun.{name}")
           PY
 
       # v1.1.0 — the hybrid-routing policy engine's JVM unit tests (the
@@ -1788,13 +1803,30 @@ jobs:
       # wildcard domain, IPv4/IPv6/CIDR, priority, conflicts, default
       # route, fail-closed). Runs on the gradle project the build above
       # just configured.
-      - name: Hybrid routing — Kotlin policy unit tests
+      - name: Hybrid routing + Family Shield — Kotlin unit tests
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon :app:testDebugUnitTest --tests 'com.chakcaad.aethone.routing.*'
+          # Family Shield (phase 1): age profiles, categories, block/allow
+          # lists, mandatory priority, uid match, invalid uid, unknown-domain
+          # policy, conflicts, snapshot generation + golden, PIN verify /
+          # backoff / recovery, profile switching, content sources, events.
+          ./gradlew --no-daemon :app:testDebugUnitTest --tests 'com.chakcaad.aethone.routing.*' --tests 'com.chakcaad.aethone.shield.*'
           mkdir -p "$GITHUB_WORKSPACE/test-evidence"
           cp -r app/build/test-results "$GITHUB_WORKSPACE/test-evidence/hybrid-routing-junit" || true
+          # fail-closed: the shield suites must have actually run
+          python3 - <<'PY'
+          import glob, re, sys
+          files = glob.glob('app/build/test-results/testDebugUnitTest/TEST-com.chakcaad.aethone.shield.*.xml')
+          total = 0
+          for f in files:
+              t = open(f).read()
+              m = re.search(r'tests="(\d+)"[^>]*failures="(\d+)"[^>]*errors="(\d+)"', t) or re.search(r'tests="(\d+)"', t)
+              total += int(m.group(1))
+          print(f"Family Shield JVM suites: {len(files)} files, {total} tests")
+          if len(files) < 4 or total < 30:
+              print("::error::Family Shield unit tests did not run (expected >= 4 suites / 30 tests)"); sys.exit(1)
+          PY
 
       # v4.35 (owner round 11, the beta-release decree: «نسخه های مختلف cpu
       # های مختلف و .. رو بیلد بگیریم») — one release APK per ABI on top of

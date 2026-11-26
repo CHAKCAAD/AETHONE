@@ -136,3 +136,12 @@ Export only through the user's own save picker; nothing leaves the phone otherwi
 * `test/zz_traffic_analytics_shots_test.dart` — renders the screens with a
   **test-only** mock channel (fixture numbers live in the test file only).
 * zeptun `zig build test` on the patched tree — see §10 of the PR / CI.
+
+## 10. Family Shield interaction (phase 1, 2026-11-26)
+
+Flows rejected by Family Shield are answered with RST / ICMP before any dial and are never handed to
+`TrafficMeter.onFlowOpen`; they move no SOCKS bytes, so they are not counted as tunnel traffic
+(unit-tested in `ShieldPolicyTest.routeGateRejectsBeforeHybridAndNeverMeters`). DNS answers (including
+NXDOMAIN for blocked names) are local and stay outside per-app accounting as before. The owner uid is
+now looked up once per flow in `HybridRouter.route` and passed to the meter (the meter's own lookup is
+only a fallback). Not device tested.
