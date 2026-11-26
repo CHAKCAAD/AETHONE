@@ -12,6 +12,7 @@ package dev.zeptun
 ///    engine on its own thread. `config` is the TOML document (mobile
 ///    preset + socks5 handler + fake-IP DNS); null starts from the preset.
 ///  * [nativeStop] — stop + join + destroy (idempotent by bridge design).
+///  * [meter] — per-flow byte reports for Traffic Analytics (routed starts).
 ///  * [nativeCounter] — raw ZeptunStats field by index (order:
 ///    0 rx_packets, 1 rx_bytes, 2 tx_packets, 3 tx_bytes, …; -1 when the
 ///    engine is not running).
@@ -34,6 +35,18 @@ object Zeptun {
     @JvmStatic
     fun route(proto: Int, family: Int, src: ByteArray, sport: Int, dst: ByteArray, dport: Int, name: String?): Int =
         com.chakcaad.aethone.routing.HybridRouter.route(proto, family, src, sport, dst, dport, name)
+    /// AETHONE traffic analytics (scripts/zeptun-hybrid-routing.patch, meter
+    /// part): called by libzeptun-jni on the engine thread with a TCP flow's
+    /// payload byte deltas (up = app → its SOCKS5 stream, down = stream →
+    /// app) and the route it was really dialled on. Registered only for a
+    /// routed start; must never throw.
+    @JvmStatic
+    fun meter(proto: Int, family: Int, src: ByteArray, sport: Int, dst: ByteArray, dport: Int, route: Int, up: Long, down: Long, closed: Boolean) {
+        try {
+            com.chakcaad.aethone.analytics.TrafficMeter.onMeter(proto, src, sport, dst, dport, route, up, down, closed)
+        } catch (_: Throwable) {
+        }
+    }
     external fun nativeStop()
     external fun nativeVersion(): String
     external fun nativeCounter(index: Int): Long

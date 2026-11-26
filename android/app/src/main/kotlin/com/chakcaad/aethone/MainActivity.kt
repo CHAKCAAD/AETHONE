@@ -38,6 +38,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val TAG = "AethoneMain"
         private const val REQ_VPN_PERMISSION = 4711
+        private const val REQUEST_TRAFFIC_EXPORT = 4712
 
         /// v4.19 (#1 diagnostics): the last Java-level crash lands here so
         /// the next device test can hand it over even without adb.
@@ -323,6 +324,8 @@ class MainActivity : FlutterActivity() {
                     // v1.1.0 — hybrid per-tunnel routing policy (JSON), only
                     // for a hybrid protocol with routing on.
                     val hybridRouting = call.argument<String>("hybridRouting")
+                    // Traffic Analytics: the protocol id usage is booked under.
+                    val analyticsProfile = call.argument<String>("analyticsProfile")
                     // v4.26 — record the session BEFORE the start goes out:
                     // a stop that lands while this start is still in flight
                     // bumps the stop generation past it, and the straggler
@@ -341,6 +344,9 @@ class MainActivity : FlutterActivity() {
                         )
                     if (!hybridRouting.isNullOrBlank()) {
                         intent.putExtra(AethoneVpnService.EXTRA_HYBRID_ROUTING, hybridRouting)
+                    }
+                    if (!analyticsProfile.isNullOrBlank()) {
+                        intent.putExtra(AethoneVpnService.EXTRA_ANALYTICS_PROFILE, analyticsProfile)
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         startForegroundService(intent)
@@ -417,6 +423,45 @@ class MainActivity : FlutterActivity() {
                     com.chakcaad.aethone.routing.HybridRouter.status(),
                 )
                 "zeptunCounters" -> result.success(AethoneVpnService.counters())
+                // Traffic Analytics (docs/traffic-analytics.md §5): every
+                // read runs off the main thread; the store is SQLite.
+                "trafficQuery" -> analyticsIo(result) {
+                    com.chakcaad.aethone.analytics.TrafficMeter.query(this, call.argument<String>("query") ?: "{}")
+                }
+                "trafficLive" -> result.success(com.chakcaad.aethone.analytics.TrafficMeter.live())
+                "trafficConfig" -> {
+                    com.chakcaad.aethone.analytics.TrafficMeter.configure(
+                        this,
+                        call.argument<Boolean>("enabled"),
+                        call.argument<Boolean>("domains"),
+                        call.argument<Int>("retentionDays"),
+                    )
+                    result.success(com.chakcaad.aethone.analytics.TrafficMeter.config())
+                }
+                "trafficClear" -> analyticsIo(result) {
+                    com.chakcaad.aethone.analytics.TrafficMeter.clear(this); true
+                }
+                "trafficLabels" -> analyticsIo(result) {
+                    com.chakcaad.aethone.analytics.TrafficMeter.labels(
+                        this, call.argument<List<String>>("apps") ?: emptyList(),
+                    )
+                }
+                "trafficExport" -> {
+                    val format = if (call.argument<String>("format") == "csv") "csv" else "json"
+                    pendingExport = format to result
+                    val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US)
+                        .format(java.util.Date())
+                    val pick = Intent(Intent.ACTION_CREATE_DOCUMENT)
+                        .addCategory(Intent.CATEGORY_OPENABLE)
+                        .setType(if (format == "csv") "text/csv" else "application/json")
+                        .putExtra(Intent.EXTRA_TITLE, "aethone-traffic-$stamp.$format")
+                    try {
+                        startActivityForResult(pick, REQUEST_TRAFFIC_EXPORT)
+                    } catch (e: Exception) {
+                        pendingExport = null
+                        result.success(mapOf("ok" to false, "error" to "no-picker"))
+                    }
+                }
                 // v4.19 (#7): the proxy-mode process hold (CoreHoldService).
                 "startCoreHold" -> {
                     val port = call.argument<Int>("port") ?: 1819
@@ -513,6 +558,34 @@ class MainActivity : FlutterActivity() {
         null
     }
 
+    private var pendingExport: Pair<String, MethodChannel.Result>? = null
+
+    private fun <T> analyticsIo(result: MethodChannel.Result, block: () -> T) {
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Thread({
+            try {
+                val v = block()
+                main.post { result.success(v) }
+            } catch (t: Throwable) {
+                main.post { result.error("traffic", t.message ?: t.javaClass.simpleName, null) }
+            }
+        }, "aethone-analytics-io").start()
+    }
+
+    private fun finishTrafficExport(uri: android.net.Uri?) {
+        val (format, result) = pendingExport ?: return
+        pendingExport = null
+        if (uri == null) {
+            result.success(mapOf("ok" to false, "error" to "cancelled"))
+            return
+        }
+        analyticsIo(result) {
+            val text = com.chakcaad.aethone.analytics.TrafficMeter.export(this, format)
+            contentResolver.openOutputStream(uri, "wt")!!.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+            mapOf("ok" to true, "bytes" to text.length)
+        }
+    }
+
     private fun installedApps(): List<Map<String, String>> {
         val pm = packageManager
         val launcher = android.content.Intent(
@@ -567,6 +640,10 @@ class MainActivity : FlutterActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_TRAFFIC_EXPORT) {
+            finishTrafficExport(if (resultCode == RESULT_OK) data?.data else null)
+            return
+        }
         if (requestCode == REQ_VPN_PERMISSION) {
             val granted = resultCode == RESULT_OK
             Log.i(TAG, "VPN permission granted=$granted")

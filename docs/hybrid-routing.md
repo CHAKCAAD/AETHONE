@@ -36,7 +36,7 @@ zeptun dials the chosen SOCKS5 listener → WARP / Psiphon / Tor inside Aether
 ```
 
 * **Where the engine lives:** the decision is native (Kotlin, in the VpnService process) and is enforced by zeptun at dial time. Flutter only edits and stores rules; it never decides a route.
-* **zeptun patch** (`scripts/zeptun-hybrid-routing.patch`, applied to the pinned tree by `scripts/build_native.sh` and by the CI zig-test gate):
+* **zeptun patch** (`scripts/zeptun-hybrid-routing.patch`, applied to the pinned tree by `scripts/build_native.sh` and by the CI zig-test gate; since 2026-11-26 it also carries the Traffic Analytics per-flow meter — see `docs/traffic-analytics.md`):
   * `handler.socks5.routes[0..4]` — extra SOCKS5 servers; `Dial.route` picks one per flow; the warm pool stays for route 0 only.
   * `zeptun_set_route_callback` / `zeptun_set_route_servers` (C ABI) and `Judge.askRoute` — answer decoding is **fail-closed**: any unknown answer, including "direct", rejects the flow; an out-of-range route index is refused, never defaulted.
   * TCP (`stack/tcp.zig`) and UDP (`stack/udp.zig`) ask the router once per new flow, passing the fake-IP domain when the destination is a fake address.
