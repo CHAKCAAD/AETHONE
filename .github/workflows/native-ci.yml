@@ -647,6 +647,21 @@ jobs:
       - name: Run inspection (readelf v3 — machine, PIE, static-proof, NEEDED, LOAD, two-case RELRO 16KB)
         run: bash scripts/inspect_elf.sh --dir "${{ github.workspace }}/out"
 
+      # Family Shield phase 2 — Android app seccomp gate. Zig code in libzeptun
+      # issues raw syscalls; on x86_64 a legacy `poll` (nr 7) killed the app
+      # with SIGSYS on the first routed TCP flow (run 45870688624, tombstone_00).
+      # Disassembles both zeptun libraries and fails on any direct legacy
+      # syscall (poll/select/epoll_wait/open/access/stat/...); fixture check
+      # first so the gate can't silently stop detecting.
+      - name: Android seccomp gate (x86_64 zeptun libs — no direct poll/legacy syscalls)
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check capstone==5.0.9 pyelftools==0.33
+          python3 scripts/check_android_seccomp.py --self-test
+          python3 scripts/check_android_seccomp.py \
+            out/x86_64/zeptun/libzeptun.so \
+            out/x86_64/zeptun/libzeptun-jni.so
+
       - name: Upload inspection results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

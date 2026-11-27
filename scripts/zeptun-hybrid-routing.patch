@@ -94,6 +94,32 @@ index d7cf252..bd0c5ea 100644
  };
  
  pub const DirectConfig = struct {
+diff --git a/src/device/linux.zig b/src/device/linux.zig
+index 7972e29..3af088c 100644
+--- a/src/device/linux.zig
++++ b/src/device/linux.zig
+@@ -139,7 +139,7 @@ pub const Tun = struct {
+         const paths = [_][*:0]const u8{ "/dev/net/tun", "/dev/tun" };
+         var last: i32 = 0;
+         for (paths) |path| {
+-            const r = sys.linuxResult(os_linux.open(path, .{ .ACCMODE = .RDWR, .NONBLOCK = true, .CLOEXEC = true }, 0));
++            const r = sys.linuxResult(sys.openAt(path, .{ .ACCMODE = .RDWR, .NONBLOCK = true, .CLOEXEC = true }, 0));
+             if (r >= 0) return r;
+             last = r;
+             if (sys.toErrno(r) != .noent) break;
+diff --git a/src/elastic.zig b/src/elastic.zig
+index 33c489b..cb025bd 100644
+--- a/src/elastic.zig
++++ b/src/elastic.zig
+@@ -192,7 +192,7 @@ pub const CpuStat = struct {
+         if (s.failed) return null;
+         const linux = std.os.linux;
+         if (s.fd == sys.invalid_fd) {
+-            const r = sys.linuxResult(linux.open("/proc/stat", .{ .ACCMODE = .RDONLY, .CLOEXEC = true }, 0));
++            const r = sys.linuxResult(sys.openAt("/proc/stat", .{ .ACCMODE = .RDONLY, .CLOEXEC = true }, 0));
+             if (r < 0) {
+                 s.failed = true;
+                 return null;
 diff --git a/src/engine.zig b/src/engine.zig
 index b4dd13e..cdb6b12 100644
 --- a/src/engine.zig
@@ -1783,6 +1809,69 @@ index 09f5121..e73a809 100644
              if (h.cfg.handler.socks5.udp_address) |ua| {
                  if (ua.family == relay.addr.family) relay.addr = ua;
              }
+diff --git a/src/io/epoll.zig b/src/io/epoll.zig
+index 488d077..1060c33 100644
+--- a/src/io/epoll.zig
++++ b/src/io/epoll.zig
+@@ -238,7 +238,7 @@ pub fn Impl(comptime Outer: type) type {
+                     if (op.events.in) mask |= linux.POLL.IN | 0x2000;
+                     if (op.events.out) mask |= linux.POLL.OUT;
+                     var pfd = [1]linux.pollfd{.{ .fd = op.fd, .events = mask, .revents = 0 }};
+-                    const r = sys.linuxResult(linux.poll(&pfd, 1, 0));
++                    const r = sys.linuxResult(sys.ppollMs(&pfd, 1, 0));
+                     if (r < 0) break :blk r;
+                     if (r == 0) break :blk sys.Errno.again.result();
+                     const rev: u32 = @bitCast(@as(i32, pfd[0].revents));
+diff --git a/src/io/sys.zig b/src/io/sys.zig
+index 16a76c9..11713d1 100644
+--- a/src/io/sys.zig
++++ b/src/io/sys.zig
+@@ -121,6 +121,25 @@ pub inline fn linuxResult(rc: usize) i32 {
+     return @intCast(@min(rc, std.math.maxInt(i32)));
+ }
+ 
++// AETHONE: Android's app seccomp filter (bionic SECCOMP_ALLOWLIST_APP) only
++// admits the legacy poll(2)/open(2)/access(2)/... syscalls on 32-bit ABIs.
++// On x86_64 a raw `poll` (nr 7) kills the process with SIGSYS (SYS_SECCOMP),
++// and arm64 has no `poll` at all. zig's std.os.linux.poll/open emit the
++// legacy syscall whenever the arch has it, so every Linux path goes through
++// these ppoll/openat wrappers instead (also fine on desktop Linux).
++pub fn ppollMs(fds: [*]linux.pollfd, n: usize, timeout_ms: i32) usize {
++    if (timeout_ms < 0) return linux.ppoll(fds, @intCast(n), null, null);
++    var ts: linux.timespec = .{
++        .sec = @intCast(@divTrunc(timeout_ms, 1000)),
++        .nsec = @intCast(@as(i64, @rem(timeout_ms, 1000)) * std.time.ns_per_ms),
++    };
++    return linux.ppoll(fds, @intCast(n), &ts, null);
++}
++
++pub fn openAt(path: [*:0]const u8, flags: linux.O, mode: linux.mode_t) usize {
++    return linux.openat(linux.AT.FDCWD, path, flags, mode);
++}
++
+ pub inline fn libcResult(rc: anytype) i32 {
+     if (rc == -1) return mapErrno(c.errno(rc)).result();
+     return @intCast(@min(rc, std.math.maxInt(i32)));
+@@ -668,3 +687,19 @@ test "random bytes come from the operating system" {
+     try std.testing.expect(!std.mem.eql(u8, &a, &b));
+     try std.testing.expect(!std.mem.allEqual(u8, &a, 0));
+ }
++
++test "ppollMs replaces poll(2): timeout, readiness and infinite-wait encoding" {
++    if (!is_linux) return error.SkipZigTest;
++    var p: [2]i32 = undefined;
++    try std.testing.expectEqual(@as(usize, 0), linux.pipe2(&p, .{ .CLOEXEC = true }));
++    defer _ = linux.close(p[0]);
++    defer _ = linux.close(p[1]);
++    var pfd = [1]linux.pollfd{.{ .fd = p[0], .events = linux.POLL.IN, .revents = 0 }};
++    try std.testing.expectEqual(@as(i32, 0), linuxResult(ppollMs(&pfd, 1, 0)));
++    try std.testing.expectEqual(@as(i32, 0), linuxResult(ppollMs(&pfd, 1, 15)));
++    const one = [1]u8{1};
++    try std.testing.expectEqual(@as(usize, 1), linux.write(p[1], &one, 1));
++    try std.testing.expectEqual(@as(i32, 1), linuxResult(ppollMs(&pfd, 1, -1)));
++    try std.testing.expect(pfd[0].revents & linux.POLL.IN != 0);
++    try std.testing.expectEqual(@as(i32, 1), linuxResult(ppollMs(&pfd, 1, 1500)));
++}
 diff --git a/src/jni/zeptun_jni.c b/src/jni/zeptun_jni.c
 index ee56f42..58a8b9c 100644
 --- a/src/jni/zeptun_jni.c
@@ -2169,6 +2258,80 @@ index 12defb5..b8ea29e 100644
      _ = @import("tests/tcp_sim.zig");
 +    _ = @import("tests/shield_engine_tests.zig");
  }
+diff --git a/src/route/android.zig b/src/route/android.zig
+index ce0241a..05492e4 100644
+--- a/src/route/android.zig
++++ b/src/route/android.zig
+@@ -23,7 +23,7 @@ pub fn appIdOf(list: []const u8, name: []const u8) ?u32 {
+ fn readFile(path: [*:0]const u8, buf: []u8) ?[]u8 {
+     if (!sys.is_linux) return null;
+     const linux = std.os.linux;
+-    const fd = sys.linuxResult(linux.open(path, .{ .ACCMODE = .RDONLY, .CLOEXEC = true }, 0));
++    const fd = sys.linuxResult(sys.openAt(path, .{ .ACCMODE = .RDONLY, .CLOEXEC = true }, 0));
+     if (fd < 0) return null;
+     defer sys.close(fd);
+     var total: usize = 0;
+@@ -38,7 +38,7 @@ fn readFile(path: [*:0]const u8, buf: []u8) ?[]u8 {
+ fn listUsers(out: []u32) usize {
+     if (!sys.is_linux) return 0;
+     const linux = std.os.linux;
+-    const fd = sys.linuxResult(linux.open(users_path, .{ .ACCMODE = .RDONLY, .DIRECTORY = true, .CLOEXEC = true }, 0));
++    const fd = sys.linuxResult(sys.openAt(users_path, .{ .ACCMODE = .RDONLY, .DIRECTORY = true, .CLOEXEC = true }, 0));
+     if (fd < 0) return 0;
+     defer sys.close(fd);
+     var count: usize = 0;
+diff --git a/src/route/linux.zig b/src/route/linux.zig
+index 522f8dd..987f37b 100644
+--- a/src/route/linux.zig
++++ b/src/route/linux.zig
+@@ -583,7 +583,7 @@ pub fn configure(setup: InterfaceSetup) Error!Applied {
+ fn relaxReversePathFilter(name: []const u8) void {
+     var path: [64]u8 = undefined;
+     const file = std.fmt.bufPrint(&path, "/proc/sys/net/ipv4/conf/{s}/rp_filter", .{name}) catch return;
+-    const fd = sys.linuxResult(std.os.linux.open(@ptrCast(path[0..file.len].ptr), .{ .ACCMODE = .RDWR, .CLOEXEC = true }, 0));
++    const fd = sys.linuxResult(sys.openAt(@ptrCast(path[0..file.len].ptr), .{ .ACCMODE = .RDWR, .CLOEXEC = true }, 0));
+     if (fd < 0) return;
+     defer sys.close(fd);
+     var buf: [8]u8 = undefined;
+diff --git a/src/route/monitor.zig b/src/route/monitor.zig
+index a8de013..7f87310 100644
+--- a/src/route/monitor.zig
++++ b/src/route/monitor.zig
+@@ -100,7 +100,7 @@ pub const Monitor = struct {
+         if (sys.is_linux) {
+             const linux = std.os.linux;
+             var pfd = [2]linux.pollfd{ .{ .fd = m.fd, .events = linux.POLL.IN, .revents = 0 }, .{ .fd = m.wake[0], .events = linux.POLL.IN, .revents = 0 } };
+-            if (sys.linuxResult(linux.poll(&pfd, 2, timeout)) <= 0) return false;
++            if (sys.linuxResult(sys.ppollMs(&pfd, 2, timeout)) <= 0) return false;
+             if (pfd[0].revents == 0) return false;
+         } else {
+             var pfd = [2]std.c.pollfd{ .{ .fd = m.fd, .events = std.c.POLL.IN, .revents = 0 }, .{ .fd = m.wake[0], .events = std.c.POLL.IN, .revents = 0 } };
+diff --git a/src/route/netns.zig b/src/route/netns.zig
+index 5cf2bbc..2fa4fde 100644
+--- a/src/route/netns.zig
++++ b/src/route/netns.zig
+@@ -47,7 +47,7 @@ pub const Handle = struct {
+ };
+ 
+ fn openPath(path: [:0]const u8) !sys.fd_t {
+-    const r = sys.linuxResult(std.os.linux.open(path.ptr, .{ .ACCMODE = .RDONLY, .CLOEXEC = true }, 0));
++    const r = sys.linuxResult(sys.openAt(path.ptr, .{ .ACCMODE = .RDONLY, .CLOEXEC = true }, 0));
+     if (r < 0) return sys.errnoError(sys.toErrno(r));
+     return r;
+ }
+diff --git a/src/route/resolved.zig b/src/route/resolved.zig
+index 0df5e58..76ccefe 100644
+--- a/src/route/resolved.zig
++++ b/src/route/resolved.zig
+@@ -23,7 +23,7 @@ fn ownsResolved() bool {
+     if (r == 0) return true;
+     if (sys.toErrno(r) != .inprogress) return false;
+     var fds = [_]std.os.linux.pollfd{.{ .fd = fd, .events = std.os.linux.POLL.OUT, .revents = 0 }};
+-    if (sys.linuxResult(std.os.linux.poll(&fds, 1, stub_wait_ms)) <= 0) return false;
++    if (sys.linuxResult(sys.ppollMs(&fds, 1, stub_wait_ms)) <= 0) return false;
+     return sys.socketError(fd) == .success;
+ }
+ 
 diff --git a/src/stack/dns.zig b/src/stack/dns.zig
 index 4d01b3d..98d3026 100644
 --- a/src/stack/dns.zig
