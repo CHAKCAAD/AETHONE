@@ -4,4 +4,22 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <application>
+        <!-- Real-device test driver (docs/family-shield-device-testing.md,
+             scripts/device-test/). DEBUG SOURCE SET ONLY: the class lives in
+             src/debug/kotlin and this declaration exists only in the debug
+             (DA, com.chakcaad.aethone.da) build. Reachable only by a sender
+             holding android.permission.DUMP (the adb shell; an ordinary app
+             can only get it through adb) AND inert unless the
+             debug.aethone.shieldtest system property is 1. CI job
+             device-test-apk fails if a release APK ever declares it. -->
+        <receiver
+            android:name="com.chakcaad.aethone.shield.DeviceTestReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.chakcaad.aethone.DEVICE_TEST"/>
+            </intent-filter>
+        </receiver>
+    </application>
 </manifest>

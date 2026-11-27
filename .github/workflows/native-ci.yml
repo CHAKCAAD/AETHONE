@@ -1873,6 +1873,20 @@ jobs:
           echo "jniLibs for the debug build (arm64-v8a ONLY):"
           find "$JL" -type f -printf '%p  %s bytes\n' | sort
 
+      # Device-test round (branch feature/family-shield-device-test): the DA
+      # debug build WITHOUT PREVIEW_MODE (real engines), arm64-only, kept for
+      # the device-test-apk job. Its debug source set carries the adb-only
+      # DeviceTestReceiver (DUMP-permission + debug.aethone.shieldtest gated);
+      # release builds never contain it (gated in device-test-apk). Built
+      # before the preview so app-debug.apk is not overwritten.
+      - name: Build device-test DA APK (debuggable, arm64-only, real engines — NOT a release)
+        run: |
+          set -euo pipefail
+          flutter build apk --debug --target-platform android-arm64
+          mkdir -p devtest
+          cp build/app/outputs/flutter-apk/app-debug.apk devtest/app-da-debug-arm64.apk
+          ls -la devtest/
+
       - name: Build preview-debug APK (UI demo — PREVIEW_MODE is debug-only BY CODE)
         run: |
           set -euo pipefail
@@ -1948,6 +1962,14 @@ jobs:
           name: aethone-apk-r${{ github.run_number }}
           path: dist/
           if-no-files-found: error
+
+      - name: Upload device-test DA APK (intermediate, for device-test-apk)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: devtest-da-r${{ github.run_number }}
+          path: devtest/
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Record packaging status (real result, uploaded even on failure)
         if: always()
@@ -3076,6 +3098,122 @@ jobs:
           if-no-files-found: error
 
   # =========================================================================
+  # Device-test round — device-test-apk: assembles the arm64 APKs the OWNER
+  # installs on a real phone (docs/family-shield-device-testing.md) into ONE
+  # clearly-labelled artifact. NOT a release candidate, never published.
+  #   * release APK (com.chakcaad.aethone): the rotated-key build from
+  #     release-signing when it signed this run, else the debug-signed one
+  #     from android-apk (labelled so in DEVICE_TEST_INFO.txt);
+  #   * DA APK (com.chakcaad.aethone.da): debuggable, carries the adb-only
+  #     device hook.
+  # Manifest gates (scripts/check_device_test_apk.py): the release APK is not
+  # debuggable, does not declare DeviceTestReceiver, ShieldTestReceiver is not
+  # exported; the DA APK's hook is DUMP-permission protected. Signer gate: never
+  # the compromised key. No secrets in this job.
+  # =========================================================================
+  device-test-apk:
+    name: "Device-test APKs (arm64 — NOT a release candidate)"
+    needs: [android-apk, release-signing]
+    if: ${{ always() && needs.android-apk.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout AETHONE repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Download the APK artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: aethone-apk-r${{ github.run_number }}
+          path: apk
+
+      - name: Download the DA device-test APK
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: devtest-da-r${{ github.run_number }}
+          path: da
+
+      - name: Download the rotated-key signed APKs (when release-signing signed this run)
+        if: ${{ needs.release-signing.outputs.signed == 'true' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: aethone-apk-signed-r${{ github.run_number }}
+          path: signed
+
+      - name: Install pinned build-tools (apksigner + aapt2)
+        run: |
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "build-tools;${BUILD_TOOLS_VERSION}" > /dev/null
+          [ -x "$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}/aapt2" ] || { echo "::error::aapt2 missing"; exit 1; }
+
+      - name: Assemble + gate the device-test APKs
+        env:
+          SIGNED: ${{ needs.release-signing.outputs.signed }}
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}"
+          R="${{ github.run_number }}"
+          OUT="device-test"
+          mkdir -p "$OUT"
+          REL="$OUT/aethone-DEVICE-TEST-arm64-v8a-r${R}-release-NOT-A-RELEASE.apk"
+          DA="$OUT/aethone-DEVICE-TEST-DA-debuggable-arm64-v8a-r${R}.apk"
+          if [ "${SIGNED:-}" = "true" ] && [ -f "signed/aethone-arm64-v8a-r${R}.apk" ]; then
+            cp "signed/aethone-arm64-v8a-r${R}.apk" "$REL"
+            REL_SIGN="rotated release key (release-signing job, secrets) — installs like a future release would; still NOT a release candidate"
+          else
+            cp "apk/aethone-arm64-v8a-r${R}.apk" "$REL"
+            REL_SIGN="DEBUG key (release secrets absent in this run) — the migration rows DT-MIG-02/04 are NOT meaningful with this APK"
+            echo "::warning::device-test release APK is debug-signed (release-signing did not sign this run)"
+          fi
+          cp da/app-da-debug-arm64.apk "$DA"
+          fails=0
+          for kind in release da; do
+            f="$REL"; [ "$kind" = da ] && f="$DA"
+            "$BT/aapt2" dump xmltree --file AndroidManifest.xml "$f" > "$OUT/manifest-$kind.txt"
+            python3 scripts/check_device_test_apk.py "$kind" "$OUT/manifest-$kind.txt" || fails=$((fails + 1))
+            libs="$(unzip -Z1 "$f" | grep '^lib/' | sort | tr '\n' ' ')"
+            echo "$kind libs: $libs"
+            for need in lib/arm64-v8a/libzeptun-jni.so lib/arm64-v8a/libaether.so; do
+              grep -q "$need" <<<"$libs" || { echo "::error::$kind APK lacks $need"; fails=$((fails + 1)); }
+            done
+            if grep -q 'lib/armeabi-v7a/\|lib/x86_64/' <<<"$libs"; then echo "::error::$kind APK is not arm64-only"; fails=$((fails + 1)); fi
+            "$BT/apksigner" verify --print-certs "$f" > "$OUT/signer-$kind.txt"
+            cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$OUT/signer-$kind.txt" | head -1 | tr -d ': ' | tr 'A-F' 'a-f')"
+            [ -n "$cert" ] || { echo "::error::no signer on $f"; fails=$((fails + 1)); }
+            [ "$cert" != "$OLD_COMPROMISED_CERT_SHA256" ] || { echo "::error::$f is signed by the COMPROMISED key"; fails=$((fails + 1)); }
+            echo "$kind signer SHA-256: $cert" | tee -a "$OUT/signers.txt"
+          done
+          [ "$fails" -eq 0 ] || { echo "::error::device-test gates failed ($fails)"; exit 1; }
+          mkdir -p "$OUT/scripts" "$OUT/docs"
+          cp -R scripts/device-test "$OUT/scripts/"
+          cp docs/family-shield-device-testing.md docs/family-shield-testing.md docs/family-shield-security.md docs/settings-migration.md "$OUT/docs/"
+          {
+            echo "DEVICE TEST BUILD — NOT A RELEASE CANDIDATE. Do not publish, do not distribute."
+            echo "No result in this artifact is device-tested; the owner's phone run produces the results."
+            echo "run_id=${{ github.run_id }} run_number=${R} attempt=${{ github.run_attempt }}"
+            echo "commit=${{ github.sha }} ref=${{ github.ref }}"
+            echo "release_apk=$(basename "$REL") package=com.chakcaad.aethone signing=${REL_SIGN}"
+            echo "da_apk=$(basename "$DA") package=com.chakcaad.aethone.da signing=CI debug key (new per run) debuggable=yes hooks=DeviceTestReceiver (DUMP permission + debug.aethone.shieldtest=1)"
+            cat "$OUT/signers.txt"
+            echo "protocol=docs/family-shield-device-testing.md  scripts=scripts/device-test/README.md"
+            echo "armeabi-v7a: aethone-armeabi-v7a-r${R}.apk is in aethone-apk-r${R} (debug-signed) / aethone-apk-signed-r${R} (rotated key) — not part of this artifact"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > "$OUT/DEVICE_TEST_INFO.txt"
+          ( cd "$OUT" && sha256sum ./*.apk > SHA256SUMS.txt )
+          cat "$OUT/DEVICE_TEST_INFO.txt" "$OUT/SHA256SUMS.txt"
+          ls -la "$OUT"
+
+      - name: Upload the device-test artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aethone-device-test-arm64-r${{ github.run_number }}-NOT-A-RELEASE
+          path: device-test/
+          if-no-files-found: error
+
+  # =========================================================================
   # Family Shield phase 2 — shield-e2e: the shield on a REAL emulator with the
   # packaged release APK (x86_64 cores): DNS NXDOMAIN through the TUN, app
   # blocking by uid, loopback SOCKS access control (LoopbackGuard PoC),
@@ -3415,7 +3553,7 @@ jobs:
 
   status-summary:
     name: Status summary (real CI results vs NOT TESTED)
-    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui, android-apk, apk-smoke, release-signing, shield-e2e, desktop-native, desktop-bundle, desktop-smoke, linux-packages]
+    needs: [native-build, elf-inspect, runtime-smoke, cargo-test, go-test, zig-test, flutter-ui, android-apk, apk-smoke, release-signing, shield-e2e, device-test-apk, desktop-native, desktop-bundle, desktop-smoke, linux-packages]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -3462,6 +3600,7 @@ jobs:
           se="${{ needs.shield-e2e.result }}"
           echo "release-signing: $rsg"
           echo "shield-e2e   : $se"
+          echo "device-test-apk: ${{ needs.device-test-apk.result }} (artifact aethone-device-test-arm64-r${{ github.run_number }}-NOT-A-RELEASE — NOT a release candidate, NOT device-tested)"
           dn="${{ needs.desktop-native.result }}"
           db="${{ needs.desktop-bundle.result }}"
           ds="${{ needs.desktop-smoke.result }}"

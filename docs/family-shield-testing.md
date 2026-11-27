@@ -63,6 +63,11 @@ snapshot call, no IPv6 route, no hijack, the same `nativeStart` / `nativeStartRo
 
 ## 4. Device acceptance list (real device — NOT run)
 
+The full step-by-step protocol with pass/fail criteria, evidence and the adb helper scripts is
+[family-shield-device-testing.md](family-shield-device-testing.md) (branch
+`feature/family-shield-device-test`). The list below is its summary. It has still **not been run on a
+real device**.
+
 1. Shield off: every protocol connects exactly as v1.0.2 (single tunnel, hybrid, Lantern, Tor, Psiphon).
 2. Shield on, single tunnel + hybrid: blocked domain → browser shows "site can't be reached" immediately;
    allowed domains load; hybrid rules still route as configured.
