@@ -3179,7 +3179,12 @@ jobs:
             for need in lib/arm64-v8a/libzeptun-jni.so lib/arm64-v8a/libaether.so; do
               grep -q "$need" <<<"$libs" || { echo "::error::$kind APK lacks $need"; fails=$((fails + 1)); }
             done
-            if grep -q 'lib/armeabi-v7a/\|lib/x86_64/' <<<"$libs"; then echo "::error::$kind APK is not arm64-only"; fails=$((fails + 1)); fi
+            # The AETHONE engines must be arm64 only. Flutter plugin AARs ship
+            # their own small libs (libdartjni, libdatastore_shared_counter) for
+            # every ABI even with --target-platform android-arm64; recorded, not fatal.
+            if grep -Eq 'lib/(armeabi-v7a|x86_64)/lib(aether|zeptun-jni|lantern|psiphon|lyrebird)\.so' <<<"$libs"; then echo "::error::$kind APK carries engine libs for a non-arm64 ABI"; fails=$((fails + 1)); fi
+            other="$(tr ' ' '\n' <<<"$libs" | grep -E '^lib/(armeabi-v7a|x86_64)/' | tr '\n' ' ' || true)"
+            [ -z "$other" ] || echo "$kind: non-arm64 plugin libs present (not engines): $other" | tee -a "$OUT/abi-notes.txt"
             "$BT/apksigner" verify --print-certs "$f" > "$OUT/signer-$kind.txt"
             cert="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$OUT/signer-$kind.txt" | head -1 | tr -d ': ' | tr 'A-F' 'a-f')"
             [ -n "$cert" ] || { echo "::error::no signer on $f"; fails=$((fails + 1)); }

@@ -91,7 +91,7 @@ can't be tested with it. The DA build carries a debug-only adb test hook, descri
 
 ## 2. Android ABI (ARM64, armeabi-v7a note)
 
-The device-test APK is **arm64-v8a only**. CI checks every arm64/armv7 library's ELF and seccomp safety; the x86_64 build also runs on the emulator. arm64 has no legacy `poll`/`open` syscalls. No arm64 binary has run on a device yet.
+The device-test APKs carry the AETHONE engines for **arm64-v8a only** (the DA APK also has two small Flutter-plugin libraries for other ABIs; CI records them in `abi-notes.txt`). CI checks every arm64/armv7 library's ELF and seccomp safety; the x86_64 build also runs on the emulator. arm64 has no legacy `poll`/`open` syscalls. No arm64 binary has run on a device yet.
 
 | ID | Test | Build | Steps | Pass criteria | Evidence |
 |---|---|---|---|---|---|

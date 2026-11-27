@@ -42,7 +42,7 @@ sec(1, "ENV", "Setup and device identity", "", [
 
 # ---------------------------------------------------------------- §2
 sec(2, "ABI", "Android ABI (ARM64, armeabi-v7a note)",
- "The device-test APK is **arm64-v8a only**. CI checks every arm64/armv7 library's ELF and seccomp "
+ "The device-test APKs carry the AETHONE engines for **arm64-v8a only** (the DA APK also has two small Flutter-plugin libraries for other ABIs; CI records them in `abi-notes.txt`). CI checks every arm64/armv7 library's ELF and seccomp "
  "safety; the x86_64 build also runs on the emulator. arm64 has no legacy `poll`/`open` syscalls. "
  "No arm64 binary has run on a device yet.", [
  ("DT-ABI-01", "Native engines load on arm64", R,
