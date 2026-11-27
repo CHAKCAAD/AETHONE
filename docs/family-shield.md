@@ -7,21 +7,27 @@ approved); no real device used; not merged, not released.** Phase 1 below is unc
 Phase-2 docs: [channel API](family-shield-channel.md) · [key rotation](signing-key-rotation.md) ·
 [settings migration](settings-migration.md); security §5/§8, testing §5, release §4 updated.
 
-## Phase 2 deliverables (2026-11-26)
+## Phase 2 deliverables (2026-11-26, status updated 2026-11-27)
 
-| # | Item | Status |
-|---|---|---|
-| 1 | Method channel `aethone/family_shield` (enable/disable, status, profiles, rules, PIN-session gating, events, export/import) | Implemented; ShieldAdmin JVM-tested; driven on the emulator through the same handler |
-| 2 | VpnService + zeptun wiring: DNS NXDOMAIN, uid app blocking before the SOCKS dial, live snapshot swap + `zeptun_revalidate_flows`, batched events; shielded start refused if the engine hook is missing | Implemented; emulator e2e (see testing §5) |
-| 3 | Status from real state: Protected / Degraded / Inactive / Validation failed + reasons | Implemented; JVM + emulator |
-| 4 | Loopback SOCKS accept gate (getConnectionOwnerUid + own-process socket match, fail-closed) | PoC implemented + emulator-tested on the CI stub listener; **not wired to the real cores** (they bind their own TCP listeners) → real listeners stay `local-socks-exposed` |
-| 5 | IPv6 capture validated by an engine counter (zeptun counter 7) | Implemented; emulator |
-| 6 | Per-app exclusion audit per app | Implemented; JVM-tested; emulator shows the whole-device case only |
-| 7 | u32 counters: all count events (none count bytes); wrap test (Zig) + wrap-safe 64-bit Kotlin totals | Implemented + tested |
-| 8 | Signing-key rotation prep (secrets-only, least privilege, old-cert gate, docs) | Implemented; CI signed with the owner's new key |
-| 9 | Settings export/import + migration plan | Implemented; JVM + emulator export; picker import not emulator-tested |
-| 10 | Tests wired into native-ci.yml fail-closed | ShieldPhase2Test gate (≥5 suites/45 tests), `shield-e2e` job, `release-signing` job |
+Three states only: **Implemented & Tested** (host/JVM/Zig tests and/or the CI x86_64 emulator — never a
+real device) · **Implemented Not Fully Tested** · **Not Implemented**. Evidence: native-ci run
+46006344077 @ `6eaddf5`, testing §5.
 
+| # | Item | Status | Evidence / gap |
+|---|---|---|---|
+| 1 | Method channel `aethone/family_shield` (enable/disable, status, profiles, rules, PIN-session gating, events, export/import) | Implemented Not Fully Tested | ShieldAdmin JVM-tested; `ShieldChannel.handle` driven on the emulator; the Dart side of the channel never invoked (no UI) |
+| 2 | VpnService + zeptun wiring: DNS NXDOMAIN, uid app blocking before the SOCKS dial, live snapshot swap + `zeptun_revalidate_flows`, batched events; shielded start refused if the engine hook is missing | Implemented & Tested | emulator: NXDOMAIN, uid block/release, live swap, cached fake IP refused, revalidation ≤ 1 s, fail-closed start; event batching JVM-only |
+| 3 | Status from real state: Protected / Degraded / Inactive / Validation failed + reasons | Implemented & Tested | JVM (all states/reasons) + emulator (inactive → protected with the guarded stub only); Degraded with real cores not exercised on the emulator |
+| 4 | Loopback SOCKS accept gate (getConnectionOwnerUid + own-process socket match, fail-closed) | Implemented Not Fully Tested | PoC passes on the emulator for the test stub (uid 2000/0 reset, own process + zeptun admitted); **not wired to the real cores 1819–1822** → they stay `local-socks-exposed`, never Protected |
+| 5 | IPv6 capture validated by an engine counter (zeptun counter 7) | Implemented & Tested | emulator: v6 address on TUN, v6 TCP flow reached the tunnel, counter 7 = 815 |
+| 6 | Per-app exclusion audit per app | Implemented Not Fully Tested | JVM-tested; emulator shows the whole-device case only |
+| 7 | u32 counters: all count events (none count bytes); wrap test (Zig) + wrap-safe 64-bit Kotlin totals | Implemented & Tested | Zig wrap test + Kotlin; counters read back on the emulator |
+| 8 | Signing-key rotation prep (secrets-only, least privilege, old-cert gate, docs) | Implemented & Tested | CI `release-signing` job signed with the owner's new key (run 46006344077: success) |
+| 9 | Settings export/import + migration plan | Implemented Not Fully Tested | export JVM + emulator (2 profiles, no PIN); import via the picker not tested |
+| 10 | Tests wired into native-ci.yml fail-closed | Implemented & Tested | ShieldPhase2Test gate, `shield-e2e` (35/35 PASS), `release-signing`, new Android seccomp gate in `elf-inspect` |
+| — | Android seccomp safety of zeptun (no legacy `poll`/`open` syscalls) | Implemented & Tested | fix in the zeptun patch; `scripts/check_android_seccomp.py` gate; e2e ran without SIGSYS |
+
+Real-device testing: **none** (see testing §4).
 
 Read next: [architecture](family-shield-architecture.md) · [security](family-shield-security.md) ·
 [content sources](family-shield-content-sources.md) · [testing](family-shield-testing.md) ·
