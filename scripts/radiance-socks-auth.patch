@@ -1,0 +1,37 @@
+--- a/vpn/boxoptions_novpn.go	2026-11-27 14:20:48.460000000 +0000
++++ b/vpn/boxoptions_novpn.go	2026-11-27 14:20:48.484000000 +0000
+@@ -5,9 +5,11 @@
+ import (
+ 	"log/slog"
+ 	"net/netip"
++	"os"
+ 
+ 	C "github.com/sagernet/sing-box/constant"
+ 	O "github.com/sagernet/sing-box/option"
++	"github.com/sagernet/sing/common/auth"
+ 	"github.com/sagernet/sing/common/json/badoption"
+ 
+ 	"github.com/getlantern/radiance/common/env"
+@@ -35,6 +37,14 @@
+ 		addrPort = netip.MustParseAddrPort(defaultSocksAddress)
+ 	}
+ 	listen := badoption.Addr(addrPort.Addr())
++	// AETHONE Family Shield (phase 2.1): when the sidecar was given the session
++	// secret, the mixed inbound demands it from every client (SOCKS5 RFC 1929,
++	// HTTP Proxy-Authorization; SOCKS4 is refused) — loopback is reachable by
++	// every app on Android, the TUN never sees it.
++	var users []auth.User
++	if u, p := os.Getenv("AETHONE_SOCKS_USERNAME"), os.Getenv("AETHONE_SOCKS_PASSWORD"); u != "" && p != "" {
++		users = []auth.User{{Username: u, Password: p}}
++	}
+ 	return []O.Inbound{
+ 		{
+ 			Type: C.TypeMixed,
+@@ -44,6 +54,7 @@
+ 					Listen:     &listen,
+ 					ListenPort: addrPort.Port(),
+ 				},
++				Users: users,
+ 			},
+ 		},
+ 	}

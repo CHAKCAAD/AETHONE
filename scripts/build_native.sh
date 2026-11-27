@@ -204,6 +204,18 @@ echo "[zeptun $ABI] exported: libzeptun.so libzeptun-jni.so libzeptun.a (interme
 echo "== [2/4] aether @ $AETHER_SHA (cargo-ndk --platform $API_LEVEL, features tor) =="
 AETHER_SRC="$SRC_CACHE/aether"
 clone_pin "$AETHER_REPO" "$AETHER_SHA" "$AETHER_SRC"
+# Family Shield phase 2.1 — the loopback accept gate (own-process check on every
+# loopback listener, session secret on the socks5 server for the Psiphon child,
+# Psiphon config with LocalProxyAuthLoopback): scripts/aether-loopback-gate.patch,
+# docs/family-shield-security.md §8. The cached src is reset first (never
+# double-applied); pt-build.sh at the tree root is not touched here.
+AETHER_GATE_PATCH="$SCRIPT_DIR/aether-loopback-gate.patch"
+[ -f "$AETHER_GATE_PATCH" ] || die "aether loopback-gate patch not found: $AETHER_GATE_PATCH"
+git -C "$AETHER_SRC" checkout -- aether/src
+rm -f "$AETHER_SRC/aether/src/loopback_gate.rs"
+git -C "$AETHER_SRC" apply --whitespace=nowarn "$AETHER_GATE_PATCH" \
+  || die "aether loopback-gate patch does not apply to $AETHER_SHA"
+echo "[aether] loopback-gate patch applied ($(sha256sum "$AETHER_GATE_PATCH" | cut -c1-16))"
 (
   cd "$AETHER_SRC/aether"
   under=$(echo "$RUST_TARGET" | tr '-' '_')
@@ -475,6 +487,14 @@ echo "$prov" > "$SRC_CACHE/lyrebird-buildinfo.txt"   # raw, for the record
 echo "== [4/4] psiphon @ $PSIPHON_FORK_SHA (N1 pin; fork of 83aa73b, +566/-3 noise profiles) =="
 PSIPHON_SRC="$SRC_CACHE/psiphon-fork"
 clone_pin "$PSIPHON_FORK_REPO" "$PSIPHON_FORK_SHA" "$PSIPHON_SRC"
+# Family Shield phase 2.1 — LocalProxyAuthLoopback: the fork's local proxy
+# credentials apply to loopback clients too (scripts/psiphon-local-proxy-auth.patch).
+PSIPHON_AUTH_PATCH="$SCRIPT_DIR/psiphon-local-proxy-auth.patch"
+[ -f "$PSIPHON_AUTH_PATCH" ] || die "psiphon local-proxy-auth patch not found: $PSIPHON_AUTH_PATCH"
+git -C "$PSIPHON_SRC" checkout -- psiphon
+git -C "$PSIPHON_SRC" apply --whitespace=nowarn "$PSIPHON_AUTH_PATCH" \
+  || die "psiphon local-proxy-auth patch does not apply to $PSIPHON_FORK_SHA"
+echo "[psiphon] local-proxy-auth patch applied ($(sha256sum "$PSIPHON_AUTH_PATCH" | cut -c1-16))"
 (
   cd "$PSIPHON_SRC"
   # Build env replicated from Aether's psiphon-build.sh (GOOS=linux static,

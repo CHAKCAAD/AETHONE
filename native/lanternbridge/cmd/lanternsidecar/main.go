@@ -64,7 +64,25 @@ func run() error {
 	// v1.0.2 — the app's Lantern location pick (ISO alpha-2, empty = auto):
 	// the autoconnect goes straight to a server in that country.
 	location := flag.String("location", "", "Lantern exit country (ISO alpha-2); empty = automatic")
+	// AETHONE Family Shield (phase 2.1): the session secret file (64 hex
+	// digits, app-private). When given, the mixed SOCKS/HTTP inbound demands
+	// it from every client (scripts/radiance-socks-auth.patch). Never passed
+	// on the command line itself (argv is readable by the shell uid).
+	socksAuthFile := flag.String("socks-auth-file", "", "session secret file; the SOCKS/HTTP inbound then requires RFC 1929 / Proxy-Authorization")
 	flag.Parse()
+	if *socksAuthFile != "" {
+		user, pass, err := readSocksAuth(*socksAuthFile)
+		if err != nil {
+			// fail closed: never serve an unauthenticated listener when auth was asked for
+			return fmt.Errorf("socks auth file: %w", err)
+		}
+		_ = os.Setenv("AETHONE_SOCKS_USERNAME", user)
+		_ = os.Setenv("AETHONE_SOCKS_PASSWORD", pass)
+		log.Printf("Lantern SOCKS/HTTP inbound: session authentication required (loopback gate)")
+	} else {
+		_ = os.Unsetenv("AETHONE_SOCKS_USERNAME")
+		_ = os.Unsetenv("AETHONE_SOCKS_PASSWORD")
+	}
 
 	if *dataDir == "" || *logDir == "" || *controlSocket == "" || *controlToken == "" {
 		return errors.New("data-dir, log-dir, control-socket and control-token are required")
@@ -355,3 +373,26 @@ func isLoopbackAddress(address string) bool {
 	ip := net.ParseIP(strings.Trim(host, "[]"))
 	return ip != nil && ip.IsLoopback()
 }
+
+// socksAuthUser is the RFC 1929 user name of the session secret (the same
+// as the Aether core's loopback gate).
+const socksAuthUser = "aethone"
+
+// readSocksAuth reads the session secret: exactly 64 hex digits.
+func readSocksAuth(path string) (string, string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", err
+	}
+	secret := strings.ToLower(strings.TrimSpace(string(raw)))
+	if len(secret) != 64 {
+		return "", "", errors.New("the secret must be 64 hex digits")
+	}
+	for _, c := range secret {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			return "", "", errors.New("the secret must be 64 hex digits")
+		}
+	}
+	return socksAuthUser, secret, nil
+}
+

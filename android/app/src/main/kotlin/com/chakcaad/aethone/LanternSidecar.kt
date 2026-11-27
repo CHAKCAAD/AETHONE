@@ -49,6 +49,13 @@ object LanternSidecar {
     @Volatile
     private var controlToken: String = ""
 
+    /// Family Shield 2.1: the running sidecar was started with the loopback
+    /// gate's session secret (its SOCKS/HTTP inbound demands it). Status still
+    /// verifies it with a foreign-process probe (LoopbackSession.probe).
+    @Volatile
+    var authArmed: Boolean = false
+        private set
+
     /// A free loopback port for the control socket. The sidecar binds it a
     /// moment later; the token still guards every request.
     private fun freeLoopbackPort(): Int =
@@ -93,7 +100,11 @@ object LanternSidecar {
             if (location.matches(Regex("^[A-Za-z]{2}$"))) listOf("--location", location.uppercase())
             else emptyList()
         )
-        val pb = ProcessBuilder(cmd)
+        // Family Shield 2.1 — the gate session's secret FILE (never the secret
+        // itself in argv: the shell uid can read other processes' cmdline).
+        val gate = com.chakcaad.aethone.shield.LoopbackSession.current(context)
+        val fullCmd = if (gate != null) cmd + listOf("--socks-auth-file", gate.file.absolutePath) else cmd
+        val pb = ProcessBuilder(fullCmd)
             .directory(data)
             .redirectOutput(ProcessBuilder.Redirect.INHERIT)
             .redirectError(ProcessBuilder.Redirect.INHERIT)
@@ -101,15 +112,17 @@ object LanternSidecar {
         pb.environment()["TMPDIR"] = context.cacheDir.absolutePath
         lastExit = null
         process = pb.start()
+        authArmed = gate != null
         controlPort = ctlPort
         controlToken = token
-        Log.i(TAG, "Lantern sidecar started (socks 127.0.0.1:$port)")
+        Log.i(TAG, "Lantern sidecar started (socks 127.0.0.1:$port, session auth ${if (gate != null) "required" else "off"})")
     }
 
     @Synchronized
     fun stop() {
         val p = process ?: return
         process = null
+        authArmed = false
         controlPort = 0
         controlToken = ""
         try {

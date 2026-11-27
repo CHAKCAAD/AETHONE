@@ -63,9 +63,24 @@ class TunnelProbeResult {
   final bool countryIsPseudo;
 }
 
+/// Family Shield 2.1 — the loopback gate session's RFC 1929 credentials
+/// (user `aethone`, password = the session secret). The listeners of the
+/// Psiphon child and the Lantern sidecar demand them while the gate is armed;
+/// Aether's own listeners admit this process without them.
+class SocksCredentials {
+  const SocksCredentials(this.username, this.password);
+  final String username;
+  final String password;
+}
+
 /// SOCKS5 + cloudflare-trace probe over `dart:io`. The CONNECT target is
 /// resolved BY THE CORE (ATYP=domain) — no local DNS is used.
 class TunnelProbe {
+  /// Family Shield 2.1 — set by the connect walk for the armed session
+  /// (null = no gate). When set, every handshake offers no-auth AND
+  /// username/password and authenticates if the listener picks the latter.
+  static SocksCredentials? sessionCredentials;
+
   /// Same host the pinned core uses for its own exit detection
   /// (aether/src/exitloc.rs TRACE_HOST / TRACE_PATH).
   static const String traceHost = 'www.cloudflare.com';
@@ -134,10 +149,22 @@ class TunnelProbe {
     try {
       final reader = SocksReader(socket, timeout);
 
-      // --- SOCKS5 greeting: one no-auth method ---
-      socket.add(<int>[0x05, 0x01, 0x00]);
+      // --- SOCKS5 greeting: no-auth (+ username/password while the Family
+      // Shield loopback gate is armed — v2.1) ---
+      final creds = sessionCredentials;
+      socket.add(
+        creds == null ? <int>[0x05, 0x01, 0x00] : <int>[0x05, 0x02, 0x00, 0x02],
+      );
       final greet = await reader.read(2);
-      if (greet[0] != 0x05 || greet[1] != 0x00) {
+      if (greet[0] == 0x05 && greet[1] == 0x02 && creds != null) {
+        final user = utf8.encode(creds.username);
+        final pass = utf8.encode(creds.password);
+        socket.add(<int>[0x01, user.length, ...user, pass.length, ...pass]);
+        final status = await reader.read(2);
+        if (status[1] != 0x00) {
+          throw const SocketException('socks5 authentication refused');
+        }
+      } else if (greet[0] != 0x05 || greet[1] != 0x00) {
         throw const SocketException('socks5 greeting refused');
       }
 

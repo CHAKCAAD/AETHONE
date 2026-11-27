@@ -489,6 +489,30 @@ class MainActivity : FlutterActivity() {
                 }
                 "coreHoldStatus" -> result.success(CoreHoldService.status())
                 // feature/lantern-core — the Lantern sidecar (LanternSidecar).
+                // Family Shield 2.1 — arm (tunnel mode + shield enabled) or
+                // disarm the loopback gate for the session about to start.
+                // Called by the connect walk BEFORE any core starts; the
+                // answer carries the secret file the core flags point at and
+                // the credentials the app's own SOCKS probes use.
+                "loopbackGate" -> {
+                    val tunnel = call.argument<Boolean>("tunnel") ?: false
+                    Thread {
+                        val res: Map<String, Any?>? = try {
+                            val enabled = com.chakcaad.aethone.shield.FamilyShield.repo(this).config().enabled
+                            if (tunnel && enabled) {
+                                val s = com.chakcaad.aethone.shield.LoopbackSession.arm(this)
+                                mapOf("file" to s.file.absolutePath, "user" to com.chakcaad.aethone.shield.LoopbackSession.USER, "secret" to s.secret)
+                            } else {
+                                com.chakcaad.aethone.shield.LoopbackSession.disarm(this)
+                                null
+                            }
+                        } catch (t: Throwable) {
+                            Log.e("AethoneGate", "loopback gate could not be armed", t)
+                            mapOf("error" to (t.javaClass.simpleName + ": " + t.message))
+                        }
+                        runOnUiThread { result.success(res) }
+                    }.start()
+                }
                 "lanternStart" -> {
                     try {
                         LanternSidecar.start(

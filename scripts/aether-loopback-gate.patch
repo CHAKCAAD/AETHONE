@@ -1,0 +1,708 @@
+diff --git a/aether/src/cli.rs b/aether/src/cli.rs
+index 2349ed3..5f8b4c0 100644
+--- a/aether/src/cli.rs
++++ b/aether/src/cli.rs
+@@ -45,6 +45,8 @@ Connection:
+   --stats-secs <n>         how often to log that line (default 60)
+   --quick-reconnect        auto-accept reconnecting with the last known working gateway
+   --no-quick-reconnect     always scan fresh, ignore any saved last-connection gateway
++  --loopback-gate <FILE>   admit only this process (and, on the socks5 listener, clients holding
++                           the session secret in FILE) to every loopback listener (AETHONE)
+   -4                       scan/connect over IPv4 only (default)
+   -6                       scan/connect over IPv6 only
+   --dual                   scan/connect over both IPv4 and IPv6
+@@ -431,6 +433,7 @@ Environment variables:
+                                    working (check.torproject.org:443)
+   AETHER_TOR_LOG                   how loud tor is: info, debug or trace
+   AETHER_QUICK_RECONNECT           1 or 0, for --quick-reconnect
++  AETHER_LOOPBACK_GATE             the session secret file, for --loopback-gate
+   AETHER_IP                        --ip: v4, v6 or both
+   AETHER_PEER                      --peer
+   AETHER_WG_PEER                   --wg-peer
+@@ -616,6 +619,9 @@ pub fn parse_args(args: Vec<String>) -> crate::error::Result<Parsed> {
+             "--stats-secs" => set("AETHER_STATS_SECS", next_value!()),
+             "--quick-reconnect" => set("AETHER_QUICK_RECONNECT", "1"),
+             "--no-quick-reconnect" => set("AETHER_QUICK_RECONNECT", "0"),
++            // AETHONE Family Shield: arm the loopback accept gate (loopback_gate.rs) with the
++            // session secret kept in this file.
++            "--loopback-gate" => set("AETHER_LOOPBACK_GATE", next_value!()),
+ 
+             "-4" => set("AETHER_IP", "v4"),
+             "-6" => set("AETHER_IP", "v6"),
+diff --git a/aether/src/exitloc.rs b/aether/src/exitloc.rs
+index 4995a4c..69c2721 100644
+--- a/aether/src/exitloc.rs
++++ b/aether/src/exitloc.rs
+@@ -164,9 +164,20 @@ pub async fn report(stack: &StackHandle, what: &str) -> Option<Exit> {
+ }
+ 
+ pub async fn report_through_socks(proxy: SocketAddr, what: &str) -> Option<Exit> {
++    report_through_socks_as(proxy, None, what).await
++}
++
++/// [`report_through_socks`] with `user:password@` for a proxy that demands it (AETHONE Family
++/// Shield: Psiphon's listener under the loopback gate).
++pub async fn report_through_socks_as(
++    proxy: SocketAddr,
++    userinfo: Option<String>,
++    what: &str,
++) -> Option<Exit> {
++    let userinfo = userinfo.unwrap_or_default();
+     let client = reqwest::Client::builder()
+         .timeout(LOOKUP_TIMEOUT)
+-        .proxy(reqwest::Proxy::all(format!("socks5h://{proxy}")).ok()?)
++        .proxy(reqwest::Proxy::all(format!("socks5h://{userinfo}{proxy}")).ok()?)
+         .build()
+         .ok()?;
+ 
+diff --git a/aether/src/lib.rs b/aether/src/lib.rs
+index 898e17c..17fc7d4 100644
+--- a/aether/src/lib.rs
++++ b/aether/src/lib.rs
+@@ -14,6 +14,7 @@ pub mod ffi;
+ pub mod fragment;
+ pub mod https;
+ pub mod lastconn;
++pub mod loopback_gate;
+ pub mod masque;
+ pub mod masque_h2;
+ pub mod netstack;
+@@ -2772,7 +2773,13 @@ type TunnelExit = tokio::task::JoinHandle<Result<()>>;
+ /// `socks`. Checked as the setting is read: one set aside as unusable would have the tunnel, and
+ /// a registration, dial out around the carrier, straight out, so it ends aether instead.
+ fn carrier_upstream(name: &str, socks: SocketAddr) -> Result<String> {
+-    let setting = format!("socks5://{socks}");
++    // AETHONE Family Shield: Psiphon's listener demands the session secret under the loopback gate.
++    let userinfo = if name == "psiphon" {
++        crate::loopback_gate::userinfo().unwrap_or_default()
++    } else {
++        String::new()
++    };
++    let setting = format!("socks5://{userinfo}{socks}");
+     upstream::Upstream::parse(&setting).map_err(|e| {
+         AetherError::Other(format!(
+             "{name} listens on {socks}, which the tunnel cannot be dialled through ({}); \
+diff --git a/aether/src/loopback_gate.rs b/aether/src/loopback_gate.rs
+new file mode 100644
+index 0000000..fe07594
+--- /dev/null
++++ b/aether/src/loopback_gate.rs
+@@ -0,0 +1,477 @@
++//! AETHONE Family Shield — loopback accept gate (phase 2.1).
++//!
++//! On Android loopback traffic never crosses the VpnService TUN, so any app on the device could
++//! dial a listener of this core on 127.0.0.1 and use the tunnel unfiltered. When the gate is armed
++//! (`--loopback-gate <secret file>`, env `AETHER_LOOPBACK_GATE`), every connection accepted on a
++//! listener of this core is checked before any byte of it is served:
++//!
++//! * **own-process** — the client end is a socket of THIS process (walk `/proc/self/fd`,
++//!   `getsockname` = the accepted peer, `getpeername` = the listener, `SO_TYPE` = stream). The
++//!   in-process clients are admitted this way: zeptun (TUN engine, JNI), the core's own dials
++//!   (tor, readiness checks, exit lookup) and the app's own probes. A process of another uid can
++//!   not own a socket of this process, nor can a process of our own uid (a child): it is a
++//!   process identity check, stricter than a uid check.
++//! * **session secret** — only on the main socks5 server (`socks5` kind): a client of another
++//!   process must authenticate with RFC 1929 (user [`USER`], password = the 64-hex-digit session
++//!   secret read from the gate file). This is how the Psiphon child (same uid, another process)
++//!   dials the core's socks5 server as its upstream. The secret only exists in the app's private
++//!   storage and memory.
++//! * anything else — refused with an RST before the first byte (fail-closed: a failed walk, an
++//!   unreadable secret, a non-socks5 listener).
++//!
++//! UDP ASSOCIATE relays: while the gate is armed, an association latches only onto a source that
++//! is a UDP socket of this process (the same walk), so a foreign app can not win the race for the
++//! first datagram.
++//!
++//! The gate also keeps the list of the loopback listeners it guards (and the Psiphon child's own
++//! authenticated listener) in `<gate dir>/aether-listeners.json`, which the app reads as the
++//! core's runtime declaration and then verifies with its own foreign-process probe.
++
++use std::collections::{BTreeMap, HashSet};
++use std::net::{IpAddr, SocketAddr};
++use std::sync::{Mutex, OnceLock};
++
++use tokio::io::{AsyncReadExt, AsyncWriteExt};
++
++/// The RFC 1929 user name of the session secret (the password carries the secret).
++pub const USER: &str = "aethone";
++
++const ENV: &str = "AETHER_LOOPBACK_GATE";
++
++#[cfg(test)]
++thread_local! {
++    /// Tests arm the gate on their own thread only (the env is process-wide).
++    static TEST_GATE: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
++}
++
++/// What the gate decided for one accepted connection.
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum Admit {
++    /// Gate disarmed: serve as before.
++    Open,
++    /// The client is a socket of this process.
++    OwnProcess,
++    /// Another process: served only after RFC 1929 with the session secret.
++    Secret,
++    /// Refused (RST), with the reason.
++    Refuse(&'static str),
++}
++
++/// The secret file, when the gate is armed.
++pub fn armed() -> Option<std::path::PathBuf> {
++    #[cfg(test)]
++    if let Some(p) = TEST_GATE.with(|g| g.borrow().clone()) {
++        return Some(p);
++    }
++    let raw = std::env::var_os(ENV)?;
++    if raw.is_empty() {
++        return None;
++    }
++    Some(std::path::PathBuf::from(raw))
++}
++
++/// The session secret, read from the gate file: 64 hex digits, nothing else. `None` when the gate
++/// is armed but the file is missing or malformed (callers fail closed).
++pub fn secret() -> Option<String> {
++    let path = armed()?;
++    let text = std::fs::read_to_string(path).ok()?;
++    let s = text.trim();
++    (s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())).then(|| s.to_ascii_lowercase())
++}
++
++/// `user:secret@` for a socks5:// URL, when the gate is armed with a readable secret.
++pub fn userinfo() -> Option<String> {
++    secret().map(|s| format!("{USER}:{s}@"))
++}
++
++/// Canonical form: an IPv4-mapped IPv6 address compares equal to the IPv4 one.
++fn canonical(a: SocketAddr) -> SocketAddr {
++    match a.ip() {
++        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
++            Some(v4) => SocketAddr::new(IpAddr::V4(v4), a.port()),
++            None => a,
++        },
++        IpAddr::V4(_) => a,
++    }
++}
++
++/// Whether the local address of one of our sockets (`ours`) is the address a datagram or a
++/// connection came from (`from`): equal, or a wildcard bind on the same port and family.
++fn same_source(ours: SocketAddr, from: SocketAddr) -> bool {
++    let (ours, from) = (canonical(ours), canonical(from));
++    if ours.port() != from.port() {
++        return false;
++    }
++    ours.ip() == from.ip() || (ours.ip().is_unspecified() && ours.is_ipv4() == from.is_ipv4())
++}
++
++/// Walks this process's descriptors. `Some(true)`: a socket of `kind` whose local address is
++/// `from` and (for streams) whose peer is `to`. `Some(false)`: walked, none. `None`: the walk could
++/// not run (callers fail closed).
++#[cfg(any(target_os = "linux", target_os = "android"))]
++fn own_socket(from: SocketAddr, to: Option<SocketAddr>, kind: socket2::Type, skip: i32) -> Option<bool> {
++    use std::os::fd::BorrowedFd;
++    let dir = std::fs::read_dir("/proc/self/fd").ok()?;
++    let mut walked = false;
++    for entry in dir.flatten() {
++        let Some(fd) = entry.file_name().to_str().and_then(|n| n.parse::<i32>().ok()) else {
++            continue;
++        };
++        if fd == skip {
++            continue;
++        }
++        walked = true;
++        // SAFETY: the descriptor is only borrowed for getsockopt/getsockname/getpeername, never
++        // closed here. If another thread closes (or reuses) it meanwhile the calls fail or read
++        // another socket's addresses, which the comparisons below reject.
++        let fd = unsafe { BorrowedFd::borrow_raw(fd) };
++        let sock = socket2::SockRef::from(&fd);
++        let Ok(t) = sock.r#type() else { continue };
++        if t != kind {
++            continue;
++        }
++        let Some(local) = sock.local_addr().ok().and_then(|a| a.as_socket()) else {
++            continue;
++        };
++        if !same_source(local, from) {
++            continue;
++        }
++        match to {
++            None => return Some(true),
++            Some(to) => {
++                if let Some(peer) = sock.peer_addr().ok().and_then(|a| a.as_socket()) {
++                    if canonical(peer) == canonical(to) {
++                        return Some(true);
++                    }
++                }
++            }
++        }
++    }
++    if walked { Some(false) } else { None }
++}
++
++#[cfg(not(any(target_os = "linux", target_os = "android")))]
++fn own_socket(_: SocketAddr, _: Option<SocketAddr>, _: socket2::Type, _: i32) -> Option<bool> {
++    None
++}
++
++/// The pure decision, unit-tested: `own` is the walk's answer, `kind` the listener's kind.
++pub fn decide(own: Option<bool>, kind: &str, secret_readable: bool) -> Admit {
++    match own {
++        Some(true) => Admit::OwnProcess,
++        None => Admit::Refuse("fd-walk-failed"),
++        Some(false) if kind == "socks5" && secret_readable => Admit::Secret,
++        Some(false) if kind == "socks5" => Admit::Refuse("no-session-secret"),
++        Some(false) => Admit::Refuse("not-own-process"),
++    }
++}
++
++static NEED_SECRET: OnceLock<Mutex<HashSet<SocketAddr>>> = OnceLock::new();
++
++fn need_secret() -> &'static Mutex<HashSet<SocketAddr>> {
++    NEED_SECRET.get_or_init(|| Mutex::new(HashSet::new()))
++}
++
++static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
++
++/// Decides for a connection accepted on `listener` from `peer`. `Secret` connections are recorded
++/// so that [`authenticate_if_required`] enforces RFC 1929 in the socks5 handshake.
++pub fn admit(sock: &tokio::net::TcpStream, peer: SocketAddr, listener: SocketAddr, kind: &str) -> Admit {
++    if armed().is_none() {
++        return Admit::Open;
++    }
++    #[cfg(unix)]
++    let skip = std::os::fd::AsRawFd::as_raw_fd(sock);
++    #[cfg(not(unix))]
++    let skip = {
++        let _ = sock;
++        -1
++    };
++    let own = own_socket(peer, Some(listener), socket2::Type::STREAM, skip);
++    let verdict = decide(own, kind, secret().is_some());
++    if verdict == Admit::Secret {
++        if let Ok(mut set) = need_secret().lock() {
++            set.insert(canonical(peer));
++        }
++    }
++    // Runtime evidence, bounded: the first 64 admissions and refusals at info/warn, then every
++    // 256th (a client spraying the port can not flood the log), the rest at debug.
++    let n = LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++    let loud = n < 64 || n % 256 == 0;
++    match &verdict {
++        Admit::Refuse(why) if loud => {
++            log::warn!("[shield-gate] {kind} {listener}: refused {peer} ({why}) [#{n}]");
++        }
++        Admit::Refuse(why) => log::debug!("[shield-gate] {kind} {listener}: refused {peer} ({why})"),
++        other if loud => log::info!("[shield-gate] {kind} {listener}: admitted {peer} ({other:?}) [#{n}]"),
++        other => log::debug!("[shield-gate] {kind} {listener}: admitted {peer} ({other:?})"),
++    }
++    verdict
++}
++
++/// Resets a refused connection (RST, no byte served).
++pub fn refuse(sock: tokio::net::TcpStream) {
++    let _ = socket2::SockRef::from(&sock).set_linger(Some(std::time::Duration::ZERO));
++    drop(sock);
++}
++
++/// In the socks5 handshake, after the client's method list was read: when this connection was
++/// admitted on the session secret, negotiate RFC 1929 and check it. `Ok(true)` = it was required
++/// and passed (the method reply is already sent), `Ok(false)` = not required (the caller answers
++/// as before), `Err` = refused (the answer is already sent).
++pub async fn authenticate_if_required<S>(sock: &mut S, peer: Option<SocketAddr>, methods: &[u8]) -> std::io::Result<bool>
++where
++    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
++{
++    let required = match peer {
++        Some(p) => need_secret().lock().map(|mut s| s.remove(&canonical(p))).unwrap_or(true),
++        // the peer address is unknown: fail closed when the gate is armed
++        None => armed().is_some(),
++    };
++    if !required {
++        return Ok(false);
++    }
++    let denied = || std::io::Error::new(std::io::ErrorKind::PermissionDenied, "loopback gate: socks5 authentication refused");
++    if !methods.contains(&0x02) {
++        sock.write_all(&[0x05, 0xff]).await?;
++        return Err(denied());
++    }
++    sock.write_all(&[0x05, 0x02]).await?;
++    let mut head = [0u8; 2];
++    sock.read_exact(&mut head).await?;
++    if head[0] != 0x01 {
++        return Err(denied());
++    }
++    let mut user = vec![0u8; head[1] as usize];
++    sock.read_exact(&mut user).await?;
++    let mut plen = [0u8; 1];
++    sock.read_exact(&mut plen).await?;
++    let mut pass = vec![0u8; plen[0] as usize];
++    sock.read_exact(&mut pass).await?;
++    let ok = match secret() {
++        Some(s) => ct_eq(&user, USER.as_bytes()) & ct_eq(&pass, s.as_bytes()),
++        None => false,
++    };
++    if !ok {
++        sock.write_all(&[0x01, 0x01]).await?;
++        log::warn!("[shield-gate] socks5 authentication failed for {peer:?}");
++        return Err(denied());
++    }
++    sock.write_all(&[0x01, 0x00]).await?;
++    Ok(true)
++}
++
++/// Constant-time comparison (length is not secret: both sides are fixed-format).
++fn ct_eq(a: &[u8], b: &[u8]) -> bool {
++    if a.len() != b.len() {
++        return false;
++    }
++    a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
++}
++
++/// Whether an unlatched UDP relay may latch onto `from`: always when the gate is disarmed; when
++/// armed, only a UDP socket of this process.
++pub fn udp_latch_allowed(from: SocketAddr) -> bool {
++    if armed().is_none() {
++        return true;
++    }
++    let own = own_socket(from, None, socket2::Type::DGRAM, -1) == Some(true);
++    if !own {
++        let n = LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++        if n < 64 || n % 256 == 0 {
++            log::warn!("[shield-gate] udp relay: {from} is not a socket of this process; not latched [#{n}]");
++        }
++    }
++    own
++}
++
++// ------------------------------------------------------------------ listener declarations
++
++static DECLARED: OnceLock<Mutex<BTreeMap<u16, (String, &'static str)>>> = OnceLock::new();
++
++fn declared() -> &'static Mutex<BTreeMap<u16, (String, &'static str)>> {
++    DECLARED.get_or_init(|| Mutex::new(BTreeMap::new()))
++}
++
++/// A loopback listener declared to the app while it lives (dropped = withdrawn).
++pub struct Declared(Option<u16>);
++
++impl Drop for Declared {
++    fn drop(&mut self) {
++        if let Some(port) = self.0 {
++            if let Ok(mut map) = declared().lock() {
++                map.remove(&port);
++            }
++            write_declarations();
++        }
++    }
++}
++
++/// Declares `address` (a listener of `kind`) guarded by `guard` (`own-process`,
++/// `own-process+secret`, `secret` for the Psiphon child's authenticated listener). No-op when the
++/// gate is disarmed.
++pub fn declare(address: SocketAddr, kind: &str, guard: &'static str) -> Declared {
++    if armed().is_none() || !address.ip().is_loopback() {
++        return Declared(None);
++    }
++    if let Ok(mut map) = declared().lock() {
++        map.insert(address.port(), (kind.to_string(), guard));
++    }
++    write_declarations();
++    Declared(Some(address.port()))
++}
++
++fn write_declarations() {
++    let Some(file) = armed() else { return };
++    let Some(dir) = file.parent() else { return };
++    let listeners: Vec<serde_json::Value> = match declared().lock() {
++        Ok(map) => map
++            .iter()
++            .map(|(port, (kind, guard))| serde_json::json!({"port": port, "kind": kind, "guard": guard}))
++            .collect(),
++        Err(_) => return,
++    };
++    let body = serde_json::json!({"pid": std::process::id(), "listeners": listeners}).to_string();
++    let tmp = dir.join("aether-listeners.json.tmp");
++    if std::fs::write(&tmp, body).is_ok() {
++        let _ = std::fs::rename(&tmp, dir.join("aether-listeners.json"));
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn the_decision_is_fail_closed() {
++        assert_eq!(decide(Some(true), "socks5", false), Admit::OwnProcess);
++        assert_eq!(decide(Some(true), "tor socks5", false), Admit::OwnProcess);
++        assert_eq!(decide(Some(false), "socks5", true), Admit::Secret);
++        assert_eq!(decide(Some(false), "socks5", false), Admit::Refuse("no-session-secret"));
++        assert_eq!(decide(Some(false), "psiphon socks5", true), Admit::Refuse("not-own-process"));
++        assert_eq!(decide(Some(false), "tor socks5", true), Admit::Refuse("not-own-process"));
++        assert_eq!(decide(None, "socks5", true), Admit::Refuse("fd-walk-failed"));
++    }
++
++    #[test]
++    fn mapped_and_wildcard_sources_compare_as_the_kernel_reports_them() {
++        let v4: SocketAddr = "127.0.0.1:4000".parse().unwrap();
++        let mapped: SocketAddr = "[::ffff:127.0.0.1]:4000".parse().unwrap();
++        let any: SocketAddr = "0.0.0.0:4000".parse().unwrap();
++        assert!(same_source(mapped, v4));
++        assert!(same_source(any, v4));
++        assert!(!same_source("127.0.0.1:4001".parse().unwrap(), v4));
++        assert!(!same_source("[::]:4000".parse().unwrap(), v4));
++    }
++
++    #[test]
++    fn constant_time_compare() {
++        assert!(ct_eq(b"abc", b"abc"));
++        assert!(!ct_eq(b"abc", b"abd"));
++        assert!(!ct_eq(b"abc", b"abcd"));
++    }
++
++    #[cfg(any(target_os = "linux", target_os = "android"))]
++    #[tokio::test]
++    async fn an_in_process_client_is_own_process_and_a_child_process_is_not() {
++        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
++        let at = listener.local_addr().unwrap();
++        let (client, accepted) = tokio::join!(tokio::net::TcpStream::connect(at), listener.accept());
++        let _client = client.unwrap();
++        let (sock, peer) = accepted.unwrap();
++        let skip = std::os::fd::AsRawFd::as_raw_fd(&sock);
++        assert_eq!(own_socket(peer, Some(at), socket2::Type::STREAM, skip), Some(true));
++        // the same port as a datagram source is not this stream socket
++        assert_eq!(own_socket(peer, None, socket2::Type::DGRAM, skip), Some(false));
++
++        // a client in another process (same uid): not ours
++        let mut child = std::process::Command::new("bash")
++            .arg("-c")
++            .arg(format!("exec 3<>/dev/tcp/127.0.0.1/{} 2>/dev/null; sleep 3", at.port()))
++            .spawn();
++        if let Ok(child) = child.as_mut() {
++            if let Ok(Ok((sock, peer))) =
++                tokio::time::timeout(std::time::Duration::from_secs(2), listener.accept()).await
++            {
++                let skip = std::os::fd::AsRawFd::as_raw_fd(&sock);
++                assert_eq!(own_socket(peer, Some(at), socket2::Type::STREAM, skip), Some(false));
++            }
++            let _ = child.kill();
++        }
++    }
++
++    #[cfg(any(target_os = "linux", target_os = "android"))]
++    #[tokio::test]
++    async fn an_in_process_udp_socket_is_found() {
++        let ours = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
++        let at = ours.local_addr().unwrap();
++        assert_eq!(own_socket(at, None, socket2::Type::DGRAM, -1), Some(true));
++        let gone = {
++            let s = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
++            s.local_addr().unwrap()
++        };
++        // a port no socket of ours holds any more
++        assert_eq!(own_socket(gone, None, socket2::Type::DGRAM, -1), Some(false));
++    }
++
++    #[tokio::test]
++    async fn rfc1929_is_enforced_for_secret_admissions() {
++        // the gate file
++        let dir = std::env::temp_dir().join(format!("aether-gate-test-{}", std::process::id()));
++        std::fs::create_dir_all(&dir).unwrap();
++        let file = dir.join("secret");
++        let secret = "ab".repeat(32);
++        std::fs::write(&file, &secret).unwrap();
++        TEST_GATE.with(|g| *g.borrow_mut() = Some(file.clone()));
++
++        let peer: SocketAddr = "127.0.0.1:5555".parse().unwrap();
++        // not recorded → not required
++        let (mut a, _b) = tokio::io::duplex(256);
++        assert!(!authenticate_if_required(&mut a, Some(peer), &[0x00]).await.unwrap());
++
++        // recorded, client offers no auth → 0xFF and refused
++        need_secret().lock().unwrap().insert(peer);
++        let (mut a, mut b) = tokio::io::duplex(256);
++        assert!(authenticate_if_required(&mut a, Some(peer), &[0x00]).await.is_err());
++        let mut r = [0u8; 2];
++        b.read_exact(&mut r).await.unwrap();
++        assert_eq!(r, [0x05, 0xff]);
++
++        // recorded, wrong password → 0x01 0x01
++        need_secret().lock().unwrap().insert(peer);
++        let (mut a, mut b) = tokio::io::duplex(512);
++        let mut msg = vec![0x01, USER.len() as u8];
++        msg.extend_from_slice(USER.as_bytes());
++        msg.push(64);
++        msg.extend_from_slice("cd".repeat(32).as_bytes());
++        b.write_all(&msg).await.unwrap();
++        assert!(authenticate_if_required(&mut a, Some(peer), &[0x00, 0x02]).await.is_err());
++        let mut r = [0u8; 4];
++        b.read_exact(&mut r).await.unwrap();
++        assert_eq!(r, [0x05, 0x02, 0x01, 0x01]);
++
++        // recorded, right password → 0x01 0x00
++        need_secret().lock().unwrap().insert(peer);
++        let (mut a, mut b) = tokio::io::duplex(512);
++        let mut msg = vec![0x01, USER.len() as u8];
++        msg.extend_from_slice(USER.as_bytes());
++        msg.push(64);
++        msg.extend_from_slice(secret.as_bytes());
++        b.write_all(&msg).await.unwrap();
++        assert!(authenticate_if_required(&mut a, Some(peer), &[0x02]).await.unwrap());
++        let mut r = [0u8; 4];
++        b.read_exact(&mut r).await.unwrap();
++        assert_eq!(r, [0x05, 0x02, 0x01, 0x00]);
++
++        // declarations land next to the secret file
++        let held = declare("127.0.0.1:1819".parse().unwrap(), "socks5", "own-process+secret");
++        let text = std::fs::read_to_string(dir.join("aether-listeners.json")).unwrap();
++        assert!(text.contains("\"port\":1819") && text.contains("own-process+secret"), "{text}");
++        drop(held);
++        let text = std::fs::read_to_string(dir.join("aether-listeners.json")).unwrap();
++        assert!(!text.contains("1819"), "{text}");
++
++        TEST_GATE.with(|g| *g.borrow_mut() = None);
++        let _ = std::fs::remove_dir_all(&dir);
++    }
++}
+diff --git a/aether/src/psiphon.rs b/aether/src/psiphon.rs
+index 313d4ce..fd027e1 100644
+--- a/aether/src/psiphon.rs
++++ b/aether/src/psiphon.rs
+@@ -647,6 +647,28 @@ fn build_config(
+         }
+     }
+ 
++    // AETHONE Family Shield: with the loopback gate armed, Psiphon's own listeners (socks5, and the
++    // http proxy when one is asked for) demand the session secret from every client, loopback
++    // included (LocalProxyAuthLoopback, scripts/psiphon-local-proxy-auth.patch). Never started
++    // unauthenticated while the gate is armed.
++    if crate::loopback_gate::armed().is_some() {
++        let Some(secret) = crate::loopback_gate::secret() else {
++            return Err(AetherError::Other(
++                "the loopback gate is armed but its session secret is unreadable; psiphon is not \
++                 started with an unauthenticated listener"
++                    .into(),
++            ));
++        };
++        map.retain(|key, _| {
++            !key.eq_ignore_ascii_case("LocalProxyUsername")
++                && !key.eq_ignore_ascii_case("LocalProxyPassword")
++                && !key.eq_ignore_ascii_case("LocalProxyAuthLoopback")
++        });
++        map.insert("LocalProxyUsername".into(), serde_json::Value::from(crate::loopback_gate::USER));
++        map.insert("LocalProxyPassword".into(), serde_json::Value::from(secret));
++        map.insert("LocalProxyAuthLoopback".into(), serde_json::Value::from(true));
++    }
++
+     if let Some(code) = region() {
+         log::info!("[*] psiphon is asked to leave from {code}");
+         map.insert("EgressRegion".into(), serde_json::Value::from(code));
+@@ -682,6 +704,8 @@ pub struct Running {
+     child: Child,
+     pub socks: SocketAddr,
+     pub http: Option<SocketAddr>,
++    /// AETHONE Family Shield: Psiphon's own listener, declared to the app while it runs.
++    _declared: crate::loopback_gate::Declared,
+ }
+ 
+ impl Running {
+@@ -890,13 +914,20 @@ pub async fn start(
+         }
+     });
+ 
+-    Ok(Running { child, socks, http })
++    let _declared = crate::loopback_gate::declare(socks, "psiphon child socks5", "secret");
++    Ok(Running {
++        child,
++        socks,
++        http,
++        _declared,
++    })
+ }
+ 
+ fn announce(proxy: SocketAddr, what: &'static str) {
+     let proxy = crate::socks::dialable(proxy);
+     tokio::spawn(async move {
+-        crate::exitloc::report_through_socks(proxy, what).await;
++        crate::exitloc::report_through_socks_as(proxy, crate::loopback_gate::userinfo(), what)
++            .await;
+     });
+ }
+ 
+@@ -957,7 +988,10 @@ pub async fn run_chain(through: SocketAddr, state: PathBuf) -> Result<()> {
+         &state,
+         BEHIND_HELD,
+         http.as_ref().map(|_| BEHIND_HELD),
+-        Some(format!("socks5://{through}")),
++        Some(format!(
++            "socks5://{}{through}",
++            crate::loopback_gate::userinfo().unwrap_or_default()
++        )),
+         Placement::BehindHeld,
+     )
+     .await?;
+diff --git a/aether/src/socks.rs b/aether/src/socks.rs
+index 46cbf5f..86effc5 100644
+--- a/aether/src/socks.rs
++++ b/aether/src/socks.rs
+@@ -231,6 +231,16 @@ where
+     Fut: Future<Output = ()> + Send + 'static,
+ {
+     let listener = listener.borrow();
++    // AETHONE Family Shield: the address every accepted client is checked against, and the
++    // declaration of this listener to the app while it is served (no-op with the gate disarmed).
++    let gate_local = listener.local_addr().ok();
++    let _declared = gate_local.map(|at| {
++        crate::loopback_gate::declare(
++            at,
++            kind,
++            if kind == "socks5" { "own-process+secret" } else { "own-process" },
++        )
++    });
+     let limit = Arc::new(Semaphore::new(max));
+     let mut clients = tokio::task::JoinSet::new();
+     let mut last_accept_warning: Option<std::time::Instant> = None;
+@@ -264,6 +274,15 @@ where
+                         return Err(error.into());
+                     }
+                 };
++                if let Some(at) = gate_local {
++                    if let crate::loopback_gate::Admit::Refuse(_) =
++                        crate::loopback_gate::admit(&sock, peer, at, kind)
++                    {
++                        crate::loopback_gate::refuse(sock);
++                        drop(permit);
++                        continue;
++                    }
++                }
+                 enable_keepalive(&sock);
+                 let client = serve_one(sock, peer);
+                 clients.spawn(async move {
+@@ -481,6 +500,12 @@ async fn handshake(sock: &mut TcpStream) -> Result<()> {
+     let nmethods = prefix[1] as usize;
+     let mut methods = vec![0u8; nmethods];
+     sock.read_exact(&mut methods).await?;
++    // AETHONE Family Shield: a client of another process admitted on the session secret must
++    // pass RFC 1929 here (the method reply is sent by the gate).
++    let peer = sock.peer_addr().ok();
++    if crate::loopback_gate::authenticate_if_required(sock, peer, &methods).await? {
++        return Ok(());
++    }
+     sock.write_all(&[VER, 0x00]).await?;
+     Ok(())
+ }
+@@ -1353,7 +1378,12 @@ fn expected_udp_source(control_peer: SocketAddr, requested: &Target) -> IpAddr {
+ fn udp_source_allowed(expected_ip: IpAddr, latched: Option<SocketAddr>, from: SocketAddr) -> bool {
+     match latched {
+         Some(known) => known == from,
+-        None => normalize_ip(from.ip()) == normalize_ip(expected_ip),
++        // AETHONE Family Shield: with the loopback gate armed, the first datagram latches the
++        // association only when it comes from a UDP socket of this process.
++        None => {
++            normalize_ip(from.ip()) == normalize_ip(expected_ip)
++                && crate::loopback_gate::udp_latch_allowed(from)
++        }
+     }
+ }
+ 

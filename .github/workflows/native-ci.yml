@@ -1072,6 +1072,11 @@ jobs:
           echo "aether pin verified: $(git -C "$src" rev-parse HEAD)"
           [ -d "$src/quiche/quiche" ] \
             || { echo "::error::quiche path dependency missing from the pinned tree (aether/Cargo.toml: ../quiche/quiche)"; exit 1; }
+          # Family Shield 2.1 — the same loopback-gate patch build_native.sh applies (reset first).
+          git -C "$src" checkout -- aether/src
+          rm -f "$src/aether/src/loopback_gate.rs"
+          git -C "$src" apply --whitespace=nowarn "$GITHUB_WORKSPACE/scripts/aether-loopback-gate.patch"
+          echo "aether loopback-gate patch applied: $(sha256sum "$GITHUB_WORKSPACE/scripts/aether-loopback-gate.patch" | cut -c1-16)"
 
       - name: Fetch locked sources and apply the boring-sys 5.3.0 patch (byte-identical to build_native.sh)
         run: |
@@ -1273,6 +1278,10 @@ jobs:
           echo "psiphon fork pin verified: $(git -C "$src" rev-parse HEAD)"
           [ -f "$src/go.mod" ] || { echo "::error::go.mod missing in the pinned tree"; exit 1; }
           [ -d "$src/vendor" ] || { echo "::error::vendor/ missing in the pinned tree (-mod=vendor requires it)"; exit 1; }
+          # Family Shield 2.1 — the same local-proxy-auth patch build_native.sh applies (reset first).
+          git -C "$src" checkout -- psiphon
+          git -C "$src" apply --whitespace=nowarn "$GITHUB_WORKSPACE/scripts/psiphon-local-proxy-auth.patch"
+          echo "psiphon local-proxy-auth patch applied: $(sha256sum "$GITHUB_WORKSPACE/scripts/psiphon-local-proxy-auth.patch" | cut -c1-16)"
 
       - name: Run go vet + go test (23 gated packages — quic runs as a non-gating probe)
         run: |
@@ -1308,6 +1317,10 @@ jobs:
           # Recorded, never silent: the ONE skipped test and its reason.
           echo "skip=^TestInproxy$ (network-bound WebRTC/STUN integration test; 'unexpected STUN server failed count' on run 41716942645 with all relays completed 10/10, green on 41703712047; deterministic inproxy tests stay gated)" \
             | tee -a "$GITHUB_WORKSPACE/test-evidence/go-test.log"
+          # Family Shield 2.1 — the patched local-proxy auth (LocalProxyAuthLoopback), gated.
+          go test -count=1 -timeout 10m -run '^TestLocalProxyAuth' -v ./psiphon \
+            2>&1 | tee "$GITHUB_WORKSPACE/test-evidence/go-test-local-proxy-auth.log"
+          grep -q -- '--- PASS: TestLocalProxyAuthLoopback' "$GITHUB_WORKSPACE/test-evidence/go-test-local-proxy-auth.log"
 
       - name: Run quic package as a non-gating probe (recorded, never a gate)
         if: always()
@@ -3084,10 +3097,10 @@ jobs:
   # scripts/shield_e2e.sh (fail-closed: any FAIL fails the job).
   # =========================================================================
   shield-e2e:
-    name: "Family Shield e2e (emulator: DNS, uid, loopback guard, IPv6, revalidation)"
+    name: "Family Shield e2e (emulator: DNS, uid, loopback guard, IPv6, revalidation, real-core SOCKS gates)"
     needs: android-apk
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 80
     env:
       SDK_ROOT: /usr/local/lib/android/sdk
       EMU_VERSION: "37.3.10"
@@ -3169,6 +3182,37 @@ jobs:
           set -euo pipefail
           export PATH="$SDK_ROOT/platform-tools:$PATH"
           EV=shield-evidence bash scripts/shield_e2e.sh
+
+      # Family Shield 2.1 — the REAL cores' loopback listeners (Aether 1819/1820/
+      # 1821 + the Psiphon child + Lantern 1822): foreign uid 2000 / root refused,
+      # internal chaining (in-process client, zeptun, Psiphon child → Aether with
+      # the session secret), per-listener status from runtime probes.
+      # Runs even when the phase-2 script failed (evidence first).
+      - name: Family Shield real-core loopback gates (fail-closed on proven leaks)
+        if: always()
+        run: |
+          set -euo pipefail
+          export PATH="$SDK_ROOT/platform-tools:$PATH"
+          EV=shield-evidence bash scripts/shield_e2e_cores.sh
+
+      # Seccomp evidence for the Go / Rust cores (non-gating, recorded): the
+      # zeptun libs are gated in elf-inspect; these run under the same app
+      # filter (in-process Aether, exec'd Psiphon / Lantern / lyrebird).
+      - name: Seccomp scan of the packaged x86_64 core libraries (evidence, non-gating)
+        if: always()
+        run: |
+          set -uo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check capstone==5.0.9 pyelftools==0.33 || true
+          APK="$(find apk-dist -name 'aethone-ui-*-release-universal.apk' -type f | head -1)"
+          mkdir -p apk-libs shield-evidence
+          unzip -o -q "$APK" 'lib/x86_64/*' -d apk-libs || true
+          for f in apk-libs/lib/x86_64/libaether.so apk-libs/lib/x86_64/libpsiphon.so apk-libs/lib/x86_64/liblantern.so apk-libs/lib/x86_64/liblyrebird.so; do
+            [ -f "$f" ] || { echo "$f: not packaged" | tee -a shield-evidence/seccomp-cores.txt; continue; }
+            rc=0
+            timeout 180 python3 scripts/check_android_seccomp.py "$f" > "shield-evidence/seccomp-$(basename "$f").txt" 2>&1 || rc=$?
+            echo "$(basename "$f"): rc=$rc (0 clean, 1 denied syscall site, 2 tool error; 124 timeout)" | tee -a shield-evidence/seccomp-cores.txt
+            tail -5 "shield-evidence/seccomp-$(basename "$f").txt"
+          done
 
       - name: Shut down + status
         if: always()

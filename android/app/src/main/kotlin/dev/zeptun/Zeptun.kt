@@ -75,6 +75,11 @@ object Zeptun {
     /// 0 dns_blocked, 1 flow_blocked, 2 flows_killed, 3 swaps, 4 rejected,
     /// 5 generation, 6 active; -1 when the engine is not running.
     external fun nativeShieldCounter(index: Int): Long
+    /// AETHONE Family Shield 2.1 — CI self-test hook (ShieldTestReceiver only):
+    /// the in-process Aether core's C API through libzeptun-jni (dlopen of
+    /// libaether.so). op 0 = aether_core_start(arg = JSON array of CLI
+    /// strings), 1 = job poll, 2 = cancel, 3 = free (by [id]).
+    external fun nativeAetherCall(op: Int, arg: String?, id: Long): String
     external fun nativeStop()
     external fun nativeVersion(): String
     external fun nativeCounter(index: Int): Long

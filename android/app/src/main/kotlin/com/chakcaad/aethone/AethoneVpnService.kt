@@ -215,6 +215,10 @@ class AethoneVpnService : VpnService() {
     /// tunnel like a port change; rule edits alone never do.
     private var liveShield: Boolean = false
 
+    /// Family Shield 2.1 — the loopback-gate session zeptun authenticates
+    /// with (secret prefix; a new session restarts zeptun).
+    private var liveGateKey: String = ""
+
     /// Traffic Analytics: the profile of the current start intent.
     private var analyticsProfile: String = "unknown"
 
@@ -392,6 +396,14 @@ class AethoneVpnService : VpnService() {
         apps: List<String>,
         routing: com.chakcaad.aethone.routing.HybridRouter.Config? = null,
     ): String? {
+        // Family Shield 2.1 — the loopback gate session (armed by the app
+        // before the cores started): zeptun authenticates with its secret
+        // (Psiphon's and Lantern's listeners demand it; Aether admits zeptun
+        // as its own process either way). Lantern under the gate is TCP-only:
+        // sing-box's SOCKS UDP relay re-latches to any sender on loopback.
+        val gate = com.chakcaad.aethone.shield.LoopbackSession.current(this)
+        val tcpOnly = tcpOnly || (gate != null && port == com.chakcaad.aethone.shield.SocksAuth.Listener.LANTERN.port)
+        val gateKey = gate?.secret?.take(8) ?: ""
         val routingKey = routing?.key ?: ""
         // Family Shield — compiled and handed to libzeptun-jni BEFORE any
         // TUN exists; the snapshot is in force before the first packet. A
@@ -417,7 +429,8 @@ class AethoneVpnService : VpnService() {
             val appsKey = "$appMode|${apps.sorted().joinToString(",")}"
             if (port != socksPort || tcpOnly != socksTcpOnly ||
                 socksStrict != socksStrictLive || appsKey != liveAppsKey ||
-                routingKey != liveRoutingKey || shieldPlan.active != liveShield
+                routingKey != liveRoutingKey || shieldPlan.active != liveShield ||
+                gateKey != liveGateKey
             ) {
                 Log.i(
                     TAG,
@@ -581,6 +594,7 @@ class AethoneVpnService : VpnService() {
             ${if (tcpOnly) "udp = false" else ""}
             ${if (socksStrict) "pipeline = false" else ""}
             ${if (socksStrict) "optimistic_data = false" else ""}
+            ${com.chakcaad.aethone.shield.SocksAuth.tomlLines(gate?.credentials).replace("\n", "\n            ")}
 
             [dns]
             fake_ip = true
@@ -633,6 +647,7 @@ class AethoneVpnService : VpnService() {
         liveAppsKey = "$appMode|${apps.sorted().joinToString(",")}"
         liveRoutingKey = routingKey
         liveShield = shieldPlan.active
+        liveGateKey = gateKey
         com.chakcaad.aethone.shield.FamilyShield.anyTunnelUp = true
         if (shieldPlan.active) {
             // Family Shield phase 2: the engine must report the snapshot
@@ -652,6 +667,7 @@ class AethoneVpnService : VpnService() {
             "zeptun up on socks 127.0.0.1:$port udp=${if (tcpOnly) "disabled" else "enabled"} " +
                 "strict=${if (socksStrict) "sequential" else "pipelined"} " +
                 "apps=$liveAppsKey routing=${routingKey.ifEmpty { "off" }} " +
+                "loopback-gate=${if (gate != null) "armed" else "off"} " +
                 "(protect callback installed)",
         )
         EngineBridge.emit(upEvent(port))

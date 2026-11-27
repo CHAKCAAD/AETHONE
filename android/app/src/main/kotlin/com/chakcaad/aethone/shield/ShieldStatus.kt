@@ -34,9 +34,17 @@ object ShieldStatus {
         val port: Int,
         /// something accepted a TCP connection on 127.0.0.1:port
         val listening: Boolean,
-        /// the listener only accepts AETHONE's own process (LoopbackGuard in
-        /// front of a core that is not reachable otherwise)
+        /// phase 2.1: true only from runtime evidence — a guard is in force
+        /// for this listener ([guard]) AND a probe from another process was
+        /// refused ([probe]); see LoopbackSession.guarded
         val guarded: Boolean,
+        /// what guards it at runtime: own-process / own-process+secret /
+        /// secret / null (nothing — exposed)
+        val guard: String? = null,
+        /// the foreign-process probe result (LoopbackSession.Probe.wire)
+        val probe: String? = null,
+        /// which core / listener this is (Aether's declaration, or the port's tunnel)
+        val kind: String? = null,
     )
 
     data class Inputs(

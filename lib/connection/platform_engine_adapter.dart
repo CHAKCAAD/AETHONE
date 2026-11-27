@@ -95,6 +95,7 @@ class AetherArguments {
     required String nativeLibraryDir,
     String? lyrebirdPath,
     String? psiphonPath,
+    String? loopbackGateFile,
   }) {
     final overlay = chain;
     final modeId = effectiveMode(protocol, overlay);
@@ -214,6 +215,13 @@ class AetherArguments {
     // into a null-core build; the adapter always passes the store's layer).
     if (core != null) {
       args.addAll(coreArgs(core, protocol, overlay));
+    }
+    // Family Shield 2.1 — the loopback accept gate (tunnel mode with the
+    // shield on): only this process (and, on the socks5 listener, holders of
+    // the session secret in this app-private file) may use the core's
+    // loopback listeners. The secret itself never enters the argument list.
+    if (loopbackGateFile != null) {
+      args.addAll(['--loopback-gate', loopbackGateFile]);
     }
     return args;
   }
@@ -1422,6 +1430,8 @@ class PlatformEngineAdapter implements EngineAdapter {
       _emitState(VpnState.connecting);
       final paths = await _paths();
       if (_stale(gen)) return false;
+      await _armLoopbackGate(tunnel);
+      if (_stale(gen)) return false;
       final started = await _startLantern(paths.filesDir);
       if (_stale(gen)) {
         await _stopLantern();
@@ -1502,6 +1512,9 @@ class PlatformEngineAdapter implements EngineAdapter {
       final core = _core =
           _coreFactory == null ? AetherCore.open() : _coreFactory();
       final paths = await _paths();
+      // Family Shield 2.1 — arm (or disarm) the loopback gate BEFORE the core
+      // starts; the synchronous section below reads the answer.
+      final gateFile = await _armLoopbackGate(tunnel);
       // v4.41 (owner round 17, item 3) — the routing-area profile reaches the
       // engine at last: the selected country's rules file is (re)written into
       // the engine dir and planted as AETHER_ROUTES_FILE; the pinned core's
@@ -1542,6 +1555,7 @@ class PlatformEngineAdapter implements EngineAdapter {
           nativeLibraryDir: paths.nativeLibraryDir,
           lyrebirdPath: paths.lyrebirdPath,
           psiphonPath: paths.psiphonPath,
+          loopbackGateFile: gateFile,
         ),
       );
       // v4.26 — record the job id on the PROCESS side (Kotlin companion):
@@ -2385,6 +2399,38 @@ class PlatformEngineAdapter implements EngineAdapter {
 
   /// Starts the sidecar through the platform channel. Returns null on
   /// success, or the reason it could not be started.
+  /// Family Shield 2.1 — asks the platform to arm the loopback gate for the
+  /// session about to start (tunnel mode + shield enabled) or to disarm it.
+  /// Returns the secret file the core flag points at (null = no gate) and
+  /// sets the credentials the app's own SOCKS probes use. A platform that
+  /// does not know the call (tests, desktop) means no gate.
+  Future<String?> _armLoopbackGate(bool tunnel) async {
+    TunnelProbe.sessionCredentials = null;
+    try {
+      final raw = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'loopbackGate',
+        {'tunnel': tunnel},
+      );
+      if (raw == null) return null;
+      final file = raw['file'];
+      final user = raw['user'];
+      final secret = raw['secret'];
+      if (file is String && user is String && secret is String) {
+        TunnelProbe.sessionCredentials = SocksCredentials(user, secret);
+        return file;
+      }
+      // {'error': …}: the gate could not be armed — the cores start
+      // unguarded and the shield status reports their listeners exposed.
+      debugPrint('loopback gate not armed: ${raw['error']}');
+      return null;
+    } on MissingPluginException {
+      return null;
+    } on PlatformException catch (e) {
+      debugPrint('loopback gate not armed: ${e.message}');
+      return null;
+    }
+  }
+
   Future<String?> _startLantern(String filesDir) async {
     _lanternFailure = null;
     try {

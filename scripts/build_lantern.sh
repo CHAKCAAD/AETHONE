@@ -67,15 +67,34 @@ go mod download
 go mod verify
 echo "Radiance pin:"; grep '^github.com/getlantern/radiance ' go.sum | head -2
 
+# Family Shield phase 2.1 — Radiance's novpn mixed inbound gets the session
+# secret as its users (scripts/radiance-socks-auth.patch): the VERIFIED module
+# (go mod verify above) is copied, patched and swapped in through an alternate
+# go.mod (-modfile) — the checked-in go.mod/go.sum stay untouched.
+RAD_PATCH="$ROOT/scripts/radiance-socks-auth.patch"
+[ -f "$RAD_PATCH" ] || die "radiance patch not found: $RAD_PATCH"
+RAD_SRC="$(go list -m -f '{{.Dir}}' github.com/getlantern/radiance)"
+[ -d "$RAD_SRC" ] || die "radiance module dir not found"
+SHIELD_MOD="$(mktemp -d)"
+cp -r "$RAD_SRC" "$SHIELD_MOD/radiance"
+chmod -R u+w "$SHIELD_MOD/radiance"
+patch -p1 --forward -d "$SHIELD_MOD/radiance" < "$RAD_PATCH" || die "radiance patch does not apply"
+grep -q 'AETHONE_SOCKS_PASSWORD' "$SHIELD_MOD/radiance/vpn/boxoptions_novpn.go" || die "radiance patch not in effect"
+cp go.mod "$SHIELD_MOD/go.shield.mod"
+cp go.sum "$SHIELD_MOD/go.shield.sum"
+go mod edit -modfile="$SHIELD_MOD/go.shield.mod" -replace "github.com/getlantern/radiance=$SHIELD_MOD/radiance"
+MODFILE="-modfile=$SHIELD_MOD/go.shield.mod"
+echo "[radiance] socks-auth patch applied ($(sha256sum "$RAD_PATCH" | cut -c1-16))"
+
 # Local unit tests only (host build) — never contact Lantern servers in CI.
 if [ "$ABI" = "x86_64" ]; then
-  go test -tags="$TAGS" ./cmd/lanternsidecar
+  go test "$MODFILE" -tags="$TAGS" ./cmd/lanternsidecar
 fi
 
 echo "== building liblantern.so for $ABI ($GOARCH_IN${GOARM_IN:+ v$GOARM_IN}, API $API_LEVEL)"
 env GOOS=android GOARCH="$GOARCH_IN" ${GOARM_IN:+GOARM="$GOARM_IN"} CGO_ENABLED=1 \
     CC="$TC/$CC" CXX="$TC/$CXX" \
-  go build -trimpath -buildmode=pie -tags="$TAGS" -ldflags="$LDFLAGS" \
+  go build "$MODFILE" -trimpath -buildmode=pie -tags="$TAGS" -ldflags="$LDFLAGS" \
     -o "$OUT/liblantern.so" ./cmd/lanternsidecar
 "$TC/llvm-strip" --strip-unneeded "$OUT/liblantern.so" || true
 [ -s "$OUT/liblantern.so" ] || die "liblantern.so missing after go build"

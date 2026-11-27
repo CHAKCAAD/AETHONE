@@ -342,14 +342,33 @@ object FamilyShield {
     /// port that accepts a TCP connection is a listener; it counts as
     /// guarded only when a LoopbackGuard listener of this process owns it.
     /// Blocking I/O (≤ 4 × 150 ms) — never call on the main thread.
-    fun probeListeners(): List<ShieldStatus.Listener> = SocksAuth.Listener.entries.map { l ->
-        val listening = try {
-            java.net.Socket().use { s ->
-                s.connect(java.net.InetSocketAddress(java.net.InetAddress.getByName("127.0.0.1"), l.port), 150)
-                true
+    ///
+    /// Phase 2.1: the ports are 1819–1822 plus every loopback listener the
+    /// gated Aether core declares (e.g. the Psiphon child's own port). A
+    /// listening port is guarded only when a guard is in force for it at
+    /// runtime AND a probe from another process (toybox nc, no secret) was
+    /// refused — never from configuration alone.
+    fun probeListeners(context: Context): List<ShieldStatus.Listener> {
+        val declared = LoopbackSession.declared(context).associateBy { it.port }
+        val ports = (SocksAuth.Listener.entries.map { it.port } + declared.keys).distinct().sorted()
+        return ports.map { port ->
+            val listening = LoopbackSession.listening(port)
+            val d = declared[port]
+            val guard = when {
+                d != null -> d.guard
+                port in LoopbackGuard.guardedPorts -> "own-process"
+                port == SocksAuth.Listener.LANTERN.port && com.chakcaad.aethone.LanternSidecar.authArmed -> "secret"
+                else -> null
             }
-        } catch (_: Exception) { false }
-        ShieldStatus.Listener(l.port, listening, guarded = listening && l.port in LoopbackGuard.guardedPorts)
+            val probe = if (listening) LoopbackSession.probe(port) else null
+            ShieldStatus.Listener(
+                port, listening,
+                guarded = LoopbackSession.guarded(listening, guard, probe),
+                guard = guard,
+                probe = probe?.wire,
+                kind = d?.kind ?: SocksAuth.Listener.byPort(port)?.tunnel,
+            )
+        }
     }
 
     /// Status derived from real system state only (call off the main thread:
@@ -358,7 +377,7 @@ object FamilyShield {
         val cfg = try { repo(context).config() } catch (_: Throwable) { ShieldConfig() }
         val rt = runtime
         val hook = tunnelUp && engineHookInstalled()
-        val listeners = if (tunnelUp) probeListeners() else emptyList()
+        val listeners = if (tunnelUp) probeListeners(context) else emptyList()
         val audit = exclusionAudit(context)
         fun raw(i: Int): Long = try { Zeptun.nativeShieldCounter(i) } catch (_: Throwable) { -1L }
         val totals = (0..7).associateWith { i -> if (i == 5 || i == 6) raw(i) else counters.observe(i, raw(i)) }
@@ -395,7 +414,11 @@ object FamilyShield {
             "ipv6Packets" to totals[7],
             "ipv6Route" to ipv6Captured,
             "appBlockingSupported" to appBlockingSupported,
-            "listeners" to listeners.map { mapOf("port" to it.port, "listening" to it.listening, "guarded" to it.guarded) },
+            "listeners" to listeners.map {
+                mapOf("port" to it.port, "listening" to it.listening, "guarded" to it.guarded,
+                    "guard" to it.guard, "probe" to it.probe, "kind" to it.kind)
+            },
+            "loopbackGate" to (LoopbackSession.current(context) != null),
             "exclusions" to mapOf(
                 "mode" to audit.mode,
                 "othersExcluded" to audit.othersExcluded,

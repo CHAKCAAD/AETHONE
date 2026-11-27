@@ -1,0 +1,65 @@
+diff --git a/psiphon/config.go b/psiphon/config.go
+index 493e39b1..ad2d72d9 100644
+--- a/psiphon/config.go
++++ b/psiphon/config.go
+@@ -182,6 +182,17 @@ type Config struct {
+ 	LocalProxyUsername string `json:",omitempty"`
+ 	LocalProxyPassword string `json:",omitempty"`
+ 
++	// LocalProxyAuthLoopback [AETHONE Family Shield] makes the
++	// LocalProxyUsername/LocalProxyPassword check apply to loopback clients
++	// too. Without it loopback clients are exempt, so on Android any app
++	// could dial the local SOCKS/HTTP proxy (loopback never crosses the
++	// VpnService TUN). With it, every client must authenticate (RFC 1929 for
++	// SOCKS5, Proxy-Authorization for HTTP; SOCKS4 is refused); a client that
++	// offers no acceptable method is answered 0xFF and closed. Ignored unless
++	// both credentials are set (fail-closed is the caller's job: AETHONE
++	// never sets this flag without a credential pair).
++	LocalProxyAuthLoopback bool `json:",omitempty"`
++
+ 	// DisableLocalHTTPProxy disables running the local HTTP proxy.
+ 	DisableLocalHTTPProxy bool `json:",omitempty"`
+ 
+diff --git a/psiphon/localProxyAuth_test.go b/psiphon/localProxyAuth_test.go
+index 54e9efe8..37436ed4 100644
+--- a/psiphon/localProxyAuth_test.go
++++ b/psiphon/localProxyAuth_test.go
+@@ -57,3 +57,23 @@ func TestLocalProxyAuthRequiredForClient(t *testing.T) {
+ 		})
+ 	}
+ }
++
++// [AETHONE Family Shield] LocalProxyAuthLoopback removes the loopback
++// exemption: every client must authenticate.
++func TestLocalProxyAuthLoopback(t *testing.T) {
++	strict := &Config{
++		LocalProxyUsername:     "user",
++		LocalProxyPassword:     "pass",
++		LocalProxyAuthLoopback: true,
++	}
++	for _, addr := range []string{"127.0.0.1:12345", "[::1]:12345", "192.168.1.10:1", "not-an-ip-address"} {
++		if !localProxyAuthRequiredForClient(strict, addr) {
++			t.Fatalf("LocalProxyAuthLoopback: %s exempt from auth", addr)
++		}
++	}
++	// the flag alone (no credential pair) never enables auth: nothing to check against
++	if localProxyAuthRequiredForClient(&Config{LocalProxyAuthLoopback: true}, "127.0.0.1:1") {
++		t.Fatal("LocalProxyAuthLoopback without credentials must not require auth")
++	}
++}
++
+diff --git a/psiphon/socksProxy.go b/psiphon/socksProxy.go
+index 99bab7c2..e9e60c24 100644
+--- a/psiphon/socksProxy.go
++++ b/psiphon/socksProxy.go
+@@ -146,6 +146,10 @@ func localProxyAuthRequiredForClient(config *Config, remoteAddr string) bool {
+ 	if !localProxyAuthRequired(config) {
+ 		return false
+ 	}
++	if config.LocalProxyAuthLoopback {
++		// [AETHONE Family Shield] no loopback exemption
++		return true
++	}
+ 	return !isLoopbackRemoteAddr(remoteAddr)
+ }
+ 
